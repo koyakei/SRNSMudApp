@@ -8,6 +8,7 @@
 @using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Components.Contract
 @implements IAsyncDisposable
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <MudCard id="@($"item-card-{Item.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Item.Id))" Outlined="true"
          Class="rounded-xl scroll-observe-target" Style="@GetItemCardStyle()">
@@ -61,7 +62,9 @@
                                 <span @onclick:stopPropagation="true">
                                     <MudLink Href="@($"/User/UserDetail/{Item.OwnerId}")"
                                              Color="Color.Inherit"
-                                             Underline="Underline.Hover">@(Item.Owner?.UserName)</MudLink>
+                                             Underline="Underline.Hover">
+                                        @(Item.Owner?.UserName)
+                                    </MudLink>
                                 </span>
                             }
                             else
@@ -72,7 +75,9 @@
                             最終更新:
                             <span @onclick:stopPropagation="true">
                                 <MudLink Href="@($"/ItemDetail/{Item.Id}")" Color="Color.Inherit"
-                                         Underline="Underline.Hover">@Item.UpdatedDate.ToLocalTime().ToString("g")</MudLink>
+                                         Underline="Underline.Hover">
+                                    @Item.UpdatedDate.ToLocalTime().ToString("g")
+                                </MudLink>
                             </span>
                         </MudText>
                     </div>
@@ -157,10 +162,13 @@
                                                    Size="Size.Small" Color="Color.Inherit"
                                                    Class="chip-icon-btn mr-1"
                                                    OnClick="@(() => OnAddTagToTagClicked(tr.Tag))"/>
-                                    <span class="d-flex align-center"><a class="chip-link mr-1"
-                                                                         style="@(isDeleted ? "text-decoration: line-through;" : "")"
-                                                                         @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
-                                                                         @onclick:stopPropagation="true">@(tr.Tag?.Name ?? "不明")</a>
+                                    <span class="d-flex align-center">
+                                        <a class="chip-link mr-1"
+                                           style="@(isDeleted ? "text-decoration: line-through;" : "")"
+                                           @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
+                                           @onclick:stopPropagation="true">
+                                            @(tr.Tag?.Name ?? "不明")
+                                        </a>
                                         @if (!isDeleted)
                                         {
                                             <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
@@ -224,7 +232,9 @@
                                                         Class="mr-1 small-icon"/>
                                                     <a class="small-chip-link"
                                                        @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{added.TagId}"))"
-                                                       @onclick:stopPropagation="true">@added.Tag?.Name</a>
+                                                       @onclick:stopPropagation="true">
+                                                        @added.Tag?.Name
+                                                    </a>
                                                 </div>
                                             </MudChip>
                                         }
