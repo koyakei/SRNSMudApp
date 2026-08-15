@@ -1,0 +1,92 @@
+@page "/Tag/AddTag"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h3">Add Tag</MudText>
+
+<hr/>
+
+<EditForm Model="@Input" OnValidSubmit="AddTagAsync">
+    <DataAnnotationsValidator/>
+    <MudCard Class="add-tag-card">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h4">Create a new tag.</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTextField @bind-Value="Input.Name" Label="Tag Name" For="@(() => Input.Name)" Required="true"
+                          RequiredError="Tag Name is required." Immediate="true"/>
+            <MudTextField @bind-Value="Input.Content" Label="Content" For="@(() => Input.Content)" Lines="4"
+                          Class="mt-3" Immediate="true"/>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="w-100">Add
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</EditForm>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private InputModel Input { get; } = new();
+
+    public class InputModel
+    {
+        [Required] public string Name { get; set; } = "";
+        public string? Content { get; set; }
+    }
+
+    private async Task AddTagAsync()
+    {
+        Console.WriteLine($"[DEBUG] AddTagAsync started! Input.Name='{Input.Name}'");
+        var authState = await AuthState!;
+        var user = authState.User;
+        string? userId = null;
+        ApplicationUser? currentUser = null;
+
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        if (user.Identity is not null && user.Identity.IsAuthenticated)
+        {
+            userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                currentUser = await dbContext.Users.FindAsync(userId);
+            }
+        }
+
+        if (currentUser == null)
+        {
+            Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+            return;
+        }
+
+        var tag = new Tag
+        {
+            Name = Input.Name,
+            Content = Input.Content ?? string.Empty,
+            OwnerId = userId!,
+            Owner = currentUser,
+            CachedWeight = 0
+        };
+        dbContext.Tags.Add(tag);
+        try
+        {
+            await dbContext.SaveChangesAsync();
+            NavigationManager.NavigateTo("/Tag/TagList");
+        }
+        catch (DbUpdateException ex)
+        {
+            Snackbar.Add(ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true ? "同じ名前のタグが既に存在します。" : $"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+}

@@ -1,0 +1,214 @@
+@inject NavigationManager NavigationManager
+
+<MudPaper Outlined="true" Class="tag-tree-popover-content rounded-lg pa-2">
+    <MudList T="object" Dense="true" Class="pa-0">
+        @foreach (var line in _treeLines)
+        {
+            <MudListItem OnClick="@(() => OnLineClicked(line))"
+                         Class="@($"pa-0 px-2 rounded {(line.IsCurrent ? "current" : "")} {(line.IsParent ? "parent" : "")} {(line.IsChild ? "child" : "")} {(line.IsSibling ? "sibling" : "")} {(EnableExpand ? "cursor-pointer" : "")}")">
+                <div class="d-flex align-center tag-tree-line" style="gap: 4px; padding: 2px 0;">
+                    <span class="tag-tree-indent">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary"
+                                 Style="white-space: pre; font-family: monospace;">@line.Indent</MudText>
+                    </span>
+                    <span class="tag-tree-icon" style="font-size: 10px; width: 14px; flex-shrink: 0;">@line.Icon</span>
+
+                    @if (EnableNavigation)
+                    {
+                        <span @onclick:stopPropagation="true" class="tag-tree-name tag-link"
+                              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <MudLink Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;"
+                                     OnClick="@(() => NavigateToTag(line.TagId))">@line.Name</MudLink>
+                        </span>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Primary"
+                                 Style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                 Class="tag-tree-name">@line.Name</MudText>
+                    }
+
+                    @if (!string.IsNullOrEmpty(line.Role))
+                    {
+                        <span class="tag-tree-role">@line.Role</span>
+                    }
+                    <div style="flex: 1;"></div>
+                    @if (!line.IsCurrent && EnableSwap)
+                    {
+                        <span class="tag-tree-swap-btn" @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           Class="pa-1"
+                                           OnClick="@(() => OnSwap.InvokeAsync(line.TagId))"
+                                           title="このタグに入れ替える"/>
+                        </span>
+                    }
+                    @if (EnableAddChild)
+                    {
+                        <span class="tag-tree-add-btn" @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           Class="pa-1"
+                                           OnClick="@(() => AddChildTagClicked(line.TagId))"
+                                           title="このタグの子にタグを追加"/>
+                        </span>
+                    }
+                </div>
+            </MudListItem>
+        }
+    </MudList>
+</MudPaper>
+
+@code {
+    [Parameter] public Tag TargetTag { get; set; } = null!;
+    [Parameter] public IEnumerable<Tag> AllTags { get; set; } = new List<Tag>();
+    [Parameter] public bool EnableSwap { get; set; }
+    [Parameter] public bool EnableExpand { get; set; } = true;
+    [Parameter] public bool EnableNavigation { get; set; } = true;
+    [Parameter] public bool EnableAddChild { get; set; }
+    [Parameter] public EventCallback<int> OnSwap { get; set; }
+    [Parameter] public EventCallback<Tag> OnAddChildTag { get; set; }
+
+    private async Task AddChildTagClicked(int tagId)
+    {
+        if (OnAddChildTag.HasDelegate)
+        {
+            var targetTag = AllTags.FirstOrDefault(t => t.Id == tagId);
+            if (targetTag != null)
+            {
+                await OnAddChildTag.InvokeAsync(targetTag);
+            }
+        }
+    }
+
+    private readonly List<TagTreeLine> _treeLines = [];
+    private readonly HashSet<int> _expandedTreeTagIds = [];
+
+    private record TagTreeLine(
+        int TagId,
+        string Indent,
+        string Icon,
+        string Name,
+        string Role,
+        bool IsCurrent,
+        bool IsParent,
+        bool IsChild,
+        bool IsSibling,
+        bool HasChildren,
+        bool IsExpanded
+    );
+
+    protected override void OnParametersSet()
+    {
+        if (TargetTag == null || AllTags == null)
+        {
+            return;
+        }
+
+        if (!_expandedTreeTagIds.Any())
+        {
+            // Auto-expand parents of TargetTag
+            var current = AllTags.FirstOrDefault(t => t.Id == TargetTag.Id);
+            while (current != null)
+            {
+                _expandedTreeTagIds.Add(current.Id);
+                current = AllTags.FirstOrDefault(t => t.Id == current.ParentTagId.GetValueOrDefault(-1));
+            }
+        }
+
+        BuildTree();
+    }
+
+    private void BuildTree()
+    {
+        _treeLines.Clear();
+        if (TargetTag == null || !AllTags.Any()) return;
+
+        var ancestors = new HashSet<int>();
+        var curr = AllTags.FirstOrDefault(t => t.Id == TargetTag.ParentTagId.GetValueOrDefault(-1));
+        var rootTag = TargetTag;
+        while (curr != null)
+        {
+            ancestors.Add(curr.Id);
+            rootTag = curr;
+            curr = AllTags.FirstOrDefault(t => t.Id == curr.ParentTagId.GetValueOrDefault(-1));
+        }
+
+        var siblings = AllTags
+            .Where(t => t.ParentTagId == TargetTag.ParentTagId && t.Id != TargetTag.Id)
+            .Select(t => t.Id)
+            .ToHashSet();
+
+        AddTreeLinesRecursive(_treeLines, rootTag, 0, TargetTag.Id, ancestors, siblings);
+    }
+
+    private void AddTreeLinesRecursive(List<TagTreeLine> lines, Tag current, int depth, int targetTagId, HashSet<int> ancestors, HashSet<int> siblings)
+    {
+        var children = AllTags.Where(t => t.ParentTagId == current.Id).OrderBy(t => t.Name).ToList();
+        var hasChildren = children.Any();
+        var isExpanded = _expandedTreeTagIds.Contains(current.Id) || !EnableExpand;
+        var isCurrent = current.Id == targetTagId;
+
+        var isParent = ancestors.Contains(current.Id);
+        var isSibling = siblings.Contains(current.Id);
+        var isChild = current.ParentTagId == targetTagId;
+
+        var role = isCurrent ? "自身" : isParent ? "親" : isSibling ? "兄弟" : isChild ? "子" : "";
+
+        var indent = new string(' ', depth * 2);
+        var icon = (EnableExpand, hasChildren) switch
+        {
+            (true, true) => isExpanded ? "▼" : "▶",
+            (false, true) => isParent || isCurrent ? (isExpanded ? "▼" : "▶") : (isChild ? "▶" : "▷"),
+            (false, false) => true switch
+            {
+                _ when isParent => "▷",
+                _ when isSibling => "◇",
+                _ when isCurrent => "◆",
+                _ when isChild => "▶",
+                _ => "▷"
+            },
+            _ => "◆"
+        };
+
+        lines.Add(new TagTreeLine(current.Id, indent, icon, current.Name, role, isCurrent, isParent, isChild, isSibling, hasChildren, isExpanded));
+
+        if (!isExpanded && EnableExpand) return;
+
+        foreach (var child in children)
+        {
+            if (!EnableExpand)
+            {
+                if (isParent || isCurrent || isChild)
+                {
+                    AddTreeLinesRecursive(lines, child, depth + 1, targetTagId, ancestors, siblings);
+                }
+            }
+            else
+            {
+                AddTreeLinesRecursive(lines, child, depth + 1, targetTagId, ancestors, siblings);
+            }
+        }
+    }
+
+    private void OnLineClicked(TagTreeLine line)
+    {
+        if (!EnableExpand) return;
+
+        if (!_expandedTreeTagIds.Remove(line.TagId))
+            _expandedTreeTagIds.Add(line.TagId);
+
+        BuildTree();
+    }
+
+    private void NavigateToTag(int tagId)
+    {
+        if (EnableNavigation)
+        {
+            NavigationManager.NavigateTo($"/TagDetail/{tagId}");
+        }
+    }
+
+}

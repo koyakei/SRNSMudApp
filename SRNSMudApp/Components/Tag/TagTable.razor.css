@@ -1,0 +1,40 @@
+.search-input {
+    max-width: 300px;
+}
+
+.tag-chip {
+    padding: 0 6px;
+    min-height: 24px;
+    margin: 0;
+}
+
+.tag-link {
+    cursor: pointer;
+    color: inherit;
+    text-decoration: none;
+}
+
+.tag-chip-more {
+    cursor: pointer;
+    padding: 0 6px;
+    min-height: 24px;
+    margin: 0;
+}
+
+.content-cell {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.action-container {
+    position: relative;
+}
+
+.tree-popover {
+    background: transparent;
+    box-shadow: none;
+    margin-left: 10px;
+    z-index: 100;
+}

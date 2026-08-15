@@ -1,0 +1,142 @@
+@page "/Bounty/BountyBoard"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using SRNSMudApp.Data
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">Bounty Board</MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">
+        他のユーザーが「このアイテムにタグをつけてほしい！」と依頼しているリストです。条件を満たせば依頼を完了して報酬を受け取ることができます。
+    </MudText>
+
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog" Class="mb-6">
+        タグ付けを依頼する
+    </MudButton>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Indeterminate="true"/>
+    }
+    else if (!_bounties.Any())
+    {
+        <MudAlert Severity="Severity.Info">現在、募集中のバウンティはありません。</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var bounty in _bounties)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="3">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@bounty.RequestedTag.Name</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    依頼者: @bounty.RequesterUserId</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2">@bounty.TargetItem.Content</MudText>
+
+                            @if (bounty.OfferedRewardAsset != null)
+                            {
+                                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
+                                          Style="font-size: 0.8rem;">
+                                    報酬: @bounty.OfferedRewardAsset.TargetTag?.Name の権利
+                                </MudAlert>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">（無償のウィッシュリスト）</MudText>
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            @if (bounty.RequesterUserId == _currentUserId)
+                            {
+                                <MudButton Disabled="true" Variant="Variant.Text">自分の依頼</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
+                                           OnClick="() => FulfillBounty(bounty)">
+                                    依頼を完了する
+                                </MudButton>
+                            }
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading = true;
+    private string _currentUserId = string.Empty;
+    private List<BountyTaggingContract> _bounties = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        _bounties = await dbContext.TaggingRequestEntities
+            .OfType<BountyTaggingContract>()
+            .Include(b => b.TargetItem)
+            .Include(b => b.RequestedTag)
+            .Include(b => b.OfferedRewardAsset).ThenInclude(a => a.TargetTag)
+            .Where(b => b.Status == TradeStatus.Proposed)
+            .OrderByDescending(b => b.CreatedDate)
+            .AsNoTracking()
+            .ToListAsync();
+
+        _isLoading = false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<BountyCreateDialog>("タグ付けの依頼を作成", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task FulfillBounty(BountyTaggingContract bounty)
+    {
+        var parameters = new DialogParameters<FulfillBountyDialog> { { x => x.Bounty, bounty } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<FulfillBountyDialog>("依頼を叶える", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+}

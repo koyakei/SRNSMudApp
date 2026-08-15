@@ -1,0 +1,166 @@
+@page "/PublicOffer/PublicOfferBoard"
+@rendermode InteractiveServer
+
+@using SRNSMudApp.Services
+@using System.Security.Claims
+
+@attribute [Authorize]
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject TaggingContractService ContractService
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">公開オファー掲示板</MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">他のユーザーが提供しているタグの公開オファー一覧です。</MudText>
+
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog" Class="mb-6">
+        オファーを作成する
+    </MudButton>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Indeterminate="true"/>
+    }
+    else if (!_offers.Any())
+    {
+        <MudAlert Severity="Severity.Info">現在、アクティブな公開オファーはありません。</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var offer in _offers)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="3">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@offer.OfferedTag.Name</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    提供者: @offer.Owner?.UserName</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @if (offer.RequiredAssetAmount > 0)
+                            {
+                                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
+                                          Style="font-size: 0.8rem;">
+                                    要求アセット量: @offer.RequiredAssetAmount
+                                </MudAlert>
+                            }
+                            else
+                            {
+                                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
+                                          Style="font-size: 0.8rem;">
+                                    無償で提供
+                                </MudAlert>
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            @if (offer.OwnerId == _currentUserId)
+                            {
+                                <MudButton Color="Color.Error" Variant="Variant.Text"
+                                           OnClick="() => DeactivateOffer(offer)">
+                                    取り下げる
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
+                                           OnClick="() => TriggerOffer(offer)">
+                                    オファーに応じる
+                                </MudButton>
+                            }
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading = true;
+    private string _currentUserId = string.Empty;
+    private List<PublicTradeOffer> _offers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        _offers = await dbContext.PublicTradeOffers!
+            .Include(o => o.OfferedTag)
+            .Include(o => o.Owner)
+            .Where(o => o.IsActive)
+            .OrderByDescending(o => o.CreatedDate)
+            .AsNoTracking()
+            .ToListAsync();
+
+        _isLoading = false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CreatePublicOfferDialog>("公開オファーの作成", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task TriggerOffer(PublicTradeOffer offer)
+    {
+        var parameters = new DialogParameters<TriggerPublicOfferDialog> { { x => x.Offer, offer } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TriggerPublicOfferDialog>("オファーに応じる", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is int contractId)
+        {
+            // Now accept the contract we just created via the dialog
+            try
+            {
+                await ContractService.AcceptContractAsync(contractId, _currentUserId);
+                Snackbar.Add("公開オファーを利用してタグを獲得しました！", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+                // Also could try to cancel the contract since it failed
+                await ContractService.CancelContractAsync(contractId, _currentUserId);
+            }
+
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task DeactivateOffer(PublicTradeOffer offer)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        var entity = await dbContext.PublicTradeOffers!.FindAsync(offer.Id);
+        if (entity != null && entity.OwnerId == _currentUserId)
+        {
+            entity.IsActive = false;
+            await dbContext.SaveChangesAsync();
+            Snackbar.Add("オファーを取り下げました。", Severity.Success);
+            await LoadDataAsync();
+        }
+    }
+
+}

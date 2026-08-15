@@ -1,0 +1,28 @@
+.search-container {
+    position: relative;
+}
+
+.clear-btn {
+    text-transform: none;
+}
+
+.suggestion-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+}
+
+.suggestion-dropdown-wrapper {
+    position: relative;
+    z-index: 1201;
+    margin-top: 4px;
+}
+
+.suggestion-dropdown-wrapper ::deep .mud-paper {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.suggestion-item:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}

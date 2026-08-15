@@ -1,0 +1,234 @@
+@page "/Contract/ContractManagement"
+@rendermode InteractiveServer
+
+@using SRNSMudApp.Services
+@using System
+@using System.Threading.Tasks
+@using System.Security.Claims
+
+@attribute [Authorize]
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TaggingContractService ContractService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">コントラクト管理</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Indeterminate="true"/>
+    }
+    else
+    {
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
+            <MudTabPanel Text="受信トレイ (Inbox)">
+                <div class="pa-4">
+                    @if (!_incomingContracts.Any())
+                    {
+                        <MudAlert Severity="Severity.Info">現在、受信したコントラクトの提案はありません。</MudAlert>
+                    }
+                    else
+                    {
+                        <MudGrid>
+                            @foreach (var contract in _incomingContracts)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudCard Elevation="3">
+                                        <MudCardHeader>
+                                            <CardHeaderContent>
+                                                <MudText
+                                                    Typo="Typo.h6">@(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                    送信者: @contract.RequesterUserId</MudText>
+                                            </CardHeaderContent>
+                                        </MudCardHeader>
+                                        <MudCardContent>
+                                            <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
+                                            <MudText Typo="Typo.body2"
+                                                     Class="mb-2">@contract.TargetItem.Content</MudText>
+
+                                            <MudText Typo="Typo.subtitle2">希望タグ</MudText>
+                                            <MudText Typo="Typo.body2"
+                                                     Class="mb-2">@contract.RequestedTag.Name</MudText>
+
+                                            @if (contract is MutualTaggingContract mutual)
+                                            {
+                                                <MudDivider Class="my-2"/>
+                                                <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
+                                                <MudText Typo="Typo.body2">@mutual.OfferedTargetItem.Content</MudText>
+                                                <MudText Typo="Typo.body2">@mutual.OfferedTag.Name</MudText>
+                                            }
+                                            else if (contract is GratisTaggingContract gratis && !string.IsNullOrEmpty(gratis.RequesterMessage))
+                                            {
+                                                <MudDivider Class="my-2"/>
+                                                <MudText Typo="Typo.subtitle2">メッセージ</MudText>
+                                                <MudText Typo="Typo.body2">@gratis.RequesterMessage</MudText>
+                                            }
+                                        </MudCardContent>
+                                        <MudCardActions>
+                                            <MudButton Color="Color.Success" Variant="Variant.Filled"
+                                                       OnClick="() => AcceptContract(contract)" Class="mr-2">
+                                                承認する
+                                            </MudButton>
+                                            <MudButton Color="Color.Error" Variant="Variant.Outlined"
+                                                       OnClick="() => RejectContract(contract)">
+                                                拒否する
+                                            </MudButton>
+                                        </MudCardActions>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </div>
+            </MudTabPanel>
+
+            <MudTabPanel Text="送信済み (Outbox)">
+                <div class="pa-4">
+                    @if (!_outgoingContracts.Any())
+                    {
+                        <MudAlert Severity="Severity.Info">現在、送信したコントラクトの提案はありません。</MudAlert>
+                    }
+                    else
+                    {
+                        <MudGrid>
+                            @foreach (var contract in _outgoingContracts)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudCard Elevation="3">
+                                        <MudCardHeader>
+                                            <CardHeaderContent>
+                                                <MudText
+                                                    Typo="Typo.h6">@(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                    宛先: @contract.TagOwnerUserId</MudText>
+                                            </CardHeaderContent>
+                                        </MudCardHeader>
+                                        <MudCardContent>
+                                            <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
+                                            <MudText Typo="Typo.body2"
+                                                     Class="mb-2">@contract.TargetItem.Content</MudText>
+
+                                            <MudText Typo="Typo.subtitle2">希望タグ</MudText>
+                                            <MudText Typo="Typo.body2"
+                                                     Class="mb-2">@contract.RequestedTag.Name</MudText>
+
+                                            <MudText Typo="Typo.body2" Color="Color.Info" Class="mt-2">
+                                                ステータス: @(contract.Status == TradeStatus.Proposed ? "提案中" : contract.Status.ToString())
+                                            </MudText>
+                                        </MudCardContent>
+                                        <MudCardActions>
+                                            @if (contract.Status == TradeStatus.Proposed)
+                                            {
+                                                <MudButton Color="Color.Error" Variant="Variant.Text"
+                                                           OnClick="() => CancelContract(contract)">
+                                                    取り下げる
+                                                </MudButton>
+                                            }
+                                        </MudCardActions>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </div>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading = true;
+    private string _currentUserId = string.Empty;
+
+    private List<TaggingRequestEntity> _incomingContracts = [];
+    private List<TaggingRequestEntity> _outgoingContracts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        // Incoming: User is the Tag Owner, and contract is Proposed
+        _incomingContracts = await dbContext.TaggingRequestEntities
+            .Where(c => c.TagOwnerUserId == _currentUserId && c.Status == TradeStatus.Proposed && (c is GratisTaggingContract || c is MutualTaggingContract))
+            .Include(c => c.TargetItem)
+            .Include(c => c.RequestedTag)
+            .OrderByDescending(c => c.CreatedDate)
+            .ToListAsync();
+
+        // Manual Include for Mutual specific properties because EF Core can be tricky with derived types includes without explicit casting in older versions
+        foreach (var c in _incomingContracts.OfType<MutualTaggingContract>())
+        {
+            await dbContext.Entry(c).Reference(m => m.OfferedTargetItem).LoadAsync();
+            await dbContext.Entry(c).Reference(m => m.OfferedTag).LoadAsync();
+        }
+
+        // Outgoing: User is the Requester
+        _outgoingContracts = await dbContext.TaggingRequestEntities
+            .Where(c => c.RequesterUserId == _currentUserId && (c is GratisTaggingContract || c is MutualTaggingContract))
+            .Include(c => c.TargetItem)
+            .Include(c => c.RequestedTag)
+            .OrderByDescending(c => c.CreatedDate)
+            .ToListAsync();
+
+        _isLoading = false;
+    }
+
+    private async Task AcceptContract(TaggingRequestEntity contract)
+    {
+        try
+        {
+            await ContractService.AcceptContractAsync(contract.Id, _currentUserId);
+            Snackbar.Add("コントラクトを承認しました。", Severity.Success);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
+        }
+    }
+
+    private async Task RejectContract(TaggingRequestEntity contract)
+    {
+        try
+        {
+            await ContractService.CancelContractAsync(contract.Id, _currentUserId);
+            Snackbar.Add("コントラクトを拒否しました。", Severity.Success);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
+        }
+    }
+
+    private async Task CancelContract(TaggingRequestEntity contract)
+    {
+        try
+        {
+            await ContractService.CancelContractAsync(contract.Id, _currentUserId);
+            Snackbar.Add("コントラクトを取り下げました。", Severity.Success);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
+        }
+    }
+
+}

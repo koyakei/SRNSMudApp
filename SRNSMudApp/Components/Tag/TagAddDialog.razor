@@ -1,0 +1,265 @@
+@using System.Numerics.Tensors
+@using System.Security.Claims
+@using SRNSMudApp.Services
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject ITagEmbeddingService TagEmbeddingService
+
+<MudDialog>
+    <DialogContent>
+        <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Elevation="0" Rounded="true" ApplyEffectsToContainer="true"
+                 panelClass="pt-4">
+            <MudTabPanel Text="既存タグから選択">
+                <!-- 検索入力エリア -->
+                <div class="d-flex align-center gap-4 mb-4">
+                    <MudTextField @bind-Value="_searchText"
+                                  Label="タグを検索"
+                                  Placeholder="タグ名 または 内容を入力..."
+                                  Immediate="true"
+                                  OnKeyDown="@HandleKeyDown"
+                                  Clearable="true"
+                                  AutoFocus="true"/>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="@SearchAsync">検索</MudButton>
+                </div>
+
+                <!-- 検索結果表示エリア -->
+                @if (_isSearching)
+                {
+                    <div class="d-flex justify-center pa-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                    </div>
+                }
+                else if (_searchResults != null)
+                {
+                    if (_searchResults.Any())
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">検索候補から1つ選択してください：</MudText>
+
+                        <!-- スクロール可能な一覧エリア -->
+                        <div class="tag-search-results">
+                            <MudRadioGroup T="Tag" @bind-Value="SelectedTag">
+                                @foreach (var tag in _searchResults)
+                                {
+                                    var isActive = _activeTreeTagId == tag.Id;
+                                    <div class="d-flex align-center search-result-item">
+                                        <MudRadio Value="@tag" Color="Color.Primary" Class="flex-grow-1 py-2">
+                                            <div class="d-flex flex-column">
+                                                <MudText Typo="Typo.body1">@tag.Name</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    ウェイト: @tag.CachedWeight | 内容: @tag.Content
+                                                </MudText>
+                                            </div>
+                                        </MudRadio>
+                                        <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => ToggleTree(tag.Id))"
+                                                       title="タグツリーを表示"
+                                                       Class="ml-2"/>
+
+                                        @* タグツリーポップオーバー *@
+                                        <MudPopover Open="@isActive"
+                                                    AnchorOrigin="Origin.TopRight"
+                                                    TransformOrigin="Origin.TopLeft"
+                                                    OverflowBehavior="OverflowBehavior.FlipAlways"
+                                                    Class="tree-popover" Paper="false">
+                                            <TagTreePopoverContent TargetTag="@tag"
+                                                                   AllTags="@_allTags"
+                                                                   EnableSwap="false"
+                                                                   EnableExpand="false"
+                                                                   EnableNavigation="false"/>
+                                        </MudPopover>
+                                    </div>
+                                }
+                            </MudRadioGroup>
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="px-4 py-2" Color="Color.Error">
+                            一致するタグが見つかりません
+                        </MudText>
+                    }
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="新規作成">
+                <MudTextField @bind-Value="_newTagName" Label="タグ名" Required="true" RequiredError="タグ名は必須です"
+                              Immediate="true" Class="mb-3"/>
+                <MudTextField @bind-Value="_newTagContent" Label="内容" Lines="3" Immediate="true"/>
+            </MudTabPanel>
+        </MudTabs>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        @if (_activeTabIndex == 0)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SubmitSearch"
+                       Disabled="@(SelectedTag == null)">選択して追加
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SubmitCreateAsync"
+                       Disabled="@(string.IsNullOrWhiteSpace(_newTagName))">作成して追加
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private Tag? SelectedTag { get; set; }
+    private string _searchText = string.Empty;
+
+    // 状態管理用
+    private bool _isSearching;
+    private List<Tag>? _searchResults;
+
+    // ===== タグツリーポップオーバー用 =====
+    private List<Tag> _allTags = [];
+    private int? _activeTreeTagId;
+
+    // ===== 新規作成用 =====
+    private int _activeTabIndex;
+    private string _newTagName = string.Empty;
+    private string _newTagContent = string.Empty;
+
+    private void ToggleTree(int tagId)
+    {
+        if (_activeTreeTagId == tagId)
+        {
+            _activeTreeTagId = null;
+        }
+        else
+        {
+            _activeTreeTagId = tagId;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        _allTags = await dbContext.Tags.AsNoTracking().ToListAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            _searchResults = null;
+            SelectedTag = null;
+            return;
+        }
+
+        _isSearching = true;
+        SelectedTag = null; // 検索のたびに選択状態をリセット
+        // StateHasChanged();
+
+        try
+        {
+            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(_searchText);
+            var queryArray = queryVector.ToArray();
+
+            await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+            var textMatches = await dbContext.Tags
+                .Where(x => x.Name.Contains(_searchText) || x.Content.Contains(_searchText))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var vectorTags = await dbContext.Tags.Where(x => x.Embedding != null).AsNoTracking().ToListAsync();
+
+            var vectorMatches = vectorTags
+                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
+                .Take(50)
+                .ToList();
+
+            _searchResults =
+            [
+                .. textMatches.Concat(vectorMatches)
+                    .DistinctBy(x => x.Id)
+                    .Take(50)
+            ];
+
+            // ▼ UX向上：ヒットした結果が1件だけなら自動的に選択状態にする
+            if (_searchResults.Count == 1)
+            {
+                SelectedTag = _searchResults.First();
+            }
+        }
+        finally
+        {
+            _isSearching = false;
+            // StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Enterキーが押されたら検索を実行
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private void SubmitSearch()
+    {
+        MudDialog.Close(DialogResult.Ok(SelectedTag));
+    }
+
+    private async Task SubmitCreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTagName)) return;
+
+        var authState = await AuthState!;
+        var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+            return;
+        }
+
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        var existingTag = await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == _newTagName);
+        if (existingTag != null)
+        {
+            Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
+            return;
+        }
+
+        var newTag = new Tag
+        {
+            Name = _newTagName,
+            Content = _newTagContent ?? string.Empty,
+            OwnerId = userId,
+            CachedWeight = 0
+        };
+
+        try
+        {
+            var embedding = await TagEmbeddingService.GenerateEmbeddingAsync($"{newTag.Name} {newTag.Content}");
+            newTag.Embedding = embedding.ToArray();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Embedding generation failed: {ex.Message}");
+        }
+
+        dbContext.Tags.Add(newTag);
+        await dbContext.SaveChangesAsync();
+
+        MudDialog.Close(DialogResult.Ok(newTag));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+}

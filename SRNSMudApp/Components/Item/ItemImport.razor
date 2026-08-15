@@ -1,0 +1,169 @@
+@using System.Security.Claims
+@rendermode InteractiveServer
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 rounded-xl mb-4">
+    <MudStack>
+        <MudText Typo="Typo.h6">CSVからインポート</MudText>
+        <MudText Typo="Typo.body2">フォーマット: 1列目にアイテムのContent、2列目以降にタグ名を指定します。</MudText>
+        <InputFile id="csv-upload" OnChange="@OnCsvUpload" hidden accept=".csv"/>
+        <MudButton HtmlTag="label"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.UploadFile"
+                   for="csv-upload"
+                   Disabled="@_isUploading">
+            @if (_isUploading)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">処理中...</MudText>
+            }
+            else
+            {
+                <MudText>CSVファイルを選択</MudText>
+            }
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public EventCallback OnImportCompleted { get; set; }
+
+    private string _currentUserId = null!;
+    private bool _isUploading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+    }
+
+    private async Task OnCsvUpload(InputFileChangeEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Error);
+            return;
+        }
+
+        _isUploading = true;
+        // StateHasChanged();
+
+        try
+        {
+            var file = e.File;
+            if (file.Size > 5 * 1024 * 1024) // 5MB limit
+            {
+                Snackbar.Add("ファイルサイズが大きすぎます。5MB以下のファイルを選択してください。", Severity.Error);
+                return;
+            }
+
+            await ProcessCsvFile(file);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isUploading = false;
+            // StateHasChanged();
+        }
+    }
+
+    private async Task ProcessCsvFile(IBrowserFile file)
+    {
+        var importedItemCount = 0;
+        var linesToProcess = new List<string[]>();
+        using (var reader = new StreamReader(file.OpenReadStream()))
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                var values = line.Split(',').Select(v => v.Trim()).ToArray();
+                if (values.Length > 0 && !string.IsNullOrWhiteSpace(values[0]))
+                {
+                    linesToProcess.Add(values);
+                }
+            }
+        }
+
+        if (!linesToProcess.Any())
+        {
+            Snackbar.Add("処理するデータがありませんでした。", Severity.Info);
+            return;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            var allTagNames = linesToProcess.SelectMany(values => values.Skip(1))
+                .Where(tagName => !string.IsNullOrWhiteSpace(tagName))
+                .Distinct()
+                .ToList();
+
+            var existingTags = await context.Tags
+                .Where(t => t.OwnerId == _currentUserId && allTagNames.Contains(t.Name))
+                .ToDictionaryAsync(t => t.Name, t => t);
+
+            var newTagNames = allTagNames.Where(name => !existingTags.ContainsKey(name));
+            var newTags = new List<Tag>();
+            foreach (var tagName in newTagNames)
+            {
+                var newTag = new Tag { Name = tagName, OwnerId = _currentUserId };
+                newTags.Add(newTag);
+                existingTags[tagName] = newTag;
+            }
+
+            if (newTags.Any())
+            {
+                context.Tags.AddRange(newTags);
+            }
+
+            foreach (var values in linesToProcess)
+            {
+                var content = values[0];
+                var newItem = new Item
+                {
+                    Content = content,
+                    OwnerId = _currentUserId,
+                    TagRelations = new List<TagRelation>()
+                };
+                context.Items.Add(newItem);
+
+                var tagNamesInLine = values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
+                foreach (var tagName in tagNamesInLine)
+                {
+                    if (!existingTags.TryGetValue(tagName, out var tag)) continue;
+                    var newRelation = new TagRelation
+                    {
+                        Item = newItem,
+                        Tag = tag,
+                        Weight = 1,
+                        OwnerId = _currentUserId
+                    };
+                    newItem.TagRelations.Add(newRelation);
+                }
+
+                importedItemCount++;
+            }
+
+            await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            Snackbar.Add($"{importedItemCount}件のアイテムをインポートしました。", Severity.Success);
+            await OnImportCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            Snackbar.Add($"インポート中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+}

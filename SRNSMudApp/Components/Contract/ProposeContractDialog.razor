@@ -1,0 +1,168 @@
+
+@using System.Security.Claims
+@using SRNSMudApp.Services
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TaggingContractService ContractService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudText Typo="Typo.body1" Class="mb-4">
+                あなたはこのタグの操作権限を持っていません。<br/>
+                タグの作成者にタグ付けのリクエスト（コントラクト）を提案しますか？
+            </MudText>
+
+            <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
+            <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true"/>
+
+            <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
+                提案するWeight変更: @(WeightDelta > 0 ? $"+{WeightDelta}" : $"{WeightDelta}")
+            </MudAlert>
+
+            <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
+                <MudTabPanel Text="無償のお願い (Gratis)">
+                    <div class="pa-4">
+                        <MudTextField T="string" Label="メッセージ（任意）" @bind-Value="_gratisMessage" Lines="3"
+                                      MaxLength="200"/>
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="相互タグ付け (Mutual)">
+                    <div class="pa-4">
+                        <MudText Typo="Typo.body2" Class="mb-2">
+                            代わりにあなたが提供するタグとアイテムを選択してください。
+                        </MudText>
+
+                        <MudAutocomplete T="Item" Label="提供するアイテム" @bind-Value="_offeredItem"
+                                         SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
+                                         Required="true" RequiredError="アイテムを選択してください"
+                                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+
+                        <MudAutocomplete T="Tag" Label="提供するタグ" @bind-Value="_offeredTag"
+                                         SearchFunc="@SearchTags" ToStringFunc="@(t => t?.Name ?? "")"
+                                         Required="true" RequiredError="タグを選択してください"
+                                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+
+                        <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedRightAsset"
+                                   Clearable="true" Required="true" RequiredError="相互タグ付けにはアセットが必要です"
+                                   ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")">
+                            @foreach (var asset in _myAssets)
+                            {
+                                <MudSelectItem Value="@asset"/>
+                            }
+                        </MudSelect>
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">提案する
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public Item TargetItem { get; set; } = null!;
+    [Parameter] public Tag RequestedTag { get; set; } = null!;
+    [Parameter] public int WeightDelta { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private string _currentUserId = string.Empty;
+
+    // Gratis fields
+    private string? _gratisMessage;
+
+    // Mutual fields
+    private Item? _offeredItem;
+    private Tag? _offeredTag;
+    private RightAsset? _selectedRightAsset;
+    private List<RightAsset> _myAssets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadMyAssetsAsync();
+    }
+
+    private async Task LoadMyAssetsAsync()
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        _myAssets = await dbContext.RightAssets
+            .Include(a => a.TargetTag)
+            .Where(a => a.OwnerId == _currentUserId && !a.IsBurned)
+            .ToListAsync();
+    }
+
+    private async Task<IEnumerable<Item>> SearchItems(string? value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
+        if (string.IsNullOrEmpty(value))
+        {
+            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Items
+            .Where(i => i.Content.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
+    }
+
+    private async Task<IEnumerable<Tag>> SearchTags(string? value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
+        if (string.IsNullOrEmpty(value))
+        {
+            return await dbContext.Tags.Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Tags
+            .Where(t => t.Name.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
+    }
+
+    private async Task Submit()
+    {
+        await _form!.ValidateAsync();
+        if (!_isValid) return;
+
+        bool isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
+
+        if (isMutual)
+        {
+            await ContractService.ProposeMutualContractAsync(
+                requesterUserId: _currentUserId,
+                tagOwnerUserId: RequestedTag.OwnerId,
+                targetItemId: TargetItem.Id,
+                requestedTagId: RequestedTag.Id,
+                offeredTargetItemId: _offeredItem!.Id,
+                offeredTagId: _offeredTag!.Id,
+                consumedRightAssetId: _selectedRightAsset!.Id
+            );
+        }
+        else
+        {
+            await ContractService.ProposeGratisContractAsync(
+                requesterUserId: _currentUserId,
+                tagOwnerUserId: RequestedTag.OwnerId,
+                targetItemId: TargetItem.Id,
+                requestedTagId: RequestedTag.Id,
+                message: _gratisMessage
+            );
+        }
+
+        Snackbar.Add("コントラクトを提案しました。", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

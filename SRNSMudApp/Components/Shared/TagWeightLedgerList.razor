@@ -1,0 +1,35 @@
+@using SRNSMudApp.Data
+@namespace SRNSMudApp.Components.Shared
+
+<MudTable Items="@Ledgers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true" Dense="true"
+          Class="mt-4">
+    <HeaderContent>
+        <MudTh>日時</MudTh>
+        <MudTh>実行者</MudTh>
+        <MudTh>理由</MudTh>
+        <MudTh>操作種別</MudTh>
+        <MudTh>変更前</MudTh>
+        <MudTh>変動量</MudTh>
+        <MudTh>変更後</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="実行者">@(context.Owner?.UserName ?? "-")</MudTd>
+        <MudTd DataLabel="理由">@context.Reason</MudTd>
+        <MudTd DataLabel="操作種別">@context.SourceType</MudTd>
+        <MudTd DataLabel="変更前">@context.PreviousWeight</MudTd>
+        <MudTd DataLabel="変動量">
+            <MudText Color="@(context.Delta > 0 ? Color.Success : (context.Delta < 0 ? Color.Error : Color.Default))">
+                @(context.Delta > 0 ? "+" : "")@context.Delta
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="変更後">@context.NewWeight</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[]{10, 20, 50}"/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    [Parameter] public IEnumerable<TagWeightLedger> Ledgers { get; set; } = Enumerable.Empty<TagWeightLedger>();
+}

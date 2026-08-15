@@ -1,0 +1,107 @@
+@using System.Security.Claims
+@implements IDisposable
+
+@inject NavigationManager NavigationManager
+@inject IWebHostEnvironment Env
+
+<MudNavMenu>
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+
+    <MudNavLink Href="auth" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Lock">Auth Required</MudNavLink>
+
+    <MudNavLink Href="Tag/TagSearch" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Tag Search
+    </MudNavLink>
+    <MudNavLink Href="User/UserSearch" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Search"> User Search
+    </MudNavLink>
+    <MudNavLink Href="Item/ItemList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Item List
+    </MudNavLink>
+    <MudNavLink Href="Tag/TagList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Tag List</MudNavLink>
+    <MudNavLink Href="tag-tree" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Tag Tree</MudNavLink>
+    <AuthorizeView>
+        <Authorized>
+            <MudNavLink Href="@($"User/UserDetail/{currentUserId}")" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.AccountCircle">Profile
+            </MudNavLink>
+            <MudNavLink Href="Account/Manage" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudNavLink>
+            <form action="Account/Logout" method="post">
+                <AntiforgeryToken/>
+                <input type="hidden" name="ReturnUrl" value="@currentUrl"/>
+                <button type="submit" class="mud-nav-link mud-ripple">
+                    <MudIcon Icon="@Icons.Material.Filled.Logout" Color="Color.Info" Class="mr-3"></MudIcon>
+                    Logout
+                </button>
+            </form>
+            <AuthorizeView Roles="Admin" Context="adminContext">
+                <MudNavLink Href="User/Management" Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.ManageAccounts">User Management
+                </MudNavLink>
+                <MudNavLink Href="Tag/AddTag" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">Add Tag
+                </MudNavLink>
+                <MudNavLink Href="Admin/RequireConfirmedAccount" Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Settings">User Confirmation Settings
+                </MudNavLink>
+                <MudNavLink Href="Admin/Invitations" Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.MailOutline">Invitation Management
+                </MudNavLink>
+            </AuthorizeView>
+            <MudNavLink Href="import-tag" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FileUpload">Import
+                Tags
+            </MudNavLink>
+            <MudNavLink Href="Bounty/BountyBoard" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.AssignmentTurnedIn">Bounty Board
+            </MudNavLink>
+            <MudNavLink Href="Contract/ContractManagement" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Mail">Inbox
+            </MudNavLink>
+            <MudNavLink Href="PublicOffer/PublicOfferBoard" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Store">Public Offers
+            </MudNavLink>
+        </Authorized>
+        <NotAuthorized>
+            <MudNavLink Href="Account/Register" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">
+                Register
+            </MudNavLink>
+            <MudNavLink Href="Account/Login" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Password">Login
+            </MudNavLink>
+            <MudNavLink Href="Account/RegisterConfirmation" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.BugReport">Confirm User (Debug)
+            </MudNavLink>
+        </NotAuthorized>
+    </AuthorizeView>
+    @if (Env.IsDevelopment())
+    {
+        <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix"
+                    Icon="@Icons.Material.Filled.AdminPanelSettings">Make Me Admin
+        </MudNavLink>
+    }
+</MudNavMenu>
+
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? currentUrl;
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+
+}

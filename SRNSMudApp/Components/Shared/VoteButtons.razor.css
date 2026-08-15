@@ -1,0 +1,7 @@
+.vote-container {
+    min-width: 32px;
+}
+
+.vote-score {
+    font-weight: 700;
+}

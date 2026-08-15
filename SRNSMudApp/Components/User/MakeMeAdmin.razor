@@ -1,0 +1,87 @@
+@page "/User/MakeMeAdmin"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@rendermode InteractiveServer
+@inject UserManager<ApplicationUser> UserManager
+@inject ISnackbar Snackbar
+@inject IWebHostEnvironment Env
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
+    <MudText Typo="Typo.h5" GutterBottom="true">デバッグ: Admin権限の取得</MudText>
+
+    @if (!Env.IsDevelopment())
+    {
+        <MudAlert Severity="Severity.Error">このページは開発環境でのみ利用可能です。</MudAlert>
+    }
+    else
+    {
+        <MudText Class="mb-4">
+            開発用機能です。現在のログインユーザーに「Admin」ロールを付与します。
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@GrantAdminAsync" Disabled="@_isLoading">
+            @if (_isLoading)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">処理中...</MudText>
+            }
+            else
+            {
+                <MudText>自分をAdminにする</MudText>
+            }
+        </MudButton>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading;
+
+    private async Task GrantAdminAsync()
+    {
+        if (!Env.IsDevelopment()) return;
+
+        _isLoading = true;
+        try
+        {
+            var authState = await AuthState!;
+            var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                Snackbar.Add("ログインしていません。", Severity.Warning);
+                return;
+            }
+
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+                return;
+            }
+
+            var result = await UserManager.AddToRoleAsync(user, "Admin");
+            if (result.Succeeded)
+            {
+                Snackbar.Add("Adminロールを付与しました！再ログインすると反映されます。", Severity.Success);
+            }
+            else if (result.Errors.Any(e => e.Code == "UserAlreadyInRole"))
+            {
+                Snackbar.Add("既にAdminロールを持っています。", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add("権限付与に失敗しました: " + string.Join(", ", result.Errors.Select(e => e.Description)), Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+}

@@ -1,0 +1,127 @@
+
+@using System.Security.Claims
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudText Typo="Typo.body1" Class="mb-4">
+                以下のオファーを実行してタグを受け取ります。
+            </MudText>
+
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                提供されるタグ: @Offer.OfferedTag.Name<br/>
+                要求されるアセット量: @(Offer.RequiredAssetAmount > 0 ? Offer.RequiredAssetAmount.ToString() : "無償")
+            </MudAlert>
+
+            <MudAutocomplete T="Item" Label="タグを付与する対象のアイテム" @bind-Value="_selectedItem"
+                             SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
+                             Required="true" RequiredError="アイテムを選択してください"
+                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+
+            @if (Offer.RequiredAssetAmount > 0)
+            {
+                <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedAsset" Clearable="true"
+                           Required="true" RequiredError="要求量以上のアセットを選択してください"
+                           ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利 (量: {a.Amount})" : "")">
+                    @foreach (var asset in _validAssets)
+                    {
+                        <MudSelectItem Value="@asset"/>
+                    }
+                </MudSelect>
+                @if (!_validAssets.Any())
+                {
+                    <MudText Color="Color.Error" Typo="Typo.caption">条件を満たすアセットを所有していません。</MudText>
+                }
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit"
+                   Disabled="@(!_isValid || (Offer.RequiredAssetAmount > 0 && !_validAssets.Any()))">実行する
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public PublicTradeOffer Offer { get; set; } = null!;
+
+    private MudForm? _form;
+    private bool _isValid;
+    private string _currentUserId = string.Empty;
+
+    private Item? _selectedItem;
+    private RightAsset? _selectedAsset;
+    private List<RightAsset> _validAssets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        if (Offer.RequiredAssetAmount > 0)
+        {
+            await LoadMyAssetsAsync();
+        }
+    }
+
+    private async Task LoadMyAssetsAsync()
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        // Asset must match the OfferedTagId (usually they trade for the same tag they are offering? Wait, no.
+        // "ユーザーが提供する RightAsset の TargetTagId は、OfferedTagId と一致しているか判定に使用します"
+        // Yes, the required asset must be for the OfferedTagId.)
+        _validAssets = await dbContext.RightAssets
+            .Include(a => a.TargetTag)
+            .Where(a => a.OwnerId == _currentUserId && !a.IsBurned && a.TargetTagId == Offer.OfferedTagId && a.Amount >= Offer.RequiredAssetAmount)
+            .ToListAsync();
+    }
+
+    private async Task<IEnumerable<Item>> SearchItems(string? value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
+        if (string.IsNullOrEmpty(value))
+        {
+            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Items
+            .Where(i => i.Content.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
+    }
+
+    private async Task Submit()
+    {
+        await _form!.ValidateAsync();
+        if (!_isValid || _selectedItem == null) return;
+        if (Offer.RequiredAssetAmount > 0 && _selectedAsset == null) return;
+
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        var triggerContract = new PublicOfferTriggerContract
+        {
+            OwnerId = _currentUserId,
+            RequesterUserId = _currentUserId,
+            TagOwnerUserId = Offer.OwnerId,
+            TargetItemId = _selectedItem.Id,
+            RequestedTagId = Offer.OfferedTagId,
+            Status = TradeStatus.Proposed,
+            TargetPublicTradeOfferId = Offer.Id,
+            ConsumedRightAssetId = _selectedAsset?.Id
+        };
+
+        dbContext.TaggingRequestEntities.Add(triggerContract);
+        await dbContext.SaveChangesAsync();
+
+        MudDialog.Close(DialogResult.Ok(triggerContract.Id));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

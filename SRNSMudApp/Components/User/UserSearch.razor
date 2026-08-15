@@ -1,0 +1,67 @@
+@page "/User/UserSearch"
+@rendermode InteractiveServer
+@attribute [AllowAnonymous]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
+    <MudText Typo="Typo.h5" GutterBottom="true">ユーザー検索</MudText>
+
+    <MudAutocomplete T="ApplicationUser"
+                     Label="ユーザーを検索"
+                     @bind-Value="SelectedUser"
+                     SearchFunc="@SearchUsersAsync"
+                     ToStringFunc="@(user => user == null ? null : user.UserName)"
+                     Placeholder="ユーザー名を入力..."
+                     ResetValueOnEmptyText="true"
+                     Clearable="true">
+
+        <ItemTemplate Context="user">
+            <div class="d-flex flex-column">
+                <MudText Typo="Typo.body1">@user.UserName</MudText>
+            </div>
+        </ItemTemplate>
+
+        <NoItemsTemplate>
+            <MudText Align="Align.Center" Class="px-4 py-2">
+                一致するユーザーが見つかりません
+            </MudText>
+        </NoItemsTemplate>
+    </MudAutocomplete>
+
+    @if (SelectedUser != null)
+    {
+        <MudCard Class="mt-4">
+            <MudCardContent>
+                <MudText>選択されたユーザー: <strong>@SelectedUser.UserName</strong></MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Href="@($"/User/UserDetail/{SelectedUser.Id}")">詳細を見る
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private ApplicationUser? SelectedUser { get; set; }
+
+    private async Task<IEnumerable<ApplicationUser>> SearchUsersAsync(string? value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
+
+        var query = dbContext.Users.AsQueryable();
+
+        if (string.IsNullOrEmpty(value))
+        {
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
+        }
+
+        var upperValue = value.ToUpper();
+        query = query.Where(x => x.NormalizedUserName != null && x.NormalizedUserName.Contains(upperValue));
+
+        return await query.AsNoTracking().Take(50).ToListAsync(token);
+    }
+
+}

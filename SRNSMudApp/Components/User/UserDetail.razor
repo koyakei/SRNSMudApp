@@ -1,0 +1,202 @@
+@page "/User/UserDetail/{UserId}"
+@rendermode InteractiveServer
+@using System.Text.Json
+@implements IAsyncDisposable
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-10">
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+    }
+    else if (user == null)
+    {
+        <MudAlert Severity="Severity.Error">ユーザーが見つかりませんでした。</MudAlert>
+    }
+    else
+    {
+        <div class="d-flex align-center mb-4">
+            <MudText Typo="Typo.h5">@user.UserName</MudText>
+        </div>
+
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mt-4"
+                 ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
+            <MudTabPanel Text="アクティビティ (Item & Tag)">
+                <SRNSMudApp.Components.Shared.ResourceList Tags="userTags" Items="userItems"
+                                                           OnDataChanged="LoadDataAsync" EnableUrlUpdate="false"/>
+            </MudTabPanel>
+            <MudTabPanel Text="作成したタグツリー">
+                <MudCard Elevation="0" Outlined="true">
+                    <MudCardContent>
+                        @if (userTags != null && userTags.Count > 0)
+                        {
+                            <div id="jqtree-container-user-detail" class="tree-container"></div>
+                        }
+                        else
+                        {
+                            <MudText>作成したタグはありません。</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string UserId { get; set; } = string.Empty;
+
+    private ApplicationUser? user;
+    private List<Tag> userTags = [];
+    private List<Item> userItems = [];
+    private bool isLoading = true;
+
+    private int _activeTabIndex;
+    private DotNetObjectReference<UserDetail>? _dotNetRef;
+    private bool _isTreeInitialized;
+
+    private void OnTabChanged(int index)
+    {
+        _activeTabIndex = index;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            await using var dbContext = await DbFactory.CreateDbContextAsync();
+            user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+
+            if (user != null)
+            {
+                userTags = await dbContext.Tags
+                    .Include(t => t.Owner)
+                    .Include(t => t.TargetTagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .AsNoTracking()
+                    .Where(t => t.OwnerId == UserId)
+                    .OrderByDescending(t => t.UpdatedDate)
+                    .ToListAsync();
+
+                userItems = await dbContext.Items
+                    .Include(i => i.Owner)
+                    .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .AsNoTracking()
+                    .Where(i => i.OwnerId == UserId)
+                    .OrderByDescending(i => i.UpdatedDate)
+                    .ToListAsync();
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && !_isTreeInitialized && user != null && userTags.Count > 0 && _activeTabIndex == 1)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            var treeDataJson = GetSerializedTreeData();
+            // isLoggedIn = false にしてドラッグ＆ドロップや追加を無効化（閲覧専用）
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container-user-detail", treeDataJson, _dotNetRef, false);
+            }
+            catch (Exception)
+            {
+            }
+
+            _isTreeInitialized = true;
+        }
+    }
+
+    private string GetSerializedTreeData()
+    {
+        // Root nodes are tags that either have no parent, or their parent is not in the userTags list.
+        List<Tag> rootNodes = [.. userTags.Where(t => t.ParentTagId == null || userTags.All(ut => ut.Id != t.ParentTagId))];
+        var treeData = BuildTreeDataForJqTree(rootNodes, userTags);
+        var options = new JsonSerializerOptions { MaxDepth = 128 };
+        return JsonSerializer.Serialize(treeData, options);
+    }
+
+    private static List<object> BuildTreeDataForJqTree(IEnumerable<Tag> currentLevelNodes, IEnumerable<Tag> allTags)
+    {
+        var tagList = allTags as IReadOnlyCollection<Tag> ?? allTags.ToList();
+        var result = new List<object>();
+        var sortedNodes = currentLevelNodes.OrderBy(t => t.Name).ToList();
+
+        foreach (var node in sortedNodes)
+        {
+            var childNodes = tagList.Where(t => t.ParentTagId == node.Id).ToList();
+            var nodeChildren = BuildTreeDataForJqTree(childNodes, tagList);
+
+            if (nodeChildren.Count == 0)
+            {
+                result.Add(new
+                {
+                    id = node.Id,
+                    name = node.Name
+                });
+                continue;
+            }
+
+            result.Add(new
+            {
+                id = node.Id,
+                name = node.Name,
+                children = nodeChildren
+            });
+        }
+
+        return result;
+    }
+
+    [JSInvokable]
+    public void NavigateToTagDetail(int tagId)
+    {
+        NavigationManager.NavigateTo($"/TagDetail/{tagId}");
+    }
+
+    // jqTreeInterop が呼ばないように isLoggedIn = false で初期化しているが、念のため定義
+    [JSInvokable]
+    public Task OnTreeMove(int movedNodeId, int targetNodeId, string position)
+    {
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        try
+        {
+            if (_isTreeInitialized)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container-user-detail");
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+        catch
+        {
+            // Ignore during teardown
+        }
+    }
+
+}

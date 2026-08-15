@@ -1,0 +1,338 @@
+@using System.Security.Claims
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (ShowHeader)
+{
+    <div class="d-flex justify-space-between align-center mb-4">
+        @if (ShowCreateButton)
+        {
+            <MudButton Href="/Tag/AddTag" Variant="Variant.Filled" Color="Color.Primary">
+                Create New Tag
+            </MudButton>
+        }
+        else
+        {
+            <div></div>
+        }
+
+        <MudAutocomplete T="string" @bind-Value="tagSearch" SearchFunc="@SearchTags"
+                         Placeholder="Search tags..." Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                         Class="mt-0 search-input"
+                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"
+                         Clearable="true"/>
+    </div>
+}
+
+<MudTable Items="@Tags" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@(Tags == null)"
+          LoadingProgressColor="Color.Info" Filter="FilterFunc">
+    <HeaderContent>
+        @if (OnRemoveTag.HasDelegate)
+        {
+            <MudTh></MudTh>
+        }
+        <MudTh>Name</MudTh>
+        <MudTh>Attached Tags</MudTh>
+        <MudTh>Content</MudTh>
+        <MudTh>Weight</MudTh>
+        <MudTh>Owner Name</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        @if (OnRemoveTag.HasDelegate)
+        {
+            <MudTd DataLabel="Remove">
+                <MudIconButton Icon="@Icons.Material.Filled.LinkOff" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => OnRemoveTag.InvokeAsync(context))" title="タグ付けを解除"/>
+            </MudTd>
+        }
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+        <MudTd DataLabel="Attached Tags">
+            @{
+                var allTags = context.TargetTagRelations?
+                    .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+                    .OrderByDescending(tr => tr.Weight)
+                    .ToList() ?? [];
+                var areTagsExpanded = _expandedTagIds.Contains(context.Id);
+                var hasManyTags = allTags.Count >= 3;
+                const int displayLimit = 2;
+                var tagsToDisplay = areTagsExpanded || !hasManyTags ? allTags : [.. allTags.Take(displayLimit)];
+                var hiddenCount = hasManyTags ? allTags.Count - displayLimit : 0;
+            }
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="align-items-center">
+                @foreach (var tr in tagsToDisplay)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                             Class="tag-chip"
+                             CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
+                             OnClose="@(_ => RemoveTagToTagRelationAsync(tr))">
+                        <a class="tag-link"
+                           @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tr.Tag?.Id}"))"
+                           @onclick:stopPropagation="true">
+                            @(tr.Tag?.Name ?? "不明")
+                        </a>
+                    </MudChip>
+                }
+                @if (hasManyTags)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                             OnClick="@(() => ToggleTagExpand(context.Id))"
+                             Class="tag-chip-more">
+                        @(areTagsExpanded ? "閉じる" : $"+{hiddenCount} more")
+                    </MudChip>
+                }
+            </MudStack>
+        </MudTd>
+        <MudTd DataLabel="Content">
+            <div class="content-cell"
+                 title="@context.Content">
+                @context.Content
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Weight">@context.CachedWeight</MudTd>
+        <MudTd DataLabel="Owner Name">@(context.Owner?.UserName)</MudTd>
+        <MudTd DataLabel="Actions">
+            <div class="d-flex align-center action-container">
+                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small" Color="Color.Primary"
+                               OnClick="@(() => OnAddTagToTagClicked(context))" title="タグを追加"/>
+                <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small"
+                               OnClick="@(() => ToggleTree(context.Id))" title="タグツリーを表示"/>
+
+                @* タグツリーポップオーバー *@
+                <MudPopover Open="@(_activeTreeTagId == context.Id)"
+                            AnchorOrigin="Origin.TopRight"
+                            TransformOrigin="Origin.TopLeft"
+                            OverflowBehavior="OverflowBehavior.FlipAlways"
+                            Class="tree-popover" Paper="false">
+                    <TagTreePopoverContent TargetTag="@context"
+                                           AllTags="@_allTagsCache"
+                                           EnableSwap="false"
+                                           EnableExpand="true"
+                                           EnableNavigation="true"/>
+                </MudPopover>
+
+                @* ログイン中のユーザーがタグの作成者の場合のみ編集・削除ボタンを表示 *@
+                @if (!string.IsNullOrEmpty(_currentUserId) && context.OwnerId == _currentUserId)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="@(() => EditTagAsync(context))" title="編集"/>
+                    @if (!context.IsSystem)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                       OnClick="@(() => DeleteTagAsync(context))" title="削除"/>
+                    }
+                }
+            </div>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public IEnumerable<Tag>? Tags { get; set; }
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+    [Parameter] public EventCallback<Tag> OnRemoveTag { get; set; }
+    [Parameter] public bool ShowHeader { get; set; } = true;
+    [Parameter] public bool ShowCreateButton { get; set; } = true;
+
+    private string _currentUserId = "";
+    private string tagSearch = "";
+    private List<Tag> _allTagsCache = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _allTagsCache = await context.Tags.AsNoTracking().ToListAsync();
+    }
+
+    private bool FilterFunc(Tag tag)
+    {
+        if (string.IsNullOrWhiteSpace(tagSearch))
+            return true;
+        if (tag.Name.Contains(tagSearch, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (tag.Content?.Contains(tagSearch, StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+        return tag.Owner?.UserName?.Contains(tagSearch, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private async Task<IEnumerable<string>> SearchTags(string? value, CancellationToken token)
+    {
+        await Task.Yield();
+
+        var sourceTags = Tags ?? [];
+
+        if (string.IsNullOrEmpty(value))
+        {
+            return sourceTags.Select(t => t.Name).Distinct().Take(20);
+        }
+
+        return sourceTags
+            .Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Name)
+            .Distinct()
+            .Take(20);
+    }
+
+    private readonly HashSet<int> _expandedTagIds = [];
+
+    private void ToggleTagExpand(int tagId)
+    {
+        if (!_expandedTagIds.Remove(tagId))
+        {
+            _expandedTagIds.Add(tagId);
+        }
+    }
+
+    // ===== タグツリーポップオーバー用 =====
+    private int? _activeTreeTagId;
+
+    private void ToggleTree(int tagId)
+    {
+        if (_activeTreeTagId == tagId)
+        {
+            _activeTreeTagId = null;
+        }
+        else
+        {
+            _activeTreeTagId = tagId;
+        }
+    }
+
+    private async Task OnAddTagToTagClicked(Tag targetTag)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TagAddDialog>("タグにタグを追加", options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is Tag selectedTag)
+        {
+            await AddTagToTagAsync(targetTag, selectedTag);
+        }
+    }
+
+    private async Task AddTagToTagAsync(Tag targetTag, Tag selectedTag)
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var alreadyExists = await context.TagRelationToTags
+            .AnyAsync(tr => tr.TargetTagId == targetTag.Id && tr.TagId == selectedTag.Id);
+
+        if (alreadyExists)
+        {
+            Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+            return;
+        }
+
+        var newRelation = new TagRelationToTag
+        {
+            TargetTagId = targetTag.Id,
+            TagId = selectedTag.Id,
+            Weight = 1,
+            OwnerId = _currentUserId
+        };
+
+        context.Set<TagRelationToTag>().Add(newRelation);
+        await context.SaveChangesAsync();
+
+        Snackbar.Add("タグを追加しました。", Severity.Success);
+
+        await NotifyDataChangedAsync();
+    }
+
+    private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
+    {
+        if (relation.OwnerId != _currentUserId)
+        {
+            Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+            return;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var entity = await context.TagRelationToTags.FindAsync(relation.Id);
+        if (entity != null)
+        {
+            context.Remove(entity);
+            await context.SaveChangesAsync();
+            Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task EditTagAsync(Tag tag)
+    {
+        if (tag.OwnerId != _currentUserId)
+        {
+            Snackbar.Add("タグの作成者本人ではないため、編集する権限がありません。", Severity.Error);
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var parameters = new DialogParameters { ["Tag"] = tag };
+
+        var dialog = await DialogService.ShowAsync<TagEditDialog>("タグの編集", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await NotifyDataChangedAsync();
+            Snackbar.Add("タグを更新しました。", Severity.Success);
+        }
+    }
+
+    private async Task DeleteTagAsync(Tag tag)
+    {
+        if (tag.OwnerId != _currentUserId)
+        {
+            Snackbar.Add("タグの作成者本人ではないため、削除する権限がありません。", Severity.Error);
+            return;
+        }
+
+        if (tag.IsSystem)
+        {
+            Snackbar.Add("システムタグは削除できません。", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var tagToDelete = await context.Tags.FindAsync(tag.Id);
+            if (tagToDelete != null)
+            {
+                context.Tags.Remove(tagToDelete);
+                await context.SaveChangesAsync();
+
+                await NotifyDataChangedAsync();
+                Snackbar.Add("タグを削除しました。", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("対象のタグが既に削除されているか、見つかりません。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task NotifyDataChangedAsync()
+    {
+        if (OnDataChanged.HasDelegate)
+        {
+            await OnDataChanged.InvokeAsync();
+        }
+    }
+
+}

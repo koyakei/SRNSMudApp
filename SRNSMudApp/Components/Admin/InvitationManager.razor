@@ -1,0 +1,151 @@
+@page "/Admin/Invitations"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@using SRNSMudApp.Data
+@using System.Security.Cryptography
+
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Invitation Management</PageTitle>
+
+<MudText Typo="Typo.h3" GutterBottom="true">Invitation Management</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6">Create New Invitation</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudTextField @bind-Value="_newEmail" Label="Invitee Email Address" Variant="Variant.Outlined"/>
+        </MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateInvitation"
+                       DisableElevation="true">
+                Generate Invite Link
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable Items="@_invitations" Hover="true" Dense="true" Elevation="1">
+    <HeaderContent>
+        <MudTh>Email</MudTh>
+        <MudTh>Code</MudTh>
+        <MudTh>Expiration</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Action</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Code">
+            <MudTooltip Text="Copy Link">
+                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                               OnClick="@(() => CopyLink(context.InvitationCode))"/>
+            </MudTooltip>
+            @context.InvitationCode
+        </MudTd>
+        <MudTd DataLabel="Expiration">@context.ExpirationDate.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="Status">
+            @if (context.IsUsed)
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">Used</MudChip>
+            }
+            else if (context.ExpirationDate < DateTime.UtcNow)
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small">Expired</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small">Pending</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Action">
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                           OnClick="@(() => DeleteInvitation(context))"/>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    private string _newEmail = "";
+    private List<Invitation> _invitations = new();
+    private string? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask;
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        await LoadInvitations();
+    }
+
+    private async Task LoadInvitations()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        _invitations = await context.Invitations!
+            .OrderByDescending(i => i.CreatedDate)
+            .ToListAsync();
+    }
+
+    private async Task CreateInvitation()
+    {
+        if (string.IsNullOrWhiteSpace(_newEmail))
+        {
+            Snackbar.Add("Email is required.", Severity.Error);
+            return;
+        }
+
+        var code = GenerateRandomCode(16);
+        var invitation = new Invitation
+        {
+            Email = _newEmail,
+            InvitationCode = code,
+            ExpirationDate = DateTime.UtcNow.AddDays(7), // 7 days expiration
+            IsUsed = false,
+            InvitedByAdminId = _currentUserId,
+            OwnerId = _currentUserId ?? "system"
+        };
+
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        context.Invitations!.Add(invitation);
+        await context.SaveChangesAsync();
+
+        Snackbar.Add("Invitation created successfully.", Severity.Success);
+        _newEmail = "";
+        await LoadInvitations();
+    }
+
+    private async Task DeleteInvitation(Invitation invitation)
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        context.Invitations!.Remove(invitation);
+        await context.SaveChangesAsync();
+        Snackbar.Add("Invitation deleted.", Severity.Info);
+        await LoadInvitations();
+    }
+
+    // This method simulates copying to clipboard. In a real app, use JSInterop.
+    private void CopyLink(string code)
+    {
+        // For simplicity, just show snackbar. JS interop needed for real clipboard copy.
+        Snackbar.Add($"Link to copy: /Account/Login?inviteCode={code}", Severity.Info);
+    }
+
+    private string GenerateRandomCode(int length)
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        var randomBytes = new byte[length];
+        RandomNumberGenerator.Fill(randomBytes);
+        var code = new char[length];
+        for (int i = 0; i < length; i++)
+        {
+            code[i] = chars[randomBytes[i] % chars.Length];
+        }
+
+        return new string(code);
+    }
+
+}

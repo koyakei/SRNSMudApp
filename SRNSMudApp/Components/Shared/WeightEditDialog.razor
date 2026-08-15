@@ -1,0 +1,26 @@
+<MudDialog>
+    <DialogContent>
+        <MudNumericField @bind-Value="Weight" Label="Weight" Variant="Variant.Outlined" Immediate="true"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">確定</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public int Weight { get; set; }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(Weight));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <base href="/"/>
+    <ResourcePreloader/>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+          rel="stylesheet"/>
+    <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]"/>
+    <link rel="stylesheet" href="@Assets["SRNSMudApp.styles.css"]"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jqtree@1.8.10/jqtree.css"/>
+    <ImportMap/>
+    <link rel="icon" type="image/ico" href="favicon.ico"/>
+    <HeadOutlet/>
+    <title>SRNS</title>
+</head>
+
+<body>
+<Routes/>
+<ReconnectModal/>
+<script src="@Assets["_framework/blazor.web.js"]"></script>
+<script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+<script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jqtree@1.8.10/tree.jquery.js"></script>
+<script src="js/jqTreeInterop.js"></script>
+<script src="js/contentOverflow.js"></script>
+<script src="js/download.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="js/auth.js"></script>
+</body>
+
+</html>

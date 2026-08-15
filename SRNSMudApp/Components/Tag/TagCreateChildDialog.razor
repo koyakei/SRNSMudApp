@@ -1,0 +1,48 @@
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string"
+                      @bind-Value="_name"
+                      Label="タグ名"
+                      Variant="Variant.Outlined"
+                      Class="mb-4"
+                      AutoFocus="true"
+                      Required="true"
+                      RequiredError="タグ名は必須です"/>
+
+        <MudTextField T="string"
+                      @bind-Value="_content"
+                      Label="内容"
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      MaxLines="5"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@Submit">追加</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string _name = "";
+    private string _content = "";
+
+    public record Result(string Name, string Content);
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(new Result(_name, _content ?? "")));
+    }
+
+}

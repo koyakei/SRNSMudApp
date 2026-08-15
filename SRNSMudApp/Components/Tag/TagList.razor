@@ -1,0 +1,31 @@
+@page "/Tag/TagList"
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<MudText Typo="Typo.h4" GutterBottom="true">Tag List</MudText>
+
+<SRNSMudApp.Components.Tag.TagTable Tags="@tags" OnDataChanged="LoadDataAsync"/>
+
+@code {
+    private List<Tag>? tags;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        tags = await context.Tags
+            .Include(t => t.Owner)
+            .Include(t => t.TargetTagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // StateHasChanged();
+    }
+
+}

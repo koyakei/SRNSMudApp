@@ -1,0 +1,38 @@
+@inject IServiceProvider Services
+
+<button type="submit" name="__passkeySubmit" @attributes="AdditionalAttributes">@ChildContent</button>
+<passkey-submit
+    operation="@Operation"
+    name="@Name"
+    email-name="@EmailName"
+    request-token-name="@requestTokenName"
+    request-token-value="@requestTokenValue">
+</passkey-submit>
+
+@code {
+    private string? requestTokenValue;
+    private const string requestTokenName = "RequestVerificationToken";
+
+    [Inject] private AntiforgeryStateProvider AntiforgeryStateProvider { get; set; } = default!;
+
+    [Parameter] [EditorRequired] public PasskeyOperation Operation { get; set; }
+
+    [Parameter] [EditorRequired] public string Name { get; set; } = default!;
+
+    [Parameter] public string? EmailName { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var currentToken = AntiforgeryStateProvider.GetAntiforgeryToken();
+        if (currentToken != null)
+        {
+            requestTokenValue = currentToken.Value;
+        }
+    }
+
+}

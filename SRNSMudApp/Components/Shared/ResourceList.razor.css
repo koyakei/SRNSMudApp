@@ -1,0 +1,85 @@
+.flex-1 {
+    flex: 1;
+}
+
+.resource-name {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.resource-link {
+    font-weight: inherit;
+    font-size: inherit;
+    color: inherit;
+    text-decoration: none;
+}
+
+.custom-chip {
+    padding: 0 10px;
+    flex: 1 1 auto;
+    text-align: center;
+    overflow: visible;
+}
+
+.chip-icon-btn {
+    padding: 2px !important;
+    min-width: 24px !important;
+}
+
+.chip-link {
+    cursor: pointer;
+    color: inherit;
+    text-decoration: none;
+}
+
+.tree-popover {
+    background: transparent;
+    box-shadow: none;
+    margin-bottom: 8px;
+}
+
+.more-chip {
+    cursor: pointer;
+    padding: 0 10px;
+    flex: 1 1 auto;
+    text-align: center;
+}
+
+.resource-content {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+
+.font-inherit {
+    font-weight: inherit;
+    font-size: inherit;
+}
+
+.added-tags-popover {
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.small-chip {
+    padding: 0 6px !important;
+    min-height: 24px !important;
+    margin: 0 !important;
+}
+
+.small-icon {
+    font-size: 14px !important;
+}
+
+.small-chip-link {
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: inherit;
+    text-decoration: none;
+}

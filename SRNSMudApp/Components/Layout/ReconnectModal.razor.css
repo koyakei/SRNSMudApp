@@ -1,0 +1,130 @@
+/* noinspection CssUnusedSymbol */
+#components-reconnect-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1400;
+    overflow: hidden;
+    background-color: transparent;
+    border: none;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#components-reconnect-modal::backdrop {
+    background: rgba(10, 16, 28, 0.5);
+}
+
+#components-reconnect-modal[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.components-reconnect-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: radial-gradient(90% 60% at 80% 0%, rgba(89, 74, 226, 0.12), transparent 60%), radial-gradient(80% 55% at 0% 100%, rgba(33, 150, 243, 0.16), transparent 62%), rgba(8, 12, 20, 0.5);
+}
+
+/* Actions and Text handled by MudBlazor components */
+
+.components-reconnect-first-attempt-visible,
+.components-reconnect-repeated-attempt-visible,
+.components-reconnect-failed-visible,
+.components-pause-visible,
+.components-resume-failed-visible {
+    display: none;
+}
+
+dialog[open].components-reconnect-show .components-reconnect-first-attempt-visible {
+    display: block;
+}
+
+dialog[open].components-reconnect-show .components-rejoin-loader {
+    display: inline-flex;
+}
+
+dialog[open].components-reconnect-failed .components-reconnect-failed-visible {
+    display: block;
+}
+
+dialog[open].components-reconnect-failed #components-reconnect-button {
+    display: block;
+}
+
+dialog[open].components-reconnect-repeated-attempt .components-reconnect-repeated-attempt-visible {
+    display: block;
+}
+
+dialog[open].components-reconnect-repeated-attempt .components-rejoin-loader {
+    display: inline-flex;
+}
+
+dialog[open].components-reconnect-paused .components-pause-visible,
+dialog[open].components-pause .components-pause-visible {
+    display: block;
+}
+
+dialog[open].components-reconnect-paused #components-resume-button,
+dialog[open].components-pause #components-resume-button,
+dialog[open].components-reconnect-resume-failed #components-resume-button,
+dialog[open].components-resume-failed #components-resume-button {
+    display: block;
+}
+
+dialog[open].components-reconnect-resume-failed .components-resume-failed-visible,
+dialog[open].components-resume-failed .components-resume-failed-visible {
+    display: block;
+}
+
+.components-rejoin-loader {
+    display: none;
+    margin-bottom: 10px;
+    gap: 8px;
+}
+
+.components-rejoin-loader div {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: #594AE2;
+    animation: reconnect-pulse 1.2s infinite ease-in-out both;
+}
+
+.components-rejoin-loader div:nth-child(1) {
+    animation-delay: -0.24s;
+}
+
+.components-rejoin-loader div:nth-child(2) {
+    animation-delay: -0.12s;
+}
+
+@keyframes reconnect-pulse {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* Buttons handled by MudButton */
+
+@media (max-width: 600px) {
+    .components-reconnect-backdrop {
+        padding: 14px;
+    }
+
+}

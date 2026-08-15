@@ -1,0 +1,79 @@
+
+@using System.Security.Claims
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudAutocomplete T="Tag" Label="提供するタグ（自分が作成したタグのみ）" @bind-Value="_selectedTag"
+                             SearchFunc="@SearchMyTags" ToStringFunc="@(t => t?.Name ?? "")"
+                             Required="true" RequiredError="タグを選択してください"
+                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+
+            <MudNumericField T="int" Label="要求するアセット量" @bind-Value="_requiredAssetAmount" Min="0"
+                             HelperText="0の場合は無償で提供します。"/>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">公開する
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private string _currentUserId = string.Empty;
+
+    private Tag? _selectedTag;
+    private int _requiredAssetAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+    }
+
+    private async Task<IEnumerable<Tag>> SearchMyTags(string? value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
+        var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId);
+
+        if (!string.IsNullOrEmpty(value))
+        {
+            query = query.Where(t => t.Name.Contains(value));
+        }
+
+        return await query.Take(10).ToListAsync(token);
+    }
+
+    private async Task Submit()
+    {
+        await _form!.ValidateAsync();
+        if (!_isValid || _selectedTag == null) return;
+
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        var offer = new PublicTradeOffer
+        {
+            OwnerId = _currentUserId,
+            OfferedTagId = _selectedTag.Id,
+            RequiredAssetAmount = _requiredAssetAmount,
+            IsActive = true
+        };
+
+        dbContext.PublicTradeOffers!.Add(offer);
+        await dbContext.SaveChangesAsync();
+
+        Snackbar.Add("公開オファーを作成しました。", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

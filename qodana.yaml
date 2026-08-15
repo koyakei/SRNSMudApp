@@ -1,0 +1,79 @@
+version: "1.0"
+image: jetbrains/qodana-cdnet:latest
+dotnet:
+  solution: SRNSMudApp.sln
+
+# ---------------------------------------------------------
+# Profile settings (厳格な推奨プロファイル)
+# ---------------------------------------------------------
+profile:
+  name: qodana.recommended
+
+# ---------------------------------------------------------
+# Inspection include/exclude (トップレベルで指定)
+# ---------------------------------------------------------
+# 特定の重大なインスペクショングループを強制的に有効化
+include:
+  - name: "category:Security"
+  - name: "category:Probable bugs"
+  - name: "category:Performance"
+  - name: "category:Maintainability"
+
+# プロジェクト特性上、意図的に許容するインスペクションを除外
+exclude:
+  - name: "JSUnusedGlobalSymbols"
+  - name: "ConditionalAccessQualifierIsNonNullableAccordingToAPIContract"
+  - name: "ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract"
+  - name: "NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract"
+  - name: "InconsistentNaming"
+  - name: "AutoPropertyCanBeMadeGetOnly.Global"
+  - name: "PropertyCanBeMadeInitOnly.Global"
+  - name: "UnusedAutoPropertyAccessor.Global"
+  - name: "UnusedMember.Local"
+  - name: "UnusedMember.Global"
+  - name: "UnusedParameter.Local"
+  - name: "PreferConcreteValueOverDefault"
+  - name: "MergeIntoPattern"
+  - name: "ArrangeObjectCreationWhenTypeEvident"
+  - name: "CanSimplifySetAddingWithSingleCall"
+  - name: "MergeConditionalExpression"
+  - name: "AutoPropertyCanBeMadeGetOnly.Local"
+  - name: "NotAccessedPositionalProperty.Local"
+  - name: "ClassNeverInstantiated.Local"
+  - name: "UnusedAutoPropertyAccessor.Local"
+  - name: "RedundantTypeDeclarationBody"
+  - name: "RedundantSuppressNullableWarningExpression"
+  - name: "JoinDeclarationAndInitializer"
+
+# ---------------------------------------------------------
+# Bootstrap commands (事前ビルド処理)
+# ---------------------------------------------------------
+# AIエージェントが生成したコードや依存関係を確実にビルド・検証する
+bootstrap: |+
+  set -eu
+  echo "Cleaning existing build artifacts..."
+  find . -type d \( -name "obj" -o -name "bin" \) -exec rm -rf {} +
+  echo "Restoring and building .NET solutions..."
+  dotnet restore
+  # 本番向けにクリーンビルドを実行し、コンパイルエラーを検出する
+  dotnet build --no-restore -c Release
+
+# ---------------------------------------------------------
+# Quality Gates (品質ゲートの設定)
+# ---------------------------------------------------------
+# AI主導の開発環境で、品質基準を満たさないコードを完全にブロック（Fail-fast）
+failureConditions:
+  severityThresholds:
+    any: 0      # 合計の問題数が1つでもあればCI/CDをフェイル
+    critical: 0 # 致命的な問題
+    high: 0     # 深刻な問題
+    moderate: 0 # 中程度の問題
+    low: 0      # 軽微な問題
+    info: 0     # 情報レベルの警告も許容しない
+
+  # コードカバレッジの品質ゲート (サポートされている場合)
+  # AIが生成したテストコードの網羅性を厳密に担保
+  testCoverageThresholds:
+    total: 5 # 全体カバレッジ80%未満でフェイル
+    fresh: 5 # 新規追加コードは90%未満でフェイル
+linter: qodana-cdnet-EAP

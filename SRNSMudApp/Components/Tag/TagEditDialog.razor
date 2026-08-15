@@ -1,0 +1,98 @@
+@using SRNSMudApp.Services
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject ITagEmbeddingService TagEmbeddingService
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string"
+                      @bind-Value="_editName"
+                      Label="タグ名"
+                      Variant="Variant.Outlined"
+                      Class="mb-4"
+                      AutoFocus="true"
+                      Required="true"
+                      RequiredError="タグ名は必須です"/>
+
+        <MudTextField T="string"
+                      @bind-Value="_editContent"
+                      Label="内容"
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      MaxLines="5"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    // TagList.razor から渡される Tag パラメータ
+    [Parameter] public Tag Tag { get; set; } = null!;
+
+    // 編集用のバインド変数（キャンセル時に元のオブジェクトを汚染しないため）
+    private string _editName = null!;
+    private string _editContent = null!;
+
+    protected override void OnInitialized()
+    {
+        // 初期値として現在の値をセット
+        _editName = Tag.Name;
+        _editContent = Tag.Content;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName))
+        {
+            Snackbar.Add("タグ名は空にできません。", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var tagToUpdate = await context.Tags.FindAsync(Tag.Id);
+
+            if (tagToUpdate != null)
+            {
+                tagToUpdate.Name = _editName;
+                tagToUpdate.Content = _editContent;
+
+                // タグ名が変更された場合などに備え、ベクトルも再生成する
+                try
+                {
+                    var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(_editName);
+                    tagToUpdate.Embedding = embedding.ToArray();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
+                }
+
+                await context.SaveChangesAsync();
+
+                // 成功した場合はダイアログを閉じ、結果として true を返す
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("対象のタグが見つかりませんでした。", Severity.Error);
+                MudDialog.Cancel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+}

@@ -1,0 +1,140 @@
+@using Microsoft.EntityFrameworkCore
+@using SRNSMudApp.Data
+@using System.Security.Claims
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            @if (TargetItem == null)
+            {
+                <MudAutocomplete T="Item" Label="対象のアイテム" @bind-Value="_selectedItem"
+                                 SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
+                                 Required="true" RequiredError="アイテムを選択してください"
+                                 ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"
+                                 MaxItems="10"/>
+            }
+            else
+            {
+                <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
+            }
+
+            <MudAutocomplete T="Tag" Label="希望するタグ" @bind-Value="_selectedTag"
+                             SearchFunc="@SearchTags" ToStringFunc="@(t => t?.Name ?? "")"
+                             Required="true" RequiredError="タグを選択してください"
+                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"
+                             MaxItems="10"/>
+
+            <MudSelect T="RightAsset" Label="報酬として提供するアセット（任意）" @bind-Value="_selectedRewardAsset"
+                       Clearable="true"
+                       ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")">
+                @foreach (var asset in _myAssets)
+                {
+                    <MudSelectItem Value="@asset"/>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">依頼を作成
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public Item? TargetItem { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+
+    private string _currentUserId = string.Empty;
+    private Item? _selectedItem;
+    private Tag? _selectedTag;
+    private RightAsset? _selectedRewardAsset;
+
+    private List<RightAsset> _myAssets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        if (TargetItem != null)
+        {
+            _selectedItem = TargetItem;
+        }
+
+        await LoadMyAssetsAsync();
+    }
+
+    private async Task LoadMyAssetsAsync()
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        _myAssets = await dbContext.RightAssets
+            .Include(a => a.TargetTag)
+            .Where(a => a.OwnerId == _currentUserId && !a.IsBurned)
+            .ToListAsync();
+    }
+
+    private async Task<IEnumerable<Item>> SearchItems(string value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        if (string.IsNullOrEmpty(value))
+        {
+            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Items
+            .Where(i => i.Content.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
+    }
+
+    private async Task<IEnumerable<Tag>> SearchTags(string value, CancellationToken token)
+    {
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+        if (string.IsNullOrEmpty(value))
+        {
+            return await dbContext.Tags.Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Tags
+            .Where(t => t.Name.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
+    }
+
+    private async Task Submit()
+    {
+        await _form!.ValidateAsync();
+        if (!_isValid || _selectedItem == null || _selectedTag == null)
+            return;
+
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        var bounty = new BountyTaggingContract
+        {
+            OwnerId = _currentUserId,
+            RequesterUserId = _currentUserId,
+            TagOwnerUserId = _selectedTag.OwnerId, // Base property for who owns the requested tag
+            TargetItemId = _selectedItem.Id,
+            RequestedTagId = _selectedTag.Id,
+            Status = TradeStatus.Proposed,
+            OfferedRewardAssetId = _selectedRewardAsset?.Id
+        };
+
+        dbContext.TaggingRequestEntities.Add(bounty);
+        await dbContext.SaveChangesAsync();
+
+        Snackbar.Add("タグ付けの依頼（バウンティ）を作成しました。", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,263 @@
+@page "/"
+@using System.Security.Claims
+
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Home</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    @if (_isLoggedIn)
+    {
+        <MudText Typo="Typo.h5" GutterBottom="true" Class="mb-4">タイムライン</MudText>
+
+        @if (_followedTagIds != null && !_followedTagIds.Any())
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                まだタグをフォローしていません。タグをフォローすると、ここにタイムラインが表示されます。
+            </MudAlert>
+        }
+        else if (_followedTagIds != null)
+        {
+            <div style="height: 80vh; overflow-y: auto;">
+                <Virtualize ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
+                    <ItemContent>
+                        <div class="mb-4">
+                            @if (group.TargetType == "Item" && group.Item != null)
+                            {
+                                <SRNSMudApp.Components.Shared.ItemCard Item="@group.Item"
+                                                                       AllTags="@_allTags"
+                                                                       AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                                       CurrentUserId="@_currentUserId"
+                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                       CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                       HighlightEvents="@group.Events"
+                                                                       IsFocused="false"/>
+                            }
+                            else if (group.TargetType == "Tag" && group.Tag != null)
+                            {
+                                <SRNSMudApp.Components.Shared.TagCard Tag="@group.Tag"
+                                                                      AllTags="@_allTags"
+                                                                      CurrentUserId="@_currentUserId"
+                                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                      CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                      HighlightEvents="@group.Events"
+                                                                      IsFocused="false"/>
+                            }
+                        </div>
+                    </ItemContent>
+                    <Placeholder>
+                        <MudCard Class="mb-4" Elevation="0" Outlined="true">
+                            <MudCardContent>
+                                <div class="d-flex justify-center align-center py-4">
+                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    </Placeholder>
+                </Virtualize>
+            </div>
+        }
+    }
+    else
+    {
+        <MudText Typo="Typo.h3" GutterBottom="true" Align="Align.Center" Class="mt-10">Welcome to SRNSMudApp</MudText>
+        <MudText Align="Align.Center" Class="mb-8">ログインして、フォローしたタグのタイムラインを表示しましょう。
+        </MudText>
+        <div class="d-flex justify-center">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Href="/Account/Login" Size="Size.Large">ログイン
+            </MudButton>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoggedIn;
+    private string _currentUserId = "";
+    private List<int>? _followedTagIds;
+
+    private List<Tag> _allTags = [];
+    private List<TagRelationToTag> _allTagRelationsToTags = [];
+    private int? _currentUserGoodTagId;
+    private int? _currentUserBadTagId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        var user = authState.User;
+        _isLoggedIn = user.Identity?.IsAuthenticated ?? false;
+
+        if (_isLoggedIn)
+        {
+            _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+            if (!string.IsNullOrEmpty(_currentUserId))
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                _followedTagIds = await db.UserTagFollows!
+                    .Where(f => f.OwnerId == _currentUserId)
+                    .Select(f => f.TagId)
+                    .ToListAsync();
+
+                await FetchTagsAsync();
+            }
+        }
+    }
+
+    private async Task FetchTagsAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _allTags = await context.Tags
+            .AsNoTracking()
+            .ToListAsync();
+
+        _allTagRelationsToTags = await context.TagRelationToTags
+            .Include(tr => tr.Tag)
+            .Include(tr => tr.TargetTag)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
+            var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+            _currentUserGoodTagId = goodTag?.Id;
+            _currentUserBadTagId = badTag?.Id;
+        }
+    }
+
+    public async Task EnsureSystemTagsExistAsync()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+        if (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) return;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
+        var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+
+        var created = false;
+        if (goodTag == null)
+        {
+            goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+            context.Tags.Add(goodTag);
+            created = true;
+        }
+
+        if (badTag == null)
+        {
+            badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+            context.Tags.Add(badTag);
+            created = true;
+        }
+
+        if (created)
+        {
+            await context.SaveChangesAsync();
+            await FetchTagsAsync(); // Reload all tags list
+        }
+        else
+        {
+            _currentUserGoodTagId = goodTag.Id;
+            _currentUserBadTagId = badTag.Id;
+        }
+    }
+
+    public class TimelineFeedGroup
+    {
+        public string TargetType { get; set; } = "";
+        public int TargetId { get; set; }
+        public DateTime LatestEventDate { get; set; }
+
+        public Item? Item { get; set; }
+        public Tag? Tag { get; set; }
+
+        public List<TimelineEvent> Events { get; set; } = [];
+    }
+
+    private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimeline(ItemsProviderRequest request)
+    {
+        if (_followedTagIds == null || !_followedTagIds.Any())
+        {
+            return new ItemsProviderResult<TimelineFeedGroup>(new List<TimelineFeedGroup>(), 0);
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.TimelineEvents!
+            .Where(e => _followedTagIds.Contains(e.FollowedTagId));
+
+        var groupedQuery = query
+            .GroupBy(e => new { e.TargetType, TargetId = e.TargetType == "Item" ? e.TargetItemId : e.TargetTagId })
+            .Select(g => new
+            {
+                g.Key.TargetType,
+                g.Key.TargetId,
+                LatestEventDate = g.Max(e => e.CreatedDate)
+            })
+            .Where(g => g.TargetId != null)
+            .OrderByDescending(g => g.LatestEventDate);
+
+        var totalGroups = await groupedQuery.CountAsync();
+
+        var pagedGroups = await groupedQuery
+            .Skip(request.StartIndex)
+            .Take(request.Count)
+            .ToListAsync();
+
+        var feedGroups = new List<TimelineFeedGroup>();
+        foreach (var pg in pagedGroups)
+        {
+            var feedGroup = new TimelineFeedGroup
+            {
+                TargetType = pg.TargetType,
+                TargetId = pg.TargetId!.Value,
+                LatestEventDate = pg.LatestEventDate,
+                Events = await db.TimelineEvents!
+                    .Where(e => _followedTagIds.Contains(e.FollowedTagId) && e.TargetType == pg.TargetType && (pg.TargetType == "Item" ? e.TargetItemId == pg.TargetId : e.TargetTagId == pg.TargetId))
+                    .Include(e => e.FollowedTag)
+                    .AsNoTracking()
+                    .ToListAsync()
+            };
+
+            if (pg.TargetType == "Item")
+            {
+                feedGroup.Item = await db.Items!
+                    .Include(i => i.Owner)
+                    .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(i => i.Id == pg.TargetId);
+            }
+            else if (pg.TargetType == "Tag")
+            {
+                feedGroup.Tag = await db.Tags!
+                    .Include(t => t.Owner)
+                    .Include(t => t.TargetTagRelations!)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Id == pg.TargetId);
+            }
+
+            if (feedGroup.Item != null || feedGroup.Tag != null)
+            {
+                feedGroups.Add(feedGroup);
+            }
+        }
+
+        return new ItemsProviderResult<TimelineFeedGroup>(feedGroups, totalGroups);
+    }
+
+    private class TimelineFeedGroupComparer : IEqualityComparer<TimelineFeedGroup>
+    {
+        public bool Equals(TimelineFeedGroup? x, TimelineFeedGroup? y) => x?.TargetType == y?.TargetType && x?.TargetId == y?.TargetId;
+        public int GetHashCode(TimelineFeedGroup obj) => HashCode.Combine(obj.TargetType, obj.TargetId);
+    }
+
+}

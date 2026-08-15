@@ -1,0 +1,14 @@
+.tag-search-results {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.search-result-item {
+    position: relative;
+}
+
+.tree-popover {
+    background: transparent;
+    box-shadow: none;
+    margin-left: 10px;
+}

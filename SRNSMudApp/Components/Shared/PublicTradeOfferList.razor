@@ -1,0 +1,67 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Components.PublicOffer
+@namespace SRNSMudApp.Components.Shared
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudTable Items="@Offers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true" Dense="true"
+          Class="mt-4">
+    <HeaderContent>
+        <MudTh>ステータス</MudTh>
+        <MudTh>オファー日時</MudTh>
+        <MudTh>オファー元</MudTh>
+        <MudTh>対象タグ</MudTh>
+        <MudTh>要求アセット量</MudTh>
+        <MudTh>アクション</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="ステータス">
+            @if (context.IsActive)
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">有効</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Default" Size="Size.Small">無効</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="オファー日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="オファー元">@(context.Owner?.UserName ?? "-")</MudTd>
+        <MudTd DataLabel="対象タグ">@(context.OfferedTag?.Name ?? "-")</MudTd>
+        <MudTd DataLabel="要求アセット量">@context.RequiredAssetAmount</MudTd>
+        <MudTd DataLabel="アクション">
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
+                       Disabled="!context.IsActive"
+                       OnClick="@(() => TriggerOffer(context))">
+                受諾する
+            </MudButton>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[]{10, 20, 50}"/>
+    </PagerContent>
+</MudTable>
+
+@code {
+    [Parameter] public IEnumerable<PublicTradeOffer> Offers { get; set; } = Enumerable.Empty<PublicTradeOffer>();
+
+    [Parameter] public EventCallback OnOfferTriggered { get; set; }
+
+    private async Task TriggerOffer(PublicTradeOffer offer)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Offer", offer }
+        };
+
+        var dialog = await DialogService.ShowAsync<TriggerPublicOfferDialog>("オファーを受諾", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            Snackbar.Add("オファーを受諾し、リクエストを作成しました。", Severity.Success);
+            await OnOfferTriggered.InvokeAsync();
+        }
+    }
+
+}

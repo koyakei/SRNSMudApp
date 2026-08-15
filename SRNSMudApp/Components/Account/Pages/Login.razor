@@ -1,0 +1,102 @@
+@page "/Account/Login"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
+
+<PageTitle>Log in / Register</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Class="pa-8" Elevation="3">
+        <MudText Typo="Typo.h4" Align="Align.Center" GutterBottom="true">Welcome</MudText>
+
+        <MudText Typo="Typo.body1" Align="Align.Center" Class="mb-6">
+            Sign in or register using one of the following providers.
+        </MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                @_errorMessage
+            </MudAlert>
+        }
+
+
+
+        <MudStack Spacing="4">
+            <!-- Google Login Button Container -->
+            <div id="google-login-button-container" class="mb-2"></div>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Chat"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       OnClick="LoginWithLine">
+                Continue with LINE
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Dark"
+                       StartIcon="@Icons.Custom.Brands.GitHub"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       OnClick="LoginWithGithub">
+                Continue with GitHub
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@inject IJSRuntime JS
+
+@code {
+    private string _errorMessage = "";
+
+    // Fallback Client IDs (should be in appsettings.json)
+    private string GoogleClientId => Configuration["Authentication:Google:ClientId"] ?? "YOUR_GOOGLE_CLIENT_ID";
+    private string LineClientId => Configuration["Authentication:Line:ClientId"] ?? "YOUR_LINE_CLIENT_ID";
+    private string GithubClientId => Configuration["Authentication:GitHub:ClientId"] ?? "YOUR_GITHUB_CLIENT_ID";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("customAuth.renderGoogleButton", GoogleClientId, "google-login-button-container");
+            }
+            catch (Exception ex)
+            {
+                // Ignore prerendering errors or logging them
+                Console.WriteLine($"Error rendering Google button: {ex.Message}");
+            }
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+
+        if (query.TryGetValue("error", out var errorMsg))
+        {
+            _errorMessage = errorMsg.ToString();
+        }
+    }
+
+    private async Task LoginWithLine()
+    {
+        var redirectUri = NavigationManager.ToAbsoluteUri($"/auth/callback?provider=Line").ToString();
+        await JS.InvokeVoidAsync("window.customAuth.redirectToLine", LineClientId, redirectUri);
+    }
+
+    private async Task LoginWithGithub()
+    {
+        var redirectUri = NavigationManager.ToAbsoluteUri($"/auth/callback?provider=Github").ToString();
+        await JS.InvokeVoidAsync("window.customAuth.redirectToGithub", GithubClientId, redirectUri);
+    }
+
+}

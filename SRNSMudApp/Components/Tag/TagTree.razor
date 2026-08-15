@@ -1,0 +1,544 @@
+@page "/tag-tree"
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+@using System.Security.Claims
+@using System.Text.Json
+@implements IAsyncDisposable
+
+<MudText Typo="Typo.h4" GutterBottom="true">タグ階層管理</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">
+    JqTreeを使用してノードをドラッグ＆ドロップし、親子関係を変更できます。変更は自動的にデータベースに保存されます。
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12">
+        <div class="d-flex align-center">
+            <MudTextField T="string" Value="@_searchText" ValueChanged="OnSearchTextChanged" Placeholder="タグを検索..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mr-4"
+                          Immediate="true" DebounceInterval="300"/>
+            <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="@DeleteSelectedTags" Disabled="@(string.IsNullOrEmpty(_currentUserId))">選択したタグを削除
+            </MudButton>
+        </div>
+    </MudItem>
+    <MudItem xs="12">
+        <MudPaper Width="100%" Elevation="3" Class="pa-4">
+            <div id="jqtree-container" class="mt-4 tree-container"></div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Tag> _tags = [];
+    private string? _searchText;
+    private DotNetObjectReference<TagTree>? _dotNetRef;
+    private bool _isTreeInitialized;
+    private bool _dataLoaded;
+    private string? _currentUserId;
+
+    [SupplyParameterFromQuery(Name = "tagId")]
+    public int? SelectedTagId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        await LoadDataAsync();
+        _dataLoaded = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            await using var context = await DbFactory.CreateDbContextAsync();
+            _tags = await context.Tags.Where(t => !t.IsSystem).ToListAsync();
+
+            // 循環参照を検出して解除する（DB上のデータも修復する）
+            HashSet<int> visited = [];
+            HashSet<int> recursionStack = [];
+            var hasCycles = false;
+
+            foreach (var tag in _tags)
+            {
+                if (visited.Contains(tag.Id)) continue;
+
+                var current = tag;
+                List<Tag> path = [];
+
+                while (current != null)
+                {
+                    if (recursionStack.Contains(current.Id))
+                    {
+                        current.ParentTagId = null;
+
+                        var dbTag = await context.Tags.FindAsync(current.Id);
+                        if (dbTag is not null)
+                        {
+                            dbTag.ParentTagId = null;
+                        }
+
+                        hasCycles = true;
+                        break;
+                    }
+
+                    if (visited.Contains(current.Id)) break;
+
+                    recursionStack.Add(current.Id);
+                    path.Add(current);
+
+                    current = current.ParentTagId.HasValue
+                        ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value)
+                        : null;
+                }
+
+                foreach (var p in path)
+                {
+                    recursionStack.Remove(p.Id);
+                    visited.Add(p.Id);
+                }
+            }
+
+            if (hasCycles)
+            {
+                await context.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TagTree] LoadDataAsync ERROR: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // _dataLoaded が true になるまでツリーを初期化しない
+        // （OnInitializedAsync の await 中に firstRender が先に来る場合がある）
+        if (!_isTreeInitialized && _dataLoaded)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            var treeDataJson = GetSerializedTreeData();
+            var isLoggedIn = !string.IsNullOrEmpty(_currentUserId);
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container", treeDataJson, _dotNetRef, isLoggedIn, SelectedTagId);
+            }
+            catch (Exception)
+            {
+            }
+
+            _isTreeInitialized = true;
+        }
+    }
+
+    private IEnumerable<Tag> GetFilteredTags()
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return _tags
+                .OrderByDescending(t => t.OwnerId == _currentUserId)
+                .ThenBy(t => t.Name)
+                .Take(2000);
+        }
+
+        var baseTags = _tags.Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        HashSet<int> resultIds = [];
+
+        foreach (var tag in baseTags)
+        {
+            resultIds.Add(tag.Id);
+
+            var current = tag;
+            while (current.ParentTagId.HasValue)
+            {
+                var parent = _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value);
+                if (parent == null) break;
+
+                // If parent is already in the set, its ancestors are also already in the set
+                if (!resultIds.Add(parent.Id))
+                    break;
+
+                current = parent;
+            }
+        }
+
+        return _tags.Where(t => resultIds.Contains(t.Id));
+    }
+
+    private static List<object> BuildTreeDataForJqTree(int? parentId, IEnumerable<Tag> filteredTags)
+    {
+        var tagList = filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags];
+        List<object> result = [];
+        List<Tag> children;
+
+        if (parentId == null)
+        {
+            var allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
+            children =
+            [
+                .. tagList
+                    .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
+                    .OrderBy(t => t.Name)
+            ];
+        }
+        else
+        {
+            children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
+        }
+
+        foreach (var child in children)
+        {
+            var nodeChildren = BuildTreeDataForJqTree(child.Id, tagList);
+            if (nodeChildren.Count == 0)
+            {
+                result.Add(new
+                {
+                    id = child.Id,
+                    name = child.Name
+                });
+                continue;
+            }
+
+            result.Add(new
+            {
+                id = child.Id,
+                name = child.Name,
+                children = nodeChildren
+            });
+        }
+
+        return result;
+    }
+
+    private string GetSerializedTreeData()
+    {
+        var filteredTags = GetFilteredTags();
+        var treeData = BuildTreeDataForJqTree(null, filteredTags);
+        // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする
+        var options = new JsonSerializerOptions { MaxDepth = 1024 };
+        return JsonSerializer.Serialize(treeData, options);
+    }
+
+    private async Task OnSearchTextChanged(string? text)
+    {
+        _searchText = text;
+        if (_isTreeInitialized)
+        {
+            var treeDataJson = GetSerializedTreeData();
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    private async Task DeleteSelectedTags()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        List<int> selectedIds = [];
+        try
+        {
+            selectedIds = await JSRuntime.InvokeAsync<List<int>>("jqTreeInterop.getSelectedIds", "jqtree-container");
+        }
+        catch (Exception)
+        {
+        }
+
+        if (selectedIds == null || selectedIds.Count == 0)
+        {
+            Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
+            return;
+        }
+
+        var hasDeleted = false;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            var selectedTagsFromDb = await context.Tags.Where(t => selectedIds.Contains(t.Id)).ToListAsync();
+
+            var unauthorizedTags = selectedTagsFromDb.Where(t => t.OwnerId != _currentUserId).ToList();
+            var systemTags = selectedTagsFromDb.Where(t => t.IsSystem).ToList();
+            var authorizedIds = selectedTagsFromDb.Where(t => t.OwnerId == _currentUserId && !t.IsSystem).Select(t => t.Id).ToList();
+
+            if (unauthorizedTags.Count > 0)
+            {
+                var skippedNames = string.Join(", ", unauthorizedTags.Select(t => t.Name));
+                Snackbar.Add($"削除権限がないためスキップしました: {skippedNames}", Severity.Warning);
+            }
+
+            if (systemTags.Count > 0)
+            {
+                var skippedNames = string.Join(", ", systemTags.Select(t => t.Name));
+                Snackbar.Add($"システムタグは削除できないためスキップしました: {skippedNames}", Severity.Warning);
+            }
+
+            if (authorizedIds.Count > 0)
+            {
+                var tagsToDelete = await context.Tags
+                    .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == _currentUserId)
+                    .ToListAsync();
+
+                if (tagsToDelete.Count > 0)
+                {
+                    // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
+                    var relationsToDelete = await context.TagRelationToTags
+                        .Where(tr => authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
+                        .ToListAsync();
+
+                    if (relationsToDelete.Count > 0)
+                    {
+                        context.TagRelationToTags.RemoveRange(relationsToDelete);
+                    }
+
+                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
+                    var orphanedChildren = await context.Tags
+                        .Where(t => t.ParentTagId.HasValue && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
+                        .ToListAsync();
+
+                    foreach (var child in orphanedChildren)
+                    {
+                        child.ParentTagId = null;
+                    }
+
+                    // SQLiteの自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
+                    foreach (var tag in tagsToDelete)
+                    {
+                        tag.ParentTagId = null;
+                    }
+
+                    await context.SaveChangesAsync();
+
+                    // タグ本体の削除
+                    context.Tags.RemoveRange(tagsToDelete);
+                    await context.SaveChangesAsync();
+
+                    hasDeleted = true;
+                    Snackbar.Add($"{tagsToDelete.Count}個のタグを削除しました。", Severity.Success);
+                }
+
+                await transaction.CommitAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"削除中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+
+        if (hasDeleted)
+        {
+            await LoadDataAsync();
+            StateHasChanged();
+            if (_isTreeInitialized)
+            {
+                var treeDataJson = GetSerializedTreeData();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+    }
+
+
+    [JSInvokable]
+    public async Task AddChildTagByNodeId(int parentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var dialog = await DialogService.ShowAsync<TagCreateChildDialog>("子タグの追加");
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is TagCreateChildDialog.Result data)
+        {
+            try
+            {
+                var newTag = new Tag
+                {
+                    Name = data.Name,
+                    Content = data.Content,
+                    ParentTagId = parentId,
+                    OwnerId = _currentUserId,
+                    CachedWeight = 0,
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                };
+
+                await using var context = await DbFactory.CreateDbContextAsync();
+                context.Tags.Add(newTag);
+                await context.SaveChangesAsync();
+
+                Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
+
+                await LoadDataAsync();
+                StateHasChanged();
+                if (_isTreeInitialized)
+                {
+                    var treeDataJson = GetSerializedTreeData();
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
+            {
+                Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnTreeMove(int movedNodeId, int targetNodeId, string position)
+    {
+        var movedItem = _tags.FirstOrDefault(t => t.Id == movedNodeId);
+        var targetItem = _tags.FirstOrDefault(t => t.Id == targetNodeId);
+
+        if (movedItem == null || targetItem == null) return;
+
+        // 権限チェック: 自分のタグ以外は移動不可とする
+        if (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
+        {
+            Snackbar.Add("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
+            if (!_isTreeInitialized) return;
+
+            var treeDataJson = GetSerializedTreeData();
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+            }
+            catch (Exception)
+            {
+            }
+
+            return;
+        }
+
+        // 自分自身の子孫へのドロップは無効（循環参照を防ぐ）
+        // movedItem が targetItem の祖先（または自身）であるかを確認する
+        if (IsDescendantOrSelf(movedItem, targetItem))
+        {
+            Snackbar.Add($"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
+            if (!_isTreeInitialized) return;
+
+            var treeDataJson = GetSerializedTreeData();
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+            }
+            catch (Exception)
+            {
+            }
+
+            return;
+        }
+
+        movedItem.ParentTagId = position switch
+        {
+            "inside" => targetItem.Id,
+            "before" or "after" => targetItem.ParentTagId,
+            _ => movedItem.ParentTagId
+        };
+
+        try
+        {
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var tagToUpdate = await context.Tags.FindAsync(movedItem.Id);
+            if (tagToUpdate != null)
+            {
+                tagToUpdate.ParentTagId = movedItem.ParentTagId;
+                tagToUpdate.UpdatedDate = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+                Snackbar.Add("タグ構造を更新しました。", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存時にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+
+        StateHasChanged();
+
+        // jqTreeのデータを更新
+        if (_isTreeInitialized)
+        {
+            var treeDataJson = GetSerializedTreeData();
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    private bool IsDescendantOrSelf(Tag parent, Tag target)
+    {
+        if (parent.Id == target.Id) return true;
+
+        var children = _tags.Where(t => t.ParentTagId == parent.Id);
+        return children.Any(child => IsDescendantOrSelf(child, target));
+    }
+
+
+    [JSInvokable]
+    public void NavigateToTagDetail(int tagId)
+    {
+        NavigationManager.NavigateTo($"/TagDetail/{tagId}");
+    }
+
+    [JSInvokable]
+    public void OnNodeSelected(int? nodeId)
+    {
+        var uri = NavigationManager.GetUriWithQueryParameter("tagId", nodeId);
+        NavigationManager.NavigateTo(uri, false, true);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        try
+        {
+            if (_isTreeInitialized)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container");
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+        catch
+        {
+            // Ignore during teardown
+        }
+    }
+
+}

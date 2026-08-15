@@ -1,0 +1,276 @@
+@page "/import-tag"
+@using System.Numerics.Tensors
+@using System.Security.Claims
+@using System.Text
+@using System.Text.RegularExpressions
+@using SRNSMudApp.Services
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject ITagEmbeddingService TagEmbeddingService
+
+<MudText Typo="Typo.h4" GutterBottom="true">タグインポート (CSV)</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">
+    階層構造を持ったタグをCSVから一括インポートします。各行の左から右に向かって親子の階層関係になります。<br/>
+    （例: <code>動物,哺乳類,犬</code> という行は「動物 > 哺乳類 > 犬」という構造を作成します）
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="3">
+    <MudText Typo="Typo.h6" GutterBottom="true">インポート先タグ（必須）</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">
+        選択したタグの子としてインポートします。親タグの選択は必須です。
+    </MudText>
+    <MudAutocomplete T="Tag"
+                     Label="親タグを検索"
+                     @bind-Value="_selectedParentTag"
+                     SearchFunc="@SearchTagsAsync"
+                     ToStringFunc="@(tag => tag == null ? null : tag.Name)"
+                     Placeholder="タグ名を入力..."
+                     ResetValueOnEmptyText="true"
+                     Clearable="true"
+                     Class="mb-4">
+        <ItemTemplate Context="tag">
+            <MudText Typo="Typo.body1">@tag.Name</MudText>
+        </ItemTemplate>
+        <NoItemsTemplate>
+            <MudText Align="Align.Center" Class="px-4 py-2">
+                一致するタグが見つかりません
+            </MudText>
+        </NoItemsTemplate>
+    </MudAutocomplete>
+
+    <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles" Accept=".csv">
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.CloudUpload">
+            CSVファイルを選択
+        </MudButton>
+    </MudFileUpload>
+
+    @if (_file != null)
+    {
+        <MudText Typo="Typo.body2" Class="mt-2">選択されたファイル: @_file.Name (@_file.Size bytes)</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" Class="mt-4" OnClick="@ImportData"
+                   Disabled="@(_isImporting || _selectedParentTag == null)">
+            @if (_isImporting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">インポート中...</MudText>
+            }
+            else
+            {
+                <MudText>インポート実行</MudText>
+            }
+        </MudButton>
+    }
+</MudPaper>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IBrowserFile? _file;
+    private bool _isImporting;
+    private string? _currentUserId;
+    private readonly Regex _tagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F]+$");
+    private Tag? _selectedParentTag;
+
+    private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return [];
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync(token);
+        var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId).AsQueryable();
+
+        if (string.IsNullOrEmpty(value))
+        {
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
+        }
+
+        try
+        {
+            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value);
+            var queryArray = queryVector.ToArray();
+
+            var textMatches = await query
+                .Where(x => x.Name.Contains(value) || (x.Content != null && x.Content.Contains(value)))
+                .AsNoTracking()
+                .ToListAsync(token);
+
+            var vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
+
+            var vectorMatches = vectorTags
+                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
+                .Take(50)
+                .ToList();
+
+            return
+            [
+                .. textMatches.Concat(vectorMatches)
+                    .DistinctBy(x => x.Id)
+                    .Take(50)
+            ];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Vector search failed: {ex.Message}");
+            query = query.Where(x => x.Name.Contains(value) || (x.Content != null && x.Content.Contains(value)));
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private void UploadFiles(IBrowserFile? file)
+    {
+        _file = file;
+    }
+
+    private async Task ImportData()
+    {
+        if (_selectedParentTag == null)
+        {
+            Snackbar.Add("親タグを選択してください", Severity.Warning);
+            return;
+        }
+
+        if (_file == null)
+        {
+            Snackbar.Add("ファイルが選択されていません", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            Snackbar.Add("ログインが必要です", Severity.Error);
+            return;
+        }
+
+        _isImporting = true;
+        // StateHasChanged();
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+            // Read file content
+            using var stream = _file.OpenReadStream(104857600); // Max 10MB
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var content = await reader.ReadToEndAsync();
+
+            var lines = content.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
+
+            // Load existing tags for this user
+            var existingTags = await dbContext.Tags
+                .Where(t => t.OwnerId == _currentUserId)
+                .ToDictionaryAsync(t => t.Name, t => t);
+
+            var createdCount = 0;
+
+            // Begin transaction for safety
+            await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+            Tag? baseParentTag = null;
+            if (_selectedParentTag != null && existingTags.TryGetValue(_selectedParentTag.Name, out var trackedBaseTag))
+            {
+                baseParentTag = trackedBaseTag;
+            }
+
+            foreach (var line in lines)
+            {
+                var tagNames = line.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+                if (tagNames.Count == 0) continue;
+
+                var currentParentTag = baseParentTag;
+
+                foreach (var tagName in tagNames)
+                {
+                    // Validate tag name
+                    if (!_tagNameRegex.IsMatch(tagName))
+                    {
+                        throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
+                    }
+
+                    if (!existingTags.TryGetValue(tagName, out var tag))
+                    {
+                        // Tag doesn't exist, create it
+                        var newTag = new Tag
+                        {
+                            Name = tagName,
+                            OwnerId = _currentUserId,
+                            ParentTag = currentParentTag,
+                            CreatedDate = DateTime.UtcNow,
+                            UpdatedDate = DateTime.UtcNow
+                        };
+
+                        try
+                        {
+                            var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                            newTag.Embedding = embedding.ToArray();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Embedding generation failed: {ex.Message}");
+                        }
+
+                        dbContext.Tags.Add(newTag);
+
+                        existingTags[tagName] = newTag;
+                        currentParentTag = newTag;
+                        createdCount++;
+                        continue;
+                    }
+
+                    if (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
+                    {
+                        // Avoid circular reference
+                        if (!IsDescendantOrSelf(tag, currentParentTag))
+                        {
+                            tag.ParentTag = currentParentTag;
+                            tag.ParentTagId = null; // Let EF Core manage the FK via navigation property
+                        }
+                    }
+
+                    currentParentTag = tag;
+                }
+            }
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            Snackbar.Add($"インポートが完了しました。{createdCount}個のタグを新規作成しました。", Severity.Success);
+            _file = null;
+
+            // Redirect to Tag Tree page
+            NavigationManager.NavigateTo("/tag-tree");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"インポート中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isImporting = false;
+            // StateHasChanged();
+        }
+    }
+
+    private static bool IsDescendantOrSelf(Tag parent, Tag target)
+    {
+        if (ReferenceEquals(parent, target)) return true;
+
+        var current = target;
+        while (current?.ParentTag != null)
+        {
+            if (ReferenceEquals(current.ParentTag, parent)) return true;
+            current = current.ParentTag;
+        }
+
+        return false;
+    }
+
+}

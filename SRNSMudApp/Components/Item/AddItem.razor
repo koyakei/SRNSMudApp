@@ -1,0 +1,185 @@
+@using System.Security.Claims
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Identity
+@rendermode InteractiveServer
+
+@namespace SRNSMudApp.Components.Item
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject UserManager<ApplicationUser> UserManager
+
+<div class="w-100 pb-2">
+    @if (_newItem == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+        <MudText>読み込み中...</MudText>
+    }
+    else
+    {
+        <EditForm Model="@_newItem" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit"
+                  FormName="AddItem" class="w-100">
+            <DataAnnotationsValidator/>
+
+            <div class="d-flex gap-4 align-start">
+                <div class="flex-grow-1 d-flex flex-column additem-content">
+                    <MudTextField @bind-Value="_newItem.Content"
+                                  For="@(() => _newItem.Content)"
+                                  name="_newItem.Content"
+                                  Placeholder="新しいアイテムのコンテンツを入力..."
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  MaxLength="1000"
+                                  Counter="1000"
+                                  Required="true"
+                                  RequiredError="コンテンツは必須です。"
+                                  Immediate="true"/>
+
+                    @* 抽出したURLのプレビューを表示 *@
+                    @{
+                        var urls = ExtractUrls(_newItem.Content);
+                    }
+                    @if (urls.Any())
+                    {
+                        <div class="d-flex flex-column gap-2 mt-2">
+                            @foreach (var url in urls.Take(3)) // 最大3件程度に制限
+                            {
+                                <SRNSMudApp.Components.Shared.UrlPreviewCard Url="@url"/>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="d-flex flex-column align-center mt-2 additem-submit">
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               Class="w-100">
+                        保存
+                    </MudButton>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
+
+    [Parameter] public IEnumerable<Tag> InitialTags { get; set; } = [];
+
+    [Parameter] public EventCallback OnItemAdded { get; set; }
+
+    [SupplyParameterFromForm] private Item? _newItem { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 2. フォーム送信時（POST）の再読み込みで、入力済みデータを上書きしないようにガードする
+        if (_newItem == null)
+        {
+            var authState = await AuthenticationStateTask;
+            var user = authState.User;
+
+            var userId = string.Empty;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+            }
+
+            _newItem = new Item
+            {
+                Content = string.Empty,
+                OwnerId = userId
+            };
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (!string.IsNullOrWhiteSpace(_newItem!.Content))
+        {
+            try
+            {
+                await using (var context = await DbFactory.CreateDbContextAsync())
+                {
+                    context.Items.Add(_newItem);
+
+                    if (InitialTags != null && InitialTags.Any())
+                    {
+                        var tagRelations = new List<TagRelation>();
+                        foreach (var tag in InitialTags)
+                        {
+                            tagRelations.Add(new TagRelation
+                            {
+                                TagId = tag.Id,
+                                Weight = 1,
+                                OwnerId = _newItem.OwnerId
+                            });
+                        }
+
+                        _newItem.TagRelations = tagRelations;
+                    }
+
+                    await context.SaveChangesAsync();
+                }
+
+                _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
+
+                Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
+
+                if (OnItemAdded.HasDelegate)
+                {
+                    await OnItemAdded.InvokeAsync();
+                }
+                else
+                {
+                    NavigationManager.NavigateTo(NavigationManager.Uri, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                var msg = $"[AddItem ERROR] {ex}";
+                Console.WriteLine(msg);
+                System.IO.File.WriteAllText("/tmp/additem_error.txt", msg);
+                Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            }
+        }
+        else
+        {
+            Console.WriteLine("Empty content");
+        }
+    }
+
+    private void HandleInvalidSubmit(EditContext context)
+    {
+        Console.WriteLine("[AddItem] Form is INVALID. Validation messages:");
+        foreach (var msg in context.GetValidationMessages())
+        {
+            Console.WriteLine(msg);
+        }
+
+        System.IO.File.WriteAllText("/tmp/additem_invalid.txt", string.Join("\n", context.GetValidationMessages()));
+    }
+
+    private static readonly Regex UrlRegex = new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)");
+
+    private static List<string> ExtractUrls(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return [];
+        var results = new List<string>();
+        var matches = UrlRegex.Matches(text);
+        foreach (Match match in matches)
+        {
+            if (!results.Contains(match.Value))
+            {
+                results.Add(match.Value);
+            }
+        }
+
+        return results;
+    }
+
+}

@@ -1,0 +1,81 @@
+.preview-card {
+    width: 100%;
+    cursor: pointer;
+}
+
+.preview-img-container {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+}
+
+.preview-img {
+    border-top-left-radius: inherit;
+    border-bottom-left-radius: inherit;
+}
+
+.preview-content {
+    overflow: hidden;
+}
+
+.preview-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: bold;
+}
+
+.preview-highlight {
+    margin-top: 4px;
+    padding: 4px 8px;
+    border-left: 3px solid #f5a623;
+    background: rgba(245, 166, 35, 0.08);
+    border-radius: 0 4px 4px 0;
+}
+
+.highlight-header {
+    margin-bottom: 2px;
+}
+
+.highlight-icon {
+    color: #f5a623;
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+}
+
+.highlight-title {
+    color: #f5a623;
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.highlight-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.preview-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.site-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.site-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

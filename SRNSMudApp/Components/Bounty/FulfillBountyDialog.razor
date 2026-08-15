@@ -1,0 +1,149 @@
+@using Microsoft.EntityFrameworkCore
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using System.Security.Claims
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TaggingContractService ContractService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" GutterBottom="true">
+            以下のアイテムにタグ付けを行って依頼を完了します。
+        </MudText>
+        <MudList T="string" ReadOnly="true">
+            <MudListItem>
+                <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
+                <MudText Typo="Typo.body2">@Bounty.TargetItem.Content</MudText>
+            </MudListItem>
+            <MudListItem>
+                <MudText Typo="Typo.subtitle2">付与するタグ</MudText>
+                <MudText Typo="Typo.body2">@Bounty.RequestedTag.Name</MudText>
+            </MudListItem>
+            @if (Bounty.OfferedRewardAsset != null)
+            {
+                <MudListItem>
+                    <MudText Typo="Typo.subtitle2">獲得できる報酬</MudText>
+                    <MudText Typo="Typo.body2"
+                             Color="Color.Success">@($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")</MudText>
+                </MudListItem>
+            }
+        </MudList>
+
+        @if (_isLoading)
+        {
+            <MudProgressCircular Indeterminate="true"/>
+        }
+        else if (_canFulfillAsOwner)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">
+                あなたはタグ「@Bounty.RequestedTag.Name」のオーナーです。アセットを消費せずに依頼を完了できます。
+            </MudAlert>
+        }
+        else if (_myValidAssets.Any())
+        {
+            <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                <MudSelect T="RightAsset" Label="消費するアセットを選択" @bind-Value="_selectedAsset" Required="true"
+                           RequiredError="消費するアセットを選択してください"
+                           ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")"
+                           Class="mt-4">
+                    @foreach (var asset in _myValidAssets)
+                    {
+                        <MudSelectItem Value="@asset"/>
+                    }
+                </MudSelect>
+            </MudForm>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">
+                この依頼を完了するために必要な「@Bounty.RequestedTag.Name」の権利（RightAsset）を所持していません。
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!CanSubmit())">
+            承諾して完了
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public BountyTaggingContract Bounty { get; set; } = null!;
+
+    private MudForm? _form;
+    private bool _isValid = true;
+    private bool _isLoading = true;
+
+    private string _currentUserId = string.Empty;
+    private bool _canFulfillAsOwner;
+    private List<RightAsset> _myValidAssets = [];
+    private RightAsset? _selectedAsset;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState!;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        _canFulfillAsOwner = Bounty.RequestedTag.OwnerId == _currentUserId;
+
+        if (!_canFulfillAsOwner)
+        {
+            _myValidAssets = await dbContext.RightAssets
+                .Include(a => a.TargetTag)
+                .Where(a => a.OwnerId == _currentUserId && a.TargetTagId == Bounty.RequestedTagId && !a.IsBurned)
+                .ToListAsync();
+
+            if (_myValidAssets.Count == 1)
+            {
+                _selectedAsset = _myValidAssets.First();
+            }
+        }
+
+        _isLoading = false;
+    }
+
+    private bool CanSubmit()
+    {
+        if (_isLoading) return false;
+        if (_canFulfillAsOwner) return true;
+        return _myValidAssets.Any() && _selectedAsset != null && _isValid;
+    }
+
+    private async Task Submit()
+    {
+        if (!CanSubmit()) return;
+
+        if (!_canFulfillAsOwner)
+        {
+            await _form!.ValidateAsync();
+            if (!_isValid) return;
+        }
+
+        try
+        {
+            await ContractService.AcceptContractAsync(Bounty.Id, _currentUserId, _canFulfillAsOwner ? null : _selectedAsset?.Id);
+            Snackbar.Add("依頼を完了しました！", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

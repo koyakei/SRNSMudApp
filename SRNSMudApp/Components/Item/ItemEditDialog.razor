@@ -1,0 +1,78 @@
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string"
+                      @bind-Value="_editContent"
+                      Label="内容"
+                      Variant="Variant.Outlined"
+                      Lines="5"
+                      MaxLines="10"
+                      MaxLength="1000"
+                      Counter="1000"
+                      Immediate="true"
+                      AutoFocus="true"
+                      Required="true"
+                      RequiredError="内容は必須です"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    // ItemList.razor から渡される Item パラメータ
+    [Parameter] public Item Item { get; set; } = null!;
+
+    // 編集用のバインド変数（キャンセル時に元のオブジェクトを汚染しないため）
+    private string _editContent = null!;
+
+    protected override void OnInitialized()
+    {
+        // 初期値として現在のコンテンツをセット
+        _editContent = Item.Content;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editContent))
+        {
+            Snackbar.Add("内容は空にできません。", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var itemToUpdate = await context.Items.FindAsync(Item.Id);
+
+            if (itemToUpdate != null)
+            {
+                itemToUpdate.Content = _editContent;
+                await context.SaveChangesAsync();
+
+                // 成功した場合はダイアログを閉じ、結果として true を返す
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("対象のアイテムが見つかりませんでした。", Severity.Error);
+                MudDialog.Cancel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+}

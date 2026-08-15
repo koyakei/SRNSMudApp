@@ -1,0 +1,58 @@
+<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
+
+<dialog id="components-reconnect-modal" data-nosnippet>
+    <div class="components-reconnect-backdrop">
+        <MudPaper Elevation="24" Class="pa-5 rounded-xl" Style="width: min(480px, 100%);" aria-live="assertive"
+                  aria-atomic="true">
+            <header class="d-flex align-center mb-2" style="gap: 10px;">
+                <span class="components-reconnect-status-dot" aria-hidden="true"></span>
+                <MudText Typo="Typo.h6" Style="font-size: 1.05rem; font-weight: 600; line-height: 1.3;">Connection
+                    Interrupted
+                </MudText>
+            </header>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Your current session is still open. We'll keep trying to restore it.
+            </MudText>
+
+            <div
+                class="components-rejoin-loader components-reconnect-first-attempt-visible components-reconnect-repeated-attempt-visible"
+                aria-hidden="true">
+                <div></div>
+                <div></div>
+                <div></div>
+            </div>
+
+            <MudText Typo="Typo.body2" Style="font-weight: 500;" Class="components-reconnect-first-attempt-visible">
+                Rejoining the server...
+            </MudText>
+            <MudText Typo="Typo.body2" Style="font-weight: 500;" Class="components-reconnect-repeated-attempt-visible">
+                Rejoin failed. Trying again in <span id="components-seconds-to-next-attempt"></span>s.
+            </MudText>
+            <MudText Typo="Typo.body2" Style="font-weight: 500;" Color="Color.Error"
+                     Class="components-reconnect-failed-visible">
+                Failed to rejoin. Retry now or reload the page.
+            </MudText>
+
+            <MudText Typo="Typo.body2" Style="font-weight: 500;" Class="components-pause-visible">
+                The session has been paused by the server.
+            </MudText>
+            <MudText Typo="Typo.body2" Style="font-weight: 500;" Color="Color.Error"
+                     Class="components-resume-failed-visible">
+                Failed to resume the session. Retry now or reload the page.
+            </MudText>
+
+            <div class="mt-3 d-flex justify-end" style="gap: 10px;">
+                <MudButton id="components-reconnect-button" Class="components-reconnect-failed-visible"
+                           Variant="Variant.Filled" Color="Color.Primary">
+                    Retry
+                </MudButton>
+                <MudButton id="components-resume-button"
+                           Class="components-pause-visible components-resume-failed-visible" Variant="Variant.Filled"
+                           Color="Color.Primary">
+                    Resume
+                </MudButton>
+            </div>
+        </MudPaper>
+    </div>
+</dialog>

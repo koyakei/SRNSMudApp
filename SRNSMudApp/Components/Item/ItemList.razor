@@ -1,0 +1,651 @@
+@page "/Item/ItemList"
+@using System.Numerics.Tensors
+@using System.Text.Encodings.Web
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@using System.Text.Unicode
+@using Microsoft.AspNetCore.WebUtilities
+@using SRNSMudApp.Services
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ITagEmbeddingService TagEmbeddingService
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@inject LinkPreviewService LinkPreviewService
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
+    <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mb-4">
+        <MudTabPanel Text="アイテムの追加">
+            <AddItem InitialTags="@_selectedFilterTags" OnItemAdded="LoadDataAsync"/>
+        </MudTabPanel>
+        <AuthorizeView>
+            <Authorized>
+                <MudTabPanel Text="アイテムのインポート (CSV)">
+                    <ItemImport OnImportCompleted="LoadDataAsync"/>
+                </MudTabPanel>
+            </Authorized>
+        </AuthorizeView>
+    </MudTabs>
+
+    @* ===== タグ検索セクション ===== *@
+    <MudPaper Class="pa-3 mb-4 rounded-xl search-container" Outlined="true">
+        @* 選択済みタグチップ *@
+        @if (_selectedFilterTags.Any())
+        {
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-2 align-center">
+                @foreach (var tag in _selectedFilterTags)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                             OnClose="@(_ => RemoveTagFilter(tag))">
+                        @tag.Name
+                    </MudChip>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
+                           OnClick="@ClearAllTagFilters" StartIcon="@Icons.Material.Filled.Clear"
+                           Class="clear-btn">
+                    すべてクリア
+                </MudButton>
+            </MudStack>
+        }
+
+        @* 検索テキスト入力 *@
+        <MudTextField T="string"
+                      Value="_tagSearchText"
+                      ValueChanged="OnTagSearchTextChanged"
+                      Placeholder="タグで絞り込み..."
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnKeyDown="@OnTagSearchKeyDown"
+                      Clearable="true"/>
+
+        @* ===== 候補ドロップダウン ===== *@
+        @if (_showSuggestions)
+        {
+            <div class="suggestion-backdrop" @onclick="CloseSuggestions" @onclick:stopPropagation="true"></div>
+            <div class="suggestion-dropdown-wrapper">
+                <MudPaper Elevation="8" Class="rounded-lg py-1">
+                    @if (_tagSuggestions.Any())
+                    {
+                        @for (var i = 0; i < _tagSuggestions.Count; i++)
+                        {
+                            var tag = _tagSuggestions[i];
+                            var isHighlighted = i == _highlightedIndex;
+                            var count = _tagItemCounts.GetValueOrDefault(tag.Id, 0);
+
+                            <div @onclick="@(() => SelectTagFilter(tag))"
+                                 @onclick:stopPropagation="true"
+                                 class="d-flex justify-space-between align-center w-100 px-4 py-2 cursor-pointer suggestion-item"
+                                 style="@(isHighlighted ? "background-color: rgba(0, 0, 0, 0.08);" : "")">
+                                <MudText Typo="Typo.body2">@tag.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @count 件
+                                </MudText>
+                            </div>
+                        }
+                    }
+                    else if (!string.IsNullOrWhiteSpace(_tagSearchText))
+                    {
+                        <div class="px-4 py-2">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">一致するタグがありません</MudText>
+                        </div>
+                    }
+                </MudPaper>
+            </div>
+        }
+    </MudPaper>
+
+    @* ===== フィルタ結果件数 ===== *@
+    @if (_selectedFilterTags.Any())
+    {
+        <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
+            @(_items.Count()) 件のアイテム、@(_foundTags.Count()) 件のタグが見つかりました
+        </MudText>
+    }
+
+    <div class="d-flex flex-column gap-2 mb-4">
+        <div class="d-flex justify-space-between align-end flex-wrap gap-2">
+            <MudAutocomplete T="Tag"
+                             Label="ソート対象タグを追加"
+                             Value="null"
+                             ValueChanged="OnSortTargetTagAdded"
+                             SearchFunc="@SearchSortTagsAsync"
+                             ToStringFunc="@(t => t == null ? "" : t.Name)"
+                             Clearable="false"
+                             ResetValueOnEmptyText="true"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Style="min-width: 250px;"/>
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                       OnClick="@ExportToJsonAsync">
+                JSONエクスポート
+            </MudButton>
+        </div>
+
+        @if (_sortConditions.Any())
+        {
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="align-center">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">ソート優先度 (左から):</MudText>
+                @foreach (var condition in _sortConditions)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                             OnClose="@(_ => RemoveSortCondition(condition))">
+                        <span class="d-flex align-center">
+                            @condition.Tag.Name
+                            <MudIconButton
+                                Icon="@(condition.Order == SortOrder.Desc ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                                Size="Size.Small" Color="Color.Inherit" Class="ml-1 pa-0"
+                                OnClick="@(() => ToggleSortOrder(condition))"
+                                title="@(condition.Order == SortOrder.Desc ? "降順 (クリックで昇順に変更)" : "昇順 (クリックで降順に変更)")"/>
+                        </span>
+                    </MudChip>
+                }
+            </MudStack>
+        }
+    </div>
+
+    <SRNSMudApp.Components.Shared.ResourceList Tags="_foundTags" Items="_items" OnDataChanged="LoadDataAsync"/>
+</MudContainer>
+
+
+@code {
+    private IEnumerable<Item> _items = [];
+    private IEnumerable<Tag> _foundTags = [];
+
+    // ===== タグ検索フィルタ用ステート =====
+    private List<Tag> _selectedFilterTags = [];
+    private string _tagSearchText = "";
+    private List<Tag> _tagSuggestions = [];
+    private Dictionary<int, int> _tagItemCounts = [];
+    private bool _showSuggestions;
+    private int _highlightedIndex = -1;
+
+    // ===== ソート用ステート =====
+    public enum SortOrder
+    {
+        Desc,
+        Asc
+    }
+
+    public class SortCondition
+    {
+        public Tag Tag { get; set; } = null!;
+        public SortOrder Order { get; set; } = SortOrder.Desc;
+    }
+
+    private readonly List<SortCondition> _sortConditions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = new Uri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+
+        if (query.TryGetValue("tags", out var tagsValues))
+        {
+            var tagIds = tagsValues.Select(v => int.TryParse(v, out var id) ? id : 0).Where(id => id > 0).ToList();
+            if (tagIds.Any())
+            {
+                _selectedFilterTags = await context.Tags
+                    .Where(t => tagIds.Contains(t.Id))
+                    .ToListAsync();
+            }
+        }
+
+        if (query.TryGetValue("sort", out var sortStr))
+        {
+            var parts = sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var kvp = part.Split(':');
+                if (kvp.Length == 2 && int.TryParse(kvp[0], out var tagId))
+                {
+                    var order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
+                    var tag = await context.Tags.FindAsync(tagId);
+                    if (tag != null)
+                    {
+                        _sortConditions.Add(new SortCondition { Tag = tag, Order = order });
+                    }
+                }
+            }
+        }
+
+        await LoadDataAsync();
+    }
+
+    // ===== タグ検索メソッド =====
+
+    private async Task OnTagSearchTextChanged(string? value)
+    {
+        _tagSearchText = value ?? string.Empty;
+        _highlightedIndex = -1;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _tagSuggestions.Clear();
+            _tagItemCounts.Clear();
+            _showSuggestions = false;
+            return;
+        }
+
+        await SearchTagsAsync();
+    }
+
+    private async Task SearchTagsAsync()
+    {
+        var selectedIds = _selectedFilterTags.Select(t => t.Id).ToHashSet();
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+
+        var query = context.Tags.AsNoTracking().Where(t => !selectedIds.Contains(t.Id));
+
+        try
+        {
+            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(_tagSearchText);
+            var queryArray = queryVector.ToArray();
+
+            var textMatches = await query
+                .Where(t => t.Name.Contains(_tagSearchText) || t.Content.Contains(_tagSearchText))
+                .ToListAsync();
+
+            var vectorTags = await query
+                .Where(t => t.Embedding != null)
+                .ToListAsync();
+
+            var vectorMatches = vectorTags
+                .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
+                .Take(10)
+                .ToList();
+
+            _tagSuggestions =
+            [
+                .. textMatches.Concat(vectorMatches)
+                    .DistinctBy(t => t.Id)
+                    .Take(10)
+            ];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Vector search failed: {ex.Message}");
+            _tagSuggestions = await query
+                .Where(t => t.Name.Contains(_tagSearchText) || t.Content.Contains(_tagSearchText))
+                .OrderBy(t => t.Name)
+                .Take(10)
+                .ToListAsync();
+        }
+
+        if (_tagSuggestions.Any())
+        {
+            var ids = _tagSuggestions.Select(t => t.Id).ToList();
+            _tagItemCounts = await context.TagRelations
+                .Where(tr => ids.Contains(tr.TagId))
+                .GroupBy(tr => tr.TagId)
+                .Select(g => new { TagId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.TagId, x => x.Count);
+        }
+        else
+        {
+            _tagItemCounts.Clear();
+        }
+
+        _showSuggestions = true;
+    }
+
+    private async Task OnTagSearchKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                _showSuggestions = false;
+                _highlightedIndex = -1;
+                break;
+            case "ArrowDown":
+                if (_showSuggestions && _tagSuggestions.Any())
+                    _highlightedIndex = Math.Min(_highlightedIndex + 1, _tagSuggestions.Count - 1);
+                break;
+            case "ArrowUp":
+                if (_showSuggestions && _tagSuggestions.Any())
+                    _highlightedIndex = Math.Max(_highlightedIndex - 1, 0);
+                break;
+            case "Enter":
+                if (_highlightedIndex >= 0 && _highlightedIndex < _tagSuggestions.Count)
+                    await SelectTagFilter(_tagSuggestions[_highlightedIndex]);
+                break;
+        }
+    }
+
+    private void UpdateUrlQuery()
+    {
+        var tagIds = _selectedFilterTags.Select(t => t.Id).ToArray();
+        var sortParam = string.Join(",", _sortConditions.Select(c => $"{c.Tag.Id}:{(c.Order == SortOrder.Desc ? "desc" : "asc")}"));
+
+        var parameters = new Dictionary<string, object?>
+        {
+            { "tags", tagIds.Any() ? tagIds : null },
+            { "sort", string.IsNullOrEmpty(sortParam) ? null : sortParam }
+        };
+        var newUri = NavigationManager.GetUriWithQueryParameters(parameters);
+        NavigationManager.NavigateTo(newUri, replace: true);
+    }
+
+    private async Task SelectTagFilter(Tag tag)
+    {
+        if (_selectedFilterTags.All(t => t.Id != tag.Id))
+        {
+            _selectedFilterTags.Add(tag);
+        }
+
+        _tagSearchText = "";
+        _tagSuggestions.Clear();
+        _tagItemCounts.Clear();
+        _showSuggestions = false;
+        _highlightedIndex = -1;
+        UpdateUrlQuery();
+        await LoadDataAsync();
+    }
+
+    private async Task RemoveTagFilter(Tag tag)
+    {
+        _selectedFilterTags.RemoveAll(t => t.Id == tag.Id);
+        _sortConditions.RemoveAll(c => c.Tag.Id == tag.Id);
+        UpdateUrlQuery();
+        await LoadDataAsync();
+    }
+
+    private async Task ClearAllTagFilters()
+    {
+        _selectedFilterTags.Clear();
+        _sortConditions.Clear();
+        UpdateUrlQuery();
+        await LoadDataAsync();
+    }
+
+    private void CloseSuggestions()
+    {
+        _showSuggestions = false;
+        _highlightedIndex = -1;
+    }
+
+    // ===== 既存メソッド =====
+
+    private async Task LoadDataAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var query = context.Items
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsQueryable();
+
+        var tagQuery = context.Tags
+            .Include(t => t.Owner)
+            .Include(t => t.TargetTagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsQueryable();
+
+        // タグフィルタ適用（AND 検索: 選択した全タグを含む Item/Tag のみ）
+        if (_selectedFilterTags.Any())
+        {
+            query = _selectedFilterTags.Aggregate(query, (current, tag) => current.Where(i => i.TagRelations.Any(tr => tr.TagId == tag.Id)));
+            tagQuery = _selectedFilterTags.Aggregate(tagQuery, (current, tag) => current.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == tag.Id)));
+
+            tagQuery = ApplySortToTagQuery(tagQuery);
+            _foundTags = await tagQuery.ToListAsync();
+        }
+        else
+        {
+            _foundTags = new List<Tag>();
+        }
+
+        query = ApplySortToItemQuery(query);
+        _items = await query.ToListAsync();
+
+        // StateHasChanged();
+    }
+
+    private IQueryable<Item> ApplySortToItemQuery(IQueryable<Item> query)
+    {
+        if (!_sortConditions.Any())
+        {
+            return query.OrderByDescending(i => i.UpdatedDate);
+        }
+
+        IOrderedQueryable<Item>? orderedQuery = null;
+
+        foreach (var condition in _sortConditions)
+        {
+            var targetId = condition.Tag.Id;
+            if (orderedQuery == null)
+            {
+                orderedQuery = condition.Order == SortOrder.Desc
+                    ? query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+            else
+            {
+                orderedQuery = condition.Order == SortOrder.Desc
+                    ? orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+        }
+
+        return orderedQuery ?? query.OrderByDescending(i => i.UpdatedDate);
+    }
+
+    private IQueryable<Tag> ApplySortToTagQuery(IQueryable<Tag> query)
+    {
+        if (!_sortConditions.Any())
+        {
+            return query.OrderByDescending(t => t.UpdatedDate);
+        }
+
+        IOrderedQueryable<Tag>? orderedQuery = null;
+
+        foreach (var condition in _sortConditions)
+        {
+            var targetId = condition.Tag.Id;
+            if (orderedQuery == null)
+            {
+                orderedQuery = condition.Order == SortOrder.Desc
+                    ? query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+            else
+            {
+                orderedQuery = condition.Order == SortOrder.Desc
+                    ? orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+        }
+
+        return orderedQuery ?? query.OrderByDescending(t => t.UpdatedDate);
+    }
+
+    private async Task OnSortTargetTagAdded(Tag? tag)
+    {
+        if (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
+        {
+            _sortConditions.Add(new SortCondition { Tag = tag, Order = SortOrder.Desc });
+            UpdateUrlQuery();
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ToggleSortOrder(SortCondition condition)
+    {
+        condition.Order = condition.Order == SortOrder.Desc ? SortOrder.Asc : SortOrder.Desc;
+        UpdateUrlQuery();
+        await LoadDataAsync();
+    }
+
+    private async Task RemoveSortCondition(SortCondition condition)
+    {
+        _sortConditions.Remove(condition);
+        UpdateUrlQuery();
+        await LoadDataAsync();
+    }
+
+    private Task<IEnumerable<Tag>> SearchSortTagsAsync(string? value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Task.FromResult<IEnumerable<Tag>>(_selectedFilterTags);
+        }
+
+        var matches = _selectedFilterTags.Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(matches);
+    }
+
+    private async Task ExportToJsonAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+
+        var itemIds = _items.Select(i => i.Id).ToList();
+
+        var allTags = await context.Tags.ToDictionaryAsync(t => t.Id);
+
+        var itemTags = await context.TagRelations
+            .Where(tr => itemIds.Contains(tr.ItemId))
+            .ToListAsync();
+
+        var relatedTagIds = itemTags.Select(t => t.TagId).Distinct().ToList();
+
+        var tagToTags = await context.TagRelationToTags
+            .Where(trt => relatedTagIds.Contains(trt.TargetTagId))
+            .ToListAsync();
+
+        var exportList = new List<ExportItemDto>();
+
+        foreach (var item in _items)
+        {
+            var exportItem = new ExportItemDto { Content = item.Content };
+            var relations = itemTags.Where(tr => tr.ItemId == item.Id).ToList();
+
+            foreach (var rel in relations)
+            {
+                if (!allTags.TryGetValue(rel.TagId, out var tag)) continue;
+
+                var exportTag = new ExportTagDto
+                {
+                    Name = tag.Name,
+                    Content = tag.Content
+                };
+
+                var currentTag = tag;
+                while (currentTag.ParentTagId.HasValue && allTags.TryGetValue(currentTag.ParentTagId.Value, out var parentTag))
+                {
+                    exportTag.ParentTags.Add(new ExportTagSimpleDto
+                    {
+                        Name = parentTag.Name,
+                        Content = parentTag.Content
+                    });
+                    currentTag = parentTag;
+                }
+
+                var attachedRelations = tagToTags.Where(trt => trt.TargetTagId == tag.Id).ToList();
+                foreach (var attachedRel in attachedRelations)
+                {
+                    if (allTags.TryGetValue(attachedRel.TagId, out var attachedTag))
+                    {
+                        exportTag.RelatedTags.Add(new ExportTagSimpleDto
+                        {
+                            Name = attachedTag.Name,
+                            Content = attachedTag.Content
+                        });
+                    }
+                }
+
+                exportItem.Tags.Add(exportTag);
+            }
+
+            var urls = ExtractUrls(item.Content);
+            foreach (var url in urls.Take(3))
+            {
+                var preview = await LinkPreviewService.GetPreviewAsync(url);
+                if (preview is { IsSuccess: true })
+                {
+                    exportItem.LinkPreviews.Add(new ExportLinkPreviewDto
+                    {
+                        Url = preview.Url,
+                        Title = preview.Title,
+                        Description = preview.Description,
+                        ImageUrl = preview.ImageUrl,
+                        SiteName = preview.SiteName
+                    });
+                }
+            }
+
+            exportList.Add(exportItem);
+        }
+
+        var json = JsonSerializer.Serialize(exportList, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+        });
+
+        try
+        {
+            await JS.InvokeVoidAsync("window.downloadFileFromText", "search_results.json", json);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public class ExportItemDto
+    {
+        public string Content { get; set; } = string.Empty;
+        public List<ExportTagDto> Tags { get; set; } = [];
+        public List<ExportLinkPreviewDto> LinkPreviews { get; set; } = [];
+    }
+
+    public class ExportTagDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public List<ExportTagSimpleDto> ParentTags { get; set; } = [];
+        public List<ExportTagSimpleDto> RelatedTags { get; set; } = [];
+    }
+
+    public class ExportTagSimpleDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+    }
+
+    public class ExportLinkPreviewDto
+    {
+        public string Url { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public string SiteName { get; set; } = string.Empty;
+    }
+
+    private static readonly Regex UrlRegex = new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)");
+
+    private static List<string> ExtractUrls(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return [];
+        List<string> results = [];
+        var matches = UrlRegex.Matches(text);
+        foreach (Match match in matches)
+        {
+            if (!results.Contains(match.Value))
+            {
+                results.Add(match.Value);
+            }
+        }
+
+        return results;
+    }
+
+}

@@ -1,0 +1,677 @@
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using SRNSMudApp.Components.Tag
+@implements IAsyncDisposable
+
+<MudCard id="@($"tag-card-{Tag.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Tag.Id))" Outlined="true"
+         Class="rounded-xl scroll-observe-target" Style="@GetTagCardStyle()">
+    <MudCardContent Class="pa-4">
+        <div class="d-flex align-start">
+            <VoteButtons Score="GetTagScore()"
+                         IsUpvoted="IsTagUpvoted()"
+                         IsDownvoted="IsTagDownvoted()"
+                         OnUpvoteClicked="UpvoteTagAsync"
+                         OnDownvoteClicked="DownvoteTagAsync"/>
+
+            <div class="flex-1">
+                <div class="d-flex justify-space-between align-start">
+                    <div>
+                        <div class="resource-name">
+                            <MudLink Href="@($"/TagDetail/{Tag.Id}")" Typo="Typo.subtitle1"
+                                     Class="resource-link">
+                                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small"
+                                         Class="mr-1"/>
+                                @Tag.Name
+                            </MudLink>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Tag.Content))
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-2">@Tag.Content</MudText>
+                        }
+                        <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                 Class="mb-2 d-block">
+                            作成者:
+                            @if (!string.IsNullOrEmpty(Tag.OwnerId))
+                            {
+                                <span @onclick:stopPropagation="true">
+                                    <MudLink Href="@($"/User/UserDetail/{Tag.OwnerId}")"
+                                             Color="Color.Inherit"
+                                             Underline="Underline.Hover">@(Tag.Owner?.UserName)</MudLink>
+                                </span>
+                            }
+                            else
+                            {
+                                @(Tag.Owner?.UserName ?? "不明")
+                            }
+                        </MudText>
+                    </div>
+                </div>
+
+                @{
+                    var allTags = Tag.TargetTagRelations?
+                        .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+                        .OrderByDescending(tr => tr.Weight)
+                        .ToList() ?? [];
+
+                    // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelationToTag としてリストに追加して表示する
+                    if (HighlightEvents != null)
+                    {
+                        foreach (var ev in HighlightEvents.Where(e => e.EventType == "Delete"))
+                        {
+                            if (ev.FollowedTag != null && allTags.All(t => t.TagId != ev.FollowedTagId))
+                            {
+                                allTags.Add(new TagRelationToTag
+                                {
+                                    TagId = ev.FollowedTagId,
+                                    Tag = ev.FollowedTag,
+                                    Weight = ev.PreviousWeight ?? 0,
+                                    OwnerId = ev.OwnerId, // fake owner
+                                });
+                            }
+                        }
+                    }
+
+                    var hasManyTags = allTags.Count >= 5;
+                    const int displayLimit = 4;
+
+                    var tagsToDisplay = _areTagsExpanded || !hasManyTags ? allTags : [.. allTags.Take(displayLimit)];
+                    var hiddenCount = hasManyTags ? allTags.Count - displayLimit : 0;
+                }
+
+                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="align-items-center">
+                    @for (var i = 0; i < tagsToDisplay.Count; i++)
+                    {
+                        var tr = tagsToDisplay[i];
+                        var tagId = tr.Tag?.Id ?? -1;
+                        var highlightEvent = HighlightEvents?.FirstOrDefault(e => e.FollowedTagId == tagId);
+
+                        var isDeleted = highlightEvent?.EventType == "Delete";
+                        var isInserted = highlightEvent?.EventType == "Insert";
+                        var isUpdated = highlightEvent?.EventType == "Update";
+                        var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > (highlightEvent.PreviousWeight ?? 0);
+
+                        var isMyTag = tr.OwnerId == CurrentUserId;
+                        var bgColor = isDeleted ? "#E0E0E0" : (highlightEvent != null ? "#FFEB3B" : (isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4"));
+                        var textColor = isDeleted ? "#9E9E9E" : (highlightEvent != null ? "#F57F17" : (isMyTag ? i < _chipTextColors.Length ? _chipTextColors[i] : _chipTextColors[0] : "#5C4B00"));
+
+                        var chipId = $"tag-tagchip-{Tag.Id}-{tagId}";
+                        var isActive = _activePopoverTagId == tagId && _activePopoverChipKey == chipId;
+                        var displayWeight = isUpdated || isInserted ? $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}" : isDeleted ? $"{highlightEvent?.PreviousWeight}" : tr.Weight.ToString();
+                        var addBtnColor = weightIncreased ? Color.Success : Color.Inherit;
+
+                        <span id="@chipId"
+                              class="position-relative d-inline-flex align-center">
+                            <MudChip T="string" Size="Size.Small"
+                                     Class="custom-chip"
+                                     Style="@($"background: {bgColor}; color: {textColor}; font-weight: {(highlightEvent != null ? "bold" : "normal")}")"
+                                     CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
+                                     OnClose="@(_ => RemoveTagToTagRelationAsync(tr))">
+                                <div class="d-flex align-center">
+                                    <MudIconButton Icon="@Icons.Material.Filled.LocalOffer"
+                                                   Size="Size.Small" Color="Color.Inherit"
+                                                   Class="chip-icon-btn mr-1"
+                                                   OnClick="@(() => OnAddTagToTagClicked(tr.Tag))"/>
+                                    <span class="d-flex align-center"><a class="chip-link mr-1"
+                                                                         style="@(isDeleted ? "text-decoration: line-through;" : "")"
+                                                                         @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
+                                                                         @onclick:stopPropagation="true">@(tr.Tag?.Name ?? "不明")</a>
+                                        @if (!isDeleted)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                                           Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
+                                                           OnClick="@(() => UpdateTagToTagWeightAsync(tr, -1))"
+                                                           title="Weightを減らす"/>
+                                        }
+                                        <MudLink Color="Color.Inherit" Underline="Underline.Hover"
+                                                 Class="mx-1 cursor-pointer font-weight-bold" OnClick="@(async () =>
+                                                                                                       {
+                                                                                                           if (!isDeleted) await EditTagToTagWeightAsync(tr);
+                                                                                                       })">
+                                            @if (isDeleted)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                         Class="mr-1" Style="font-size: 1rem; vertical-align: middle;"/>
+                                            }
+                                            <span style="vertical-align: middle;">@displayWeight</span>
+                                        </MudLink>
+                                        @if (!isDeleted)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                           Color="@addBtnColor" Class="chip-icon-btn pa-0 mx-1"
+                                                           OnClick="@(() => UpdateTagToTagWeightAsync(tr, 1))"
+                                                           title="Weightを増やす"/>
+                                        }
+                                        <span class="ml-1">(@GetShortOwnerName(tr.Tag?.Owner?.UserName))</span>
+                                    </span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                                                   Size="Size.Small" Color="Color.Inherit"
+                                                   Class="chip-icon-btn ml-1"
+                                                   OnClick="@(() => ToggleTagTreePopover(tagId, chipId))"/>
+                                </div>
+                            </MudChip>
+
+                            @* tags tree UI if any *@
+                            <MudPopover Open="@(isActive && tr.Tag != null)"
+                                        AnchorOrigin="Origin.TopCenter"
+                                        TransformOrigin="Origin.BottomCenter"
+                                        OverflowBehavior="OverflowBehavior.FlipAlways"
+                                        Class="tree-popover" Paper="false">
+                                <TagTreePopoverContent TargetTag="@tr.Tag"
+                                                       AllTags="@AllTags"
+                                                       EnableSwap="true"
+                                                       EnableExpand="true"
+                                                       EnableNavigation="true"
+                                                       EnableAddChild="true"
+                                                       OnAddChildTag="OnAddChildTagFromTree"
+                                                       OnSwap="@(newTagId => ChangeTagTagAsync(tr, newTagId))"/>
+                            </MudPopover>
+                        </span>
+                    }
+
+                    @if (hasManyTags)
+                    {
+                        if (_areTagsExpanded)
+                        {
+                            <MudChip T="string" Size="Size.Small"
+                                     OnClick="@ToggleTagTagExpand"
+                                     Class="more-chip">
+                                閉じる
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small"
+                                     OnClick="@ToggleTagTagExpand"
+                                     Class="more-chip">
+                                +@hiddenCount more
+                            </MudChip>
+                        }
+                    }
+
+                    <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => OnAddTagToTagClicked(Tag))"
+                                   title="タグを追加"/>
+                </MudStack>
+            </div>
+        </div>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter, EditorRequired] public Tag Tag { get; set; } = null!;
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+    [Parameter] public bool IsFocused { get; set; }
+    [Parameter] public EventCallback<int> OnFocus { get; set; }
+    [Parameter] public List<Tag> AllTags { get; set; } = [];
+    [Parameter] public string CurrentUserId { get; set; } = "";
+    [Parameter] public int? CurrentUserGoodTagId { get; set; }
+    [Parameter] public int? CurrentUserBadTagId { get; set; }
+    [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
+    [Parameter] public List<TimelineEvent>? HighlightEvents { get; set; }
+
+    private readonly string[] _chipBackgrounds = ["#EEEDFE"];
+    private readonly string[] _chipTextColors = ["#26215C"];
+
+    private bool _areTagsExpanded;
+    private int _activePopoverTagId = -1;
+    private string _activePopoverChipKey = "";
+
+    private string GetTagCardStyle()
+    {
+        var borderColor = IsFocused ? "var(--mud-palette-primary)" : "var(--mud-palette-lines-default)";
+        var borderWidth = IsFocused ? "2px" : "1px";
+        return $"background: var(--mud-palette-surface); border-color: {borderColor}; border-width: {borderWidth}; border-style: solid; transition: border 0.2s ease;";
+    }
+
+    [JSInvokable]
+    public void OnElementFocusedByScroll(string elementId)
+    {
+        if (elementId == $"tag-card-{Tag.Id}")
+        {
+            OnFocus.InvokeAsync(Tag.Id);
+        }
+    }
+
+    private DotNetObjectReference<TagCard>? _dotNetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.initScrollObserver");
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#tag-card-{Tag.Id}");
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dotNetRef != null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
+            }
+            catch (Exception)
+            {
+            }
+
+            _dotNetRef.Dispose();
+        }
+    }
+
+    private void ToggleTagTagExpand()
+    {
+        _areTagsExpanded = !_areTagsExpanded;
+    }
+
+    private async Task ToggleTagTreePopover(int tagId, string chipKey)
+    {
+        if (_activePopoverTagId == tagId && _activePopoverChipKey == chipKey)
+        {
+            _activePopoverTagId = -1;
+            _activePopoverChipKey = "";
+        }
+        else
+        {
+            _activePopoverTagId = tagId;
+            _activePopoverChipKey = chipKey;
+            StateHasChanged();
+            await Task.Yield();
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    private static string GetShortOwnerName(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return "不明";
+        return name.Length > 7 ? name[..7] : name;
+    }
+
+    // --- Voting Logic ---
+    private int GetTagScore()
+    {
+        var goodCount = Tag.TargetTagRelations?.Count(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true) ?? 0;
+        var badCount = Tag.TargetTagRelations?.Count(tr => tr.Tag?.Name == "bad" && tr.Tag?.IsSystem == true) ?? 0;
+        return goodCount - badCount;
+    }
+
+    private bool IsTagUpvoted()
+    {
+        return CurrentUserGoodTagId.HasValue && Tag.TargetTagRelations?.Any(tr => tr.TagId == CurrentUserGoodTagId.Value && tr.OwnerId == CurrentUserId) == true;
+    }
+
+    private bool IsTagDownvoted()
+    {
+        return CurrentUserBadTagId.HasValue && Tag.TargetTagRelations?.Any(tr => tr.TagId == CurrentUserBadTagId.Value && tr.OwnerId == CurrentUserId) == true;
+    }
+
+    private async Task UpvoteTagAsync()
+    {
+        await ToggleTagVoteAsync(true);
+    }
+
+    private async Task DownvoteTagAsync()
+    {
+        await ToggleTagVoteAsync(false);
+    }
+
+    private async Task ToggleTagVoteAsync(bool isUpvote)
+    {
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        if (OnEnsureSystemTags.HasDelegate)
+        {
+            await OnEnsureSystemTags.InvokeAsync();
+        }
+
+        if (!CurrentUserGoodTagId.HasValue || !CurrentUserBadTagId.HasValue)
+        {
+            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            return;
+        }
+
+        var targetSystemTagId = isUpvote ? CurrentUserGoodTagId!.Value : CurrentUserBadTagId!.Value;
+        var oppositeSystemTagId = isUpvote ? CurrentUserBadTagId!.Value : CurrentUserGoodTagId!.Value;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var relations = await context.TagRelationToTags
+            .Where(tr => tr.TargetTagId == Tag.Id && tr.OwnerId == CurrentUserId)
+            .ToListAsync();
+
+        var targetRelation = relations.FirstOrDefault(tr => tr.TagId == targetSystemTagId);
+        var oppositeRelation = relations.FirstOrDefault(tr => tr.TagId == oppositeSystemTagId);
+
+        if (targetRelation != null)
+        {
+            context.TagRelationToTags.Remove(targetRelation);
+        }
+        else
+        {
+            context.TagRelationToTags.Add(new TagRelationToTag
+            {
+                TargetTagId = Tag.Id,
+                TagId = targetSystemTagId,
+                OwnerId = CurrentUserId,
+                Weight = 1
+            });
+
+            if (oppositeRelation != null)
+            {
+                context.TagRelationToTags.Remove(oppositeRelation);
+            }
+        }
+
+        await context.SaveChangesAsync();
+        if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+    }
+
+    // --- Tag Operations ---
+    private async Task OnAddTagToTagClicked(Tag? targetTag)
+    {
+        if (targetTag == null) return;
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TagAddDialog>("関連タグの追加", options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is Tag selectedTag)
+        {
+            await AddTagToTagAsync(targetTag, selectedTag);
+        }
+    }
+
+    private async Task AddTagToTagAsync(Tag targetTag, Tag selectedTag)
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var alreadyExists = await context.TagRelationToTags
+            .AnyAsync(tr => tr.TargetTagId == targetTag.Id && tr.TagId == selectedTag.Id);
+
+        if (alreadyExists)
+        {
+            Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+            return;
+        }
+
+        var newRelation = new TagRelationToTag
+        {
+            TargetTagId = targetTag.Id,
+            TagId = selectedTag.Id,
+            Weight = 1,
+            OwnerId = CurrentUserId
+        };
+
+        context.Set<TagRelationToTag>().Add(newRelation);
+        context.TimelineEvents!.Add(new TimelineEvent
+        {
+            OwnerId = CurrentUserId,
+            TargetType = "Tag",
+            TargetTagId = targetTag.Id,
+            FollowedTagId = selectedTag.Id,
+            EventType = "Insert",
+            NewWeight = 1
+        });
+        await context.SaveChangesAsync();
+
+        Snackbar.Add("タグを追加しました。", Severity.Success);
+        if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+    }
+
+    private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
+    {
+        if (relation.OwnerId != CurrentUserId)
+        {
+            Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+            return;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var entity = await context.TagRelationToTags.FindAsync(relation.Id);
+        if (entity != null)
+        {
+            context.Remove(entity);
+            context.TimelineEvents!.Add(new TimelineEvent
+            {
+                OwnerId = CurrentUserId,
+                TargetType = "Tag",
+                TargetTagId = entity.TargetTagId,
+                FollowedTagId = entity.TagId,
+                EventType = "Delete",
+                PreviousWeight = entity.Weight
+            });
+            await context.SaveChangesAsync();
+            Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        }
+    }
+
+    private async Task UpdateTagToTagWeightAsync(TagRelationToTag relation, int delta)
+    {
+        if (relation.OwnerId != CurrentUserId)
+        {
+            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            return;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var entity = await context.TagRelationToTags.FindAsync(relation.Id);
+        if (entity != null)
+        {
+            entity.Weight += delta;
+            entity.UpdatedDate = DateTime.UtcNow;
+
+            var tag = await context.Tags.FindAsync(entity.TagId);
+            if (tag != null)
+            {
+                var prevWeight = tag.CachedWeight;
+                tag.CachedWeight += delta;
+                context.TagWeightLedgers!.Add(new TagWeightLedger
+                {
+                    TagId = tag.Id,
+                    TagNameSnapshot = tag.Name,
+                    SourceType = "TagRelationToTagUpdate",
+                    SourceId = entity.Id,
+                    PreviousWeight = prevWeight,
+                    NewWeight = tag.CachedWeight,
+                    Delta = delta,
+                    IsOwnerAction = true,
+                    Reason = "ユーザーによる直接ウェイト変更",
+                    OwnerId = CurrentUserId
+                });
+
+                context.TimelineEvents!.Add(new TimelineEvent
+                {
+                    OwnerId = CurrentUserId,
+                    TargetType = "Tag",
+                    TargetTagId = entity.TargetTagId,
+                    FollowedTagId = entity.TagId,
+                    EventType = "Update",
+                    PreviousWeight = entity.Weight - delta,
+                    NewWeight = entity.Weight
+                });
+            }
+
+            await context.SaveChangesAsync();
+            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        }
+    }
+
+    private async Task EditTagToTagWeightAsync(TagRelationToTag relation)
+    {
+        if (relation.OwnerId != CurrentUserId)
+        {
+            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            return;
+        }
+
+        var parameters = new DialogParameters { ["Weight"] = relation.Weight };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<WeightEditDialog>("Weightの一括変更", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is int newWeight)
+        {
+            if (newWeight == relation.Weight) return;
+
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var entity = await context.TagRelationToTags.FindAsync(relation.Id);
+            if (entity != null)
+            {
+                var delta = newWeight - entity.Weight;
+                entity.Weight = newWeight;
+                entity.UpdatedDate = DateTime.UtcNow;
+
+                var tag = await context.Tags.FindAsync(entity.TagId);
+                if (tag != null)
+                {
+                    var prevWeight = tag.CachedWeight;
+                    tag.CachedWeight += delta;
+                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = tag.Id,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelationToTagUpdate",
+                        SourceId = entity.Id,
+                        PreviousWeight = prevWeight,
+                        NewWeight = tag.CachedWeight,
+                        Delta = delta,
+                        IsOwnerAction = true,
+                        Reason = "ユーザーによるWeightの一括変更",
+                        OwnerId = CurrentUserId
+                    });
+
+                    context.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = CurrentUserId,
+                        TargetType = "Tag",
+                        TargetTagId = entity.TargetTagId,
+                        FollowedTagId = entity.TagId,
+                        EventType = "Update",
+                        PreviousWeight = entity.Weight - delta,
+                        NewWeight = entity.Weight
+                    });
+                }
+
+                await context.SaveChangesAsync();
+                if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            }
+        }
+    }
+
+    private async Task ChangeTagTagAsync(TagRelationToTag oldRelation, int newTagId)
+    {
+        if (oldRelation.TagId == newTagId) return;
+
+        if (oldRelation.OwnerId != CurrentUserId)
+        {
+            Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
+            return;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var alreadyExists = await context.TagRelationToTags
+            .AnyAsync(tr => tr.TargetTagId == Tag.Id && tr.TagId == newTagId);
+
+        if (alreadyExists)
+        {
+            Snackbar.Add("変更先のタグは既に追加されています。", Severity.Warning);
+            return;
+        }
+
+        var entity = await context.TagRelationToTags.FindAsync(oldRelation.Id);
+        if (entity != null)
+        {
+            entity.TagId = newTagId;
+            entity.UpdatedDate = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+
+            Snackbar.Add("タグを変更しました。", Severity.Success);
+
+            _activePopoverTagId = -1;
+            _activePopoverChipKey = "";
+            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OnAddChildTagFromTree(Tag? targetTag)
+    {
+        if (targetTag == null) return;
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TagAddDialog>("子タグの追加", options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is Tag selectedTag)
+        {
+            await SetParentTagAsync(targetTag, selectedTag);
+        }
+    }
+
+    private async Task SetParentTagAsync(Tag parentTag, Tag childTag)
+    {
+        if (childTag.Id == parentTag.Id)
+        {
+            Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
+            return;
+        }
+
+        // 循環参照の簡易チェック
+        var currentParent = parentTag.ParentTagId;
+        while (currentParent != null)
+        {
+            if (currentParent == childTag.Id)
+            {
+                Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
+                return;
+            }
+
+            var p = AllTags.FirstOrDefault(t => t.Id == currentParent);
+            currentParent = p?.ParentTagId;
+        }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var entity = await context.Tags.FindAsync(childTag.Id);
+        if (entity != null)
+        {
+            if (entity.OwnerId != CurrentUserId)
+            {
+                Snackbar.Add("対象タグの作成者ではないため、親タグを変更する権限がありません。", Severity.Error);
+                return;
+            }
+
+            entity.ParentTagId = parentTag.Id;
+            entity.UpdatedDate = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+
+            Snackbar.Add("子タグとして設定しました。", Severity.Success);
+            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        }
+    }
+
+}

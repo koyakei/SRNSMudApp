@@ -1,0 +1,76 @@
+/* ===== タグツリーポップオーバー ===== */
+
+.tag-tree-popover-content {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.10);
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.tag-tree-swap-btn {
+    display: none;
+}
+
+.tag-tree-line:hover .tag-tree-swap-btn {
+    display: inline-flex;
+}
+
+.tag-tree-add-btn {
+    display: none;
+}
+
+.tag-tree-line:hover .tag-tree-add-btn {
+    display: inline-flex;
+}
+
+.tag-tree-role {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+/* 親タグ: 青系 */
+.parent .tag-tree-role {
+    background: #E3F0FF;
+    color: #1565C0;
+}
+
+.parent .tag-tree-icon {
+    color: #1E88E5;
+}
+
+/* 自身: 強調表示 */
+.current {
+    background: rgba(103, 80, 164, 0.08);
+}
+
+.current .tag-tree-role {
+    background: #EDE7F6;
+    color: #4527A0;
+    font-weight: 600;
+}
+
+.current .tag-tree-icon {
+    color: #6750A4;
+}
+
+/* 兄弟タグ: グレー系 */
+.sibling .tag-tree-role {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+.sibling .tag-tree-icon {
+    color: #9CA3AF;
+}
+
+/* 子タグ: 緑系 */
+.child .tag-tree-role {
+    background: #E8F5E9;
+    color: #2E7D32;
+}
+
+.child .tag-tree-icon {
+    color: #43A047;
+}

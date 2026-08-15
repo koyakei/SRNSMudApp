@@ -1,0 +1,94 @@
+@page "/ItemDetail/{ItemId:int}"
+@using System.Security.Claims
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    @if (_item == null)
+    {
+        <MudText>読み込み中...</MudText>
+    }
+    else
+    {
+        <div class="d-flex align-center mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                           OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+            <MudText Typo="Typo.h5">アイテム詳細</MudText>
+        </div>
+
+        <SRNSMudApp.Components.Shared.ResourceList Items="new List<Item> { _item }" OnDataChanged="LoadDataAsync"/>
+
+        <MudText Typo="Typo.h5" Class="mt-8 mb-4">付けられたタグ</MudText>
+        <SRNSMudApp.Components.Tag.TagTable Tags="@(_item.TagRelations.Select(tr => tr.Tag).Where(t => t != null))"
+                                            OnDataChanged="LoadDataAsync" ShowCreateButton="false"
+                                            OnRemoveTag="RemoveItemTagAsync"/>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public int ItemId { get; set; }
+
+    private Item? _item;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_item != null && _item.Id != ItemId)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _item = await context.Items
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.TargetTagRelations)
+            .ThenInclude(ttr => ttr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == ItemId);
+
+        // StateHasChanged();
+    }
+
+    private async Task RemoveItemTagAsync(Tag tag)
+    {
+        if (_item == null) return;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var relation = await context.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == _item.Id && tr.TagId == tag.Id);
+        if (relation != null)
+        {
+            var authState = await AuthState!;
+            var currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (relation.OwnerId != currentUserId)
+            {
+                Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+                return;
+            }
+
+            context.Remove(relation);
+            await context.SaveChangesAsync();
+            Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+
+            await LoadDataAsync();
+        }
+    }
+
+}

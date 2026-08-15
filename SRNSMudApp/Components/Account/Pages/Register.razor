@@ -1,0 +1,15 @@
+@page "/Account/Register"
+@inject NavigationManager NavigationManager
+
+<PageTitle>Register</PageTitle>
+
+@code {
+
+    protected override void OnInitialized()
+    {
+        // Registration is now handled via the unified Login page with External Auth
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        NavigationManager.NavigateTo($"/Account/Login{uri.Query}");
+    }
+
+}

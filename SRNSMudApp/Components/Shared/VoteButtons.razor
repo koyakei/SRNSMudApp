@@ -1,0 +1,33 @@
+<div class="d-flex flex-column align-center mr-3 vote-container">
+    <MudIconButton Icon="@(IsUpvoted ? Icons.Material.Filled.ArrowUpward : Icons.Material.Outlined.ArrowUpward)"
+                   Color="@(IsUpvoted ? Color.Error : Color.Default)"
+                   Size="Size.Small"
+                   Class="pa-1"
+                   OnClick="@OnUpvoteClicked"
+                   title="Upvote"/>
+
+    <MudText Typo="Typo.body2"
+             Color="@(IsUpvoted ? Color.Error : IsDownvoted ? Color.Info : Color.Default)"
+             Class="vote-score">
+        @Score
+    </MudText>
+
+    <MudIconButton Icon="@(IsDownvoted ? Icons.Material.Filled.ArrowDownward : Icons.Material.Outlined.ArrowDownward)"
+                   Color="@(IsDownvoted ? Color.Info : Color.Default)"
+                   Size="Size.Small"
+                   Class="pa-1"
+                   OnClick="@OnDownvoteClicked"
+                   title="Downvote"/>
+</div>
+
+@code {
+    [Parameter] public int Score { get; set; }
+
+    [Parameter] public bool IsUpvoted { get; set; }
+
+    [Parameter] public bool IsDownvoted { get; set; }
+
+    [Parameter] public EventCallback OnUpvoteClicked { get; set; }
+
+    [Parameter] public EventCallback OnDownvoteClicked { get; set; }
+}
