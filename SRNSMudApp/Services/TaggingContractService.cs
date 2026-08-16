@@ -77,6 +77,17 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return contract;
     }
 
+    public async Task<List<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
+    {
+        return await dbContext.TaggingRequestEntities!
+            .Include(r => r.TargetItem)
+            .Include(r => r.Owner)
+            .Include(r => r.RequestedTag)
+            .Where(r => r.TargetItemId == itemId)
+            .OrderByDescending(r => r.CreatedDate)
+            .ToListAsync();
+    }
+
     public async Task AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
     {
         // 1. EF Core からはベースエンティティとして取得
