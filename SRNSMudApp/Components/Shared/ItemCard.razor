@@ -297,10 +297,19 @@
                                      Size="Size.Small"
                                      Color="@(isAdd ? Color.Success : Color.Error)"
                                      Variant="Variant.Outlined"
-                                     Icon="@(isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)"
-                                     OnClick="@(async () => await OpenThreadDialogAsync(request))">
-                                @request.RequestedTag?.Name
-                                <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Class="ml-2" />
+                                     Icon="@(isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)">
+                                <div class="d-flex align-center">
+                                    <a class="chip-link mr-1" style="color: inherit;"
+                                       @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{request.RequestedTagId}"))"
+                                       @onclick:stopPropagation="true">
+                                        @request.RequestedTag?.Name
+                                    </a>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline" 
+                                                   Size="Size.Small" 
+                                                   Color="Color.Inherit"
+                                                   Class="pa-0" 
+                                                   OnClick="@(async () => await OpenThreadDialogAsync(request))" />
+                                </div>
                             </MudChip>
                         </MudBadge>
                     }
