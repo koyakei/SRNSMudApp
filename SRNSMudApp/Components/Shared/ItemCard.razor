@@ -30,7 +30,7 @@
                               Variant="Variant.Outlined" 
                               Dense="true" 
                               Class="mb-3 py-1 px-3"
-                              Icon="@(requestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : (requestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Filled.RemoveCircleOutline : Icons.Material.Filled.ArrowDownward))">
+                              Icon="@(requestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : (requestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline))">
                         <div class="d-flex align-start flex-wrap" style="gap: 8px;">
                             <div class="d-flex align-center mt-1">
                                 <MudText Typo="Typo.body2" Class="font-weight-bold">
@@ -245,7 +245,7 @@
                                                                                                        })">
                                             @if (isDeleted)
                                             {
-                                                <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                          Class="mr-1" Style="font-size: 1rem; vertical-align: middle;"/>
                                             }
                                             <span style="vertical-align: middle;">@displayWeight</span>
@@ -257,7 +257,7 @@
                                                            OnClick="@(() => UpdateTagRelationWeightAsync(tr, 1))"
                                                            title="Weightを増やす"/>
                                                            
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                            <MudIconButton Icon="@(isMyTag ? Icons.Material.Filled.Delete : Icons.Material.Outlined.Delete)" Size="Size.Small"
                                                            Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
                                                            OnClick="@(() => RemoveTagRelationAsync(tr))"
                                                            title="関連付けを削除"/>
