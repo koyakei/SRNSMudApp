@@ -42,4 +42,36 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             await context.SaveChangesAsync();
         }
     }
+
+    public async Task RejectRequestAsync(int requestId, string rejectUserId, string? comment)
+    {
+        await using var context = await dbFactory.CreateDbContextAsync();
+        var request = await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId);
+        
+        if (request == null)
+        {
+            throw new InvalidOperationException("リクエストが見つかりません。");
+        }
+        
+        if (request.Status != TradeStatus.Proposed)
+        {
+            throw new InvalidOperationException("このリクエストは既に処理されています。");
+        }
+
+        // Only the tag owner or the requester can reject/cancel (similar to CancelContractAsync)
+        if (request.TagOwnerUserId != rejectUserId && request.RequesterUserId != rejectUserId)
+        {
+            // For public offer and bounty, we might need different checks, but for now we follow general rule
+            if (request is not PublicOfferTriggerContract && request is not BountyTaggingContract)
+            {
+                throw new UnauthorizedAccessException("このリクエストを却下する権限がありません。");
+            }
+        }
+
+        request.Status = TradeStatus.Rejected;
+        request.RejectedAt = DateTimeOffset.UtcNow;
+        request.RejectComment = comment;
+
+        await context.SaveChangesAsync();
+    }
 }

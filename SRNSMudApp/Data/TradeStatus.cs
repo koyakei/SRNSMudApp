@@ -4,5 +4,6 @@ public enum TradeStatus
 {
     Proposed,
     Executed,
-    Canceled
+    Canceled,
+    Rejected
 }

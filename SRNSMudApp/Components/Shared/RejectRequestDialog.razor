@@ -1,0 +1,34 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-3">
+            このリクエストを却下します。申請者に伝える理由（コメント）があれば入力してください。
+        </MudText>
+        <MudTextField @bind-Value="Comment" 
+                      Label="却下理由 (オプション)" 
+                      Variant="Variant.Outlined" 
+                      Lines="3" 
+                      Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">キャンセル</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Submit">却下する</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string? Comment { get; set; }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(Comment ?? string.Empty));
+    }
+}

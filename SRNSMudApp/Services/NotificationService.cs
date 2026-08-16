@@ -53,6 +53,31 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             });
         }
 
+        // 3. Rejected requests for the user
+        var rejectedRequests = await context.TaggingRequestEntities!
+            .Include(r => r.TargetItem)
+            .Include(r => r.RequestedTag)
+            .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Rejected)
+            .ToListAsync();
+
+        foreach (var req in rejectedRequests)
+        {
+            var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
+            var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) ? "" : $"\n理由: {req.RejectComment}";
+            var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
+            var msg = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが却下されました。{commentMsg}";
+            
+            notifications.Add(new NotificationDto
+            {
+                SourceId = req.Id,
+                Type = "RequestRejected",
+                Message = msg,
+                CreatedAt = req.RejectedAt ?? new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
+                TargetUrl = $"/ItemDetail/{req.TargetItemId}",
+                IsRead = isRead
+            });
+        }
+
         foreach (var reply in itemReplies)
         {
             var isRead = readStates.Any(rs => rs.SourceId == reply.Id && rs.SourceType == "ItemReply");

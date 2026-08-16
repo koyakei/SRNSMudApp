@@ -7,10 +7,26 @@
 @inject IItemTagService ItemTagService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TaggingContractService TaggingContractService
+@inject ITaggingService TaggingService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
         <div class="d-flex flex-column pa-2" style="max-height: 50vh; overflow-y: auto;">
+            
+            @if (CanApprove(TaggingRequest))
+            {
+                <div class="d-flex justify-end mb-2">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="ApproveRequestAsync" Class="mr-2">
+                        承認
+                    </MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="RejectRequestAsync">
+                        却下
+                    </MudButton>
+                </div>
+            }
             
             <!-- 親リクエスト (スレッドの開始点) -->
             @if (TaggingRequest.RequestItem != null)
@@ -150,6 +166,56 @@
         finally
         {
             _isSubmitting = false;
+        }
+    }
+
+    private bool CanApprove(TaggingRequestEntity request)
+    {
+        if (request.Status != TradeStatus.Proposed) return false;
+        
+        if (request is PublicOfferTriggerContract) return request.RequesterUserId == _currentUserId;
+        if (request is BountyTaggingContract) return true;
+        
+        return request.TagOwnerUserId == _currentUserId;
+    }
+
+    private async Task ApproveRequestAsync()
+    {
+        if (_currentUserId == null) return;
+        
+        try
+        {
+            await TaggingContractService.AcceptContractAsync(TaggingRequest.Id, _currentUserId);
+            Snackbar.Add("リクエストを承認しました。", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認に失敗しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RejectRequestAsync()
+    {
+        if (_currentUserId == null) return;
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.RejectRequestDialog>("リクエストを却下", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                var comment = result.Data as string;
+                await TaggingService.RejectRequestAsync(TaggingRequest.Id, _currentUserId, comment);
+                Snackbar.Add("リクエストを却下しました。", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
+            }
         }
     }
 }
