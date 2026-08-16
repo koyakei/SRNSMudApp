@@ -1,0 +1,11 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using SRNSMudApp.Models;
+
+namespace SRNSMudApp.Services;
+
+public interface INotificationService
+{
+    Task<List<NotificationDto>> GetUserNotificationsAsync(string userId);
+    Task MarkAsReadAsync(string userId, int sourceId, string sourceType);
+}

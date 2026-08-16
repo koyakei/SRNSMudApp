@@ -25,6 +25,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PublicTradeOffer>? PublicTradeOffers { get; set; }
     public DbSet<TimelineEvent>? TimelineEvents { get; set; }
     public DbSet<Invitation>? Invitations { get; set; }
+    public DbSet<NotificationReadState>? NotificationReadStates { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
