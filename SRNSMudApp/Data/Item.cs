@@ -16,4 +16,12 @@ public class Item : BaseEntity
     // TagRelationを中間テーブルとして利用する場合
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TagRelation> TagRelations { get; set; } = [];
+
+    // リプライ先のアイテム（親）
+    public int? ParentItemId { get; set; }
+    public Item? ParentItem { get; set; }
+
+    // このアイテムに対するリプライ一覧
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
+    public ICollection<Item> Replies { get; set; } = [];
 }

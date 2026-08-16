@@ -25,6 +25,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PublicTradeOffer>? PublicTradeOffers { get; set; }
     public DbSet<TimelineEvent>? TimelineEvents { get; set; }
     public DbSet<Invitation>? Invitations { get; set; }
+    public DbSet<TaggingRequestReply>? TaggingRequestReplies { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -40,6 +41,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasOne(i => i.Owner)
             .WithMany()
             .HasForeignKey(i => i.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // アイテムのリプライ用自己参照リレーション
+        _ = builder.Entity<Item>()
+            .HasOne(i => i.ParentItem)
+            .WithMany(i => i.Replies)
+            .HasForeignKey(i => i.ParentItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<Tag>()
@@ -250,6 +258,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(e => e.TargetPublicTradeOfferId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // リプライとリクエストのリレーション（カスケード削除）
+        builder.Entity<TaggingRequestReply>()
+            .HasOne(r => r.TaggingRequest)
+            .WithMany(tr => tr.Replies)
+            .HasForeignKey(r => r.TaggingRequestEntityId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // リプライとユーザーのリレーション (BaseEntity の Owner プロパティに対する設定)
+        // Note: OwnerId is inherited from BaseEntity.
+        builder.Entity<TaggingRequestReply>()
+            .HasOne(r => r.Owner)
+            .WithMany()
+            .HasForeignKey(r => r.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict); // BaseEntity.OwnerId is generally Restrict to prevent cascade issues.
     }
 
     public override int SaveChanges()

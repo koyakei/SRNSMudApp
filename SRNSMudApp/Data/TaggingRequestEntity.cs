@@ -21,4 +21,7 @@ public abstract class TaggingRequestEntity : BaseEntity
     // The asset that will be burned when this contract is accepted.
     public int? ConsumedRightAssetId { get; set; }
     public RightAsset? ConsumedRightAsset { get; set; }
+
+    public TaggingRequestType RequestType { get; set; } = TaggingRequestType.Add;
+    public ICollection<TaggingRequestReply> Replies { get; set; } = new List<TaggingRequestReply>();
 }

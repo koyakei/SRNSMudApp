@@ -250,4 +250,69 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await context.SaveChangesAsync();
         return null;
     }
+
+    public async Task<List<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)
+    {
+        await using var context = await dbFactory.CreateDbContextAsync();
+        return await context.TaggingRequestEntities!
+            .Include(tr => tr.RequestedTag)
+            .Include(tr => tr.Owner) // リクエスト作成者
+            .Include(tr => tr.Replies)
+                .ThenInclude(r => r.Owner) // リプライ作成者
+            .Where(tr => tr.TargetItemId == itemId)
+            .OrderByDescending(tr => tr.CreatedDate)
+            .ToListAsync();
+    }
+
+    public async Task<TaggingRequestReply?> AddReplyToRequestAsync(int requestId, string userId, string message)
+    {
+        await using var context = await dbFactory.CreateDbContextAsync();
+        var reply = new TaggingRequestReply
+        {
+            TaggingRequestEntityId = requestId,
+            OwnerId = userId,
+            Message = message,
+            CreatedDate = DateTime.UtcNow
+        };
+
+        context.TaggingRequestReplies!.Add(reply);
+        await context.SaveChangesAsync();
+
+        // UIの即時更新用に、保存したリプライにユーザー情報を結合して返す
+        return await context.TaggingRequestReplies
+            .Include(r => r.Owner)
+            .FirstOrDefaultAsync(r => r.Id == reply.Id);
+    }
+
+    public async Task<List<Item>> GetItemRepliesAsync(int parentItemId)
+    {
+        await using var context = await dbFactory.CreateDbContextAsync();
+        return await context.Items!
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+            .Where(i => i.ParentItemId == parentItemId)
+            .OrderBy(i => i.CreatedDate)
+            .ToListAsync();
+    }
+
+    public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId)
+    {
+        await using var context = await dbFactory.CreateDbContextAsync();
+        var replyItem = new Item
+        {
+            Content = content,
+            OwnerId = userId,
+            ParentItemId = parentItemId,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+
+        context.Items!.Add(replyItem);
+        await context.SaveChangesAsync();
+
+        return await context.Items
+            .Include(i => i.Owner)
+            .FirstOrDefaultAsync(i => i.Id == replyItem.Id);
+    }
 }

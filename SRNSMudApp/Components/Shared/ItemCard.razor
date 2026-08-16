@@ -280,6 +280,25 @@
                             </MudChip>
                         }
                     }
+                    
+                    <!-- リクエスト中のタグ -->
+                    @foreach(var request in _taggingRequests)
+                    {
+                        var isAdd = request.RequestType == TaggingRequestType.Add;
+                        var replyCount = request.Replies?.Count ?? 0;
+                        
+                        <MudBadge Content="@replyCount" Color="Color.Primary" Overlap="true" Visible="@(replyCount > 0)">
+                            <MudChip T="string" 
+                                     Size="Size.Small"
+                                     Color="@(isAdd ? Color.Success : Color.Error)"
+                                     Variant="Variant.Outlined"
+                                     Icon="@(isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)"
+                                     OnClick="@(async () => await OpenThreadDialogAsync(request))">
+                                @request.RequestedTag?.Name
+                                <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Class="ml-2" />
+                            </MudChip>
+                        </MudBadge>
+                    }
 
                     <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
                                    Size="Size.Small"
@@ -287,8 +306,62 @@
                                    OnClick="@(() => OnAddTagClicked())"
                                    title="タグを追加"/>
                 </MudStack>
+                <div class="d-flex justify-end mt-2">
+                    <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline"
+                               Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
+                               OnClick="ToggleRepliesAsync">
+                        リプライ
+                    </MudButton>
+                </div>
             </div>
         </div>
+
+        <MudCollapse Expanded="_isRepliesExpanded">
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
+            
+            @if (_replies.Any())
+            {
+                <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
+                    @foreach (var reply in _replies)
+                    {
+                        <ItemCard Item="reply" 
+                                  CurrentUserId="@CurrentUserId" 
+                                  CurrentUserGoodTagId="@CurrentUserGoodTagId"
+                                  CurrentUserBadTagId="@CurrentUserBadTagId"
+                                  OnDataChanged="LoadRepliesAsync"
+                                  AllTags="AllTags"
+                                  AllTagRelationsToTags="AllTagRelationsToTags" 
+                                  HighlightEvents="HighlightEvents"
+                                  OnEnsureSystemTags="OnEnsureSystemTags" />
+                    }
+                </div>
+            }
+            
+            <div class="d-flex align-end gap-2 mt-2">
+                <MudTextField @bind-Value="_newReplyContent"
+                              Label="リプライを入力..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="2"
+                              Immediate="true"
+                              Class="flex-grow-1" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="SubmitReplyAsync"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newReplyContent) || _isSubmittingReply)">
+                    @if (_isSubmittingReply)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <span class="ms-2">送信中</span>
+                    }
+                    else
+                    {
+                        <span>送信</span>
+                    }
+                </MudButton>
+            </div>
+        </MudCollapse>
     </MudCardContent>
 </MudCard>
 
@@ -317,6 +390,22 @@
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private bool _needsOverflowCheck = true;
+    
+    private List<TaggingRequestEntity> _taggingRequests = new();
+
+    private bool _isRepliesExpanded;
+    private List<Item> _replies = new();
+    private string _newReplyContent = "";
+    private bool _isSubmittingReply;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+        if (_isRepliesExpanded)
+        {
+            await LoadRepliesAsync();
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -425,6 +514,61 @@
             catch (Exception)
             {
             }
+        }
+    }
+
+    private async Task OpenThreadDialogAsync(TaggingRequestEntity request)
+    {
+        var parameters = new DialogParameters<TaggingRequestThreadDialog>
+        {
+            { x => x.TaggingRequest, request }
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true 
+        };
+        
+        var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>($"Request: {request.RequestedTag?.Name}", parameters, options);
+        await dialog.Result;
+        StateHasChanged();
+    }
+
+    private async Task ToggleRepliesAsync()
+    {
+        _isRepliesExpanded = !_isRepliesExpanded;
+        if (_isRepliesExpanded && !_replies.Any())
+        {
+            await LoadRepliesAsync();
+        }
+    }
+
+    private async Task LoadRepliesAsync()
+    {
+        _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
+        StateHasChanged();
+    }
+
+    private async Task SubmitReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newReplyContent) || string.IsNullOrEmpty(CurrentUserId)) return;
+
+        _isSubmittingReply = true;
+        try
+        {
+            var addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
+            if (addedReply != null)
+            {
+                _newReplyContent = "";
+                await LoadRepliesAsync();
+            }
+        }
+        finally
+        {
+            _isSubmittingReply = false;
+            StateHasChanged();
         }
     }
 
@@ -562,7 +706,22 @@
 
         if (tagFromDb.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("タグの作成者ではないため、追加する権限がありません。", Severity.Error);
+            var parameters = new DialogParameters<ProposeContractDialog>
+            {
+                { x => x.TargetItem, Item },
+                { x => x.RequestedTag, tagFromDb },
+                { x => x.WeightDelta, 1 } // Adding a tag is equivalent to +1 weight request
+            };
+            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+            var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+            var result = await dialog.Result;
+            if (result is not null && !result.Canceled)
+            {
+                // Reload requests
+                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+                StateHasChanged();
+                if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            }
             return;
         }
 
@@ -601,7 +760,23 @@
     {
         if (relation.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+            if (relation.Tag == null) return;
+            var parameters = new DialogParameters<ProposeContractDialog>
+            {
+                { x => x.TargetItem, Item },
+                { x => x.RequestedTag, relation.Tag },
+                { x => x.WeightDelta, -relation.Weight } // Suggest removing entirely
+            };
+            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+            var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+            var result = await dialog.Result;
+            if (result is not null && !result.Canceled)
+            {
+                // Reload requests
+                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+                StateHasChanged();
+                if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            }
             return;
         }
 
@@ -634,7 +809,15 @@
                 { x => x.WeightDelta, delta }
             };
             var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-            await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+            var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+            var result = await dialog.Result;
+            if (result is not null && !result.Canceled)
+            {
+                // Reload requests
+                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+                StateHasChanged();
+                if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            }
             return;
         }
 

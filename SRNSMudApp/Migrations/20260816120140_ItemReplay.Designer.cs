@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SRNSMudApp.Data;
 
@@ -11,9 +12,11 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260816120140_ItemReplay")]
+    partial class ItemReplay
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -306,17 +309,12 @@ namespace SRNSMudApp.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("ParentItemId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
-
-                    b.HasIndex("ParentItemId");
 
                     b.ToTable("Items");
                 });
@@ -953,14 +951,7 @@ namespace SRNSMudApp.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SRNSMudApp.Data.Item", "ParentItem")
-                        .WithMany("Replies")
-                        .HasForeignKey("ParentItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Owner");
-
-                    b.Navigation("ParentItem");
                 });
 
             modelBuilder.Entity("SRNSMudApp.Data.PublicTradeOffer", b =>
@@ -1251,8 +1242,6 @@ namespace SRNSMudApp.Migrations
 
             modelBuilder.Entity("SRNSMudApp.Data.Item", b =>
                 {
-                    b.Navigation("Replies");
-
                     b.Navigation("TagRelations");
                 });
 

@@ -56,6 +56,11 @@ public interface IItemTagService
     /// タグの ParentTagId を変更する（子タグとして設定）。
     /// </summary>
     Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Data.Tag> allTagsForCycleCheck);
+
+    Task<List<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId);
+    Task<TaggingRequestReply?> AddReplyToRequestAsync(int requestId, string userId, string message);
+    Task<List<Item>> GetItemRepliesAsync(int parentItemId);
+    Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId);
 }
 
 /// <summary>Weight 更新の結果を表す。</summary>

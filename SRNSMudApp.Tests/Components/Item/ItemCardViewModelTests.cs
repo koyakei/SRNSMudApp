@@ -45,9 +45,9 @@ public class ItemCardViewModelTests
     {
         var relations = new List<TagRelation>
         {
-            new() { OwnerId = "u1", Tag = new Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u2", Tag = new Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u3", Tag = new Tag { Name = "bad", IsSystem = true, OwnerId = "sys" } }
+            new() { OwnerId = "u1", Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
+            new() { OwnerId = "u2", Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
+            new() { OwnerId = "u3", Tag = new SRNSMudApp.Data.Tag { Name = "bad", IsSystem = true, OwnerId = "sys" } }
         };
 
         var score = ItemCardViewModel.GetItemScore(relations);
@@ -66,7 +66,7 @@ public class ItemCardViewModelTests
     {
         var relations = new List<TagRelation>
         {
-            new() { OwnerId = "u1", Tag = new Tag { Name = "someTag", IsSystem = false, OwnerId = "u1" } }
+            new() { OwnerId = "u1", Tag = new SRNSMudApp.Data.Tag { Name = "someTag", IsSystem = false, OwnerId = "u1" } }
         };
 
         Assert.Equal(0, ItemCardViewModel.GetItemScore(relations));

@@ -15,6 +15,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         string tagOwnerUserId,
         int targetItemId,
         int requestedTagId,
+        TaggingRequestType requestType = TaggingRequestType.Add,
         string? message = null)
     {
         var contract = new GratisTaggingContract
@@ -25,6 +26,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
             Status = TradeStatus.Proposed,
+            RequestType = requestType,
             RequesterMessage = message
         };
 
@@ -40,7 +42,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         int requestedTagId,
         int offeredTargetItemId,
         int offeredTagId,
-        int consumedRightAssetId)
+        int consumedRightAssetId,
+        TaggingRequestType requestType = TaggingRequestType.Add)
     {
         var contract = new MutualTaggingContract
         {
@@ -49,12 +52,12 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             TagOwnerUserId = tagOwnerUserId,
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
-            Status = TradeStatus.Proposed,
             OfferedTargetItemId = offeredTargetItemId,
             OfferedTagId = offeredTagId,
-            ConsumedRightAssetId = consumedRightAssetId
+            ConsumedRightAssetId = consumedRightAssetId,
+            Status = TradeStatus.Proposed,
+            RequestType = requestType
         };
-
         _ = dbContext.TaggingRequestEntities!.Add(contract);
         _ = await dbContext.SaveChangesAsync();
         return contract;

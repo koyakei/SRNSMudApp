@@ -136,6 +136,7 @@
         if (!_isValid) return;
 
         bool isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
+        var requestType = WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.Remove;
 
         if (isMutual)
         {
@@ -146,7 +147,8 @@
                 requestedTagId: RequestedTag.Id,
                 offeredTargetItemId: _offeredItem!.Id,
                 offeredTagId: _offeredTag!.Id,
-                consumedRightAssetId: _selectedRightAsset!.Id
+                consumedRightAssetId: _selectedRightAsset!.Id,
+                requestType: requestType
             );
         }
         else
@@ -156,6 +158,7 @@
                 tagOwnerUserId: RequestedTag.OwnerId,
                 targetItemId: TargetItem.Id,
                 requestedTagId: RequestedTag.Id,
+                requestType: requestType,
                 message: _gratisMessage
             );
         }

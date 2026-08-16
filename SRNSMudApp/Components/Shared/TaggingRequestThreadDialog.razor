@@ -1,0 +1,139 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using System.Security.Claims
+@using MudBlazor
+
+@inject IItemTagService ItemTagService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column pa-2" style="max-height: 50vh; overflow-y: auto;">
+            
+            <!-- 親リクエスト (スレッドの開始点) -->
+            <div class="d-flex mb-1">
+                <MudAvatar Size="Size.Medium" Class="mr-3" Color="Color.Primary">
+                    @(TaggingRequest.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
+                </MudAvatar>
+                <div class="flex-grow-1">
+                    <div class="d-flex align-baseline">
+                        <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@TaggingRequest.Owner?.UserName</b></MudText>
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                            @TaggingRequest.CreatedDate.ToLocalTime().ToString("g")
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.body1" Class="mt-1">
+                        @if(TaggingRequest.RequestType == TaggingRequestType.Add)
+                        {
+                            <span>このアイテムに <b>@TaggingRequest.RequestedTag?.Name</b> を追加するリクエストをしました。</span>
+                        }
+                        else
+                        {
+                            <span>このアイテムから <b>@TaggingRequest.RequestedTag?.Name</b> を削除するリクエストをしました。</span>
+                        }
+                    </MudText>
+                </div>
+            </div>
+
+            <!-- リプライツリー -->
+            <div class="ml-5 pl-5" style="border-left: 2px solid var(--mud-palette-lines-default);">
+                @if (Replies != null && Replies.Any())
+                {
+                    @foreach(var reply in Replies)
+                    {
+                        <div class="d-flex mb-4 mt-3">
+                            <!-- 縦線の上にアバターを乗せるためのスタイル調整 -->
+                            <MudAvatar Size="Size.Small" Class="mr-3 mt-1" 
+                                       Style="margin-left: -30px; border: 3px solid var(--mud-palette-background);" 
+                                       Color="Color.Secondary">
+                                @(reply.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
+                            </MudAvatar>
+                            
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-baseline">
+                                    <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@reply.Owner?.UserName</b></MudText>
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                                        @reply.CreatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="mt-1">@reply.Message</MudText>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+            
+        </div>
+    </DialogContent>
+    
+    <DialogActions>
+        <!-- 新規リプライ投稿フィールド -->
+        <div class="d-flex w-100 px-4 pb-2 align-center">
+            <MudTextField @bind-Value="_newReplyMessage" 
+                          Placeholder="返信を投稿..." 
+                          Variant="Variant.Outlined" 
+                          Margin="Margin.Dense" 
+                          Class="mr-2" 
+                          Immediate="true" 
+                          Lines="1" 
+                          MaxLines="3"/>
+            <MudIconButton Icon="@Icons.Material.Filled.Send" 
+                           Color="Color.Primary" 
+                           AriaLabel="Send"
+                           OnClick="SubmitReplyAsync" 
+                           Disabled="@(string.IsNullOrWhiteSpace(_newReplyMessage) || _isSubmitting)" />
+        </div>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public TaggingRequestEntity TaggingRequest { get; set; } = null!;
+
+    private List<TaggingRequestReply> Replies { get; set; } = new();
+    private string _newReplyMessage = string.Empty;
+    private bool _isSubmitting;
+    private string? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // パラメータとして渡されたリクエストの既存リプライをセット
+        Replies = TaggingRequest.Replies?.OrderBy(r => r.CreatedDate).ToList() ?? new List<TaggingRequestReply>();
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _currentUserId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        }
+    }
+
+    private async Task SubmitReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newReplyMessage) || string.IsNullOrEmpty(_currentUserId))
+            return;
+
+        _isSubmitting = true;
+
+        try
+        {
+            var newReply = await ItemTagService.AddReplyToRequestAsync(TaggingRequest.Id, _currentUserId, _newReplyMessage);
+            
+            if (newReply != null)
+            {
+                Replies.Add(newReply);
+                _newReplyMessage = string.Empty;
+                
+                // 親のTaggingRequestインスタンスにも追加しておく（状態の同期）
+                TaggingRequest.Replies ??= new List<TaggingRequestReply>();
+                TaggingRequest.Replies.Add(newReply);
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
