@@ -1,6 +1,11 @@
 @using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IDialogService DialogService
-
+@inject TaggingContractService TaggingContractService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 <MudTable Items="Requests" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
     <HeaderContent>
         <MudTh>タイプ</MudTh>
@@ -32,9 +37,15 @@
         <MudTd DataLabel="リクエスタ">@context.Owner?.UserName</MudTd>
         <MudTd DataLabel="作成日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
         <MudTd DataLabel="操作">
-            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenThreadDialog(context))">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenThreadDialog(context))" Class="mr-2">
                 詳細・スレッド
             </MudButton>
+            @if (CanApprove(context))
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => ApproveRequestAsync(context))">
+                    承認
+                </MudButton>
+            }
         </MudTd>
     </RowTemplate>
 </MudTable>
@@ -42,6 +53,40 @@
 @code {
     [Parameter] public IEnumerable<TaggingRequestEntity> Requests { get; set; } = new List<TaggingRequestEntity>();
     [Parameter] public EventCallback OnRequestChanged { get; set; }
+
+    private string? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private bool CanApprove(TaggingRequestEntity request)
+    {
+        if (request.Status != TradeStatus.Proposed) return false;
+        
+        if (request is PublicOfferTriggerContract) return request.RequesterUserId == _currentUserId;
+        if (request is BountyTaggingContract) return true; // Anyone can theoretically fulfill a bounty
+        
+        return request.TagOwnerUserId == _currentUserId;
+    }
+
+    private async Task ApproveRequestAsync(TaggingRequestEntity request)
+    {
+        if (_currentUserId == null) return;
+        
+        try
+        {
+            await TaggingContractService.AcceptContractAsync(request.Id, _currentUserId);
+            Snackbar.Add("リクエストを承認しました。", Severity.Success);
+            await OnRequestChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認に失敗しました: {ex.Message}", Severity.Error);
+        }
+    }
 
     private async Task OpenThreadDialog(TaggingRequestEntity request)
     {

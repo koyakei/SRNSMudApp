@@ -231,7 +231,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         else if (contract.RequestType == TaggingRequestType.Remove || contract.RequestType == TaggingRequestType.DecreaseWeight)
         {
             var relation = await dbContext.TagRelations!
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId && tr.OwnerId == contract.RequesterUserId);
+                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
 
             if (relation != null)
             {
@@ -357,7 +357,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
             var relation1 = await dbContext.TagRelations!
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId && tr.OwnerId == contract.RequesterUserId);
+                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
             
             if (relation1 != null)
             {
@@ -527,7 +527,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
             var relation = await dbContext.TagRelations!
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == offer.OfferedTagId && tr.OwnerId == contract.RequesterUserId);
+                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == offer.OfferedTagId);
             
             if (relation != null)
             {
@@ -672,7 +672,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
             var relation = await dbContext.TagRelations
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId && tr.OwnerId == contract.RequesterUserId);
+                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
             
             if (relation != null)
             {

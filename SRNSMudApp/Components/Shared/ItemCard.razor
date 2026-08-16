@@ -719,7 +719,7 @@
     private async Task AddTagToItemAsync(Tag selectedTag)
     {
         await using var context = await DbFactory.CreateDbContextAsync();
-        var tagFromDb = await context.Tags.FirstOrDefaultAsync(t => t.Id == selectedTag.Id);
+        var tagFromDb = await context.Tags.Include(t => t.Owner).FirstOrDefaultAsync(t => t.Id == selectedTag.Id);
         if (tagFromDb == null) return;
 
         if (tagFromDb.OwnerId != CurrentUserId)
