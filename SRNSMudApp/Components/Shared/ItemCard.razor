@@ -289,7 +289,16 @@
                     <!-- リクエスト中のタグ -->
                     @foreach(var request in _taggingRequests)
                     {
+                        // Executed または Canceled の場合は非表示
+                        if (request.Status != TradeStatus.Proposed) continue;
+
                         var isAdd = request.RequestType == TaggingRequestType.Add;
+                        var hasTag = Item.TagRelations?.Any(tr => tr.TagId == request.RequestedTagId) ?? false;
+
+                        // すでに関連付けが存在する追加リクエスト、または関連付けが存在しない削除リクエストは非表示（放置されているリクエスト対策）
+                        if (isAdd && hasTag) continue;
+                        if (!isAdd && !hasTag) continue;
+
                         var replyCount = request.Replies?.Count ?? 0;
                         
                         <MudBadge Content="@replyCount" Color="Color.Primary" Overlap="true" Visible="@(replyCount > 0)">
