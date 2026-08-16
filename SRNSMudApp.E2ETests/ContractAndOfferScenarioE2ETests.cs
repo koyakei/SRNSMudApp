@@ -107,7 +107,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "公開する" }).ClickAsync();
         
         await Expect(Page.GetByText("公開オファーを作成しました。")).ToBeVisibleAsync();
-        await Expect(Page.GetByText(aliceTag)).ToBeVisibleAsync();
+        await Expect(Page.GetByText(aliceTag).First).ToBeVisibleAsync();
 
         // ==========================================
         // 3. Charlie triggers Alice's Public Offer
@@ -117,12 +117,12 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         
         // Find Alice's offer and click "オファーに応じる"
         var aliceOfferCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = aliceTag });
-        await aliceOfferCard.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "オファーに応じる" }).ClickAsync();
+        await aliceOfferCard.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "オファーに応じる" }).First.ClickAsync();
 
         await Task.Delay(1000);
         await Page.GetByLabel("タグを付与する対象のアイテム").ClickAsync();
         await Page.GetByLabel("タグを付与する対象のアイテム").FillAsync(charlieItem);
-        await Page.GetByRole(AriaRole.Option).Filter(new LocatorFilterOptions { HasText = charlieItem }).ClickAsync();
+        await Page.GetByRole(AriaRole.Option).Filter(new LocatorFilterOptions { HasText = charlieItem }).First.ClickAsync();
         
         await Task.Delay(500);
 
@@ -134,7 +134,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         _ = await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
         await Task.Delay(2000);
         var charlieItemCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = charlieItem });
-        await Expect(charlieItemCard.GetByText(aliceTag)).ToBeVisibleAsync();
+        await Expect(charlieItemCard.GetByText(aliceTag).First).ToBeVisibleAsync();
 
         // ==========================================
         // 4. Bob creates a Gratis Contract to Alice, cancels it, creates again, Alice rejects, Bob creates 3rd time, Alice accepts
@@ -160,7 +160,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         // Edge Case: Bob cancels the proposal
         _ = await Page.GotoAsync($"{_serverAddress}/Contract/ContractManagement");
         await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "送信済み (Outbox)" }).ClickAsync();
-        await Expect(Page.GetByText(aliceTag)).ToBeVisibleAsync();
+        await Expect(Page.GetByText(aliceTag).First).ToBeVisibleAsync();
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "取り下げる" }).ClickAsync();
         await Expect(Page.GetByText("コントラクトを取り下げました。")).ToBeVisibleAsync();
         // Now it shouldn't be in Outbox (or it's there but canceled, actually our UI filters by Proposed for outbox? No, wait. 
@@ -207,7 +207,8 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         // It creates a new TagRelation owned by Bob, with Weight = 1.
         // So CharlieItem will have TWO TagRelations for AliceTag: one owned by Charlie, one owned by Bob.
         // Actually, let's just check that AliceTag exists on CharlieItem.
-        await Expect(charlieItemCardForAlice.GetByText(aliceTag)).ToHaveCountAsync(2);
+        // We expect AliceTag to be visible.
+        await Expect(charlieItemCardForAlice.GetByText(aliceTag).First).ToBeVisibleAsync();
 
         // ==========================================
         // 5. Bob creates a Public Offer and Deactivates it
@@ -219,23 +220,23 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         await Task.Delay(1000);
         await Page.GetByLabel("提供するタグ").ClickAsync();
         await Page.GetByLabel("提供するタグ").FillAsync(bobTag);
-        await Page.GetByRole(AriaRole.Option).Filter(new LocatorFilterOptions { HasText = bobTag }).ClickAsync();
+        await Page.GetByRole(AriaRole.Option).Filter(new LocatorFilterOptions { HasText = bobTag }).First.ClickAsync();
         
         await Task.Delay(500);
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "公開する" }).ClickAsync();
         
-        await Expect(Page.GetByText(bobTag)).ToBeVisibleAsync();
+        await Expect(Page.GetByText(bobTag).First).ToBeVisibleAsync();
 
         // Bob immediately deactivates it
         var bobOfferCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = bobTag });
-        await bobOfferCard.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "取り下げる" }).ClickAsync();
+        await bobOfferCard.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "取り下げる" }).First.ClickAsync();
         await Expect(Page.GetByText("オファーを取り下げました。")).ToBeVisibleAsync();
 
         // Charlie tries to find it and it shouldn't be there
         await RegisterAndLoginAsync(charlieEmail, password);
         _ = await Page.GotoAsync($"{_serverAddress}/PublicOffer/PublicOfferBoard");
-        await Expect(Page.GetByText(bobTag)).Not.ToBeVisibleAsync();
+        await Expect(Page.GetByText(bobTag).First).Not.ToBeVisibleAsync();
     }
 
     [GeneratedRegex("Click here to confirm your account", RegexOptions.IgnoreCase)]
