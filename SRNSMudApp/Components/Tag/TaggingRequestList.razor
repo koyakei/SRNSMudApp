@@ -7,7 +7,8 @@
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
-<MudTable Items="Requests.Where(r => r.Status != TradeStatus.Rejected)" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+<MudTable T="TaggingRequestEntity" Items="Requests.Where(r => r.Status != TradeStatus.Rejected).ToList()" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0"
+          @bind-SelectedItem="SelectedRequest" OnRowClick="OnRowClicked" RowClassFunc="SelectedRowClassFunc">
     <HeaderContent>
         <MudTh>タイプ</MudTh>
         <MudTh>対象アイテム</MudTh>
@@ -46,6 +47,13 @@
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
                     承認
                 </MudButton>
+            }
+            @if (RejectButtonTemplate != null)
+            {
+                @RejectButtonTemplate(context)
+            }
+            else if (CanApprove(context))
+            {
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
                     却下
                 </MudButton>
@@ -57,6 +65,24 @@
 @code {
     [Parameter] public IEnumerable<TaggingRequestEntity> Requests { get; set; } = new List<TaggingRequestEntity>();
     [Parameter] public EventCallback OnRequestChanged { get; set; }
+    [Parameter] public RenderFragment<TaggingRequestEntity>? RejectButtonTemplate { get; set; }
+    [Parameter] public TaggingRequestEntity? SelectedRequest { get; set; }
+    [Parameter] public EventCallback<TaggingRequestEntity?> SelectedRequestChanged { get; set; }
+
+    private string SelectedRowClassFunc(TaggingRequestEntity element, int rowNumber)
+    {
+        if (SelectedRequest != null && SelectedRequest.Id == element.Id)
+        {
+            return "mud-table-row-selected";
+        }
+        return string.Empty;
+    }
+
+    private async Task OnRowClicked(TableRowClickEventArgs<TaggingRequestEntity> args)
+    {
+        SelectedRequest = args.Item;
+        await SelectedRequestChanged.InvokeAsync(args.Item);
+    }
 
     private string? _currentUserId;
 
@@ -116,7 +142,7 @@
         }
     }
 
-    private async Task OpenThreadDialog(TaggingRequestEntity request)
+    public async Task OpenThreadDialog(TaggingRequestEntity request)
     {
         var parameters = new DialogParameters<SRNSMudApp.Components.Shared.TaggingRequestThreadDialog>
         {

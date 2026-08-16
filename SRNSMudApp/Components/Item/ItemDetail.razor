@@ -8,6 +8,8 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject TaggingContractService TaggingContractService
+@inject ITaggingService TaggingService
+@inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
     @if (_item == null)
@@ -22,7 +24,7 @@
             <MudText Typo="Typo.h5">アイテム詳細</MudText>
         </div>
 
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6" ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
             <MudTabPanel Text="詳細 (Details)">
                 <SRNSMudApp.Components.Shared.ResourceList Items="new List<Item> { _item }" OnDataChanged="LoadDataAsync"/>
 
@@ -43,7 +45,12 @@
                 }
                 else
                 {
-                    <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@_requests" OnRequestChanged="LoadDataAsync" />
+                    <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@_requests" OnRequestChanged="LoadDataAsync" 
+                                                                  SelectedRequest="_selectedRequest" SelectedRequestChanged="OnSelectedRequestChanged">
+                        <RejectButtonTemplate Context="request">
+                            <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small" OnClick="@(() => OpenRejectDialogAsync(request))">リジェクト</MudButton>
+                        </RejectButtonTemplate>
+                    </SRNSMudApp.Components.Tag.TaggingRequestList>
                 }
             </MudTabPanel>
         </MudTabs>
@@ -58,8 +65,21 @@
     private Item? _item;
     private List<TaggingRequestEntity>? _requests;
 
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? ActiveTabQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "requestId")]
+    public int? SelectedRequestIdQuery { get; set; }
+
+    private int _activeTabIndex;
+    private TaggingRequestEntity? _selectedRequest;
+
     protected override async Task OnInitializedAsync()
     {
+        if (ActiveTabQuery == "requests")
+        {
+            _activeTabIndex = 1;
+        }
         await LoadDataAsync();
     }
 
@@ -70,6 +90,7 @@
             await LoadDataAsync();
         }
     }
+
 
     private async Task LoadDataAsync()
     {
@@ -92,7 +113,21 @@
             .FirstOrDefaultAsync(i => i.Id == ItemId);
 
         _requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
+        
+        if (SelectedRequestIdQuery.HasValue && _requests != null)
+        {
+            _selectedRequest = _requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
+        }
     }
+
+    private void OnSelectedRequestChanged(TaggingRequestEntity? request)
+    {
+        _selectedRequest = request;
+        SelectedRequestIdQuery = request?.Id;
+        UpdateUrlQuery();
+    }
+
+
 
     private async Task RemoveItemTagAsync(Tag tag)
     {
@@ -119,4 +154,52 @@
         }
     }
 
+    private async Task OpenRejectDialogAsync(TaggingRequestEntity request)
+    {
+        var authState = await AuthState!;
+        var currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (currentUserId == null) return;
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.RejectRequestDialog>("リクエストを却下", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                var comment = result.Data as string;
+                await TaggingService.RejectRequestAsync(request.Id, currentUserId, comment);
+                Snackbar.Add("リクエストを却下しました。", Severity.Success);
+                
+                if (_requests != null)
+                {
+                    _requests.Remove(request);
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void OnTabChanged(int index)
+    {
+        _activeTabIndex = index;
+        ActiveTabQuery = index == 1 ? "requests" : "details";
+        UpdateUrlQuery();
+    }
+
+    private void UpdateUrlQuery()
+    {
+        var uri = NavigationManager.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            { "tab", ActiveTabQuery },
+            { "requestId", SelectedRequestIdQuery }
+        });
+        NavigationManager.NavigateTo(uri, replace: false);
+    }
 }
