@@ -40,7 +40,7 @@ public class TaggingContractServiceTests : IDisposable
         
         // Act
         var contract = await _service.ProposeGratisContractAsync(
-            requesterId, tagOwnerId, targetItemId: 1, requestedTagId: 2, message);
+            requesterId, tagOwnerId, targetItemId: 1, requestedTagId: 2, message: message);
 
         // Assert
         Assert.NotNull(contract);
