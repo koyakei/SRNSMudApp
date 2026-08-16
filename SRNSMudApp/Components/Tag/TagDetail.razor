@@ -60,6 +60,9 @@
                 <SRNSMudApp.Components.Shared.ResourceList Tags="_relatedTags" Items="_relatedItems"
                                                            OnDataChanged="LoadDataAsync"/>
             </MudTabPanel>
+            <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
+                <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync" />
+            </MudTabPanel>
             <MudTabPanel Text="Weight 履歴 / 取引履歴">
                 <SRNSMudApp.Components.Shared.TagWeightLedgerList Ledgers="_weightLedgers"/>
             </MudTabPanel>
@@ -81,6 +84,7 @@
     private IEnumerable<Tag> _relatedTags = new List<Tag>();
     private IEnumerable<TagWeightLedger> _weightLedgers = new List<TagWeightLedger>();
     private IEnumerable<PublicTradeOffer> _publicOffers = new List<PublicTradeOffer>();
+    private IEnumerable<TaggingRequestEntity> _pendingRequests = new List<TaggingRequestEntity>();
     private bool _isFollowing;
     private string? _currentUserId;
 
@@ -148,6 +152,16 @@
                 .Include(o => o.OfferedTag)
                 .Where(o => o.OfferedTagId == TagId)
                 .OrderByDescending(o => o.CreatedDate)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _pendingRequests = await context.TaggingRequestEntities!
+                .Include(r => r.TargetItem)
+                .Include(r => r.Owner)
+                .Include(r => r.RequestedTag)
+                .Include(r => r.Replies)
+                .Where(r => r.RequestedTagId == TagId && r.Status == TradeStatus.Proposed)
+                .OrderByDescending(r => r.CreatedDate)
                 .AsNoTracking()
                 .ToListAsync();
 

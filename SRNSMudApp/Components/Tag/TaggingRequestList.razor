@@ -1,0 +1,61 @@
+@using SRNSMudApp.Data
+@inject IDialogService DialogService
+
+<MudTable Items="Requests" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+    <HeaderContent>
+        <MudTh>タイプ</MudTh>
+        <MudTh>対象アイテム</MudTh>
+        <MudTh>リクエスタ</MudTh>
+        <MudTh>作成日時</MudTh>
+        <MudTh>操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="タイプ">
+            @if (context.RequestType == TaggingRequestType.Add)
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">追加</MudChip>
+            }
+            else if (context.RequestType == TaggingRequestType.Remove)
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small">削除</MudChip>
+            }
+            else if (context.RequestType == TaggingRequestType.DecreaseWeight)
+            {
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small">Weight減少</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="対象アイテム">
+            <MudLink Href="@($"/ItemDetail/{context.TargetItemId}")">
+                @(context.TargetItem?.Content ?? $"Item #{context.TargetItemId}")
+            </MudLink>
+        </MudTd>
+        <MudTd DataLabel="リクエスタ">@context.Owner?.UserName</MudTd>
+        <MudTd DataLabel="作成日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="操作">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenThreadDialog(context))">
+                詳細・スレッド
+            </MudButton>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [Parameter] public IEnumerable<TaggingRequestEntity> Requests { get; set; } = new List<TaggingRequestEntity>();
+    [Parameter] public EventCallback OnRequestChanged { get; set; }
+
+    private async Task OpenThreadDialog(TaggingRequestEntity request)
+    {
+        var parameters = new DialogParameters<SRNSMudApp.Components.Shared.TaggingRequestThreadDialog>
+        {
+            { x => x.TaggingRequest, request }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.TaggingRequestThreadDialog>("リクエストスレッド", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await OnRequestChanged.InvokeAsync();
+        }
+    }
+}
