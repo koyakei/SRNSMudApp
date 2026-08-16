@@ -28,4 +28,7 @@ public class Item : BaseEntity
     // タグ付けリクエストに対するリプライの場合
     public int? TaggingRequestEntityId { get; set; }
     public TaggingRequestEntity? TaggingRequest { get; set; }
+
+    // このアイテムがタグ付けリクエストの本体である場合、そのリクエスト情報
+    public TaggingRequestEntity? AsRequestOf { get; set; }
 }

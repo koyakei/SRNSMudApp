@@ -212,8 +212,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         _ = builder.Entity<TaggingRequestEntity>()
             .HasOne(e => e.RequestItem)
-            .WithMany()
-            .HasForeignKey(e => e.RequestItemId)
+            .WithOne(i => i.AsRequestOf)
+            .HasForeignKey<TaggingRequestEntity>(e => e.RequestItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<TaggingRequestEntity>()

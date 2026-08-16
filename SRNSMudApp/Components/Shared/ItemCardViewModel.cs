@@ -14,6 +14,30 @@ namespace SRNSMudApp.Components.Shared;
 /// </summary>
 public static class ItemCardViewModel
 {
+    public class RequestInfo
+    {
+        public bool IsTaggingRequest { get; set; }
+        public TaggingRequestType? RequestType { get; set; }
+        public int? TargetItemId { get; set; }
+        public string? TargetItemContent { get; set; }
+        public int? TargetTagId { get; set; }
+        public string? TargetTagName { get; set; }
+    }
+
+    public static RequestInfo GetRequestInfo(SRNSMudApp.Data.Item item)
+    {
+        if (item.AsRequestOf == null) return new RequestInfo { IsTaggingRequest = false };
+        return new RequestInfo
+        {
+            IsTaggingRequest = true,
+            RequestType = item.AsRequestOf.RequestType,
+            TargetItemId = item.AsRequestOf.TargetItemId,
+            TargetItemContent = item.AsRequestOf.TargetItem?.Content,
+            TargetTagId = item.AsRequestOf.RequestedTagId,
+            TargetTagName = item.AsRequestOf.RequestedTag?.Name
+        };
+    }
+
     // ReSharper disable once InconsistentNaming
     private static readonly Regex UrlRegex =
         new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",

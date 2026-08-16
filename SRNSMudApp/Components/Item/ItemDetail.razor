@@ -60,6 +60,10 @@
             .ThenInclude(t => t.TargetTagRelations)
             .ThenInclude(ttr => ttr.Tag)
             .ThenInclude(t => t.Owner)
+            .Include(i => i.AsRequestOf)
+            .ThenInclude(r => r.TargetItem)
+            .Include(i => i.AsRequestOf)
+            .ThenInclude(r => r.RequestedTag)
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == ItemId);
 

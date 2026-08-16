@@ -21,6 +21,68 @@
                          OnDownvoteClicked="DownvoteItemAsync"/>
 
             <div class="flex-1">
+                @{
+                    var requestInfo = ItemCardViewModel.GetRequestInfo(Item);
+                }
+                @if (requestInfo.IsTaggingRequest)
+                {
+                    <MudAlert Severity="@(requestInfo.RequestType == TaggingRequestType.Add ? Severity.Success : (requestInfo.RequestType == TaggingRequestType.Remove ? Severity.Error : Severity.Warning))" 
+                              Variant="Variant.Outlined" 
+                              Dense="true" 
+                              Class="mb-3 py-1 px-3"
+                              Icon="@(requestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : (requestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Filled.RemoveCircleOutline : Icons.Material.Filled.ArrowDownward))">
+                        <div class="d-flex align-start flex-wrap" style="gap: 8px;">
+                            <div class="d-flex align-center mt-1">
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @(requestInfo.RequestType == TaggingRequestType.Add ? "タグ追加リクエスト" : (requestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "ウェイト減少リクエスト"))
+                                </MudText>
+                            </div>
+                            <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
+                            
+                            <div class="d-flex flex-column justify-center" style="flex: 1; min-width: 200px;">
+                                @if (!string.IsNullOrWhiteSpace(requestInfo.TargetItemContent))
+                                {
+                                    <div class="d-flex align-start gap-1 mt-1" @onclick:stopPropagation="true">
+                                        <div class="flex-1" style="min-width: 0;">
+                                            <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")" Color="Color.Default" Underline="Underline.Hover">
+                                                <div class="@(!_isTargetExpanded ? "line-clamp-2" : "")" 
+                                                     style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px; white-space: pre-wrap; word-break: break-word;">
+                                                    @requestInfo.TargetItemContent
+                                                </div>
+                                            </MudLink>
+                                        </div>
+                                        <MudIconButton Icon="@(_isTargetExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" 
+                                                       Size="Size.Small" 
+                                                       OnClick="ToggleTargetExpand" 
+                                                       Class="mt-n1 flex-shrink-0"
+                                                       title="展開/折りたたみ" />
+                                    </div>
+                                }
+                                else 
+                                {
+                                    <div class="mt-1" @onclick:stopPropagation="true">
+                                        <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")" Color="Color.Default" Underline="Underline.Hover">
+                                            <div style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
+                                                (内容なし)
+                                            </div>
+                                        </MudLink>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
+                            <div class="d-flex align-center mt-1">
+                                <MudText Typo="Typo.body2" Class="mr-1">タグ:</MudText>
+                                <span @onclick:stopPropagation="true">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ma-0 cursor-pointer" OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{requestInfo.TargetTagId}"))">
+                                        @requestInfo.TargetTagName
+                                    </MudChip>
+                                </span>
+                            </div>
+                        </div>
+                    </MudAlert>
+                }
+
                 <div class="d-flex justify-space-between align-start">
                     <div>
                         @{
@@ -407,6 +469,7 @@
     private bool _isExpanded;
     private bool _isOverflowing;
     private bool _areTagsExpanded;
+    private bool _isTargetExpanded;
 
     private int _activePopoverTagId = -1;
     private string _activePopoverChipKey = "";
@@ -515,6 +578,11 @@
     private void ToggleTagExpand()
     {
         _areTagsExpanded = !_areTagsExpanded;
+    }
+
+    private void ToggleTargetExpand()
+    {
+        _isTargetExpanded = !_isTargetExpanded;
     }
 
     private async Task ToggleTagTreePopover(int tagId, string chipKey)
