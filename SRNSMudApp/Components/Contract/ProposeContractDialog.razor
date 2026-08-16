@@ -11,14 +11,14 @@
         <MudForm @ref="_form" @bind-IsValid="@_isValid">
             <MudText Typo="Typo.body1" Class="mb-4">
                 あなたはこのタグの操作権限を持っていません。<br/>
-                タグの作成者にタグ付けのリクエスト（コントラクト）を提案しますか？
+                タグの作成者に@(IsRemovalRequest ? "タグの削除" : "タグ付け")のリクエスト（コントラクト）を提案しますか？
             </MudText>
 
             <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
             <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true"/>
 
             <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
-                提案するWeight変更: @(WeightDelta > 0 ? $"+{WeightDelta}" : $"{WeightDelta}")
+                @(IsRemovalRequest ? "タグの削除提案" : $"提案するWeight変更: {(WeightDelta > 0 ? "+" : "")}{WeightDelta}")
             </MudAlert>
 
             <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
@@ -71,6 +71,7 @@
     [Parameter] public Item TargetItem { get; set; } = null!;
     [Parameter] public Tag RequestedTag { get; set; } = null!;
     [Parameter] public int WeightDelta { get; set; }
+    [Parameter] public bool IsRemovalRequest { get; set; } = false;
 
     private MudForm? _form;
     private bool _isValid;
@@ -136,7 +137,7 @@
         if (!_isValid) return;
 
         bool isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
-        var requestType = WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.Remove;
+        var requestType = IsRemovalRequest ? TaggingRequestType.Remove : (WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.DecreaseWeight);
 
         if (isMutual)
         {

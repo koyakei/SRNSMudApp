@@ -194,6 +194,11 @@
                                                            Color="@addBtnColor" Class="chip-icon-btn pa-0 mx-1"
                                                            OnClick="@(() => UpdateTagRelationWeightAsync(tr, 1))"
                                                            title="Weightを増やす"/>
+                                                           
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                           Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
+                                                           OnClick="@(() => RemoveTagRelationAsync(tr))"
+                                                           title="関連付けを削除"/>
                                         }
                                         <span class="ml-1">(@GetShortOwnerName(tr.Tag?.Owner?.UserName))</span>
                                     </span>
@@ -786,7 +791,8 @@
             {
                 { x => x.TargetItem, Item },
                 { x => x.RequestedTag, relation.Tag },
-                { x => x.WeightDelta, -relation.Weight } // Suggest removing entirely
+                { x => x.WeightDelta, -relation.Weight }, // Suggest removing entirely
+                { x => x.IsRemovalRequest, true }
             };
             var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
             var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
@@ -838,7 +844,8 @@
             {
                 { x => x.TargetItem, Item },
                 { x => x.RequestedTag, relation.Tag },
-                { x => x.WeightDelta, delta }
+                { x => x.WeightDelta, delta },
+                { x => x.IsRemovalRequest, false }
             };
             var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
             var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
