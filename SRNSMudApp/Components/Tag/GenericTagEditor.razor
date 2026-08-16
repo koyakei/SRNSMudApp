@@ -1,0 +1,60 @@
+@typeparam TItem where TItem : class, SRNSMudApp.Data.ITaggable
+@inject SRNSMudApp.Services.ITaggingService TaggingService
+@using SRNSMudApp.Data
+@using MudBlazor
+
+<div class="d-flex flex-column gap-2">
+    <MudText Typo="Typo.subtitle2">タグ</MudText>
+    
+    <div class="d-flex flex-wrap gap-1">
+        @if (TargetEntity.Tags != null && TargetEntity.Tags.Any())
+        {
+            @foreach (var tag in TargetEntity.Tags)
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small"
+                         CloseIcon="@Icons.Material.Filled.Close" OnClose="@(_ => RemoveTagAsync(tag.Id))">
+                    @tag.Name
+                </MudChip>
+            }
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">タグがありません</MudText>
+        }
+    </div>
+
+    <div class="d-flex align-center gap-2 mt-2">
+        <MudNumericField @bind-Value="_newTagId" Label="追加するタグID" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AddTagAsync">追加</MudButton>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TItem TargetEntity { get; set; } = null!;
+    [Parameter] public EventCallback OnTagsChanged { get; set; }
+
+    private int _newTagId;
+
+    private async Task AddTagAsync()
+    {
+        if (_newTagId <= 0) return;
+        
+        await TaggingService.AddTagAsync<TItem>(TargetEntity.Id, _newTagId);
+        
+        if (OnTagsChanged.HasDelegate)
+        {
+            await OnTagsChanged.InvokeAsync();
+        }
+        _newTagId = 0;
+    }
+
+    private async Task RemoveTagAsync(int tagId)
+    {
+        await TaggingService.RemoveTagAsync<TItem>(TargetEntity.Id, tagId);
+        
+        if (OnTagsChanged.HasDelegate)
+        {
+            await OnTagsChanged.InvokeAsync();
+        }
+    }
+}

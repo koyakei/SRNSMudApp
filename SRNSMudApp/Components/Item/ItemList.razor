@@ -377,6 +377,7 @@
     {
         await using var context = await DbFactory.CreateDbContextAsync();
         var query = context.Items
+            .AsNoTracking()
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
@@ -384,6 +385,7 @@
             .AsQueryable();
 
         var tagQuery = context.Tags
+            .AsNoTracking()
             .Include(t => t.Owner)
             .Include(t => t.TargetTagRelations)
             .ThenInclude(tr => tr.Tag)
@@ -407,7 +409,7 @@
         query = ApplySortToItemQuery(query);
         _items = await query.ToListAsync();
 
-        // StateHasChanged();
+        StateHasChanged();
     }
 
     private IQueryable<Item> ApplySortToItemQuery(IQueryable<Item> query)

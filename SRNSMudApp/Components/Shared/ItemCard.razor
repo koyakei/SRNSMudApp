@@ -642,6 +642,19 @@
         }
 
         await context.SaveChangesAsync();
+        
+        // ローカルにも反映（削除分のみ。追加はリロードを待つ）
+        if (targetRelation != null)
+        {
+            var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == targetRelation.Id);
+            if (localTarget != null) Item.TagRelations.Remove(localTarget);
+        }
+        else if (oppositeRelation != null)
+        {
+            var localOpposite = Item.TagRelations.FirstOrDefault(tr => tr.Id == oppositeRelation.Id);
+            if (localOpposite != null) Item.TagRelations.Remove(localOpposite);
+        }
+
         if (OnDataChanged.HasDelegate)
         {
             await OnDataChanged.InvokeAsync();
@@ -752,6 +765,14 @@
         });
         await context.SaveChangesAsync();
 
+        // ローカルに即時反映
+        if (Item.TagRelations == null)
+        {
+            Item.TagRelations = new List<TagRelation>();
+        }
+        newRelation.Tag = tagFromDb;
+        Item.TagRelations.Add(newRelation);
+
         Snackbar.Add("タグを追加しました。", Severity.Success);
         if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
     }
@@ -781,7 +802,11 @@
         }
 
         await using var context = await DbFactory.CreateDbContextAsync();
-        context.Remove(relation);
+        var entityToRemove = await context.TagRelations.FindAsync(relation.Id);
+        if (entityToRemove != null)
+        {
+            context.TagRelations.Remove(entityToRemove);
+        }
         context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = CurrentUserId,
@@ -792,6 +817,13 @@
             PreviousWeight = relation.Weight
         });
         await context.SaveChangesAsync();
+
+        // 画面上に即時反映させるためローカルのコレクションからも削除する
+        var localRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == relation.Id);
+        if (localRelation != null)
+        {
+            Item.TagRelations.Remove(localRelation);
+        }
 
         Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
         if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();

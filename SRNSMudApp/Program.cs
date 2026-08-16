@@ -45,6 +45,9 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
+// Register TaggingService
+builder.Services.AddTransient<ITaggingService, TaggingService>();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()

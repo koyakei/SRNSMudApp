@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SRNSMudApp.Data;
 
-public abstract class TaggingRequestEntity : BaseEntity
+public abstract class TaggingRequestEntity : BaseEntity, ITaggable
 {
     [MaxLength(50)]
     public string RequesterUserId { get; set; } = string.Empty;
@@ -24,4 +24,7 @@ public abstract class TaggingRequestEntity : BaseEntity
 
     public TaggingRequestType RequestType { get; set; } = TaggingRequestType.Add;
     public ICollection<TaggingRequestReply> Replies { get; set; } = new List<TaggingRequestReply>();
+
+    // ITaggable Implementation
+    public virtual ICollection<Tag> Tags { get; set; } = new List<Tag>();
 }

@@ -217,6 +217,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.ConsumedRightAssetId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // ITaggable mappings
+        _ = builder.Entity<TaggingRequestEntity>()
+            .HasMany(e => e.Tags)
+            .WithMany();
+
+        _ = builder.Entity<TaggingRequestReply>()
+            .HasMany(e => e.Tags)
+            .WithMany();
+
         _ = builder.Entity<BountyTaggingContract>()
             .HasOne(e => e.OfferedRewardAsset)
             .WithMany()
