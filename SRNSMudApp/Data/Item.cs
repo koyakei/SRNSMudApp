@@ -24,4 +24,8 @@ public class Item : BaseEntity
     // このアイテムに対するリプライ一覧
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<Item> Replies { get; set; } = [];
+
+    // タグ付けリクエストに対するリプライの場合
+    public int? TaggingRequestEntityId { get; set; }
+    public TaggingRequestEntity? TaggingRequest { get; set; }
 }

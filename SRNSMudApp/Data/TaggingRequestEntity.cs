@@ -22,8 +22,11 @@ public abstract class TaggingRequestEntity : BaseEntity, ITaggable
     public int? ConsumedRightAssetId { get; set; }
     public RightAsset? ConsumedRightAsset { get; set; }
 
+    public int? RequestItemId { get; set; }
+    public Item? RequestItem { get; set; }
+
     public TaggingRequestType RequestType { get; set; } = TaggingRequestType.Add;
-    public ICollection<TaggingRequestReply> Replies { get; set; } = new List<TaggingRequestReply>();
+    public ICollection<Item> Replies { get; set; } = new List<Item>();
 
     // ITaggable Implementation
     public virtual ICollection<Tag> Tags { get; set; } = new List<Tag>();

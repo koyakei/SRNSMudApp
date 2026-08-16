@@ -18,6 +18,12 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         TaggingRequestType requestType = TaggingRequestType.Add,
         string? message = null)
     {
+        var requestItem = new Item
+        {
+            OwnerId = requesterUserId,
+            Content = message ?? (requestType == TaggingRequestType.Add ? "タグ追加リクエストを送信しました。" : "タグ削除リクエストを送信しました。")
+        };
+
         var contract = new GratisTaggingContract
         {
             OwnerId = requesterUserId,
@@ -27,7 +33,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             RequestedTagId = requestedTagId,
             Status = TradeStatus.Proposed,
             RequestType = requestType,
-            RequesterMessage = message
+            RequesterMessage = message,
+            RequestItem = requestItem
         };
 
         _ = dbContext.TaggingRequestEntities!.Add(contract);
@@ -45,6 +52,12 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         int consumedRightAssetId,
         TaggingRequestType requestType = TaggingRequestType.Add)
     {
+        var requestItem = new Item
+        {
+            OwnerId = requesterUserId,
+            Content = requestType == TaggingRequestType.Add ? "タグ追加リクエスト(Mutual)を送信しました。" : "タグ削除リクエスト(Mutual)を送信しました。"
+        };
+
         var contract = new MutualTaggingContract
         {
             OwnerId = requesterUserId,
@@ -56,7 +69,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             OfferedTagId = offeredTagId,
             ConsumedRightAssetId = consumedRightAssetId,
             Status = TradeStatus.Proposed,
-            RequestType = requestType
+            RequestType = requestType,
+            RequestItem = requestItem
         };
         _ = dbContext.TaggingRequestEntities!.Add(contract);
         _ = await dbContext.SaveChangesAsync();

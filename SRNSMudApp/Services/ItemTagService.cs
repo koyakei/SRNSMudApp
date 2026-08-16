@@ -257,30 +257,40 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return await context.TaggingRequestEntities!
             .Include(tr => tr.RequestedTag)
             .Include(tr => tr.Owner) // リクエスト作成者
+            .Include(tr => tr.RequestItem)
+                .ThenInclude(i => i!.Owner)
+            .Include(tr => tr.RequestItem)
+                .ThenInclude(i => i!.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
             .Include(tr => tr.Replies)
                 .ThenInclude(r => r.Owner) // リプライ作成者
+            .Include(tr => tr.Replies)
+                .ThenInclude(r => r.TagRelations) // ItemCard向け
+                    .ThenInclude(tr => tr.Tag)
             .Where(tr => tr.TargetItemId == itemId)
             .OrderByDescending(tr => tr.CreatedDate)
             .ToListAsync();
     }
 
-    public async Task<TaggingRequestReply?> AddReplyToRequestAsync(int requestId, string userId, string message)
+    public async Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message)
     {
         await using var context = await dbFactory.CreateDbContextAsync();
-        var reply = new TaggingRequestReply
+        var reply = new Item
         {
             TaggingRequestEntityId = requestId,
             OwnerId = userId,
-            Message = message,
+            Content = message,
             CreatedDate = DateTime.UtcNow
         };
 
-        context.TaggingRequestReplies!.Add(reply);
+        context.Items!.Add(reply);
         await context.SaveChangesAsync();
 
-        // UIの即時更新用に、保存したリプライにユーザー情報を結合して返す
-        return await context.TaggingRequestReplies
+        // UIの即時更新用に、保存したリプライに関連情報を結合して返す
+        return await context.Items
             .Include(r => r.Owner)
+            .Include(r => r.TagRelations)
+                .ThenInclude(tr => tr.Tag)
             .FirstOrDefaultAsync(r => r.Id == reply.Id);
     }
 

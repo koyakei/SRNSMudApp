@@ -6,35 +6,48 @@
 
 @inject IItemTagService ItemTagService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <MudDialog>
     <DialogContent>
         <div class="d-flex flex-column pa-2" style="max-height: 50vh; overflow-y: auto;">
             
             <!-- 親リクエスト (スレッドの開始点) -->
-            <div class="d-flex mb-1">
-                <MudAvatar Size="Size.Medium" Class="mr-3" Color="Color.Primary">
-                    @(TaggingRequest.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
-                </MudAvatar>
-                <div class="flex-grow-1">
-                    <div class="d-flex align-baseline">
-                        <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@TaggingRequest.Owner?.UserName</b></MudText>
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
-                            @TaggingRequest.CreatedDate.ToLocalTime().ToString("g")
+            @if (TaggingRequest.RequestItem != null)
+            {
+                <div class="mb-4">
+                    <ItemCard Item="TaggingRequest.RequestItem" 
+                              CurrentUserId="@_currentUserId" 
+                              AllTags="_allTags"
+                              AllTagRelationsToTags="_allTagRelationsToTags" />
+                </div>
+            }
+            else
+            {
+                <div class="d-flex mb-1">
+                    <MudAvatar Size="Size.Medium" Class="mr-3" Color="Color.Primary">
+                        @(TaggingRequest.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
+                    </MudAvatar>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-baseline">
+                            <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@TaggingRequest.Owner?.UserName</b></MudText>
+                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                                @TaggingRequest.CreatedDate.ToLocalTime().ToString("g")
+                            </MudText>
+                        </div>
+                        <MudText Typo="Typo.body1" Class="mt-1">
+                            @if(TaggingRequest.RequestType == TaggingRequestType.Add)
+                            {
+                                <span>このアイテムに <b>@TaggingRequest.RequestedTag?.Name</b> を追加するリクエストをしました。</span>
+                            }
+                            else
+                            {
+                                <span>このアイテムから <b>@TaggingRequest.RequestedTag?.Name</b> を削除するリクエストをしました。</span>
+                            }
                         </MudText>
                     </div>
-                    <MudText Typo="Typo.body1" Class="mt-1">
-                        @if(TaggingRequest.RequestType == TaggingRequestType.Add)
-                        {
-                            <span>このアイテムに <b>@TaggingRequest.RequestedTag?.Name</b> を追加するリクエストをしました。</span>
-                        }
-                        else
-                        {
-                            <span>このアイテムから <b>@TaggingRequest.RequestedTag?.Name</b> を削除するリクエストをしました。</span>
-                        }
-                    </MudText>
                 </div>
-            </div>
+            }
 
             <!-- リプライツリー -->
             <div class="ml-5 pl-5" style="border-left: 2px solid var(--mud-palette-lines-default);">
@@ -42,22 +55,19 @@
                 {
                     @foreach(var reply in Replies)
                     {
-                        <div class="d-flex mb-4 mt-3">
-                            <!-- 縦線の上にアバターを乗せるためのスタイル調整 -->
-                            <MudAvatar Size="Size.Small" Class="mr-3 mt-1" 
-                                       Style="margin-left: -30px; border: 3px solid var(--mud-palette-background);" 
-                                       Color="Color.Secondary">
-                                @(reply.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
-                            </MudAvatar>
-                            
+                        <div class="mb-4 mt-3 position-relative">
+                            <div class="position-absolute" style="left: -30px; top: 10px; z-index: 1;">
+                                <MudAvatar Size="Size.Small" 
+                                           Style="border: 3px solid var(--mud-palette-background);" 
+                                           Color="Color.Secondary">
+                                    @(reply.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
+                                </MudAvatar>
+                            </div>
                             <div class="flex-grow-1">
-                                <div class="d-flex align-baseline">
-                                    <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@reply.Owner?.UserName</b></MudText>
-                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
-                                        @reply.CreatedDate.ToLocalTime().ToString("g")
-                                    </MudText>
-                                </div>
-                                <MudText Typo="Typo.body2" Class="mt-1">@reply.Message</MudText>
+                                <ItemCard Item="reply" 
+                                          CurrentUserId="@_currentUserId" 
+                                          AllTags="_allTags"
+                                          AllTagRelationsToTags="_allTagRelationsToTags" />
                             </div>
                         </div>
                     }
@@ -92,15 +102,17 @@
     
     [Parameter] public TaggingRequestEntity TaggingRequest { get; set; } = null!;
 
-    private List<TaggingRequestReply> Replies { get; set; } = new();
+    private List<Item> Replies { get; set; } = new();
     private string _newReplyMessage = string.Empty;
     private bool _isSubmitting;
     private string? _currentUserId;
+    private List<Tag> _allTags = new();
+    private List<TagRelationToTag> _allTagRelationsToTags = new();
 
     protected override async Task OnInitializedAsync()
     {
         // パラメータとして渡されたリクエストの既存リプライをセット
-        Replies = TaggingRequest.Replies?.OrderBy(r => r.CreatedDate).ToList() ?? new List<TaggingRequestReply>();
+        Replies = TaggingRequest.Replies?.OrderBy(r => r.CreatedDate).ToList() ?? new List<Item>();
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
@@ -108,6 +120,10 @@
         {
             _currentUserId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
         }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _allTags = await context.Tags.Include(t => t.Owner).ToListAsync();
+        _allTagRelationsToTags = await context.TagRelationToTags.Include(trt => trt.Tag).ToListAsync();
     }
 
     private async Task SubmitReplyAsync()
@@ -127,7 +143,7 @@
                 _newReplyMessage = string.Empty;
                 
                 // 親のTaggingRequestインスタンスにも追加しておく（状態の同期）
-                TaggingRequest.Replies ??= new List<TaggingRequestReply>();
+                TaggingRequest.Replies ??= new List<Item>();
                 TaggingRequest.Replies.Add(newReply);
             }
         }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SRNSMudApp.Data;
 
@@ -11,9 +12,11 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260816144608_ReplaceTaggingRequestReplyWithItem")]
+    partial class ReplaceTaggingRequestReplyWithItem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -615,9 +618,6 @@ namespace SRNSMudApp.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("RequestItemId")
-                        .HasColumnType("int");
-
                     b.Property<int>("RequestType")
                         .HasColumnType("int");
 
@@ -648,8 +648,6 @@ namespace SRNSMudApp.Migrations
                     b.HasIndex("ConsumedRightAssetId");
 
                     b.HasIndex("OwnerId");
-
-                    b.HasIndex("RequestItemId");
 
                     b.HasIndex("RequestedTagId");
 
@@ -1115,11 +1113,6 @@ namespace SRNSMudApp.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SRNSMudApp.Data.Item", "RequestItem")
-                        .WithMany()
-                        .HasForeignKey("RequestItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("SRNSMudApp.Data.Tag", "RequestedTag")
                         .WithMany()
                         .HasForeignKey("RequestedTagId")
@@ -1135,8 +1128,6 @@ namespace SRNSMudApp.Migrations
                     b.Navigation("ConsumedRightAsset");
 
                     b.Navigation("Owner");
-
-                    b.Navigation("RequestItem");
 
                     b.Navigation("RequestedTag");
 
