@@ -53,6 +53,43 @@
                     </SRNSMudApp.Components.Tag.TaggingRequestList>
                 }
             </MudTabPanel>
+
+            <MudTabPanel Text="タグ履歴">
+                @if (_ledgers == null)
+                {
+                    <div class="d-flex justify-center my-4">
+                        <MudProgressCircular Color="Color.Default" Indeterminate="true" />
+                    </div>
+                }
+                else if (!_ledgers.Any())
+                {
+                    <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
+                }
+                else
+                {
+                    <MudList T="TagWeightLedger">
+                        @foreach (var ledger in _ledgers)
+                        {
+                            <MudListItem>
+                                <div class="d-flex align-center">
+                                    <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                        @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
+                                    </MudChip>
+                                    <MudText Typo="Typo.body2" Color="@(ledger.Delta > 0 ? Color.Success : (ledger.Delta < 0 ? Color.Error : Color.Default))" Class="mr-2">
+                                        @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mr-2">
+                                        @ledger.Owner?.UserName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
+                                        @ledger.CreatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudTabPanel>
         </MudTabs>
     }
 </MudContainer>
@@ -64,6 +101,7 @@
 
     private Item? _item;
     private List<TaggingRequestEntity>? _requests;
+    private List<TagWeightLedger>? _ledgers;
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? ActiveTabQuery { get; set; }
@@ -79,6 +117,10 @@
         if (ActiveTabQuery == "requests")
         {
             _activeTabIndex = 1;
+        }
+        else if (ActiveTabQuery == "history")
+        {
+            _activeTabIndex = 2;
         }
         await LoadDataAsync();
     }
@@ -114,6 +156,15 @@
 
         _requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
         
+        _ledgers = await context.TagWeightLedgers
+            .Include(l => l.Owner)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr.Tag)
+            .Where(l => l.TagRelation != null && l.TagRelation.ItemId == ItemId)
+            .OrderByDescending(l => l.CreatedDate)
+            .AsNoTracking()
+            .ToListAsync();
+
         if (SelectedRequestIdQuery.HasValue && _requests != null)
         {
             _selectedRequest = _requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
@@ -189,7 +240,12 @@
     private void OnTabChanged(int index)
     {
         _activeTabIndex = index;
-        ActiveTabQuery = index == 1 ? "requests" : "details";
+        ActiveTabQuery = index switch
+        {
+            1 => "requests",
+            2 => "history",
+            _ => "details"
+        };
         UpdateUrlQuery();
     }
 
