@@ -1,0 +1,73 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Components.Tag
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h5">付けられたタグ</MudText>
+    
+    <MudTextField @bind-Value="_searchString" 
+                  Placeholder="タグ名またはユーザー名で検索" 
+                  Adornment="Adornment.Start" 
+                  AdornmentIcon="@Icons.Material.Filled.Search" 
+                  IconSize="Size.Medium" 
+                  Class="mt-0 search-input" 
+                  Clearable="true" />
+</div>
+
+<MudTable Items="@TagRelations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Filter="FilterFunc"
+          LoadingProgressColor="Color.Info">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Content</MudTh>
+        <MudTh>Username</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            <a href="@($"/TagDetail/{context.TagId}")" class="mud-primary-text font-weight-bold" style="text-decoration: none;">
+                @context.Tag?.Name
+            </a>
+        </MudTd>
+        <MudTd DataLabel="Content">
+            <div style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@context.Tag?.Content">
+                @context.Tag?.Content
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Username">
+            @context.Owner?.UserName
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <ItemTagChip TagRelation="@context"
+                         Item="@Item"
+                         CurrentUserId="@CurrentUserId"
+                         AllTags="@AllTags"
+                         AllTagRelationsToTags="@AllTagRelationsToTags"
+                         OnDataChanged="OnDataChanged" 
+                         ChipIndex="0" />
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    [Parameter] public IEnumerable<TagRelation> TagRelations { get; set; } = [];
+    [Parameter] public Item Item { get; set; } = null!;
+    [Parameter] public string CurrentUserId { get; set; } = "";
+    [Parameter] public List<Tag> AllTags { get; set; } = [];
+    [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+
+    private string _searchString = "";
+
+    private bool FilterFunc(TagRelation relation)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+        
+        var nameMatch = relation.Tag?.Name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
+        var userMatch = relation.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
+        
+        return nameMatch || userMatch;
+    }
+}

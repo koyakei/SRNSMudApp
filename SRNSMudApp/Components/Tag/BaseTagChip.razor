@@ -1,0 +1,81 @@
+@using MudBlazor
+
+<span id="@ChipId" class="position-relative d-inline-flex align-center">
+    <MudChip T="string" Size="Size.Small"
+             Class="@($"custom-chip {Class}")"
+             Style="@Style"
+             Color="@Color"
+             Variant="@Variant"
+             CloseIcon="@CloseIcon"
+             OnClose="@OnClose">
+        <div class="d-flex align-center">
+            @if (PrefixContent != null)
+            {
+                <div class="d-flex align-center" @onclick:stopPropagation="true">
+                    @PrefixContent
+                </div>
+            }
+            <span class="d-flex align-center">
+                <a class="chip-link mr-1"
+                   style="@TagStyle"
+                   @onclick="HandleTagClick"
+                   @onclick:stopPropagation="true">
+                    @TagName
+                </a>
+                @if (WeightContent != null)
+                {
+                    <span class="mx-1 d-flex align-center font-weight-bold" @onclick:stopPropagation="true">
+                        @WeightContent
+                    </span>
+                }
+                else if (Weight != 0)
+                {
+                    <span class="mx-1 font-weight-bold" @onclick:stopPropagation="true">
+                        @Weight
+                    </span>
+                }
+                @if (OwnerName != null)
+                {
+                    <span class="ml-1" @onclick:stopPropagation="true">(@OwnerName)</span>
+                }
+            </span>
+            @if (ActionContent != null)
+            {
+                <div class="d-flex align-center" @onclick:stopPropagation="true">
+                    @ActionContent
+                </div>
+            }
+        </div>
+    </MudChip>
+    @if (PopoverContent != null)
+    {
+        @PopoverContent
+    }
+</span>
+
+@code {
+    [Parameter] public string ChipId { get; set; } = "";
+    [Parameter] public string TagName { get; set; } = "";
+    [Parameter] public int Weight { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string? TagStyle { get; set; }
+    [Parameter] public MudBlazor.Color Color { get; set; } = MudBlazor.Color.Primary;
+    [Parameter] public Variant Variant { get; set; } = Variant.Filled;
+    [Parameter] public string? OwnerName { get; set; }
+    [Parameter] public string? CloseIcon { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback<MudChip<string>> OnClose { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public RenderFragment? PrefixContent { get; set; }
+    [Parameter] public RenderFragment? WeightContent { get; set; }
+    [Parameter] public RenderFragment? ActionContent { get; set; }
+    [Parameter] public RenderFragment? PopoverContent { get; set; }
+
+    private async Task HandleTagClick()
+    {
+        if (OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+}
