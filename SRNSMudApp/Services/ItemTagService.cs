@@ -9,31 +9,33 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Services;
 
 /// <summary>
-/// IItemTagService の EF Core 実装。
-/// ItemCard.razor の @code から DbFactory を直接使っていたロジックをここに集約する。
+///     IItemTagService の EF Core 実装。
+///     ItemCard.razor の @code から DbFactory を直接使っていたロジックをここに集約する。
 /// </summary>
 public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
 {
     public async Task<string?> AddTagToItemAsync(int itemId, int tagId, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var tagFromDb = await context.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
-        if (tagFromDb == null) return "タグが見つかりません。";
+        Tag? tagFromDb = await context.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
+        if (tagFromDb == null)
+        {
+            return "タグが見つかりません。";
+        }
 
         if (tagFromDb.OwnerId != currentUserId)
+        {
             return "タグの作成者ではないため、追加する権限がありません。";
+        }
 
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == tagId);
-        if (alreadyExists) return "このタグは既に追加されています。";
-
-        var newRelation = new TagRelation
+        if (alreadyExists)
         {
-            ItemId = itemId,
-            TagId = tagId,
-            Weight = 1,
-            OwnerId = currentUserId
-        };
+            return "このタグは既に追加されています。";
+        }
+
+        var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
         context.TagRelations.Add(newRelation);
 
         context.TimelineEvents!.Add(new TimelineEvent
@@ -71,13 +73,18 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> RemoveTagRelationAsync(int relationId, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var relation = await context.TagRelations.FindAsync(relationId);
-        if (relation == null) return "タグの関連付けが見つかりません。";
+        TagRelation? relation = await context.TagRelations.FindAsync(relationId);
+        if (relation == null)
+        {
+            return "タグの関連付けが見つかりません。";
+        }
 
         if (relation.OwnerId != currentUserId)
+        {
             return "関連付けた本人ではないため、解除する権限がありません。";
+        }
 
         context.TimelineEvents!.Add(new TimelineEvent
         {
@@ -89,7 +96,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             PreviousWeight = relation.Weight
         });
 
-        var tag = await context.Tags.FindAsync(relation.TagId);
+        Tag? tag = await context.Tags.FindAsync(relation.TagId);
         if (tag != null)
         {
             var prevWeight = tag.CachedWeight;
@@ -117,17 +124,23 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null) return UpdateWeightResult.NotFound;
+        TagRelation? entity = await context.TagRelations.FindAsync(relationId);
+        if (entity == null)
+        {
+            return UpdateWeightResult.NotFound;
+        }
 
-        if (entity.OwnerId != currentUserId) return UpdateWeightResult.NoPermission;
+        if (entity.OwnerId != currentUserId)
+        {
+            return UpdateWeightResult.NoPermission;
+        }
 
         entity.Weight += delta;
         entity.UpdatedDate = DateTime.UtcNow;
 
-        var tag = await context.Tags.FindAsync(entity.TagId);
+        Tag? tag = await context.Tags.FindAsync(entity.TagId);
         if (tag != null)
         {
             var prevWeight = tag.CachedWeight;
@@ -164,21 +177,29 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> SetTagWeightAsync(int relationId, int newWeight, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null) return "タグの関連付けが見つかりません。";
+        TagRelation? entity = await context.TagRelations.FindAsync(relationId);
+        if (entity == null)
+        {
+            return "タグの関連付けが見つかりません。";
+        }
 
         if (entity.OwnerId != currentUserId)
+        {
             return "関連付けた本人ではないため、Weightを変更する権限がありません。";
+        }
 
-        if (newWeight == entity.Weight) return null;
+        if (newWeight == entity.Weight)
+        {
+            return null;
+        }
 
         var delta = newWeight - entity.Weight;
         entity.Weight = newWeight;
         entity.UpdatedDate = DateTime.UtcNow;
 
-        var tag = await context.Tags.FindAsync(entity.TagId);
+        Tag? tag = await context.Tags.FindAsync(entity.TagId);
         if (tag != null)
         {
             var prevWeight = tag.CachedWeight;
@@ -204,18 +225,29 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null) return "タグの関連付けが見つかりません。";
+        TagRelation? entity = await context.TagRelations.FindAsync(relationId);
+        if (entity == null)
+        {
+            return "タグの関連付けが見つかりません。";
+        }
 
         if (entity.OwnerId != currentUserId)
+        {
             return "関連付けた本人ではないため、変更する権限がありません。";
+        }
 
-        if (entity.TagId == newTagId) return null;
+        if (entity.TagId == newTagId)
+        {
+            return null;
+        }
 
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == newTagId);
-        if (alreadyExists) return "変更先のタグは既に追加されています。";
+        if (alreadyExists)
+        {
+            return "変更先のタグは既に追加されています。";
+        }
 
         entity.TagId = newTagId;
         entity.UpdatedDate = DateTime.UtcNow;
@@ -226,24 +258,24 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> AddTagToTagAsync(int targetTagId, int tagId, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == tagId);
-        if (alreadyExists) return "このタグは既に追加されています。";
+        if (alreadyExists)
+        {
+            return "このタグは既に追加されています。";
+        }
 
         var newRelation = new TagRelationToTag
         {
-            TargetTagId = targetTagId,
-            TagId = tagId,
-            Weight = 1,
-            OwnerId = currentUserId
+            TargetTagId = targetTagId, TagId = tagId, Weight = 1, OwnerId = currentUserId
         };
         context.Set<TagRelationToTag>().Add(newRelation);
 
         await context.SaveChangesAsync();
 
-        var tagFromDb = await context.Tags.FindAsync(tagId);
+        Tag? tagFromDb = await context.Tags.FindAsync(tagId);
         if (tagFromDb != null)
         {
             var prevWeight = tagFromDb.CachedWeight;
@@ -271,15 +303,20 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> RemoveTagToTagRelationAsync(int relationId, string currentUserId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.TagRelationToTags.FindAsync(relationId);
-        if (entity == null) return "タグの関連付けが見つかりません。";
+        TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
+        if (entity == null)
+        {
+            return "タグの関連付けが見つかりません。";
+        }
 
         if (entity.OwnerId != currentUserId)
+        {
             return "関連付けた本人ではないため、解除する権限がありません。";
+        }
 
-        var tag = await context.Tags.FindAsync(entity.TagId);
+        Tag? tag = await context.Tags.FindAsync(entity.TagId);
         if (tag != null)
         {
             var prevWeight = tag.CachedWeight;
@@ -309,28 +346,38 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         int parentTagId,
         int childTagId,
         string currentUserId,
-        IReadOnlyList<Data.Tag> allTagsForCycleCheck)
+        IReadOnlyList<Tag> allTagsForCycleCheck)
     {
         if (childTagId == parentTagId)
+        {
             return "自分自身を親にすることはできません。";
+        }
 
         // 循環参照の簡易チェック（in-memory で実施）
-        var parentTag = allTagsForCycleCheck.FirstOrDefault(t => t.Id == parentTagId);
+        Tag? parentTag = allTagsForCycleCheck.FirstOrDefault(t => t.Id == parentTagId);
         var current = parentTag?.ParentTagId;
         while (current != null)
         {
             if (current == childTagId)
+            {
                 return "循環参照になるため親に設定できません。";
-            var p = allTagsForCycleCheck.FirstOrDefault(t => t.Id == current);
+            }
+
+            Tag? p = allTagsForCycleCheck.FirstOrDefault(t => t.Id == current);
             current = p?.ParentTagId;
         }
 
-        await using var context = await dbFactory.CreateDbContextAsync();
-        var entity = await context.Tags.FindAsync(childTagId);
-        if (entity == null) return "対象タグが見つかりません。";
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        Tag? entity = await context.Tags.FindAsync(childTagId);
+        if (entity == null)
+        {
+            return "対象タグが見つかりません。";
+        }
 
         if (entity.OwnerId != currentUserId)
+        {
             return "対象タグの作成者ではないため、親タグを変更する権限がありません。";
+        }
 
         entity.ParentTagId = parentTagId;
         entity.UpdatedDate = DateTime.UtcNow;
@@ -341,20 +388,20 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<List<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.TaggingRequestEntities!
             .Include(tr => tr.RequestedTag)
             .Include(tr => tr.Owner) // リクエスト作成者
             .Include(tr => tr.RequestItem)
-                .ThenInclude(i => i!.Owner)
+            .ThenInclude(i => i!.Owner)
             .Include(tr => tr.RequestItem)
-                .ThenInclude(i => i!.TagRelations)
-                    .ThenInclude(tr => tr.Tag)
+            .ThenInclude(i => i!.TagRelations)
+            .ThenInclude(tr => tr.Tag)
             .Include(tr => tr.Replies)
-                .ThenInclude(r => r.Owner) // リプライ作成者
+            .ThenInclude(r => r.Owner) // リプライ作成者
             .Include(tr => tr.Replies)
-                .ThenInclude(r => r.TagRelations) // ItemCard向け
-                    .ThenInclude(tr => tr.Tag)
+            .ThenInclude(r => r.TagRelations) // ItemCard向け
+            .ThenInclude(tr => tr.Tag)
             .Where(tr => tr.TargetItemId == itemId)
             .OrderByDescending(tr => tr.CreatedDate)
             .ToListAsync();
@@ -362,13 +409,10 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         var reply = new Item
         {
-            TaggingRequestEntityId = requestId,
-            OwnerId = userId,
-            Content = message,
-            CreatedDate = DateTime.UtcNow
+            TaggingRequestEntityId = requestId, OwnerId = userId, Content = message, CreatedDate = DateTime.UtcNow
         };
 
         context.Items!.Add(reply);
@@ -378,17 +422,17 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return await context.Items
             .Include(r => r.Owner)
             .Include(r => r.TagRelations)
-                .ThenInclude(tr => tr.Tag)
+            .ThenInclude(tr => tr.Tag)
             .FirstOrDefaultAsync(r => r.Id == reply.Id);
     }
 
     public async Task<List<Item>> GetItemRepliesAsync(int parentItemId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.Items!
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
+            .ThenInclude(tr => tr.Tag)
             .Where(i => i.ParentItemId == parentItemId)
             .OrderBy(i => i.CreatedDate)
             .ToListAsync();
@@ -396,7 +440,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         var replyItem = new Item
         {
             Content = content,

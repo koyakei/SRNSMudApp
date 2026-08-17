@@ -1,5 +1,3 @@
-
-
 namespace SRNSMudApp.Data;
 
 public class RightAsset : BaseEntity

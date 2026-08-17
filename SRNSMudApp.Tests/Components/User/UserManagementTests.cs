@@ -5,7 +5,6 @@ using System.Security.Claims;
 using AngleSharp.Dom;
 
 using Bunit;
-using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;

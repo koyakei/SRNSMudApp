@@ -3,10 +3,10 @@
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
-@using SRNSMudApp.Services
+@using SRNSMudApp.Components.Contract
 @using SRNSMudApp.Components.Item
 @using SRNSMudApp.Components.Tag
-@using SRNSMudApp.Components.Contract
+@using SRNSMudApp.Services
 @implements IAsyncDisposable
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
@@ -26,55 +26,62 @@
                 }
                 @if (requestInfo.IsTaggingRequest)
                 {
-                    <MudAlert Severity="@(requestInfo.RequestType == TaggingRequestType.Add ? Severity.Success : (requestInfo.RequestType == TaggingRequestType.Remove ? Severity.Error : Severity.Warning))" 
-                              Variant="Variant.Outlined" 
-                              Dense="true" 
-                              Class="mb-3 py-1 px-3"
-                              Icon="@(requestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : (requestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline))">
+                    <MudAlert
+                        Severity="@(requestInfo.RequestType == TaggingRequestType.Add ? Severity.Success : requestInfo.RequestType == TaggingRequestType.Remove ? Severity.Error : Severity.Warning)"
+                        Variant="Variant.Outlined"
+                        Dense="true"
+                        Class="mb-3 py-1 px-3"
+                        Icon="@(requestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : requestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline)">
                         <div class="d-flex align-start flex-wrap" style="gap: 8px;">
                             <div class="d-flex align-center mt-1">
                                 <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                    @(requestInfo.RequestType == TaggingRequestType.Add ? "タグ追加リクエスト" : (requestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "ウェイト減少リクエスト"))
+                                    @(requestInfo.RequestType == TaggingRequestType.Add ? "タグ追加リクエスト" : requestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "ウェイト減少リクエスト")
                                 </MudText>
                             </div>
                             <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
-                            
+
                             <div class="d-flex flex-column justify-center" style="flex: 1; min-width: 200px;">
                                 @if (!string.IsNullOrWhiteSpace(requestInfo.TargetItemContent))
                                 {
                                     <div class="d-flex align-start gap-1 mt-1" @onclick:stopPropagation="true">
                                         <div class="flex-1" style="min-width: 0;">
-                                            <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")" Color="Color.Default" Underline="Underline.Hover">
-                                                <div class="@(!_isTargetExpanded ? "line-clamp-2" : "")" 
+                                            <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")"
+                                                     Color="Color.Default" Underline="Underline.Hover">
+                                                <div class="@(!_isTargetExpanded ? "line-clamp-2" : "")"
                                                      style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px; white-space: pre-wrap; word-break: break-word;">
                                                     @requestInfo.TargetItemContent
                                                 </div>
                                             </MudLink>
                                         </div>
-                                        <MudIconButton Icon="@(_isTargetExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" 
-                                                       Size="Size.Small" 
-                                                       OnClick="ToggleTargetExpand" 
-                                                       Class="mt-n1 flex-shrink-0"
-                                                       title="展開/折りたたみ" />
+                                        <MudIconButton
+                                            Icon="@(_isTargetExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                            Size="Size.Small"
+                                            OnClick="ToggleTargetExpand"
+                                            Class="mt-n1 flex-shrink-0"
+                                            title="展開/折りたたみ"/>
                                     </div>
                                 }
-                                else 
+                                else
                                 {
                                     <div class="mt-1" @onclick:stopPropagation="true">
-                                        <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")" Color="Color.Default" Underline="Underline.Hover">
-                                            <div style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
+                                        <MudLink Href="@($"/ItemDetail/{requestInfo.TargetItemId}")"
+                                                 Color="Color.Default" Underline="Underline.Hover">
+                                            <div
+                                                style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
                                                 (内容なし)
                                             </div>
                                         </MudLink>
                                     </div>
                                 }
                             </div>
-                            
+
                             <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
                             <div class="d-flex align-center mt-1">
                                 <MudText Typo="Typo.body2" Class="mr-1">タグ:</MudText>
                                 <span @onclick:stopPropagation="true">
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ma-0 cursor-pointer" OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{requestInfo.TargetTagId}"))">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                             Color="Color.Primary" Class="ma-0 cursor-pointer"
+                                             OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{requestInfo.TargetTagId}"))">
                                         @requestInfo.TargetTagName
                                     </MudChip>
                                 </span>
@@ -176,7 +183,7 @@
                                     TagId = ev.FollowedTagId,
                                     Tag = ev.FollowedTag,
                                     Weight = ev.PreviousWeight ?? 0,
-                                    OwnerId = ev.OwnerId, // fake owner
+                                    OwnerId = ev.OwnerId // fake owner
                                 });
                             }
                         }
@@ -204,8 +211,8 @@
                         var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > (highlightEvent.PreviousWeight ?? 0);
 
                         var isMyTag = tr.OwnerId == CurrentUserId;
-                        var bgColor = isDeleted ? "#E0E0E0" : (highlightEvent != null ? "#FFEB3B" : (isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4"));
-                        var textColor = isDeleted ? "#9E9E9E" : (highlightEvent != null ? "#F57F17" : (isMyTag ? i < _chipTextColors.Length ? _chipTextColors[i] : _chipTextColors[0] : "#5C4B00"));
+                        var bgColor = isDeleted ? "#E0E0E0" : highlightEvent != null ? "#FFEB3B" : isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4";
+                        var textColor = isDeleted ? "#9E9E9E" : highlightEvent != null ? "#F57F17" : isMyTag ? i < _chipTextColors.Length ? _chipTextColors[i] : _chipTextColors[0] : "#5C4B00";
 
                         var chipId = $"tag-chip-{Item.Id}-{tagId}";
                         var isActive = _activePopoverTagId == tagId && _activePopoverChipKey == chipId;
@@ -256,11 +263,13 @@
                                                            Color="@addBtnColor" Class="chip-icon-btn pa-0 mx-1"
                                                            OnClick="@(() => UpdateTagRelationWeightAsync(tr, 1))"
                                                            title="Weightを増やす"/>
-                                                           
-                                            <MudIconButton Icon="@(isMyTag ? Icons.Material.Filled.Delete : Icons.Material.Outlined.Delete)" Size="Size.Small"
-                                                           Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
-                                                           OnClick="@(() => RemoveTagRelationAsync(tr))"
-                                                           title="関連付けを削除"/>
+
+                                            <MudIconButton
+                                                Icon="@(isMyTag ? Icons.Material.Filled.Delete : Icons.Material.Outlined.Delete)"
+                                                Size="Size.Small"
+                                                Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
+                                                OnClick="@(() => RemoveTagRelationAsync(tr))"
+                                                title="関連付けを削除"/>
                                         }
                                         <span class="ml-1">(@GetShortOwnerName(tr.Tag?.Owner?.UserName))</span>
                                     </span>
@@ -347,9 +356,9 @@
                             </MudChip>
                         }
                     }
-                    
+
                     <!-- リクエスト中のタグ -->
-                    @foreach(var request in _taggingRequests)
+                    @foreach (var request in _taggingRequests)
                     {
                         // Executed または Canceled の場合は非表示
                         if (request.Status != TradeStatus.Proposed) continue;
@@ -362,9 +371,10 @@
                         if (!isAdd && !hasTag) continue;
 
                         var replyCount = request.Replies?.Count ?? 0;
-                        
-                        <MudBadge Content="@replyCount" Color="Color.Primary" Overlap="true" Visible="@(replyCount > 0)">
-                            <MudChip T="string" 
+
+                        <MudBadge Content="@replyCount" Color="Color.Primary" Overlap="true"
+                                  Visible="@(replyCount > 0)">
+                            <MudChip T="string"
                                      Size="Size.Small"
                                      Color="@(isAdd ? Color.Success : Color.Error)"
                                      Variant="Variant.Outlined"
@@ -375,11 +385,11 @@
                                        @onclick:stopPropagation="true">
                                         @request.RequestedTag?.Name
                                     </a>
-                                    <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline" 
-                                                   Size="Size.Small" 
+                                    <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline"
+                                                   Size="Size.Small"
                                                    Color="Color.Inherit"
-                                                   Class="pa-0" 
-                                                   OnClick="@(async () => await OpenThreadDialogAsync(request))" />
+                                                   Class="pa-0"
+                                                   OnClick="@(async () => await OpenThreadDialogAsync(request))"/>
                                 </div>
                             </MudChip>
                         </MudBadge>
@@ -402,27 +412,27 @@
         </div>
 
         <MudCollapse Expanded="_isRepliesExpanded">
-            <MudDivider Class="my-3" />
+            <MudDivider Class="my-3"/>
             <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
-            
+
             @if (_replies.Any())
             {
                 <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
                     @foreach (var reply in _replies)
                     {
-                        <ItemCard Item="reply" 
-                                  CurrentUserId="@CurrentUserId" 
+                        <ItemCard Item="reply"
+                                  CurrentUserId="@CurrentUserId"
                                   CurrentUserGoodTagId="@CurrentUserGoodTagId"
                                   CurrentUserBadTagId="@CurrentUserBadTagId"
                                   OnDataChanged="LoadRepliesAsync"
                                   AllTags="AllTags"
-                                  AllTagRelationsToTags="AllTagRelationsToTags" 
+                                  AllTagRelationsToTags="AllTagRelationsToTags"
                                   HighlightEvents="HighlightEvents"
-                                  OnEnsureSystemTags="OnEnsureSystemTags" />
+                                  OnEnsureSystemTags="OnEnsureSystemTags"/>
                     }
                 </div>
             }
-            
+
             <div class="d-flex align-end gap-2 mt-2">
                 <MudTextField @bind-Value="_newReplyContent"
                               Label="リプライを入力..."
@@ -430,14 +440,14 @@
                               Margin="Margin.Dense"
                               Lines="2"
                               Immediate="true"
-                              Class="flex-grow-1" />
+                              Class="flex-grow-1"/>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            OnClick="SubmitReplyAsync"
                            Disabled="@(string.IsNullOrWhiteSpace(_newReplyContent) || _isSubmittingReply)">
                     @if (_isSubmittingReply)
                     {
-                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
                         <span class="ms-2">送信中</span>
                     }
                     else
@@ -451,7 +461,7 @@
 </MudCard>
 
 @code {
-    [Parameter, EditorRequired] public Item Item { get; set; } = null!;
+    [Parameter][EditorRequired] public Item Item { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
@@ -476,7 +486,7 @@
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private bool _needsOverflowCheck = true;
-    
+
     private List<TaggingRequestEntity> _taggingRequests = [];
 
     private bool _isRepliesExpanded;
@@ -568,7 +578,10 @@
         }
     }
 
-    private string GetItemCardStyle() => ItemCardViewModel.GetItemCardStyle(IsFocused);
+    private string GetItemCardStyle()
+    {
+        return ItemCardViewModel.GetItemCardStyle(IsFocused);
+    }
 
     private void ToggleExpand()
     {
@@ -619,14 +632,14 @@
         {
             { x => x.TaggingRequest, request }
         };
-        
-        var options = new DialogOptions 
-        { 
-            CloseButton = true, 
-            MaxWidth = MaxWidth.Small, 
-            FullWidth = true 
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
         };
-        
+
         var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>($"Request: {request.RequestedTag?.Name}", parameters, options);
         await dialog.Result;
         StateHasChanged();
@@ -644,7 +657,6 @@
     private async Task LoadRepliesAsync()
     {
         _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
-        StateHasChanged();
     }
 
     private async Task SubmitReplyAsync()
@@ -664,20 +676,34 @@
         finally
         {
             _isSubmittingReply = false;
-            StateHasChanged();
         }
     }
 
-    private static string GetShortOwnerName(string? name) => ItemCardViewModel.GetShortOwnerName(name);
+    private static string GetShortOwnerName(string? name)
+    {
+        return ItemCardViewModel.GetShortOwnerName(name);
+    }
 
-    private static IReadOnlyList<string> ExtractUrls(string? text) => ItemCardViewModel.ExtractUrls(text);
+    private static IReadOnlyList<string> ExtractUrls(string? text)
+    {
+        return ItemCardViewModel.ExtractUrls(text);
+    }
 
     // --- Voting Logic ---
-    private int GetItemScore() => ItemCardViewModel.GetItemScore(Item.TagRelations);
+    private int GetItemScore()
+    {
+        return ItemCardViewModel.GetItemScore(Item.TagRelations);
+    }
 
-    private bool IsItemUpvoted() => ItemCardViewModel.IsItemUpvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
+    private bool IsItemUpvoted()
+    {
+        return ItemCardViewModel.IsItemUpvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
+    }
 
-    private bool IsItemDownvoted() => ItemCardViewModel.IsItemDownvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
+    private bool IsItemDownvoted()
+    {
+        return ItemCardViewModel.IsItemDownvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
+    }
 
     private async Task UpvoteItemAsync()
     {
@@ -897,6 +923,7 @@
                 StateHasChanged();
                 if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
             }
+
             return;
         }
 
@@ -978,6 +1005,7 @@
                 StateHasChanged();
                 if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
             }
+
             return;
         }
 
@@ -1018,6 +1046,7 @@
 
             context.TagRelations.Remove(entityToRemove);
         }
+
         await context.SaveChangesAsync();
 
         // 画面上に即時反映させるためローカルのコレクションからも削除する
@@ -1053,6 +1082,7 @@
                 StateHasChanged();
                 if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
             }
+
             return;
         }
 

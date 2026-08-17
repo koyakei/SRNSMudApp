@@ -1,11 +1,6 @@
-@using Microsoft.AspNetCore.Components.Authorization
-@using SRNSMudApp.Data
-@using SRNSMudApp.Services
 @using System.Security.Claims
-@using MudBlazor
-
+@using SRNSMudApp.Services
 @inject IItemTagService ItemTagService
-@inject AuthenticationStateProvider AuthStateProvider
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
@@ -15,27 +10,29 @@
 <MudDialog>
     <DialogContent>
         <div class="d-flex flex-column pa-2" style="max-height: 50vh; overflow-y: auto;">
-            
+
             @if (CanApprove(TaggingRequest))
             {
                 <div class="d-flex justify-end mb-2">
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="ApproveRequestAsync" Class="mr-2">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               OnClick="ApproveRequestAsync" Class="mr-2">
                         承認
                     </MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="RejectRequestAsync">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="RejectRequestAsync">
                         却下
                     </MudButton>
                 </div>
             }
-            
+
             <!-- 親リクエスト (スレッドの開始点) -->
             @if (TaggingRequest.RequestItem != null)
             {
                 <div class="mb-4">
-                    <ItemCard Item="TaggingRequest.RequestItem" 
-                              CurrentUserId="@_currentUserId" 
+                    <ItemCard Item="TaggingRequest.RequestItem"
+                              CurrentUserId="@_currentUserId"
                               AllTags="_allTags"
-                              AllTagRelationsToTags="_allTagRelationsToTags" />
+                              AllTagRelationsToTags="_allTagRelationsToTags"/>
                 </div>
             }
             else
@@ -52,7 +49,7 @@
                             </MudText>
                         </div>
                         <MudText Typo="Typo.body1" Class="mt-1">
-                            @if(TaggingRequest.RequestType == TaggingRequestType.Add)
+                            @if (TaggingRequest.RequestType == TaggingRequestType.Add)
                             {
                                 <span>このアイテムに <b>@TaggingRequest.RequestedTag?.Name</b> を追加するリクエストをしました。</span>
                             }
@@ -69,53 +66,53 @@
             <div class="ml-5 pl-5" style="border-left: 2px solid var(--mud-palette-lines-default);">
                 @if (Replies != null && Replies.Any())
                 {
-                    @foreach(var reply in Replies)
+                    @foreach (var reply in Replies)
                     {
                         <div class="mb-4 mt-3 position-relative">
                             <div class="position-absolute" style="left: -30px; top: 10px; z-index: 1;">
-                                <MudAvatar Size="Size.Small" 
-                                           Style="border: 3px solid var(--mud-palette-background);" 
+                                <MudAvatar Size="Size.Small"
+                                           Style="border: 3px solid var(--mud-palette-background);"
                                            Color="Color.Secondary">
                                     @(reply.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
                                 </MudAvatar>
                             </div>
                             <div class="flex-grow-1">
-                                <ItemCard Item="reply" 
-                                          CurrentUserId="@_currentUserId" 
+                                <ItemCard Item="reply"
+                                          CurrentUserId="@_currentUserId"
                                           AllTags="_allTags"
-                                          AllTagRelationsToTags="_allTagRelationsToTags" />
+                                          AllTagRelationsToTags="_allTagRelationsToTags"/>
                             </div>
                         </div>
                     }
                 }
             </div>
-            
+
         </div>
     </DialogContent>
-    
+
     <DialogActions>
         <!-- 新規リプライ投稿フィールド -->
         <div class="d-flex w-100 px-4 pb-2 align-center">
-            <MudTextField @bind-Value="_newReplyMessage" 
-                          Placeholder="返信を投稿..." 
-                          Variant="Variant.Outlined" 
-                          Margin="Margin.Dense" 
-                          Class="mr-2" 
-                          Immediate="true" 
-                          Lines="1" 
+            <MudTextField @bind-Value="_newReplyMessage"
+                          Placeholder="返信を投稿..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mr-2"
+                          Immediate="true"
+                          Lines="1"
                           MaxLines="3"/>
-            <MudIconButton Icon="@Icons.Material.Filled.Send" 
-                           Color="Color.Primary" 
+            <MudIconButton Icon="@Icons.Material.Filled.Send"
+                           Color="Color.Primary"
                            AriaLabel="Send"
-                           OnClick="SubmitReplyAsync" 
-                           Disabled="@(string.IsNullOrWhiteSpace(_newReplyMessage) || _isSubmitting)" />
+                           OnClick="SubmitReplyAsync"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newReplyMessage) || _isSubmitting)"/>
         </div>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] public IMudDialogInstance MudDialog { get; set; } = null!;
-    
+
     [Parameter] public TaggingRequestEntity TaggingRequest { get; set; } = null!;
 
     private List<Item> Replies { get; set; } = new();
@@ -125,12 +122,14 @@
     private List<Tag> _allTags = new();
     private List<TagRelationToTag> _allTagRelationsToTags = new();
 
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
     protected override async Task OnInitializedAsync()
     {
         // パラメータとして渡されたリクエストの既存リプライをセット
         Replies = TaggingRequest.Replies?.OrderBy(r => r.CreatedDate).ToList() ?? new List<Item>();
 
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var authState = await AuthenticationStateTask;
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
         {
@@ -152,12 +151,12 @@
         try
         {
             var newReply = await ItemTagService.AddReplyToRequestAsync(TaggingRequest.Id, _currentUserId, _newReplyMessage);
-            
+
             if (newReply != null)
             {
                 Replies.Add(newReply);
                 _newReplyMessage = string.Empty;
-                
+
                 // 親のTaggingRequestインスタンスにも追加しておく（状態の同期）
                 TaggingRequest.Replies ??= new List<Item>();
                 TaggingRequest.Replies.Add(newReply);
@@ -172,17 +171,17 @@
     private bool CanApprove(TaggingRequestEntity request)
     {
         if (request.Status != TradeStatus.Proposed) return false;
-        
+
         if (request is PublicOfferTriggerContract) return request.RequesterUserId == _currentUserId;
         if (request is BountyTaggingContract) return true;
-        
+
         return request.TagOwnerUserId == _currentUserId;
     }
 
     private async Task ApproveRequestAsync()
     {
         if (_currentUserId == null) return;
-        
+
         try
         {
             await TaggingContractService.AcceptContractAsync(TaggingRequest.Id, _currentUserId);
@@ -200,7 +199,7 @@
         if (_currentUserId == null) return;
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.RejectRequestDialog>("リクエストを却下", options);
+        var dialog = await DialogService.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -218,4 +217,5 @@
             }
         }
     }
+
 }

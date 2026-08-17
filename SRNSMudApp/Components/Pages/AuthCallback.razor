@@ -1,6 +1,6 @@
 @page "/auth/callback"
-@rendermode InteractiveServer
 @using Microsoft.AspNetCore.WebUtilities
+@rendermode InteractiveServer
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 <PageTitle>Authenticating...</PageTitle>
@@ -21,7 +21,7 @@
 
             if (query.TryGetValue("code", out var code) && query.TryGetValue("provider", out var provider))
             {
-                await JS.InvokeVoidAsync("console.log", $"[AuthCallback] Found code={code}, provider={provider}");
+                try { await JS.InvokeVoidAsync("console.log", $"[AuthCallback] Found code={code}, provider={provider}"); } catch (JSException) { }
 
                 // Call the JS function to post the code to our backend
                 try
@@ -37,7 +37,7 @@
             }
             else
             {
-                await JS.InvokeVoidAsync("console.error", $"[AuthCallback] Missing code or provider in query. Query: {uri.Query}");
+                try { await JS.InvokeVoidAsync("console.error", $"[AuthCallback] Missing code or provider in query. Query: {uri.Query}"); } catch (JSException) { }
                 NavigationManager.NavigateTo("/Account/Login");
             }
         }

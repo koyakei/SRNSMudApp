@@ -1,6 +1,7 @@
 #region
 
-using Microsoft.AspNetCore.Identity;
+using System.Text.RegularExpressions;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
@@ -54,8 +55,10 @@ public class ImportTagE2ETests : PageTest
             await Page.Context.ClearCookiesAsync();
             var userName = email.Contains('@') ? email.Split('@')[0] : email;
             await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
-            await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"^" + System.Text.RegularExpressions.Regex.Escape(_serverAddress) + @"/?$"), new Microsoft.Playwright.PageWaitForURLOptions { Timeout = 10000 });
-            await Expect(Page.GetByRole(Microsoft.Playwright.AriaRole.Button, new Microsoft.Playwright.PageGetByRoleOptions { Name = "Logout" })).ToBeVisibleAsync(new Microsoft.Playwright.LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+                new PageWaitForURLOptions { Timeout = 10000 });
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
         }
 
         // ユーザーIDを取得し、親タグを作成

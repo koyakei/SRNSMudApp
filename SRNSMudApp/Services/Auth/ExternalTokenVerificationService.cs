@@ -1,5 +1,6 @@
 #pragma warning disable CA1848
 
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -7,7 +8,8 @@ using Google.Apis.Auth;
 
 namespace SRNSMudApp.Services.Auth;
 
-public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<ExternalTokenVerificationService> logger) : IExternalTokenVerificationService
+public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<ExternalTokenVerificationService> logger)
+    : IExternalTokenVerificationService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly ILogger<ExternalTokenVerificationService> _logger = logger;
@@ -86,8 +88,9 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
             var content = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(content);
 
-            var id = doc.RootElement.GetProperty("id").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var email = doc.RootElement.TryGetProperty("email", out JsonElement emailProp) && emailProp.ValueKind != JsonValueKind.Null
+            var id = doc.RootElement.GetProperty("id").GetInt64().ToString(CultureInfo.InvariantCulture);
+            var email = doc.RootElement.TryGetProperty("email", out JsonElement emailProp) &&
+                        emailProp.ValueKind != JsonValueKind.Null
                 ? emailProp.GetString()
                 : null;
 

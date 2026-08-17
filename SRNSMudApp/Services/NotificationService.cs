@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
@@ -14,31 +9,32 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 {
     public async Task<List<NotificationDto>> GetUserNotificationsAsync(string userId)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         // 1. Tag Requests targeting the user
         // 自分に対するリクエスト（自分が作成者ではない、かつ、対象アイテムまたはタグのオーナーが自分であるもの）
-        var tagRequests = await context.TaggingRequestEntities!
+        List<TaggingRequestEntity> tagRequests = await context.TaggingRequestEntities!
             .Include(r => r.TargetItem)
             .Include(r => r.RequestedTag)
-            .Where(r => r.RequesterUserId != userId && (r.TargetItem.OwnerId == userId || r.RequestedTag.OwnerId == userId))
+            .Where(r => r.RequesterUserId != userId &&
+                        (r.TargetItem.OwnerId == userId || r.RequestedTag.OwnerId == userId))
             .ToListAsync();
 
         // 2. Item Replies targeting the user
         // 自分のアイテムに対する別ユーザーからのリプライ
-        var itemReplies = await context.Items!
+        List<Item> itemReplies = await context.Items!
             .Include(i => i.ParentItem)
             .Include(i => i.Owner)
             .Where(i => i.ParentItemId != null && i.ParentItem!.OwnerId == userId && i.OwnerId != userId)
             .ToListAsync();
 
-        var readStates = await context.NotificationReadStates!
+        List<NotificationReadState> readStates = await context.NotificationReadStates!
             .Where(n => n.UserId == userId)
             .ToListAsync();
 
         var notifications = new List<NotificationDto>();
 
-        foreach (var req in tagRequests)
+        foreach (TaggingRequestEntity req in tagRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "TagRequest");
             var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
@@ -56,13 +52,13 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         }
 
         // 3. Rejected requests for the user
-        var rejectedRequests = await context.TaggingRequestEntities!
+        List<TaggingRequestEntity> rejectedRequests = await context.TaggingRequestEntities!
             .Include(r => r.TargetItem)
             .Include(r => r.RequestedTag)
             .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Rejected)
             .ToListAsync();
 
-        foreach (var req in rejectedRequests)
+        foreach (TaggingRequestEntity req in rejectedRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
             var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) ? "" : $"\n理由: {req.RejectComment}";
@@ -80,7 +76,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             });
         }
 
-        foreach (var reply in itemReplies)
+        foreach (Item reply in itemReplies)
         {
             var isRead = readStates.Any(rs => rs.SourceId == reply.Id && rs.SourceType == "ItemReply");
             var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
@@ -101,19 +97,16 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var existing = await context.NotificationReadStates!
+        NotificationReadState? existing = await context.NotificationReadStates!
             .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
 
         if (existing == null)
         {
             context.NotificationReadStates!.Add(new NotificationReadState
             {
-                UserId = userId,
-                SourceId = sourceId,
-                SourceType = sourceType,
-                ReadAt = DateTimeOffset.UtcNow
+                UserId = userId, SourceId = sourceId, SourceType = sourceType, ReadAt = DateTimeOffset.UtcNow
             });
             await context.SaveChangesAsync();
         }

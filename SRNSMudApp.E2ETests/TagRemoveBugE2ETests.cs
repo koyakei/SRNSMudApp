@@ -1,18 +1,17 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
 
 [TestFixture]
-public partial class TagRemoveBugE2ETests : PageTest
+public class TagRemoveBugE2ETests : PageTest
 {
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -23,6 +22,9 @@ public partial class TagRemoveBugE2ETests : PageTest
 
     [OneTimeTearDown]
     public void OneTimeTearDown() => _factory?.Dispose();
+
+    private CustomWebApplicationFactory? _factory;
+    private string? _serverAddress;
 
     [Test]
     public async Task ApprovingRemoveRequest_ShouldRemoveTagging()
@@ -47,15 +49,15 @@ public partial class TagRemoveBugE2ETests : PageTest
 
         // 3. Setup Data in DB
         int tagId, itemId;
-        using (var scope = _factory!.AppServices.CreateScope())
+        using (IServiceScope scope = _factory!.AppServices.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var tagOwner = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
-            var itemOwner = await db.Users.FirstAsync(u => u.Email == itemOwnerEmail);
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            ApplicationUser tagOwner = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
+            ApplicationUser itemOwner = await db.Users.FirstAsync(u => u.Email == itemOwnerEmail);
 
             var tag = new Tag { Name = tagName, Content = "Test", OwnerId = tagOwner.Id, CachedWeight = 1 };
             db.Tags.Add(tag);
-            
+
             var item = new Item { Content = itemContent, OwnerId = itemOwner.Id };
             db.Items.Add(item);
             await db.SaveChangesAsync();
@@ -104,20 +106,20 @@ public partial class TagRemoveBugE2ETests : PageTest
         await Task.Delay(1000);
 
         // Find the "承認" (Approve) button and click it
-        var approveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "承認" }).First;
+        ILocator approveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "承認" }).First;
         await Expect(approveButton).ToBeVisibleAsync();
         await approveButton.ClickAsync();
-        
+
         // Wait for success snackbar
         await Expect(Page.Locator("text=リクエストを承認しました。")).ToBeVisibleAsync();
         await Task.Delay(1000);
 
         // 5. Verify the tag relation is removed from DB
-        using (var scope = _factory!.AppServices.CreateScope())
+        using (IServiceScope scope = _factory!.AppServices.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var relationExists = await db.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == tagId);
-            
+
             // This assertion should fail if the bug exists
             Assert.That(relationExists, Is.False, "The tag relation should have been removed after approval.");
         }

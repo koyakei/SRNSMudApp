@@ -1,6 +1,4 @@
-
 @using System.Security.Claims
-
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject ISnackbar Snackbar
 
@@ -123,5 +121,9 @@
         MudDialog.Close(DialogResult.Ok(triggerContract.Id));
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
 }

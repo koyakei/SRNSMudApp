@@ -1,17 +1,24 @@
 #region
 
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 
 #endregion
 
 namespace SRNSMudApp.Components.Item;
 
 /// <summary>
-/// ItemList ページの URL クエリパラメータ（tags / sort / focusItem）を表す値オブジェクト。
-/// URLのパースと再構築ロジックをコンポーネントから分離することで、単体テストを可能にする。
+///     ItemList ページの URL クエリパラメータ（tags / sort / focusItem）を表す値オブジェクト。
+///     URLのパースと再構築ロジックをコンポーネントから分離することで、単体テストを可能にする。
 /// </summary>
 public sealed class ItemListQueryState
 {
+    // ────────────────────────────────────────────────────────────
+    // ネストした型
+    // ────────────────────────────────────────────────────────────
+
+    public enum SortOrder { Desc, Asc }
+
     /// <summary>フィルタとして選択されているタグIDのリスト。</summary>
     public IReadOnlyList<int> TagIds { get; init; } = [];
 
@@ -26,28 +33,30 @@ public sealed class ItemListQueryState
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// URI 文字列のクエリ部分をパースして <see cref="ItemListQueryState"/> を生成する。
+    ///     URI 文字列のクエリ部分をパースして <see cref="ItemListQueryState" /> を生成する。
     /// </summary>
     public static ItemListQueryState ParseFromUri(string uriString)
     {
         var uri = new Uri(uriString, UriKind.RelativeOrAbsolute);
         var queryStr = uri.IsAbsoluteUri ? uri.Query : ExtractQuery(uriString);
-        var query = QueryHelpers.ParseQuery(queryStr);
+        Dictionary<string, StringValues> query = QueryHelpers.ParseQuery(queryStr);
 
         // tags
         List<int> tagIds = [];
-        if (query.TryGetValue("tags", out var tagsValues))
+        if (query.TryGetValue("tags", out StringValues tagsValues))
         {
             foreach (var v in tagsValues)
             {
                 if (int.TryParse(v, out var id) && id > 0)
+                {
                     tagIds.Add(id);
+                }
             }
         }
 
         // sort
         List<SortEntry> sortEntries = [];
-        if (query.TryGetValue("sort", out var sortStr))
+        if (query.TryGetValue("sort", out StringValues sortStr))
         {
             var parts = sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
@@ -55,7 +64,7 @@ public sealed class ItemListQueryState
                 var kvp = part.Split(':');
                 if (kvp.Length == 2 && int.TryParse(kvp[0], out var tagId))
                 {
-                    var order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
+                    SortOrder order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
                     sortEntries.Add(new SortEntry(tagId, order));
                 }
             }
@@ -63,15 +72,12 @@ public sealed class ItemListQueryState
 
         // focusItem
         int? focusItemId = null;
-        if (query.TryGetValue("focusItem", out var focusStr) && int.TryParse(focusStr, out var fid))
-            focusItemId = fid;
-
-        return new ItemListQueryState
+        if (query.TryGetValue("focusItem", out StringValues focusStr) && int.TryParse(focusStr, out var fid))
         {
-            TagIds = tagIds,
-            SortEntries = sortEntries,
-            FocusItemId = focusItemId
-        };
+            focusItemId = fid;
+        }
+
+        return new ItemListQueryState { TagIds = tagIds, SortEntries = sortEntries, FocusItemId = focusItemId };
     }
 
     // ────────────────────────────────────────────────────────────
@@ -79,7 +85,7 @@ public sealed class ItemListQueryState
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// NavigationManager.GetUriWithQueryParameters に渡す Dictionary を生成する。
+    ///     NavigationManager.GetUriWithQueryParameters に渡す Dictionary を生成する。
     /// </summary>
     public Dictionary<string, object?> BuildParameters()
     {
@@ -94,21 +100,15 @@ public sealed class ItemListQueryState
     }
 
     // ────────────────────────────────────────────────────────────
-    // ネストした型
-    // ────────────────────────────────────────────────────────────
-
-    public enum SortOrder { Desc, Asc }
-
-    /// <summary>1件のソート条件（タグID＋昇降順）。</summary>
-    public sealed record SortEntry(int TagId, SortOrder Order);
-
-    // ────────────────────────────────────────────────────────────
     // ヘルパー
     // ────────────────────────────────────────────────────────────
 
     private static string ExtractQuery(string uriString)
     {
-        var idx = uriString.IndexOf('?');
+        var idx = uriString.IndexOf('?', System.StringComparison.Ordinal);
         return idx >= 0 ? uriString[idx..] : string.Empty;
     }
+
+    /// <summary>1件のソート条件（タグID＋昇降順）。</summary>
+    public sealed record SortEntry(int TagId, SortOrder Order);
 }

@@ -7,11 +7,8 @@ using Bunit;
 using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-
-using Moq;
 
 using MudBlazor.Services;
 
@@ -30,9 +27,9 @@ public class TagListConcurrencyTests : TestContext
         _ = Services.AddMudServices();
 
         // Setup mock authentication
-        var authContext = this.AddTestAuthorization();
+        TestAuthorizationContext authContext = this.AddTestAuthorization();
         authContext.SetAuthorized("test-user-id");
-        authContext.SetClaims(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id"));
+        authContext.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-user-id"));
 
         // Setup In-Memory database
         var dbName = Guid.NewGuid().ToString();

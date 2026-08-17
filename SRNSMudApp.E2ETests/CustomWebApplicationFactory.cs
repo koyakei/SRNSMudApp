@@ -32,6 +32,7 @@ public class MockExternalTokenVerificationService : IExternalTokenVerificationSe
             var email = $"{token.Replace("mock-", "")}@example.com";
             return Task.FromResult<(string?, string?)>((email, providerKey));
         }
+
         return Task.FromResult<(string?, string?)>((null, null));
     }
 }
@@ -52,7 +53,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     public void EnsureServer()
     {
-        if (_host != null) return;
+        if (_host != null)
+        {
+            return;
+        }
 
         try
         {
@@ -88,7 +92,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             _ = services.AddDbContextFactory<ApplicationDbContext>(options =>
                 options.UseSqlServer(_connectionString));
-                
+
             // Inject Mock ExternalTokenVerificationService
             _ = services.RemoveAll<IExternalTokenVerificationService>();
             _ = services.AddScoped<IExternalTokenVerificationService, MockExternalTokenVerificationService>();

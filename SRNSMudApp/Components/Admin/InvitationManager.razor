@@ -1,8 +1,5 @@
 @page "/Admin/Invitations"
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.EntityFrameworkCore
-@using SRNSMudApp.Data
+@using System.Security.Claims
 @using System.Security.Cryptography
 
 @attribute [Authorize(Roles = "Admin")]
@@ -77,7 +74,7 @@
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateTask;
-        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         await LoadInvitations();
     }
@@ -140,7 +137,7 @@
         var randomBytes = new byte[length];
         RandomNumberGenerator.Fill(randomBytes);
         var code = new char[length];
-        for (int i = 0; i < length; i++)
+        for (var i = 0; i < length; i++)
         {
             code[i] = chars[randomBytes[i] % chars.Length];
         }

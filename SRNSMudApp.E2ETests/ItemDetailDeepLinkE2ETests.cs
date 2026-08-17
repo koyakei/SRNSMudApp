@@ -1,8 +1,10 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
@@ -10,9 +12,6 @@ namespace SRNSMudApp.E2ETests;
 [TestFixture]
 public class ItemDetailDeepLinkE2ETests : PageTest
 {
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -24,6 +23,9 @@ public class ItemDetailDeepLinkE2ETests : PageTest
     [OneTimeTearDown]
     public void OneTimeTearDown() => _factory?.Dispose();
 
+    private CustomWebApplicationFactory? _factory;
+    private string? _serverAddress;
+
     private async Task<(Item targetItem, TaggingRequestEntity request)> SetupTestDataAsync()
     {
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -33,12 +35,14 @@ public class ItemDetailDeepLinkE2ETests : PageTest
         await Page.Context.ClearCookiesAsync();
         var userName = email.Contains('@') ? email.Split('@')[0] : email;
         await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" })).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+            new PageWaitForURLOptions { Timeout = 10000 });
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
 
-        using var scope = _factory!.AppServices.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var user = await db.Users.FirstAsync(u => u.Email == email);
+        using IServiceScope scope = _factory!.AppServices.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        ApplicationUser user = await db.Users.FirstAsync(u => u.Email == email);
 
         var tag = new Tag { Name = $"Tag {uniqueId}", Content = "Test", OwnerId = user.Id, CachedWeight = 0 };
         db.Tags.Add(tag);
@@ -67,15 +71,16 @@ public class ItemDetailDeepLinkE2ETests : PageTest
     [Test]
     public async Task DeepLink_StateToUrl_UpdatesUrlOnInteraction()
     {
-        var (item, request) = await SetupTestDataAsync();
+        (Item item, TaggingRequestEntity request) = await SetupTestDataAsync();
 
         // Navigate to ItemDetail
         await Page.GotoAsync($"{_serverAddress}/ItemDetail/{item.Id}");
         await Task.Delay(1000);
 
         // Click the "関連リクエスト (Related Requests)" tab
-        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "関連リクエスト (Related Requests)" }).ClickAsync();
-        
+        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "関連リクエスト (Related Requests)" })
+            .ClickAsync();
+
         // Wait for URL to update with ?tab=requests
         await Expect(Page).ToHaveURLAsync(new Regex(@"tab=requests"));
 
@@ -83,7 +88,8 @@ public class ItemDetailDeepLinkE2ETests : PageTest
         await Task.Delay(1000);
 
         // Click the request row specifically
-        await Page.Locator("td").Filter(new LocatorFilterOptions { HasText = request.Owner!.UserName! }).First.ClickAsync();
+        await Page.Locator("td").Filter(new LocatorFilterOptions { HasText = request.Owner!.UserName! }).First
+            .ClickAsync();
 
         // Wait for URL to update with &requestId=...
         await Expect(Page).ToHaveURLAsync(new Regex($@"requestId={request.Id}"));
@@ -92,19 +98,19 @@ public class ItemDetailDeepLinkE2ETests : PageTest
     [Test]
     public async Task DeepLink_UrlToState_RestoresStateFromUrl()
     {
-        var (item, request) = await SetupTestDataAsync();
+        (Item item, TaggingRequestEntity request) = await SetupTestDataAsync();
 
         // Navigate to ItemDetail with query parameters
         await Page.GotoAsync($"{_serverAddress}/ItemDetail/{item.Id}?tab=requests&requestId={request.Id}");
         await Task.Delay(2000);
 
         // Verify the active tab is "関連リクエスト" (mud-tab-active class)
-        var tab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "関連リクエスト (Related Requests)" });
+        ILocator tab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "関連リクエスト (Related Requests)" });
         await Expect(tab).ToHaveClassAsync(new Regex("mud-tab-active"));
 
         // Verify the specific request row is selected (mud-table-row-selected class)
         // Find the row containing the request data
-        var row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = request.Owner!.UserName! });
+        ILocator row = Page.Locator("tr").Filter(new LocatorFilterOptions { HasText = request.Owner!.UserName! });
         await Expect(row).ToHaveClassAsync(new Regex("mud-table-row-selected"));
     }
 }

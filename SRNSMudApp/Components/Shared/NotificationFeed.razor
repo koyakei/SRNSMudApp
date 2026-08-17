@@ -1,16 +1,17 @@
+@using System.Security.Claims
 @using SRNSMudApp.Models
 @using SRNSMudApp.Services
 @inject INotificationService NotificationService
-@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager NavigationManager
 
 @if (_userId != null)
 {
     <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)">
-        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" OnClick="TogglePopover" />
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" OnClick="TogglePopover"/>
     </MudBadge>
 
-    <MudPopover Open="@_isOpen" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" MaxHeight="400" Class="pa-2" ZIndex="100">
+    <MudPopover Open="@_isOpen" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" MaxHeight="400"
+                Class="pa-2" ZIndex="100">
         <MudCard Width="300px" Elevation="0">
             <MudCardHeader>
                 <CardHeaderContent>
@@ -31,21 +32,24 @@
                                          Style="@(notification.IsRead ? "" : "background-color: var(--mud-palette-action-default);")">
                                 <div class="d-flex flex-column">
                                     <MudText Typo="Typo.body2">@notification.Message</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetRelativeTime(notification.CreatedAt)</MudText>
+                                    <MudText Typo="Typo.caption"
+                                             Color="Color.Secondary">@GetRelativeTime(notification.CreatedAt)</MudText>
                                 </div>
                             </MudListItem>
-                            <MudDivider />
+                            <MudDivider/>
                         }
                     </MudList>
                 }
             </MudCardContent>
         </MudCard>
     </MudPopover>
-    
-    <MudOverlay Visible="_isOpen" OnClick="ClosePopover" BackgroundColor="rgba(0,0,0,0)" ZIndex="99" />
+
+    <MudOverlay Visible="_isOpen" OnClick="ClosePopover" BackgroundColor="rgba(0,0,0,0)" ZIndex="99"/>
 }
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
     private string? _userId;
     private List<NotificationDto> _notifications = new();
     private int _unreadCount => _notifications.Count(n => !n.IsRead);
@@ -53,11 +57,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var authState = await AuthenticationStateTask;
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
         {
-            _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (_userId != null)
             {
                 await LoadNotificationsAsync();
@@ -90,7 +94,7 @@
             await NotificationService.MarkAsReadAsync(_userId, notification.SourceId, notification.Type);
             notification.IsRead = true;
         }
-        
+
         ClosePopover();
         NavigationManager.NavigateTo(notification.TargetUrl);
     }
@@ -103,4 +107,5 @@
         if (timeSpan <= TimeSpan.FromHours(24)) return $"{timeSpan.Hours}時間前";
         return $"{timeSpan.Days}日前";
     }
+
 }

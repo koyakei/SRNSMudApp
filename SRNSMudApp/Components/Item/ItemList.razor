@@ -64,7 +64,7 @@
                          DebounceInterval="300"
                          Clearable="true"
                          ResetValueOnEmptyText="true"
-                         MaxItems="10" />
+                         MaxItems="10"/>
     </MudPaper>
 
     @* ===== フィルタ結果件数 ===== *@
@@ -133,7 +133,7 @@
         public string DisplayText => string.IsNullOrWhiteSpace(UserName) ? Tag.Name : $"{Tag.Name} ({UserName})";
     }
 
-    private List<TagFilter> _selectedFilters = [];
+    private readonly List<TagFilter> _selectedFilters = [];
     private string _tagSearchText = "";
     private MudAutocomplete<string>? _autocomplete;
 
@@ -249,33 +249,31 @@
                 return textMatches;
             }
         }
-        else
+
+        // 状態2: " @" がある場合（ユーザー名検索）
+        var parts = value.Split(" @", 2);
+        var tagName = parts[0];
+        var userSearch = parts[1];
+
+        var usersQuery = context.TagRelations
+            .AsNoTracking()
+            .Where(tr => tr.Tag.Name == tagName)
+            .Select(tr => tr.Owner.UserName)
+            .Where(u => u != null);
+
+        if (!string.IsNullOrWhiteSpace(userSearch))
         {
-            // 状態2: " @" がある場合（ユーザー名検索）
-            var parts = value.Split(" @", 2, StringSplitOptions.None);
-            var tagName = parts[0];
-            var userSearch = parts[1];
-
-            var usersQuery = context.TagRelations
-                .AsNoTracking()
-                .Where(tr => tr.Tag.Name == tagName)
-                .Select(tr => tr.Owner.UserName)
-                .Where(u => u != null);
-
-            if (!string.IsNullOrWhiteSpace(userSearch))
-            {
-                usersQuery = usersQuery.Where(u => u!.Contains(userSearch));
-            }
-
-            var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
-
-            if (!users.Any() && string.IsNullOrWhiteSpace(userSearch))
-            {
-                return new[] { tagName + " @" };
-            }
-
-            return users.Select(u => tagName + " @" + u);
+            usersQuery = usersQuery.Where(u => u!.Contains(userSearch));
         }
+
+        var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
+
+        if (!users.Any() && string.IsNullOrWhiteSpace(userSearch))
+        {
+            return new[] { tagName + " @" };
+        }
+
+        return users.Select(u => tagName + " @" + u);
     }
 
     private async Task OnAutocompleteValueChanged(string? value)
@@ -304,6 +302,7 @@
                     });
                 });
             }
+
             return;
         }
 

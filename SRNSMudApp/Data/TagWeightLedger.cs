@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace SRNSMudApp.Data;
 
 public class TagWeightLedger : BaseEntity
@@ -21,12 +23,10 @@ public class TagWeightLedger : BaseEntity
     public bool IsOwnerAction { get; set; }
 
     // タグ名のスナップショット（履歴表示時のJOIN回避のため）
-    [System.ComponentModel.DataAnnotations.MaxLength(100)]
-    public string TagNameSnapshot { get; set; } = string.Empty;
+    [MaxLength(100)] public string TagNameSnapshot { get; set; } = string.Empty;
 
     // 変更理由やコンテキスト
-    [System.ComponentModel.DataAnnotations.MaxLength(500)]
-    public string Reason { get; set; } = string.Empty;
+    [MaxLength(500)] public string Reason { get; set; } = string.Empty;
 
     // --- 数値の変化の記録 ---
     public int PreviousWeight { get; set; }

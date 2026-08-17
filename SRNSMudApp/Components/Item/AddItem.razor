@@ -143,7 +143,7 @@
             {
                 var msg = $"[AddItem ERROR] {ex}";
                 Console.WriteLine(msg);
-                System.IO.File.WriteAllText("/tmp/additem_error.txt", msg);
+                File.WriteAllText("/tmp/additem_error.txt", msg);
                 Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
             }
         }
@@ -161,7 +161,7 @@
             Console.WriteLine(msg);
         }
 
-        System.IO.File.WriteAllText("/tmp/additem_invalid.txt", string.Join("\n", context.GetValidationMessages()));
+        File.WriteAllText("/tmp/additem_invalid.txt", string.Join("\n", context.GetValidationMessages()));
     }
 
     private static readonly Regex UrlRegex = new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)");

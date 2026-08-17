@@ -3,7 +3,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services.Auth;
@@ -21,12 +20,11 @@ public class AuthController(
     ApplicationDbContext dbContext,
     ILogger<AuthController> logger) : ControllerBase
 {
-    private readonly IExternalTokenVerificationService _tokenService = tokenService;
+    private readonly ILogger<AuthController> _logger = logger;
     private readonly RiskAssessmentService _riskService = riskService;
     private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
+    private readonly IExternalTokenVerificationService _tokenService = tokenService;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
-    private readonly ApplicationDbContext _dbContext = dbContext;
-    private readonly ILogger<AuthController> _logger = logger;
 
     [HttpPost("external-login")]
     public async Task<IActionResult> ExternalLogin([FromBody] ExternalLoginRequest request)
@@ -37,7 +35,7 @@ public class AuthController(
         }
 
         // 1. Verify ID Token
-        (var email, var providerKey) = await _tokenService.VerifyTokenAsync(request.Provider, request.Token);
+        var (email, providerKey) = await _tokenService.VerifyTokenAsync(request.Provider, request.Token);
         if (string.IsNullOrEmpty(providerKey))
         {
             return Unauthorized("Invalid token.");
@@ -76,14 +74,16 @@ public class AuthController(
             IdentityResult createResult = await _userManager.CreateAsync(newUser);
             if (!createResult.Succeeded)
             {
-                _logger.LogError("Failed to create user: {Errors}", string.Join(", ", createResult.Errors.Select(e => e.Description)));
+                _logger.LogError("Failed to create user: {Errors}",
+                    string.Join(", ", createResult.Errors.Select(e => e.Description)));
                 return StatusCode(500, "Error creating user account.");
             }
 
             IdentityResult addLoginResult = await _userManager.AddLoginAsync(newUser, userLoginInfo);
             if (!addLoginResult.Succeeded)
             {
-                _logger.LogError("Failed to add login to user: {Errors}", string.Join(", ", addLoginResult.Errors.Select(e => e.Description)));
+                _logger.LogError("Failed to add login to user: {Errors}",
+                    string.Join(", ", addLoginResult.Errors.Select(e => e.Description)));
             }
 
             existingUser = newUser;
@@ -99,7 +99,7 @@ public class AuthController(
         }
 
         // 5. Issue Identity Session
-        await _signInManager.SignInAsync(existingUser, isPersistent: true);
+        await _signInManager.SignInAsync(existingUser, true);
 
         return Ok(new { success = true });
     }

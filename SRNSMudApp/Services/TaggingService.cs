@@ -1,23 +1,29 @@
-namespace SRNSMudApp.Services;
-
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+
+namespace SRNSMudApp.Services;
 
 public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITaggingService
 {
     public async Task AddTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.Set<T>()
+        T? entity = await context.Set<T>()
             .Include(e => e.Tags)
             .FirstOrDefaultAsync(e => e.Id == entityId);
 
-        if (entity == null) return;
+        if (entity == null)
+        {
+            return;
+        }
 
-        var tag = await context.Tags.FindAsync(tagId);
-        if (tag == null) return;
+        Tag? tag = await context.Tags.FindAsync(tagId);
+        if (tag == null)
+        {
+            return;
+        }
 
         if (!entity.Tags.Any(t => t.Id == tagId))
         {
@@ -28,15 +34,18 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task RemoveTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var entity = await context.Set<T>()
+        T? entity = await context.Set<T>()
             .Include(e => e.Tags)
             .FirstOrDefaultAsync(e => e.Id == entityId);
 
-        if (entity == null) return;
+        if (entity == null)
+        {
+            return;
+        }
 
-        var tag = entity.Tags.FirstOrDefault(t => t.Id == tagId);
+        Tag? tag = entity.Tags.FirstOrDefault(t => t.Id == tagId);
         if (tag != null)
         {
             entity.Tags.Remove(tag);
@@ -46,8 +55,9 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task RejectRequestAsync(int requestId, string rejectUserId, string? comment)
     {
-        await using var context = await dbFactory.CreateDbContextAsync();
-        var request = await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId);
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        TaggingRequestEntity? request =
+            await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId);
 
         if (request == null)
         {

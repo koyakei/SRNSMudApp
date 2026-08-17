@@ -32,12 +32,12 @@ builder.Services.AddControllers();
 
 // Add Rate Limiting for Auth
 builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("AuthRateLimit", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 5;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        limiterOptions.QueueLimit = 2;
-    }));
+{
+    limiterOptions.PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 5;
+    limiterOptions.Window = TimeSpan.FromMinutes(1);
+    limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    limiterOptions.QueueLimit = 2;
+}));
 
 // Add MudBlazor services
 builder.Services.AddMudServices();

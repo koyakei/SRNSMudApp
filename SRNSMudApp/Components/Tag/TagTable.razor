@@ -92,7 +92,8 @@
                 @context.Content
             </div>
         </MudTd>
-        <MudTd DataLabel="Weight">@(OverrideWeights != null && OverrideWeights.TryGetValue(context.Id, out var w) ? w : context.CachedWeight)</MudTd>
+        <MudTd
+            DataLabel="Weight">@(OverrideWeights != null && OverrideWeights.TryGetValue(context.Id, out var w) ? w : context.CachedWeight)</MudTd>
         <MudTd DataLabel="Owner Name">@(context.Owner?.UserName)</MudTd>
         <MudTd DataLabel="Actions">
             <div class="d-flex align-center action-container">

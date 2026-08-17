@@ -1,18 +1,17 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
 
 [TestFixture]
-public partial class TaggingRequestReplyE2ETests : PageTest
+public class TaggingRequestReplyE2ETests : PageTest
 {
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -23,6 +22,9 @@ public partial class TaggingRequestReplyE2ETests : PageTest
 
     [OneTimeTearDown]
     public void OneTimeTearDown() => _factory?.Dispose();
+
+    private CustomWebApplicationFactory? _factory;
+    private string? _serverAddress;
 
     [Test]
     public async Task CanViewTaggingRequestAndSubmitReply()
@@ -39,14 +41,15 @@ public partial class TaggingRequestReplyE2ETests : PageTest
             var userName = tagOwnerEmail.Split('@')[0];
             await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
             await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"));
-            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" })).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+                .ToBeVisibleAsync();
         }
 
-        using (var scope = _factory!.AppServices.CreateScope())
+        using (IServiceScope scope = _factory!.AppServices.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var tagOwnerUser = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
-            
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            ApplicationUser tagOwnerUser = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
+
             var tag = new Tag { Name = tagName, Content = "Test content", OwnerId = tagOwnerUser.Id, CachedWeight = 0 };
             db.Tags.Add(tag);
             await db.SaveChangesAsync();
@@ -69,13 +72,13 @@ public partial class TaggingRequestReplyE2ETests : PageTest
         await Expect(Page.GetByText("アイテムが正常に保存されました。")).ToBeVisibleAsync();
 
         // 3. DBからIDを取得してリクエストコントラクトを作成
-        using (var scope = _factory.AppServices.CreateScope())
+        using (IServiceScope scope = _factory.AppServices.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var requesterUser = await db.Users.FirstAsync(u => u.Email == requesterEmail);
-            var tagOwnerUser = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
-            var item = await db.Items.FirstAsync(i => i.Content == itemContent);
-            var tag = await db.Tags.FirstAsync(t => t.Name == tagName);
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            ApplicationUser requesterUser = await db.Users.FirstAsync(u => u.Email == requesterEmail);
+            ApplicationUser tagOwnerUser = await db.Users.FirstAsync(u => u.Email == tagOwnerEmail);
+            Item item = await db.Items.FirstAsync(i => i.Content == itemContent);
+            Tag tag = await db.Tags.FirstAsync(t => t.Name == tagName);
 
             var contract = new GratisTaggingContract
             {
@@ -97,16 +100,16 @@ public partial class TaggingRequestReplyE2ETests : PageTest
         await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
         await Task.Delay(2000);
 
-        var itemCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = itemContent });
-        
+        ILocator itemCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = itemContent });
+
         // タグ名が含まれているか
         await Expect(itemCard.Locator($".mud-chip:has-text('{tagName}')")).ToBeVisibleAsync();
-        
+
         // リプライボタンをクリック
         await itemCard.Locator($".mud-chip:has-text('{tagName}')").Locator("button").ClickAsync();
 
         // 5. ダイアログが開き、リクエスト本文が見えるか確認
-        var dialog = Page.Locator(".mud-dialog");
+        ILocator dialog = Page.Locator(".mud-dialog");
         await Expect(dialog).ToBeVisibleAsync();
         await Expect(dialog.Locator($"text={tagName} を追加するリクエストをしました。")).ToBeVisibleAsync();
 
@@ -120,12 +123,12 @@ public partial class TaggingRequestReplyE2ETests : PageTest
 
         // 8. ダイアログを閉じて、バッジに1と表示されるか確認
         await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Close" }).ClickAsync();
-        
+
         // 状態更新後も表示されるか、念のためリロードして確認する
         await Page.ReloadAsync();
         await Task.Delay(2000);
         itemCard = Page.Locator(".mud-card").Filter(new LocatorFilterOptions { HasText = itemContent });
-        
+
         await Expect(itemCard.Locator(".mud-badge").First).ToHaveTextAsync("1");
     }
 }

@@ -1,8 +1,5 @@
-@using Microsoft.EntityFrameworkCore
-@using SRNSMudApp.Data
-@using SRNSMudApp.Services
 @using System.Security.Claims
-
+@using SRNSMudApp.Services
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TaggingContractService ContractService
 @inject ISnackbar Snackbar
@@ -145,5 +142,9 @@
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
 }

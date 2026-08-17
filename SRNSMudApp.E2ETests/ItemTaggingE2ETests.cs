@@ -2,7 +2,6 @@
 
 using System.Text.RegularExpressions;
 
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
@@ -44,8 +43,10 @@ public partial class ItemTaggingE2ETests : PageTest
             await Page.Context.ClearCookiesAsync();
             var userName = email.Contains('@') ? email.Split('@')[0] : email;
             await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
-            await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"^" + System.Text.RegularExpressions.Regex.Escape(_serverAddress) + @"/?$"), new Microsoft.Playwright.PageWaitForURLOptions { Timeout = 10000 });
-            await Expect(Page.GetByRole(Microsoft.Playwright.AriaRole.Button, new Microsoft.Playwright.PageGetByRoleOptions { Name = "Logout" })).ToBeVisibleAsync(new Microsoft.Playwright.LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+                new PageWaitForURLOptions { Timeout = 10000 });
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
         }
 
         // アイテムを追加
@@ -64,10 +65,10 @@ public partial class ItemTaggingE2ETests : PageTest
 
         // タグを作成 (直接DBへ挿入)
         var tagName = $"Test Tag {uniqueId}";
-        using (var scope = _factory!.AppServices.CreateScope())
+        using (IServiceScope scope = _factory!.AppServices.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var user = await db.Users.FirstAsync(u => u.Email == email);
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            ApplicationUser user = await db.Users.FirstAsync(u => u.Email == email);
             db.Tags.Add(new Tag { Name = tagName, Content = "Test content", OwnerId = user.Id, CachedWeight = 0 });
             await db.SaveChangesAsync();
         }

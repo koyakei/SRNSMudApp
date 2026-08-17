@@ -161,7 +161,7 @@
         var icon = (EnableExpand, hasChildren) switch
         {
             (true, true) => isExpanded ? "▼" : "▶",
-            (false, true) => isParent || isCurrent ? (isExpanded ? "▼" : "▶") : (isChild ? "▶" : "▷"),
+            (false, true) => isParent || isCurrent ? isExpanded ? "▼" : "▶" : isChild ? "▶" : "▷",
             (false, false) => true switch
             {
                 _ when isParent => "▷",

@@ -1,8 +1,10 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
@@ -11,9 +13,6 @@ namespace SRNSMudApp.E2ETests;
 [TestFixture]
 public class LoginAndPostItemE2ETests : PageTest
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private string _serverAddress = "";
-
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
@@ -23,10 +22,7 @@ public class LoginAndPostItemE2ETests : PageTest
     }
 
     [OneTimeTearDown]
-    public void OneTimeTearDown()
-    {
-        _factory.Dispose();
-    }
+    public void OneTimeTearDown() => _factory.Dispose();
 
     [SetUp]
     public void Setup()
@@ -36,21 +32,21 @@ public class LoginAndPostItemE2ETests : PageTest
         // Remove the global Dialog handler because we will handle it in the specific test
     }
 
+    private CustomWebApplicationFactory _factory = null!;
+    private string _serverAddress = "";
+
     private async Task<string> CreateTestInvitationAsync()
     {
-        using var scope = _factory.AppServices.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        
+        using IServiceScope scope = _factory.AppServices.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
         // Ensure dummy admin user exists
         var adminId = "dummy-admin-id";
         if (!await db.Users.AnyAsync(u => u.Id == adminId))
         {
             db.Users.Add(new ApplicationUser
             {
-                Id = adminId,
-                UserName = "admin@example.com",
-                Email = "admin@example.com",
-                EmailConfirmed = true
+                Id = adminId, UserName = "admin@example.com", Email = "admin@example.com", EmailConfirmed = true
             });
             await db.SaveChangesAsync();
         }
@@ -77,25 +73,26 @@ public class LoginAndPostItemE2ETests : PageTest
 
         // Wait for redirect to happen (either to Home or some other page)
         // Usually, successful login redirects to Home "/"
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
+        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+            new PageWaitForURLOptions { Timeout = 10000 });
         await Expect(Page.Locator("body")).ToContainTextAsync("Home");
 
         // Go to Item List page
         await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-        
+
         // Wait for Blazor Server circuit to connect before interacting
         await Task.Delay(1500);
-        
+
         // Ensure the input field is visible
         await Task.Delay(1500);
-        var input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
+        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
         await input.WaitForAsync();
-        
-        var contentText = "Test item from Google user " + Guid.NewGuid().ToString();
+
+        var contentText = "Test item from Google user " + Guid.NewGuid();
         await input.FillAsync(contentText);
-        
+
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-        
+
         // Wait for the item to appear in the list below or a snackbar
         await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
         await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
@@ -106,20 +103,21 @@ public class LoginAndPostItemE2ETests : PageTest
     {
         await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Line&code=mock-line-test");
 
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
+        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+            new PageWaitForURLOptions { Timeout = 10000 });
         await Expect(Page.Locator("body")).ToContainTextAsync("Home");
 
         await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-        
+
         await Task.Delay(1500);
-        var input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
+        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
         await input.WaitForAsync();
-        
-        var contentText = "Test item from LINE user " + Guid.NewGuid().ToString();
+
+        var contentText = "Test item from LINE user " + Guid.NewGuid();
         await input.FillAsync(contentText);
-        
+
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-        
+
         await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
         await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
     }
@@ -129,23 +127,22 @@ public class LoginAndPostItemE2ETests : PageTest
     {
         await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Github&code=mock-github-test");
 
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
+        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
+            new PageWaitForURLOptions { Timeout = 10000 });
         await Expect(Page.Locator("body")).ToContainTextAsync("Home");
 
         await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-        
+
         await Task.Delay(1500);
-        var input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
+        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
         await input.WaitForAsync();
-        
-        var contentText = "Test item from GitHub user " + Guid.NewGuid().ToString();
+
+        var contentText = "Test item from GitHub user " + Guid.NewGuid();
         await input.FillAsync(contentText);
-        
+
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-        
+
         await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
         await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
     }
-
-
 }

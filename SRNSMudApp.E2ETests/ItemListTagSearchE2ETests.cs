@@ -64,20 +64,13 @@ public class ItemListTagSearchE2ETests : PageTest
             db.Tags.Add(tag);
             await db.SaveChangesAsync();
 
-            var item = new Item
-            {
-                Content = "Item linked to search test tag",
-                OwnerId = testUser.Id
-            };
+            var item = new Item { Content = "Item linked to search test tag", OwnerId = testUser.Id };
             db.Items.Add(item);
             await db.SaveChangesAsync();
 
             db.TagRelations.Add(new TagRelation
             {
-                ItemId = item.Id,
-                TagId = tag.Id,
-                OwnerId = testUser.Id,
-                Weight = 1
+                ItemId = item.Id, TagId = tag.Id, OwnerId = testUser.Id, Weight = 1
             });
             await db.SaveChangesAsync();
         }
@@ -92,7 +85,8 @@ public class ItemListTagSearchE2ETests : PageTest
         await searchInput.FillAsync(tagName);
 
         // 候補ドロップダウンが表示されるのを待つ
-        ILocator suggestionItem = Page.Locator("div.mud-list-item", new PageLocatorOptions { HasTextString = tagName }).First;
+        ILocator suggestionItem =
+            Page.Locator("div.mud-list-item", new PageLocatorOptions { HasTextString = tagName }).First;
         await Expect(suggestionItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
 
         // 候補をクリック

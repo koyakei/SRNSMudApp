@@ -1,5 +1,3 @@
-
-
 namespace SRNSMudApp.Data;
 
 public abstract class BaseEntity

@@ -6,6 +6,5 @@ public class UserTagFollow : BaseEntity
 {
     public int TagId { get; set; }
 
-    [ForeignKey("TagId")]
-    public Tag Tag { get; set; } = null!;
+    [ForeignKey("TagId")] public Tag Tag { get; set; } = null!;
 }

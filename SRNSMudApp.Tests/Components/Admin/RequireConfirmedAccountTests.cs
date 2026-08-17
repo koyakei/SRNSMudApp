@@ -3,7 +3,6 @@
 using System.Security.Claims;
 
 using Bunit;
-using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Hosting;

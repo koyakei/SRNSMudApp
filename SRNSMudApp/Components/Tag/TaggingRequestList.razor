@@ -1,12 +1,12 @@
-@using SRNSMudApp.Services
 @using System.Security.Claims
 @using SRNSMudApp.Components.Shared
+@using SRNSMudApp.Services
 @inject IDialogService DialogService
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
-<MudTable T="TaggingRequestEntity" Items="[.. Requests.Where(r => r.Status != TradeStatus.Rejected)]" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0"
+<MudTable T="TaggingRequestEntity" Items="[.. Requests.Where(r => r.Status != TradeStatus.Rejected)]" Hover="true"
+          Breakpoint="Breakpoint.Sm" Elevation="0"
           @bind-SelectedItem="SelectedRequest" OnRowClick="OnRowClicked" RowClassFunc="SelectedRowClassFunc">
     <HeaderContent>
         <MudTh>タイプ</MudTh>
@@ -38,12 +38,14 @@
         <MudTd DataLabel="リクエスタ">@context.Owner?.UserName</MudTd>
         <MudTd DataLabel="作成日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
         <MudTd DataLabel="操作">
-            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenThreadDialog(context))" Class="mr-2">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                       OnClick="@(() => OpenThreadDialog(context))" Class="mr-2">
                 詳細・スレッド
             </MudButton>
             @if (CanApprove(context))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                           OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
                     承認
                 </MudButton>
             }
@@ -53,7 +55,8 @@
             }
             else if (CanApprove(context))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                           StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
                     却下
                 </MudButton>
             }
@@ -74,6 +77,7 @@
         {
             return "mud-table-row-selected";
         }
+
         return string.Empty;
     }
 
@@ -85,26 +89,28 @@
 
     private string? _currentUserId;
 
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var authState = await AuthenticationStateTask;
         _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     }
 
     private bool CanApprove(TaggingRequestEntity request)
     {
         if (request.Status != TradeStatus.Proposed) return false;
-        
+
         if (request is PublicOfferTriggerContract) return request.RequesterUserId == _currentUserId;
         if (request is BountyTaggingContract) return true; // Anyone can theoretically fulfill a bounty
-        
+
         return request.TagOwnerUserId == _currentUserId;
     }
 
     private async Task ApproveRequestAsync(TaggingRequestEntity request)
     {
         if (_currentUserId == null) return;
-        
+
         try
         {
             await TaggingContractService.AcceptContractAsync(request.Id, _currentUserId);
@@ -150,10 +156,11 @@
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
         var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>("リクエストスレッド", parameters, options);
         var result = await dialog.Result;
-        
+
         if (result != null && !result.Canceled)
         {
             await OnRequestChanged.InvokeAsync();
         }
     }
+
 }

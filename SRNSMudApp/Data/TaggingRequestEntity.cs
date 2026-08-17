@@ -4,11 +4,9 @@ namespace SRNSMudApp.Data;
 
 public abstract class TaggingRequestEntity : BaseEntity, ITaggable
 {
-    [MaxLength(50)]
-    public string RequesterUserId { get; set; } = string.Empty;
+    [MaxLength(50)] public string RequesterUserId { get; set; } = string.Empty;
 
-    [MaxLength(50)]
-    public string TagOwnerUserId { get; set; } = string.Empty;
+    [MaxLength(50)] public string TagOwnerUserId { get; set; } = string.Empty;
 
     public int TargetItemId { get; set; }
     public Item TargetItem { get; set; } = null!;
@@ -26,12 +24,12 @@ public abstract class TaggingRequestEntity : BaseEntity, ITaggable
     public Item? RequestItem { get; set; }
 
     public TaggingRequestType RequestType { get; set; } = TaggingRequestType.Add;
-    public ICollection<Item> Replies { get; set; } = new List<Item>();
+    public ICollection<Item> Replies { get; set; } = [];
 
-    [MaxLength(1000)]
-    public string? RejectComment { get; set; }
+    [MaxLength(1000)] public string? RejectComment { get; set; }
+
     public DateTimeOffset? RejectedAt { get; set; }
 
     // ITaggable Implementation
-    public virtual ICollection<Tag> Tags { get; set; } = new List<Tag>();
+    public virtual ICollection<Tag> Tags { get; set; } = [];
 }

@@ -1,7 +1,6 @@
 @page "/Account/Login"
-@rendermode InteractiveServer
 @using Microsoft.AspNetCore.WebUtilities
-@using Microsoft.Extensions.Configuration
+@rendermode InteractiveServer
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
 
@@ -89,13 +88,13 @@
 
     private async Task LoginWithLine()
     {
-        var redirectUri = NavigationManager.ToAbsoluteUri($"/auth/callback?provider=Line").ToString();
+        var redirectUri = NavigationManager.ToAbsoluteUri("/auth/callback?provider=Line").ToString();
         await JS.InvokeVoidAsync("window.customAuth.redirectToLine", LineClientId, redirectUri);
     }
 
     private async Task LoginWithGithub()
     {
-        var redirectUri = NavigationManager.ToAbsoluteUri($"/auth/callback?provider=Github").ToString();
+        var redirectUri = NavigationManager.ToAbsoluteUri("/auth/callback?provider=Github").ToString();
         await JS.InvokeVoidAsync("window.customAuth.redirectToGithub", GithubClientId, redirectUri);
     }
 

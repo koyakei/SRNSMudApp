@@ -1,6 +1,6 @@
-namespace SRNSMudApp.Services;
-
 using SRNSMudApp.Data;
+
+namespace SRNSMudApp.Services;
 
 public interface ITaggingService
 {

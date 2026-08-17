@@ -4,12 +4,13 @@ using Microsoft.Playwright.NUnit;
 namespace SRNSMudApp.E2ETests;
 
 [TestFixture]
-public partial class ExternalLoginButtonsE2ETests : PageTest
+public class ExternalLoginButtonsE2ETests : PageTest
 {
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", "1234567890-dummy.apps.googleusercontent.com");
+        Environment.SetEnvironmentVariable("Authentication__Google__ClientId",
+            "1234567890-dummy.apps.googleusercontent.com");
         _factory = new CustomWebApplicationFactory();
         _factory.EnsureServer();
         _serverAddress = _factory.ServerAddress;
@@ -36,7 +37,8 @@ public partial class ExternalLoginButtonsE2ETests : PageTest
         await Expect(googleButtonContainer).ToBeAttachedAsync();
 
         // Verify that customAuth.renderGoogleButton is defined in JS
-        var isRenderButtonDefined = await Page.EvaluateAsync<bool>("typeof window.customAuth.renderGoogleButton === 'function'");
+        var isRenderButtonDefined =
+            await Page.EvaluateAsync<bool>("typeof window.customAuth.renderGoogleButton === 'function'");
         Assert.That(isRenderButtonDefined, Is.True, "customAuth.renderGoogleButton should be defined in JS");
 
         // LINE Login button
@@ -44,7 +46,8 @@ public partial class ExternalLoginButtonsE2ETests : PageTest
         await Expect(lineButton).ToBeVisibleAsync();
 
         // GitHub Login button
-        ILocator githubButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue with GitHub" });
+        ILocator githubButton =
+            Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue with GitHub" });
         await Expect(githubButton).ToBeVisibleAsync();
     }
 }

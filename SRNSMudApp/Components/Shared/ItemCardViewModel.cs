@@ -19,12 +19,17 @@ public class RequestInfo
 }
 
 /// <summary>
-/// ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
-/// UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
+///     ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
+///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
 /// </summary>
 public static class ItemCardViewModel
 {
-    public static RequestInfo GetRequestInfo(SRNSMudApp.Data.Item item)
+    // ReSharper disable once InconsistentNaming
+    private static readonly Regex UrlRegex =
+        new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",
+            RegexOptions.Compiled);
+
+    public static RequestInfo GetRequestInfo(Data.Item item)
     {
         return item.AsRequestOf == null
             ? new RequestInfo { IsTaggingRequest = false }
@@ -39,23 +44,19 @@ public static class ItemCardViewModel
             };
     }
 
-    // ReSharper disable once InconsistentNaming
-    private static readonly Regex UrlRegex =
-        new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",
-            RegexOptions.Compiled);
-
     /// <summary>
-    /// フォーカス状態に応じた ItemCard のインラインスタイル文字列を返す。
+    ///     フォーカス状態に応じた ItemCard のインラインスタイル文字列を返す。
     /// </summary>
     public static string GetItemCardStyle(bool isFocused)
     {
         var borderColor = isFocused ? "var(--mud-palette-primary)" : "var(--mud-palette-lines-default)";
         var borderWidth = isFocused ? "2px" : "1px";
-        return $"background: var(--mud-palette-surface); border-color: {borderColor}; border-width: {borderWidth}; border-style: solid; transition: border 0.2s ease;";
+        return
+            $"background: var(--mud-palette-surface); border-color: {borderColor}; border-width: {borderWidth}; border-style: solid; transition: border 0.2s ease;";
     }
 
     /// <summary>
-    /// アイテムの TagRelation コレクションから投票スコア（good の Weight の合計）を計算する。
+    ///     アイテムの TagRelation コレクションから投票スコア（good の Weight の合計）を計算する。
     /// </summary>
     public static int GetItemScore(IEnumerable<TagRelation>? tagRelations)
     {
@@ -65,31 +66,33 @@ public static class ItemCardViewModel
     }
 
     /// <summary>
-    /// 現在のユーザーがアイテムにアップボート済みかどうかを返す。
+    ///     現在のユーザーがアイテムにアップボート済みかどうかを返す。
     /// </summary>
     public static bool IsItemUpvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
         return goodTagId.HasValue && !string.IsNullOrEmpty(currentUserId) &&
-               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight > 0) == true;
+               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight > 0) ==
+               true;
     }
 
     /// <summary>
-    /// 現在のユーザーがアイテムにダウンボート済みかどうかを返す。
+    ///     現在のユーザーがアイテムにダウンボート済みかどうかを返す。
     /// </summary>
     public static bool IsItemDownvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
         return goodTagId.HasValue && !string.IsNullOrEmpty(currentUserId) &&
-               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight < 0) == true;
+               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight < 0) ==
+               true;
     }
 
     /// <summary>
-    /// 指定したリレーションを現在のユーザーが変更できるかどうかを返す。
+    ///     指定したリレーションを現在のユーザーが変更できるかどうかを返す。
     /// </summary>
     public static bool CanModifyRelation(string? relationOwnerId, string? currentUserId)
         => !string.IsNullOrEmpty(currentUserId) && relationOwnerId == currentUserId;
 
     /// <summary>
-    /// テキストから URL を抽出して返す。重複は除去される。
+    ///     テキストから URL を抽出して返す。重複は除去される。
     /// </summary>
     public static IReadOnlyList<string> ExtractUrls(string? text)
     {
@@ -107,19 +110,18 @@ public static class ItemCardViewModel
                 results.Add(match.Value);
             }
         }
+
         return results;
     }
 
     /// <summary>
-    /// オーナー名を最大7文字に短縮して返す。null/空の場合は「不明」を返す。
+    ///     オーナー名を最大7文字に短縮して返す。null/空の場合は「不明」を返す。
     /// </summary>
-    public static string GetShortOwnerName(string? name)
-    {
-        return string.IsNullOrEmpty(name) ? "不明" : name.Length > 7 ? name[..7] : name;
-    }
+    public static string GetShortOwnerName(string? name) =>
+        string.IsNullOrEmpty(name) ? "不明" : name.Length > 7 ? name[..7] : name;
 
     /// <summary>
-    /// タグチップに表示するウェイト文字列を生成する（イベントの差分表示を含む）。
+    ///     タグチップに表示するウェイト文字列を生成する（イベントの差分表示を含む）。
     /// </summary>
     public static string GetTagDisplayWeight(TagRelation relation, TimelineEvent? highlightEvent)
     {
@@ -134,14 +136,14 @@ public static class ItemCardViewModel
 
         if (isDeleted)
         {
-            return highlightEvent?.PreviousWeight.ToString() ?? "";
+            return highlightEvent?.PreviousWeight?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         }
 
-        return relation.Weight.ToString();
+        return relation.Weight.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>
-    /// タグチップの背景色を返す。
+    ///     タグチップの背景色を返す。
     /// </summary>
     public static string GetTagChipBackground(
         TagRelation relation,
@@ -161,12 +163,12 @@ public static class ItemCardViewModel
         }
 
         return relation.OwnerId == currentUserId
-            ? (myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE")
+            ? myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE"
             : "#FFF9C4";
     }
 
     /// <summary>
-    /// タグチップのテキスト色を返す。
+    ///     タグチップのテキスト色を返す。
     /// </summary>
     public static string GetTagChipTextColor(
         TagRelation relation,
@@ -186,7 +188,7 @@ public static class ItemCardViewModel
         }
 
         return relation.OwnerId == currentUserId
-            ? (myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C")
+            ? myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C"
             : "#5C4B00";
     }
 }

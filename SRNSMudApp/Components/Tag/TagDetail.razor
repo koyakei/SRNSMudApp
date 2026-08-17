@@ -1,9 +1,9 @@
 @page "/TagDetail/{TagId:int}"
+@using System.Security.Claims
 @rendermode InteractiveServer
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IDialogService DialogService
 @inject NavigationManager NavigationManager
-@using System.Security.Claims
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
     @if (_tag == null)
@@ -61,7 +61,7 @@
                                                            OnDataChanged="LoadDataAsync"/>
             </MudTabPanel>
             <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
-                <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync" />
+                <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync"/>
             </MudTabPanel>
             <MudTabPanel Text="Weight 履歴 / 取引履歴">
                 <SRNSMudApp.Components.Shared.TagWeightLedgerList Ledgers="_weightLedgers"/>

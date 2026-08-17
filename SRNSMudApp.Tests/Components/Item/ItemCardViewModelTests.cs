@@ -8,9 +8,9 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
-/// ItemCardViewModel の単体テスト。
-/// bUnit・Blazor・DB接続不要で高速に実行できる。
-/// これらのテストは以前 E2E (Playwright) でしか検証できなかったロジックをカバーする。
+///     ItemCardViewModel の単体テスト。
+///     bUnit・Blazor・DB接続不要で高速に実行できる。
+///     これらのテストは以前 E2E (Playwright) でしか検証できなかったロジックをカバーする。
 /// </summary>
 public class ItemCardViewModelTests
 {
@@ -21,7 +21,7 @@ public class ItemCardViewModelTests
     [Fact]
     public void GetItemCardStyle_WhenFocused_ReturnsPrimaryBorderStyle()
     {
-        var style = ItemCardViewModel.GetItemCardStyle(isFocused: true);
+        var style = ItemCardViewModel.GetItemCardStyle(true);
 
         Assert.Contains("border-width: 2px", style);
         Assert.Contains("var(--mud-palette-primary)", style);
@@ -30,7 +30,7 @@ public class ItemCardViewModelTests
     [Fact]
     public void GetItemCardStyle_WhenNotFocused_ReturnsDefaultBorderStyle()
     {
-        var style = ItemCardViewModel.GetItemCardStyle(isFocused: false);
+        var style = ItemCardViewModel.GetItemCardStyle(false);
 
         Assert.Contains("border-width: 1px", style);
         Assert.Contains("var(--mud-palette-lines-default)", style);
@@ -45,9 +45,24 @@ public class ItemCardViewModelTests
     {
         var relations = new List<TagRelation>
         {
-            new() { OwnerId = "u1", Weight = 1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u2", Weight = 1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u3", Weight = -1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } }
+            new()
+            {
+                OwnerId = "u1",
+                Weight = 1,
+                Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" }
+            },
+            new()
+            {
+                OwnerId = "u2",
+                Weight = 1,
+                Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" }
+            },
+            new()
+            {
+                OwnerId = "u3",
+                Weight = -1,
+                Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" }
+            }
         };
 
         var score = ItemCardViewModel.GetItemScore(relations);
@@ -56,17 +71,18 @@ public class ItemCardViewModelTests
     }
 
     [Fact]
-    public void GetItemScore_WithNull_ReturnsZero()
-    {
-        Assert.Equal(0, ItemCardViewModel.GetItemScore(null));
-    }
+    public void GetItemScore_WithNull_ReturnsZero() => Assert.Equal(0, ItemCardViewModel.GetItemScore(null));
 
     [Fact]
     public void GetItemScore_WithNoVoteTags_ReturnsZero()
     {
         var relations = new List<TagRelation>
         {
-            new() { OwnerId = "u1", Tag = new SRNSMudApp.Data.Tag { Name = "someTag", IsSystem = false, OwnerId = "u1" } }
+            new()
+            {
+                OwnerId = "u1",
+                Tag = new SRNSMudApp.Data.Tag { Name = "someTag", IsSystem = false, OwnerId = "u1" }
+            }
         };
 
         Assert.Equal(0, ItemCardViewModel.GetItemScore(relations));
@@ -81,10 +97,7 @@ public class ItemCardViewModelTests
     {
         const string userId = "user-1";
         const int goodTagId = 10;
-        var relations = new List<TagRelation>
-        {
-            new() { TagId = goodTagId, OwnerId = userId }
-        };
+        var relations = new List<TagRelation> { new() { TagId = goodTagId, OwnerId = userId } };
 
         Assert.True(ItemCardViewModel.IsItemUpvoted(relations, userId, goodTagId));
     }
@@ -94,41 +107,30 @@ public class ItemCardViewModelTests
     {
         const string userId = "user-1";
         const int goodTagId = 10;
-        var relations = new List<TagRelation>
-        {
-            new() { TagId = goodTagId, OwnerId = "other-user" }
-        };
+        var relations = new List<TagRelation> { new() { TagId = goodTagId, OwnerId = "other-user" } };
 
         Assert.False(ItemCardViewModel.IsItemUpvoted(relations, userId, goodTagId));
     }
 
     [Fact]
-    public void IsItemDownvoted_WhenNoBadTagId_ReturnsFalse()
-    {
+    public void IsItemDownvoted_WhenNoBadTagId_ReturnsFalse() =>
         Assert.False(ItemCardViewModel.IsItemDownvoted([], "user-1", null));
-    }
 
     // ────────────────────────────────────────────────────────────
     // CanModifyRelation
     // ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void CanModifyRelation_WhenOwnerMatches_ReturnsTrue()
-    {
+    public void CanModifyRelation_WhenOwnerMatches_ReturnsTrue() =>
         Assert.True(ItemCardViewModel.CanModifyRelation("user-1", "user-1"));
-    }
 
     [Fact]
-    public void CanModifyRelation_WhenOwnerDiffers_ReturnsFalse()
-    {
+    public void CanModifyRelation_WhenOwnerDiffers_ReturnsFalse() =>
         Assert.False(ItemCardViewModel.CanModifyRelation("user-1", "user-2"));
-    }
 
     [Fact]
-    public void CanModifyRelation_WhenCurrentUserIsEmpty_ReturnsFalse()
-    {
+    public void CanModifyRelation_WhenCurrentUserIsEmpty_ReturnsFalse() =>
         Assert.False(ItemCardViewModel.CanModifyRelation("user-1", ""));
-    }
 
     // ────────────────────────────────────────────────────────────
     // ExtractUrls
@@ -137,7 +139,7 @@ public class ItemCardViewModelTests
     [Fact]
     public void ExtractUrls_WithSingleUrl_ReturnsIt()
     {
-        var urls = ItemCardViewModel.ExtractUrls("Hello https://example.com world");
+        IReadOnlyList<string> urls = ItemCardViewModel.ExtractUrls("Hello https://example.com world");
 
         Assert.Single(urls);
         Assert.Equal("https://example.com", urls[0]);
@@ -146,28 +148,22 @@ public class ItemCardViewModelTests
     [Fact]
     public void ExtractUrls_WithDuplicateUrls_ReturnsDeduplicated()
     {
-        var urls = ItemCardViewModel.ExtractUrls("https://a.com and https://a.com again");
+        IReadOnlyList<string> urls = ItemCardViewModel.ExtractUrls("https://a.com and https://a.com again");
 
         Assert.Single(urls);
     }
 
     [Fact]
-    public void ExtractUrls_WithNoUrl_ReturnsEmpty()
-    {
-        Assert.Empty(ItemCardViewModel.ExtractUrls("No URLs here"));
-    }
+    public void ExtractUrls_WithNoUrl_ReturnsEmpty() => Assert.Empty(ItemCardViewModel.ExtractUrls("No URLs here"));
 
     [Fact]
-    public void ExtractUrls_WithNull_ReturnsEmpty()
-    {
-        Assert.Empty(ItemCardViewModel.ExtractUrls(null));
-    }
+    public void ExtractUrls_WithNull_ReturnsEmpty() => Assert.Empty(ItemCardViewModel.ExtractUrls(null));
 
     [Fact]
     public void ExtractUrls_WithMultipleUrls_ReturnsAll()
     {
         var text = "See https://example.com and https://github.com for details";
-        var urls = ItemCardViewModel.ExtractUrls(text);
+        IReadOnlyList<string> urls = ItemCardViewModel.ExtractUrls(text);
 
         Assert.Equal(2, urls.Count);
         Assert.Contains("https://example.com", urls);
@@ -179,22 +175,16 @@ public class ItemCardViewModelTests
     // ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetShortOwnerName_WithShortName_ReturnsAsIs()
-    {
+    public void GetShortOwnerName_WithShortName_ReturnsAsIs() =>
         Assert.Equal("alice", ItemCardViewModel.GetShortOwnerName("alice"));
-    }
 
     [Fact]
-    public void GetShortOwnerName_WithLongName_TruncatesTo7Chars()
-    {
+    public void GetShortOwnerName_WithLongName_TruncatesTo7Chars() =>
         Assert.Equal("longuse", ItemCardViewModel.GetShortOwnerName("longusernamefoo"));
-    }
 
     [Fact]
-    public void GetShortOwnerName_WithNull_ReturnsUnknown()
-    {
+    public void GetShortOwnerName_WithNull_ReturnsUnknown() =>
         Assert.Equal("不明", ItemCardViewModel.GetShortOwnerName(null));
-    }
 
     // ────────────────────────────────────────────────────────────
     // GetTagDisplayWeight

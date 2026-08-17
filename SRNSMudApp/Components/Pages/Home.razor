@@ -256,8 +256,15 @@
 
     private class TimelineFeedGroupComparer : IEqualityComparer<TimelineFeedGroup>
     {
-        public bool Equals(TimelineFeedGroup? x, TimelineFeedGroup? y) => x?.TargetType == y?.TargetType && x?.TargetId == y?.TargetId;
-        public int GetHashCode(TimelineFeedGroup obj) => HashCode.Combine(obj.TargetType, obj.TargetId);
+        public bool Equals(TimelineFeedGroup? x, TimelineFeedGroup? y)
+        {
+            return x?.TargetType == y?.TargetType && x?.TargetId == y?.TargetId;
+        }
+
+        public int GetHashCode(TimelineFeedGroup obj)
+        {
+            return HashCode.Combine(obj.TargetType, obj.TargetId);
+        }
     }
 
 }

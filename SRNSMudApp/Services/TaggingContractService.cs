@@ -9,7 +9,6 @@ namespace SRNSMudApp.Services;
 
 public class TaggingContractService(ApplicationDbContext dbContext)
 {
-
     public async Task<GratisTaggingContract> ProposeGratisContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -55,7 +54,9 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         var requestItem = new Item
         {
             OwnerId = requesterUserId,
-            Content = requestType == TaggingRequestType.Add ? "タグ追加リクエスト(Mutual)を送信しました。" : "タグ削除リクエスト(Mutual)を送信しました。"
+            Content = requestType == TaggingRequestType.Add
+                ? "タグ追加リクエスト(Mutual)を送信しました。"
+                : "タグ削除リクエスト(Mutual)を送信しました。"
         };
 
         var contract = new MutualTaggingContract
@@ -92,10 +93,10 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     {
         // 1. EF Core からはベースエンティティとして取得
         TaggingRequestEntity entity = await dbContext.TaggingRequestEntities!
-            .Include(c => c.RequestedTag)
-            .Include(c => c.ConsumedRightAsset)
-            .FirstOrDefaultAsync(c => c.Id == contractId)
-            ?? throw new InvalidOperationException("契約が見つかりません。");
+                                          .Include(c => c.RequestedTag)
+                                          .Include(c => c.ConsumedRightAsset)
+                                          .FirstOrDefaultAsync(c => c.Id == contractId)
+                                      ?? throw new InvalidOperationException("契約が見つかりません。");
 
         if (entity.Status != TradeStatus.Proposed)
         {
@@ -164,8 +165,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     public async Task CancelContractAsync(int contractId, string currentUserId)
     {
         TaggingRequestEntity entity = await dbContext.TaggingRequestEntities!
-            .FirstOrDefaultAsync(c => c.Id == contractId)
-            ?? throw new InvalidOperationException("契約が見つかりません。");
+                                          .FirstOrDefaultAsync(c => c.Id == contractId)
+                                      ?? throw new InvalidOperationException("契約が見つかりません。");
 
         if (entity.Status != TradeStatus.Proposed)
         {
@@ -209,7 +210,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             consumedAssetId = rightAsset.Id;
         }
 
-        Tag tag = (contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId)) ?? throw new InvalidOperationException("Tag not found");
+        Tag tag = (contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId)) ??
+                  throw new InvalidOperationException("Tag not found");
 
         if (contract.RequestType == TaggingRequestType.Add)
         {
@@ -218,7 +220,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
                 Weight = 1,
-                OwnerId = contract.RequesterUserId,
+                OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(newRelation);
             _ = await dbContext.SaveChangesAsync();
@@ -287,7 +289,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     PreviousWeight = previousWeight,
                     NewWeight = newWeight,
                     IsOwnerAction = true,
-                    Reason = $"Gratis Tagging Contract Accepted ({(contract.RequestType == TaggingRequestType.Remove ? "Remove" : "Decrease Weight")})",
+                    Reason =
+                        $"Gratis Tagging Contract Accepted ({(contract.RequestType == TaggingRequestType.Remove ? "Remove" : "Decrease Weight")})",
                     OwnerId = executorUserId
                 };
                 _ = dbContext.TagWeightLedgers!.Add(ledger);
@@ -298,9 +301,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     TargetType = "Item",
                     TargetItemId = contract.TargetItemId,
                     FollowedTagId = contract.RequestedTagId,
-                    EventType = contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0 ? "Delete" : "Update",
+                    EventType =
+                        contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0
+                            ? "Delete"
+                            : "Update",
                     PreviousWeight = prevWeight,
-                    NewWeight = contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0 ? 0 : prevWeight + delta
+                    NewWeight = contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0
+                        ? 0
+                        : prevWeight + delta
                 });
             }
         }
@@ -344,7 +352,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
                 Weight = 1,
-                OwnerId = contract.RequesterUserId,
+                OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(relation1);
             _ = await dbContext.SaveChangesAsync();
@@ -426,7 +434,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             ItemId = contract.OfferedTargetItemId,
             TagId = contract.OfferedTagId,
             Weight = 1,
-            OwnerId = contract.TagOwnerUserId,
+            OwnerId = contract.TagOwnerUserId
         };
         _ = dbContext.TagRelations!.Add(relation2);
         _ = await dbContext.SaveChangesAsync();
@@ -465,8 +473,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     private async Task ExecuteTriggerAsync(PublicOfferTriggerContract contract)
     {
         PublicTradeOffer offer = await dbContext.PublicTradeOffers!
-            .FirstOrDefaultAsync(o => o.Id == contract.TargetPublicTradeOfferId)
-            ?? throw new InvalidOperationException("公開オファーが見つかりません。");
+                                     .FirstOrDefaultAsync(o => o.Id == contract.TargetPublicTradeOfferId)
+                                 ?? throw new InvalidOperationException("公開オファーが見つかりません。");
 
         if (!offer.IsActive)
         {
@@ -513,12 +521,13 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 ItemId = contract.TargetItemId,
                 TagId = offer.OfferedTagId,
                 Weight = 1,
-                OwnerId = contract.RequesterUserId,
+                OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(newRelation);
             _ = await dbContext.SaveChangesAsync();
 
-            Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ?? throw new InvalidOperationException("Tag not found");
+            Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ??
+                      throw new InvalidOperationException("Tag not found");
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight += 1;
             var newWeight = tag.CachedWeight;
@@ -559,7 +568,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 var prevWeight = relation.Weight;
                 _ = dbContext.TagRelations.Remove(relation);
 
-                Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ?? throw new InvalidOperationException("Tag not found");
+                Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ??
+                          throw new InvalidOperationException("Tag not found");
                 var previousWeight = tag.CachedWeight;
                 tag.CachedWeight -= prevWeight;
                 var newWeight = tag.CachedWeight;
@@ -601,7 +611,10 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         if (fulfillerAssetId.HasValue)
         {
             RightAsset fulfillerAsset = await dbContext.RightAssets
-                .FirstOrDefaultAsync(a => a.Id == fulfillerAssetId.Value && a.OwnerId == fulfillerUserId && !a.IsBurned) ?? throw new InvalidOperationException("提供されたアセットが無効または所有していません。");
+                                            .FirstOrDefaultAsync(a =>
+                                                a.Id == fulfillerAssetId.Value && a.OwnerId == fulfillerUserId &&
+                                                !a.IsBurned) ??
+                                        throw new InvalidOperationException("提供されたアセットが無効または所有していません。");
             if (fulfillerAsset.TargetTagId != contract.RequestedTagId)
             {
                 throw new InvalidOperationException("提供されたアセットは対象タグの権利ではありません。");
@@ -638,7 +651,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
                 Weight = 1,
-                OwnerId = contract.RequesterUserId,
+                OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations.Add(newRelation);
             _ = await dbContext.SaveChangesAsync();
@@ -647,7 +660,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             if (contract.OfferedRewardAssetId.HasValue)
             {
                 RightAsset? rewardAsset = await dbContext.RightAssets
-                    .FirstOrDefaultAsync(a => a.Id == contract.OfferedRewardAssetId.Value && a.OwnerId == contract.RequesterUserId);
+                    .FirstOrDefaultAsync(a =>
+                        a.Id == contract.OfferedRewardAssetId.Value && a.OwnerId == contract.RequesterUserId);
 
                 if (rewardAsset?.IsBurned == false)
                 {
@@ -679,7 +693,9 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 PreviousWeight = previousWeight,
                 NewWeight = newWeight,
                 IsOwnerAction = contract.RequestedTag.OwnerId == fulfillerUserId, // if fulfiller is owner
-                Reason = contract.OfferedRewardAssetId.HasValue ? "Reward Bounty Fulfilled" : "Goodwill Bounty Fulfilled",
+                Reason = contract.OfferedRewardAssetId.HasValue
+                    ? "Reward Bounty Fulfilled"
+                    : "Goodwill Bounty Fulfilled",
                 OwnerId = fulfillerUserId
             };
             _ = dbContext.TagWeightLedgers.Add(ledger);
@@ -708,7 +724,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 if (contract.OfferedRewardAssetId.HasValue)
                 {
                     RightAsset? rewardAsset = await dbContext.RightAssets
-                        .FirstOrDefaultAsync(a => a.Id == contract.OfferedRewardAssetId.Value && a.OwnerId == contract.RequesterUserId);
+                        .FirstOrDefaultAsync(a =>
+                            a.Id == contract.OfferedRewardAssetId.Value && a.OwnerId == contract.RequesterUserId);
 
                     if (rewardAsset?.IsBurned == false)
                     {
@@ -739,7 +756,9 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     PreviousWeight = previousWeight,
                     NewWeight = newWeight,
                     IsOwnerAction = contract.RequestedTag.OwnerId == fulfillerUserId,
-                    Reason = contract.OfferedRewardAssetId.HasValue ? "Reward Bounty Fulfilled (Remove)" : "Goodwill Bounty Fulfilled (Remove)",
+                    Reason = contract.OfferedRewardAssetId.HasValue
+                        ? "Reward Bounty Fulfilled (Remove)"
+                        : "Goodwill Bounty Fulfilled (Remove)",
                     OwnerId = fulfillerUserId
                 };
                 _ = dbContext.TagWeightLedgers.Add(ledger);

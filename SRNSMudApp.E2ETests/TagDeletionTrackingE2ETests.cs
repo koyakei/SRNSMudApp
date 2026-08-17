@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
 
@@ -8,9 +9,6 @@ namespace SRNSMudApp.E2ETests;
 [TestFixture]
 public class TagDeletionTrackingE2ETests : PageTest
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private string _baseUrl = null!;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -21,6 +19,9 @@ public class TagDeletionTrackingE2ETests : PageTest
 
     [OneTimeTearDown]
     public void OneTimeTearDown() => _factory?.Dispose();
+
+    private CustomWebApplicationFactory _factory = null!;
+    private string _baseUrl = null!;
 
     private string? _serverAddress;
 
@@ -44,9 +45,9 @@ public class TagDeletionTrackingE2ETests : PageTest
         await Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...").FillAsync(testContent);
         await Task.Delay(1500); // Wait for re-render if prerendering
         await Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...").FillAsync(testContent);
-        
+
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-        
+
         await Task.Delay(1000); // Wait for the item to be added to the list
 
         // 3. Add a tag to the item
@@ -57,20 +58,21 @@ public class TagDeletionTrackingE2ETests : PageTest
         await Page.Locator($".mud-card:has-text('{testContent}')").Locator("button[title='タグを追加']").ClickAsync();
 
         // Type tag name and submit
-        var dialog = Page.Locator(".mud-dialog");
+        ILocator dialog = Page.Locator(".mud-dialog");
         await dialog.Locator("text=新規作成").ClickAsync();
         await dialog.GetByLabel("タグ名").FillAsync("TrackingTestTag");
         await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "作成して追加" }).ClickAsync();
 
         // Wait for the tag to appear
-        var tagChip = Page.Locator($".mud-card:has-text('{testContent}')").Locator(".mud-chip:has-text('TrackingTestTag')");
+        ILocator tagChip = Page.Locator($".mud-card:has-text('{testContent}')")
+            .Locator(".mud-chip:has-text('TrackingTestTag')");
         await Expect(tagChip).ToBeVisibleAsync();
 
         // 4. Delete the tag
         // Click the close icon on the chip
-        var closeButton = tagChip.Locator(".mud-chip-close-button").First;
+        ILocator closeButton = tagChip.Locator(".mud-chip-close-button").First;
         await closeButton.ClickAsync();
-        
+
         await Task.Delay(1000); // Wait for the deletion to process over SignalR
 
         // 5. Verify the tag is deleted and no error UI appears

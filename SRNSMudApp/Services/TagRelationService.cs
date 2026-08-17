@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 using SRNSMudApp.Data;
 
@@ -32,7 +33,7 @@ public class TagRelationService(ApplicationDbContext context)
             return TaggingResult.ErrorNotFound;
         }
 
-        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
+        await using IDbContextTransaction transaction =
             await context.Database.BeginTransactionAsync();
 
         try
@@ -41,10 +42,7 @@ public class TagRelationService(ApplicationDbContext context)
             // このメソッドはテストやレガシーAPI向けのため、現在のユーザー宛てにAssetを発行して使用する
             var rightAsset = new RightAsset
             {
-                OwnerId = currentUserId,
-                TargetTagId = tagId,
-                IsBurned = true,
-                BurnedAt = DateTime.UtcNow
+                OwnerId = currentUserId, TargetTagId = tagId, IsBurned = true, BurnedAt = DateTime.UtcNow
             };
             _ = context.RightAssets.Add(rightAsset);
             _ = await context.SaveChangesAsync();
@@ -52,10 +50,7 @@ public class TagRelationService(ApplicationDbContext context)
             // 3. TagRelation を作成
             var relation = new TagRelation
             {
-                ItemId = itemId,
-                TagId = tagId,
-                OwnerId = currentUserId,
-                Weight = requiredWeight
+                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = requiredWeight
             };
             _ = context.TagRelations.Add(relation);
             _ = await context.SaveChangesAsync();
@@ -99,11 +94,14 @@ public class TagRelationService(ApplicationDbContext context)
     public async Task<TaggingResult> AllocateWeightAsync(int rightAssetId, int itemId, int tagId, string currentUserId,
         int manipulationDelta)
     {
-        if (manipulationDelta == 0) throw new ArgumentException("Manipulation delta cannot be 0");
+        if (manipulationDelta == 0)
+        {
+            throw new ArgumentException("Manipulation delta cannot be 0");
+        }
 
         var consumeAmount = Math.Abs(manipulationDelta);
 
-        var rightAsset = await context.RightAssets.FindAsync(rightAssetId);
+        RightAsset? rightAsset = await context.RightAssets.FindAsync(rightAssetId);
         if (rightAsset == null || rightAsset.OwnerId != currentUserId || rightAsset.IsBurned)
         {
             return TaggingResult.ErrorNotFound;
@@ -122,7 +120,7 @@ public class TagRelationService(ApplicationDbContext context)
             return TaggingResult.ErrorNotFound;
         }
 
-        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
+        await using IDbContextTransaction transaction =
             await context.Database.BeginTransactionAsync();
 
         try
@@ -136,7 +134,8 @@ public class TagRelationService(ApplicationDbContext context)
 
             context.RightAssets.Update(rightAsset);
 
-            var relation = await context.TagRelations.FirstOrDefaultAsync(r => r.ItemId == itemId && r.TagId == tagId);
+            TagRelation? relation =
+                await context.TagRelations.FirstOrDefaultAsync(r => r.ItemId == itemId && r.TagId == tagId);
             if (relation == null)
             {
                 relation = new TagRelation { ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = 0 };

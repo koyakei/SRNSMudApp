@@ -3,10 +3,10 @@ using SRNSMudApp.Components.Item;
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
-/// ItemListQueryState の単体テスト。
-/// URL クエリパラメータのパースと再構築ロジックを高速に検証する。
-/// 以前は ItemListTagSearchE2ETests / ItemListFocusE2ETests で Playwright を
-/// 使って間接的にしか検証できなかった内容。
+///     ItemListQueryState の単体テスト。
+///     URL クエリパラメータのパースと再構築ロジックを高速に検証する。
+///     以前は ItemListTagSearchE2ETests / ItemListFocusE2ETests で Playwright を
+///     使って間接的にしか検証できなかった内容。
 /// </summary>
 public class ItemListQueryStateTests
 {
@@ -112,13 +112,9 @@ public class ItemListQueryStateTests
     [Fact]
     public void BuildParameters_WithTags_SetTagsKey()
     {
-        var state = new ItemListQueryState
-        {
-            TagIds = [3, 7],
-            SortEntries = []
-        };
+        var state = new ItemListQueryState { TagIds = [3, 7], SortEntries = [] };
 
-        var parameters = state.BuildParameters();
+        Dictionary<string, object?> parameters = state.BuildParameters();
 
         Assert.True(parameters.ContainsKey("tags"));
         var tagArray = (int[])parameters["tags"]!;
@@ -130,7 +126,7 @@ public class ItemListQueryStateTests
     {
         var state = new ItemListQueryState { TagIds = [], SortEntries = [] };
 
-        var parameters = state.BuildParameters();
+        Dictionary<string, object?> parameters = state.BuildParameters();
 
         Assert.Null(parameters["tags"]);
     }
@@ -140,11 +136,10 @@ public class ItemListQueryStateTests
     {
         var state = new ItemListQueryState
         {
-            TagIds = [],
-            SortEntries = [new ItemListQueryState.SortEntry(5, ItemListQueryState.SortOrder.Desc)]
+            TagIds = [], SortEntries = [new ItemListQueryState.SortEntry(5, ItemListQueryState.SortOrder.Desc)]
         };
 
-        var parameters = state.BuildParameters();
+        Dictionary<string, object?> parameters = state.BuildParameters();
 
         Assert.Equal("5:desc", parameters["sort"]);
     }
@@ -154,7 +149,7 @@ public class ItemListQueryStateTests
     {
         var state = new ItemListQueryState { TagIds = [], SortEntries = [] };
 
-        var parameters = state.BuildParameters();
+        Dictionary<string, object?> parameters = state.BuildParameters();
 
         Assert.Null(parameters["sort"]);
     }
@@ -165,7 +160,7 @@ public class ItemListQueryStateTests
         // ParseFromUri → BuildParameters でパラメータが保持されることを確認
         var original = ItemListQueryState.ParseFromUri(
             "http://localhost/Item/ItemList?tags=3&tags=7&sort=3:desc,7:asc");
-        var parameters = original.BuildParameters();
+        Dictionary<string, object?> parameters = original.BuildParameters();
 
         var tagArray = (int[])parameters["tags"]!;
         Assert.Equal([3, 7], tagArray);

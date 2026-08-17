@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+
 using Moq;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 
@@ -12,13 +15,13 @@ public class ItemTagServiceTests : IDisposable
 
     public ItemTagServiceTests()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
-            
+
         _dbContext = new ApplicationDbContext(options);
-        
+
         var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
         mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new ApplicationDbContext(options));
@@ -40,7 +43,7 @@ public class ItemTagServiceTests : IDisposable
         var userId = "TestUser";
         var user = new ApplicationUser { Id = userId, UserName = "TestUser" };
         _dbContext.Users.Add(user);
-        
+
         var request = new GratisTaggingContract
         {
             OwnerId = userId,
@@ -55,7 +58,7 @@ public class ItemTagServiceTests : IDisposable
         var message = "This is a test reply";
 
         // Act
-        var replyItem = await _service.AddReplyToRequestAsync(request.Id, userId, message);
+        Item? replyItem = await _service.AddReplyToRequestAsync(request.Id, userId, message);
 
         // Assert
         Assert.NotNull(replyItem);
@@ -64,13 +67,14 @@ public class ItemTagServiceTests : IDisposable
         Assert.Equal(message, replyItem.Content);
         Assert.NotNull(replyItem.Owner);
         Assert.Equal(userId, replyItem.Owner.Id);
-        
+
         // Ensure it's saved in the DB
-        var savedItem = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == replyItem.Id);
+        Item? savedItem = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == replyItem.Id);
         Assert.NotNull(savedItem);
         Assert.Equal(request.Id, savedItem.TaggingRequestEntityId);
         Assert.Equal(message, savedItem.Content);
     }
+
     [Fact]
     public async Task AddTagToItemAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
@@ -85,10 +89,11 @@ public class ItemTagServiceTests : IDisposable
         var result = await _service.AddTagToItemAsync(item.Id, tag.Id, userId);
 
         Assert.Null(result);
-        var updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
+        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
         Assert.Equal(6, updatedTag!.CachedWeight);
 
-        var ledger = await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationInsert");
+        TagWeightLedger? ledger =
+            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationInsert");
         Assert.NotNull(ledger);
         Assert.Equal(tag.Id, ledger.TagId);
         Assert.Equal(5, ledger.PreviousWeight);
@@ -112,10 +117,11 @@ public class ItemTagServiceTests : IDisposable
         var result = await _service.RemoveTagRelationAsync(relation.Id, userId);
 
         Assert.Null(result);
-        var updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
+        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
         Assert.Equal(3, updatedTag!.CachedWeight);
 
-        var ledger = await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationDelete");
+        TagWeightLedger? ledger =
+            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationDelete");
         Assert.NotNull(ledger);
         Assert.Equal(tag.Id, ledger.TagId);
         Assert.Equal(5, ledger.PreviousWeight);
@@ -136,10 +142,11 @@ public class ItemTagServiceTests : IDisposable
         var result = await _service.AddTagToTagAsync(targetTag.Id, childTag.Id, userId);
 
         Assert.Null(result);
-        var updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
+        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
         Assert.Equal(11, updatedTag!.CachedWeight);
 
-        var ledger = await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagInsert");
+        TagWeightLedger? ledger =
+            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagInsert");
         Assert.NotNull(ledger);
         Assert.Equal(childTag.Id, ledger.TagId);
         Assert.Equal(10, ledger.PreviousWeight);
@@ -155,17 +162,21 @@ public class ItemTagServiceTests : IDisposable
         var targetTag = new Tag { Name = "TargetTag", OwnerId = userId };
         var childTag = new Tag { Name = "ChildTag", OwnerId = userId, CachedWeight = 10 };
         _dbContext.Tags.AddRange(targetTag, childTag);
-        var relation = new TagRelationToTag { TargetTagId = targetTag.Id, TagId = childTag.Id, OwnerId = userId, Weight = 3 };
+        var relation = new TagRelationToTag
+        {
+            TargetTagId = targetTag.Id, TagId = childTag.Id, OwnerId = userId, Weight = 3
+        };
         _dbContext.TagRelationToTags.Add(relation);
         await _dbContext.SaveChangesAsync();
 
         var result = await _service.RemoveTagToTagRelationAsync(relation.Id, userId);
 
         Assert.Null(result);
-        var updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
+        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
         Assert.Equal(7, updatedTag!.CachedWeight);
 
-        var ledger = await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagDelete");
+        TagWeightLedger? ledger =
+            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagDelete");
         Assert.NotNull(ledger);
         Assert.Equal(childTag.Id, ledger.TagId);
         Assert.Equal(10, ledger.PreviousWeight);

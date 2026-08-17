@@ -68,7 +68,7 @@
                                     TagId = ev.FollowedTagId,
                                     Tag = ev.FollowedTag,
                                     Weight = ev.PreviousWeight ?? 0,
-                                    OwnerId = ev.OwnerId, // fake owner
+                                    OwnerId = ev.OwnerId // fake owner
                                 });
                             }
                         }
@@ -94,8 +94,8 @@
                         var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > (highlightEvent.PreviousWeight ?? 0);
 
                         var isMyTag = tr.OwnerId == CurrentUserId;
-                        var bgColor = isDeleted ? "#E0E0E0" : (highlightEvent != null ? "#FFEB3B" : (isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4"));
-                        var textColor = isDeleted ? "#9E9E9E" : (highlightEvent != null ? "#F57F17" : (isMyTag ? i < _chipTextColors.Length ? _chipTextColors[i] : _chipTextColors[0] : "#5C4B00"));
+                        var bgColor = isDeleted ? "#E0E0E0" : highlightEvent != null ? "#FFEB3B" : isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4";
+                        var textColor = isDeleted ? "#9E9E9E" : highlightEvent != null ? "#F57F17" : isMyTag ? i < _chipTextColors.Length ? _chipTextColors[i] : _chipTextColors[0] : "#5C4B00";
 
                         var chipId = $"tag-tagchip-{Tag.Id}-{tagId}";
                         var isActive = _activePopoverTagId == tagId && _activePopoverChipKey == chipId;
@@ -203,7 +203,7 @@
 </MudCard>
 
 @code {
-    [Parameter, EditorRequired] public Tag Tag { get; set; } = null!;
+    [Parameter][EditorRequired] public Tag Tag { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }

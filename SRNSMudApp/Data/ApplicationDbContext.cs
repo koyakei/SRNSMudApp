@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage;
 
 #endregion
 
@@ -316,12 +317,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .Select(t => t.Id)
             .ToList();
 
-        foreach (EntityEntry<TagRelation> entry in itemRelations.Where(entry => restrictedTagIds.Contains(entry.Entity.TagId)))
+        foreach (EntityEntry<TagRelation> entry in itemRelations.Where(entry =>
+                     restrictedTagIds.Contains(entry.Entity.TagId)))
         {
             entry.Entity.Weight = 1;
         }
 
-        foreach (EntityEntry<TagRelationToTag> entry in tagRelations.Where(entry => restrictedTagIds.Contains(entry.Entity.TagId)))
+        foreach (EntityEntry<TagRelationToTag> entry in tagRelations.Where(entry =>
+                     restrictedTagIds.Contains(entry.Entity.TagId)))
         {
             entry.Entity.Weight = 1;
         }
@@ -352,12 +355,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .Select(t => t.Id)
             .ToListAsync(cancellationToken);
 
-        foreach (EntityEntry<TagRelation> entry in itemRelations.Where(entry => restrictedTagIds.Contains(entry.Entity.TagId)))
+        foreach (EntityEntry<TagRelation> entry in itemRelations.Where(entry =>
+                     restrictedTagIds.Contains(entry.Entity.TagId)))
         {
             entry.Entity.Weight = 1;
         }
 
-        foreach (EntityEntry<TagRelationToTag> entry in tagRelations.Where(entry => restrictedTagIds.Contains(entry.Entity.TagId)))
+        foreach (EntityEntry<TagRelationToTag> entry in tagRelations.Where(entry =>
+                     restrictedTagIds.Contains(entry.Entity.TagId)))
         {
             entry.Entity.Weight = 1;
         }
@@ -377,6 +382,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             {
                 continue;
             }
+
             // 更新日時は常時現在時刻をセット
             baseEntity.UpdatedDate = DateTime.UtcNow;
 
@@ -389,17 +395,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     }
 
     /// <summary>
-    /// RightAsset を消費して TagRelation を作成し、Ledger に記帳の上、CachedWeight を更新するアトミックトランザクション
+    ///     RightAsset を消費して TagRelation を作成し、Ledger に記帳の上、CachedWeight を更新するアトミックトランザクション
     /// </summary>
     public async Task CreateTagRelationWithAtomicSwapAsync(
         int itemId, int tagId, int rightAssetId, int weightDelta, string currentUserId)
     {
-        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await Database.BeginTransactionAsync();
+        await using IDbContextTransaction transaction = await Database.BeginTransactionAsync();
 
         try
         {
             // 1. RightAsset の取得と Burn 検証
-            RightAsset asset = await RightAssets.FindAsync(rightAssetId) ?? throw new InvalidOperationException("指定されたアセットが見つかりません。");
+            RightAsset asset = await RightAssets.FindAsync(rightAssetId) ??
+                               throw new InvalidOperationException("指定されたアセットが見つかりません。");
             if (asset.IsBurned)
             {
                 throw new InvalidOperationException("このアセットはすでに消費（Burn）されています。");
@@ -417,10 +424,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 2. TagRelation の作成
             var relation = new TagRelation
             {
-                ItemId = itemId,
-                TagId = tagId,
-                OwnerId = currentUserId,
-                Weight = weightDelta
+                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = weightDelta
             };
             _ = TagRelations.Add(relation);
 
@@ -470,12 +474,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     }
 
     /// <summary>
-    /// タグのオーナーが RightAsset を自動発行して消費し、自身のタグを付与するシナリオ
+    ///     タグのオーナーが RightAsset を自動発行して消費し、自身のタグを付与するシナリオ
     /// </summary>
     public async Task CreateFreeTagRelationAsync(
         int itemId, int tagId, string currentUserId)
     {
-        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await Database.BeginTransactionAsync();
+        await using IDbContextTransaction transaction = await Database.BeginTransactionAsync();
 
         try
         {
@@ -489,10 +493,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 2. RightAsset の発行と即時消費 (Burn)
             var rightAsset = new RightAsset
             {
-                OwnerId = currentUserId,
-                TargetTagId = tagId,
-                IsBurned = true,
-                BurnedAt = DateTime.UtcNow
+                OwnerId = currentUserId, TargetTagId = tagId, IsBurned = true, BurnedAt = DateTime.UtcNow
             };
             _ = RightAssets.Add(rightAsset);
             _ = await SaveChangesAsync(); // IDを発行するためにSave
@@ -500,10 +501,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 3. TagRelation の作成
             var relation = new TagRelation
             {
-                ItemId = itemId,
-                TagId = tagId,
-                OwnerId = currentUserId,
-                Weight = 1 // 基本値
+                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = 1 // 基本値
             };
             _ = TagRelations.Add(relation);
 

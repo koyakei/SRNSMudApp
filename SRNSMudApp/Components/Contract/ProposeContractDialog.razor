@@ -1,7 +1,5 @@
-
 @using System.Security.Claims
 @using SRNSMudApp.Services
-
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TaggingContractService ContractService
 @inject ISnackbar Snackbar
@@ -71,7 +69,7 @@
     [Parameter] public Item TargetItem { get; set; } = null!;
     [Parameter] public Tag RequestedTag { get; set; } = null!;
     [Parameter] public int WeightDelta { get; set; }
-    [Parameter] public bool IsRemovalRequest { get; set; } = false;
+    [Parameter] public bool IsRemovalRequest { get; set; }
 
     private MudForm? _form;
     private bool _isValid;
@@ -136,31 +134,31 @@
         await _form!.ValidateAsync();
         if (!_isValid) return;
 
-        bool isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
-        var requestType = IsRemovalRequest ? TaggingRequestType.Remove : (WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.DecreaseWeight);
+        var isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
+        var requestType = IsRemovalRequest ? TaggingRequestType.Remove : WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.DecreaseWeight;
 
         if (isMutual)
         {
             await ContractService.ProposeMutualContractAsync(
-                requesterUserId: _currentUserId,
-                tagOwnerUserId: RequestedTag.OwnerId,
-                targetItemId: TargetItem.Id,
-                requestedTagId: RequestedTag.Id,
-                offeredTargetItemId: _offeredItem!.Id,
-                offeredTagId: _offeredTag!.Id,
-                consumedRightAssetId: _selectedRightAsset!.Id,
-                requestType: requestType
+                _currentUserId,
+                RequestedTag.OwnerId,
+                TargetItem.Id,
+                RequestedTag.Id,
+                _offeredItem!.Id,
+                _offeredTag!.Id,
+                _selectedRightAsset!.Id,
+                requestType
             );
         }
         else
         {
             await ContractService.ProposeGratisContractAsync(
-                requesterUserId: _currentUserId,
-                tagOwnerUserId: RequestedTag.OwnerId,
-                targetItemId: TargetItem.Id,
-                requestedTagId: RequestedTag.Id,
-                requestType: requestType,
-                message: _gratisMessage
+                _currentUserId,
+                RequestedTag.OwnerId,
+                TargetItem.Id,
+                RequestedTag.Id,
+                requestType,
+                _gratisMessage
             );
         }
 
@@ -168,5 +166,9 @@
         MudDialog.Close(DialogResult.Ok(true));
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
 }

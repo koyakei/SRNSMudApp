@@ -1,4 +1,3 @@
-@using SRNSMudApp.Data
 @namespace SRNSMudApp.Components.Shared
 
 <MudTable Items="@Ledgers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true" Dense="true"
@@ -19,14 +18,14 @@
         <MudTd DataLabel="操作種別">@context.SourceType</MudTd>
         <MudTd DataLabel="変更前">@context.PreviousWeight</MudTd>
         <MudTd DataLabel="変動量">
-            <MudText Color="@(context.Delta > 0 ? Color.Success : (context.Delta < 0 ? Color.Error : Color.Default))">
+            <MudText Color="@(context.Delta > 0 ? Color.Success : context.Delta < 0 ? Color.Error : Color.Default)">
                 @(context.Delta > 0 ? "+" : "")@context.Delta
             </MudText>
         </MudTd>
         <MudTd DataLabel="変更後">@context.NewWeight</MudTd>
     </RowTemplate>
     <PagerContent>
-        <MudTablePager PageSizeOptions="new int[]{10, 20, 50}"/>
+        <MudTablePager PageSizeOptions="new[]{10, 20, 50}"/>
     </PagerContent>
 </MudTable>
 

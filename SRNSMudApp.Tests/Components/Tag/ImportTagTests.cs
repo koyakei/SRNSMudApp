@@ -5,7 +5,6 @@ using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
 
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,9 +26,10 @@ public class ImportTagTests : TestContext
 {
     public ImportTagTests()
     {
-        _ = Services.AddMudServices();        var authContext = this.AddTestAuthorization();
+        _ = Services.AddMudServices();
+        TestAuthorizationContext authContext = this.AddTestAuthorization();
         authContext.SetAuthorized("test-user-id");
-        authContext.SetClaims(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id"));
+        authContext.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-user-id"));
 
         var dbName = Guid.NewGuid().ToString();
         _ = Services.AddDbContext<ApplicationDbContext>(options =>

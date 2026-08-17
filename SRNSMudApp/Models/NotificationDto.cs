@@ -1,5 +1,3 @@
-using System;
-
 namespace SRNSMudApp.Models;
 
 public class NotificationDto
