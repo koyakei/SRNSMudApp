@@ -12,6 +12,7 @@ public class TaggingRequestRejectE2ETests
     public void OneTimeSetUp()
     {
         _factory = new CustomWebApplicationFactory();
+        _factory.EnsureServer();
     }
 
     [OneTimeTearDown]
@@ -29,17 +30,13 @@ public class TaggingRequestRejectE2ETests
         
         // 1. まず他のユーザー(user2)としてログインし、リクエストを作成する
         var user2Page = await context.NewPageAsync();
-        await user2Page.GotoAsync($"{_factory.ServerAddress}/Account/Login");
-        await user2Page.FillAsync("input[name='Input.Email']", "user2@example.com");
-        await user2Page.FillAsync("input[name='Input.Password']", "User2!Password");
-        await user2Page.ClickAsync("button[type='submit']");
+        await user2Page.GotoAsync($"{_factory.ServerAddress}/auth/callback?provider=Google&code=mock-user2");
+        await user2Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_factory.ServerAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
         
         // 2. アイテムのオーナー(user1)としてログインする
         var ownerPage = await context.NewPageAsync();
-        await ownerPage.GotoAsync($"{_factory.ServerAddress}/Account/Login");
-        await ownerPage.FillAsync("input[name='Input.Email']", "user1@example.com");
-        await ownerPage.FillAsync("input[name='Input.Password']", "User1!Password");
-        await ownerPage.ClickAsync("button[type='submit']");
+        await ownerPage.GotoAsync($"{_factory.ServerAddress}/auth/callback?provider=Google&code=mock-user1");
+        await ownerPage.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_factory.ServerAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
         
         // アイテム1の詳細画面へ遷移 (DBシードデータが存在する前提)
         await ownerPage.GotoAsync($"{_factory.ServerAddress}/ItemDetail/1");

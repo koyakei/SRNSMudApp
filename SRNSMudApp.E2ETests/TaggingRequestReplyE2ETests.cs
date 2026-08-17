@@ -102,8 +102,8 @@ public partial class TaggingRequestReplyE2ETests : PageTest
         // タグ名が含まれているか
         await Expect(itemCard.Locator($".mud-chip:has-text('{tagName}')")).ToBeVisibleAsync();
         
-        // リプライボタン（チップ自体がクリック可能なのでチップをクリック）
-        await itemCard.Locator($".mud-chip:has-text('{tagName}')").ClickAsync();
+        // リプライボタンをクリック
+        await itemCard.Locator($".mud-chip:has-text('{tagName}')").Locator("button").ClickAsync();
 
         // 5. ダイアログが開き、リクエスト本文が見えるか確認
         var dialog = Page.Locator(".mud-dialog");

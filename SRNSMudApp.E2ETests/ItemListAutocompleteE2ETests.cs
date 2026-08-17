@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using NUnit.Framework;
+using Microsoft.Extensions.DependencyInjection;
+using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
 
@@ -12,6 +14,7 @@ public class ItemListAutocompleteE2ETests
     public void OneTimeSetUp()
     {
         _factory = new CustomWebApplicationFactory();
+        _factory.EnsureServer();
     }
 
     [OneTimeTearDown]
@@ -28,11 +31,24 @@ public class ItemListAutocompleteE2ETests
         var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
 
+        using (var scope = _factory.AppServices.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var user1 = await userManager.FindByEmailAsync("user1@example.com");
+            if (user1 == null) {
+                user1 = new ApplicationUser { UserName = "user1", Email = "user1@example.com" };
+                await userManager.CreateAsync(user1);
+            }
+            if (!db.Tags.Any(t => t.Name == "Item1_Tag")) {
+                db.Tags.Add(new Tag { Name = "Item1_Tag", OwnerId = user1.Id });
+                await db.SaveChangesAsync();
+            }
+        }
+
         // ログイン (User1でログイン)
-        await page.GotoAsync($"{_factory.ServerAddress}/Account/Login");
-        await page.FillAsync("input[name='Input.Email']", "user1@example.com");
-        await page.FillAsync("input[name='Input.Password']", "User1!Password");
-        await page.ClickAsync("button[type='submit']");
+        await page.GotoAsync($"{_factory.ServerAddress}/auth/callback?provider=Google&code=mock-user1");
+        await page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_factory.ServerAddress) + @"/?$"), new PageWaitForURLOptions { Timeout = 10000 });
         
         // ItemListへ遷移
         await page.GotoAsync($"{_factory.ServerAddress}/Item/ItemList");
@@ -41,20 +57,19 @@ public class ItemListAutocompleteE2ETests
         var searchInput = page.Locator("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
         await searchInput.WaitForAsync();
 
-        // "go" と入力
-        await searchInput.FillAsync("go");
+        // "Item1" と入力
+        await searchInput.FillAsync("Item1");
         
-        // サジェストされた "good" を選択
-        var popover = page.Locator(".mud-popover");
-        await popover.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible });
-        var goodOption = popover.Locator("div.mud-list-item").Filter(new LocatorFilterOptions { HasTextString = "good" }).First;
+        // サジェストされた "Item1_Tag" を選択
+        var goodOption = page.GetByRole(AriaRole.Option).Filter(new LocatorFilterOptions { HasTextString = "Item1_Tag" }).First;
+        await goodOption.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 10000 });
         await goodOption.ClickAsync();
 
-        // 検索ボックスの値が "good @" になっていることを確認
-        await Assertions.Expect(searchInput).ToHaveValueAsync("good @");
+        // 検索ボックスの値が "Item1_Tag @" になっていることを確認
+        await Assertions.Expect(searchInput).ToHaveValueAsync("Item1_Tag @");
 
         // 続けて "user2" と入力
-        await searchInput.FillAsync("good @user2");
+        await searchInput.FillAsync("Item1_Tag @user2");
         await searchInput.PressAsync("Enter");
 
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);

@@ -1,6 +1,7 @@
 namespace SRNSMudApp.Services;
 
 using Microsoft.EntityFrameworkCore;
+
 using SRNSMudApp.Data;
 
 public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITaggingService
@@ -8,7 +9,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     public async Task AddTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
     {
         await using var context = await dbFactory.CreateDbContextAsync();
-        
+
         var entity = await context.Set<T>()
             .Include(e => e.Tags)
             .FirstOrDefaultAsync(e => e.Id == entityId);
@@ -28,7 +29,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     public async Task RemoveTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
     {
         await using var context = await dbFactory.CreateDbContextAsync();
-        
+
         var entity = await context.Set<T>()
             .Include(e => e.Tags)
             .FirstOrDefaultAsync(e => e.Id == entityId);
@@ -47,12 +48,12 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         await using var context = await dbFactory.CreateDbContextAsync();
         var request = await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId);
-        
+
         if (request == null)
         {
             throw new InvalidOperationException("リクエストが見つかりません。");
         }
-        
+
         if (request.Status != TradeStatus.Proposed)
         {
             throw new InvalidOperationException("このリクエストは既に処理されています。");

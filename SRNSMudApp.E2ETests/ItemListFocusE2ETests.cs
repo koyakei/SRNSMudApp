@@ -206,13 +206,15 @@ public class ItemListFocusE2ETests : PageTest
             await Expect(Page).ToHaveURLAsync(new Regex($"focusItem={firstItem.Id}"));
 
             // 2. 検索してタグを追加
-            ILocator searchInput = Page.Locator("input[placeholder='タグで絞り込み...']").First;
+            ILocator searchInput = Page.Locator("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").First;
             await searchInput.FillAsync("E2E_Test_Tag");
 
-            ILocator suggestion = Page.Locator(".suggestion-item",
+            ILocator suggestion = Page.Locator("div.mud-list-item",
                 new PageLocatorOptions { HasTextString = "E2E_Test_Tag" }).First;
             await Expect(suggestion).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
             await suggestion.EvaluateAsync("el => el.click()");
+            await Task.Delay(1000);
+            await Page.Locator(".mud-input-adornment button").First.ClickAsync();
 
             await Task.Delay(1500); // フィルタ更新待ち
 

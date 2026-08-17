@@ -237,7 +237,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 Delta = 1,
                 PreviousWeight = previousWeight,
                 NewWeight = newWeight,
-                IsOwnerAction = true, 
+                IsOwnerAction = true,
                 Reason = "Gratis Tagging Contract Accepted",
                 OwnerId = executorUserId
             };
@@ -253,25 +253,25 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 NewWeight = 1
             });
         }
-        else if (contract.RequestType == TaggingRequestType.Remove || contract.RequestType == TaggingRequestType.DecreaseWeight)
+        else if (contract.RequestType is TaggingRequestType.Remove or TaggingRequestType.DecreaseWeight)
         {
-            var relation = await dbContext.TagRelations!
+            TagRelation? relation = await dbContext.TagRelations!
                 .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
 
             if (relation != null)
             {
                 var prevWeight = relation.Weight;
                 var delta = contract.RequestType == TaggingRequestType.Remove ? -prevWeight : -1;
-                
+
                 if (contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0)
                 {
-                    dbContext.TagRelations.Remove(relation);
+                    _ = dbContext.TagRelations.Remove(relation);
                 }
                 else
                 {
                     relation.Weight += delta;
                 }
-                
+
                 var previousWeight = tag.CachedWeight;
                 tag.CachedWeight += delta;
                 var newWeight = tag.CachedWeight;
@@ -286,7 +286,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     Delta = delta,
                     PreviousWeight = previousWeight,
                     NewWeight = newWeight,
-                    IsOwnerAction = true, 
+                    IsOwnerAction = true,
                     Reason = $"Gratis Tagging Contract Accepted ({(contract.RequestType == TaggingRequestType.Remove ? "Remove" : "Decrease Weight")})",
                     OwnerId = executorUserId
                 };
@@ -363,7 +363,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 Delta = 1,
                 PreviousWeight = prevReqWeight,
                 NewWeight = newReqWeight,
-                IsOwnerAction = true, 
+                IsOwnerAction = true,
                 Reason = "Mutual Tagging Contract Accepted (Requested)",
                 OwnerId = executorUserId
             };
@@ -381,13 +381,13 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         }
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
-            var relation1 = await dbContext.TagRelations!
+            TagRelation? relation1 = await dbContext.TagRelations!
                 .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
-            
+
             if (relation1 != null)
             {
                 var prevWeight = relation1.Weight;
-                dbContext.TagRelations.Remove(relation1);
+                _ = dbContext.TagRelations.Remove(relation1);
 
                 var prevReqWeight = requestedTag.CachedWeight;
                 requestedTag.CachedWeight -= prevWeight;
@@ -403,7 +403,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     Delta = -prevWeight,
                     PreviousWeight = prevReqWeight,
                     NewWeight = newReqWeight,
-                    IsOwnerAction = true, 
+                    IsOwnerAction = true,
                     Reason = "Mutual Tagging Contract Accepted (Requested Remove)",
                     OwnerId = executorUserId
                 };
@@ -445,7 +445,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Delta = 1,
             PreviousWeight = prevOffWeight,
             NewWeight = newOffWeight,
-            IsOwnerAction = false, 
+            IsOwnerAction = false,
             Reason = "Mutual Tagging Contract Accepted (Offered)",
             OwnerId = contract.RequesterUserId
         };
@@ -533,7 +533,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 Delta = 1,
                 PreviousWeight = prevWeight,
                 NewWeight = newWeight,
-                IsOwnerAction = false, 
+                IsOwnerAction = false,
                 Reason = "Public Offer Triggered",
                 OwnerId = contract.RequesterUserId
             };
@@ -551,14 +551,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         }
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
-            var relation = await dbContext.TagRelations!
+            TagRelation? relation = await dbContext.TagRelations!
                 .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == offer.OfferedTagId);
-            
+
             if (relation != null)
             {
                 var prevWeight = relation.Weight;
-                dbContext.TagRelations.Remove(relation);
-                
+                _ = dbContext.TagRelations.Remove(relation);
+
                 Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ?? throw new InvalidOperationException("Tag not found");
                 var previousWeight = tag.CachedWeight;
                 tag.CachedWeight -= prevWeight;
@@ -574,7 +574,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     Delta = -prevWeight,
                     PreviousWeight = previousWeight,
                     NewWeight = newWeight,
-                    IsOwnerAction = false, 
+                    IsOwnerAction = false,
                     Reason = "Public Offer Triggered (Remove)",
                     OwnerId = contract.RequesterUserId
                 };
@@ -696,14 +696,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         }
         else if (contract.RequestType == TaggingRequestType.Remove)
         {
-            var relation = await dbContext.TagRelations
+            TagRelation? relation = await dbContext.TagRelations
                 .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
-            
+
             if (relation != null)
             {
                 var prevWeight = relation.Weight;
-                dbContext.TagRelations.Remove(relation);
-                
+                _ = dbContext.TagRelations.Remove(relation);
+
                 // Handle Reward transfer
                 if (contract.OfferedRewardAssetId.HasValue)
                 {

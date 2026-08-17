@@ -155,6 +155,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         await Expect(Page.GetByText("あなたはこのタグの操作権限を持っていません。")).ToBeVisibleAsync();
         await Page.GetByLabel("メッセージ（任意）").FillAsync("Please increase weight for Charlie!");
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "提案する" }).ClickAsync();
+        await Task.Delay(2000);
         await Expect(Page.GetByText("コントラクトを提案しました。")).ToBeVisibleAsync();
 
         // Edge Case: Bob cancels the proposal
@@ -174,6 +175,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         await charlieItemCardForBob.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Weightを増やす" }).First.ClickAsync();
         await Page.GetByLabel("メッセージ（任意）").FillAsync("2nd attempt!");
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "提案する" }).ClickAsync();
+        await Task.Delay(2000);
 
         // Edge Case: Alice Rejects
         await RegisterAndLoginAsync(aliceEmail, password);
@@ -191,6 +193,7 @@ public partial class ContractAndOfferScenarioE2ETests : PageTest
         await charlieItemCardForBob.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Weightを増やす" }).First.ClickAsync();
         await Page.GetByLabel("メッセージ（任意）").FillAsync("3rd attempt!");
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "提案する" }).ClickAsync();
+        await Task.Delay(2000);
 
         // Alice Accepts
         await RegisterAndLoginAsync(aliceEmail, password);

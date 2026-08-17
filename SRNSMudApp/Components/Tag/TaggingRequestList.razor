@@ -1,13 +1,12 @@
-@using SRNSMudApp.Data
 @using SRNSMudApp.Services
 @using System.Security.Claims
-@using Microsoft.AspNetCore.Components.Authorization
+@using SRNSMudApp.Components.Shared
 @inject IDialogService DialogService
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
-<MudTable T="TaggingRequestEntity" Items="Requests.Where(r => r.Status != TradeStatus.Rejected).ToList()" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0"
+<MudTable T="TaggingRequestEntity" Items="[.. Requests.Where(r => r.Status != TradeStatus.Rejected)]" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0"
           @bind-SelectedItem="SelectedRequest" OnRowClick="OnRowClicked" RowClassFunc="SelectedRowClassFunc">
     <HeaderContent>
         <MudTh>タイプ</MudTh>
@@ -123,7 +122,7 @@
         if (_currentUserId == null) return;
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.RejectRequestDialog>("リクエストを却下", options);
+        var dialog = await DialogService.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -144,12 +143,12 @@
 
     public async Task OpenThreadDialog(TaggingRequestEntity request)
     {
-        var parameters = new DialogParameters<SRNSMudApp.Components.Shared.TaggingRequestThreadDialog>
+        var parameters = new DialogParameters<TaggingRequestThreadDialog>
         {
             { x => x.TaggingRequest, request }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.TaggingRequestThreadDialog>("リクエストスレッド", parameters, options);
+        var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>("リクエストスレッド", parameters, options);
         var result = await dialog.Result;
         
         if (result != null && !result.Canceled)

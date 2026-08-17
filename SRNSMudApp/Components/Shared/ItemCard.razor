@@ -388,7 +388,7 @@
                     <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   OnClick="@(() => OnAddTagClicked())"
+                                   OnClick="OnAddTagClicked"
                                    title="タグを追加"/>
                 </MudStack>
                 <div class="d-flex justify-end mt-2">
@@ -477,10 +477,10 @@
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private bool _needsOverflowCheck = true;
     
-    private List<TaggingRequestEntity> _taggingRequests = new();
+    private List<TaggingRequestEntity> _taggingRequests = [];
 
     private bool _isRepliesExpanded;
-    private List<Item> _replies = new();
+    private List<Item> _replies = [];
     private string _newReplyContent = "";
     private bool _isSubmittingReply;
 
@@ -504,6 +504,7 @@
             }
             catch (Exception)
             {
+                // ignored
             }
 
             try
@@ -512,6 +513,7 @@
             }
             catch (Exception)
             {
+                // ignored
             }
         }
 
@@ -525,6 +527,7 @@
             }
             catch (Exception)
             {
+                // ignored
             }
         }
     }
@@ -561,6 +564,7 @@
         }
         catch (Exception)
         {
+            // ignored
         }
     }
 
@@ -604,6 +608,7 @@
             }
             catch (Exception)
             {
+                // ignored
             }
         }
     }
@@ -665,7 +670,7 @@
 
     private static string GetShortOwnerName(string? name) => ItemCardViewModel.GetShortOwnerName(name);
 
-    private static List<string> ExtractUrls(string? text) => ItemCardViewModel.ExtractUrls(text);
+    private static IReadOnlyList<string> ExtractUrls(string? text) => ItemCardViewModel.ExtractUrls(text);
 
     // --- Voting Logic ---
     private int GetItemScore() => ItemCardViewModel.GetItemScore(Item.TagRelations);
@@ -943,10 +948,7 @@
         await context.SaveChangesAsync();
 
         // ローカルに即時反映
-        if (Item.TagRelations == null)
-        {
-            Item.TagRelations = new List<TagRelation>();
-        }
+        Item.TagRelations ??= new List<TagRelation>();
         newRelation.Tag = tagFromDb;
         Item.TagRelations.Add(newRelation);
 
@@ -1306,6 +1308,7 @@
             }
             catch (Exception)
             {
+                // ignored
             }
 
             _dotNetRef.Dispose();

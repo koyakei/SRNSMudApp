@@ -87,12 +87,12 @@ public class ItemListTagSearchE2ETests : PageTest
         await Task.Delay(2000); // Blazor Server 初期化待ち
 
         // 検索フィールドに入力
-        ILocator searchInput = Page.Locator("input[placeholder='タグで絞り込み...']").First;
+        ILocator searchInput = Page.Locator("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").First;
         await Expect(searchInput).ToBeVisibleAsync();
         await searchInput.FillAsync(tagName);
 
         // 候補ドロップダウンが表示されるのを待つ
-        ILocator suggestionItem = Page.Locator(".suggestion-item", new PageLocatorOptions { HasTextString = tagName }).First;
+        ILocator suggestionItem = Page.Locator("div.mud-list-item", new PageLocatorOptions { HasTextString = tagName }).First;
         await Expect(suggestionItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
 
         // 候補をクリック
@@ -101,8 +101,11 @@ public class ItemListTagSearchE2ETests : PageTest
         // Blazor Server のレンダリング完了を待つ
         await Task.Delay(3000);
 
-        // Assert: 候補ドロップダウンが閉じていること
-        await Expect(suggestionItem).Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 3000 });
+        // 検索ボタンをクリックしてタグを適用する (2段階オートコンプリート仕様)
+        await Page.Locator(".mud-input-adornment button").First.ClickAsync();
+
+        // フィルタ適用を待つ
+        await Task.Delay(2000);
 
         // Assert: 選択済みタグチップが表示されること
         ILocator tagChip = Page.Locator(".mud-chip", new PageLocatorOptions { HasTextString = tagName }).First;

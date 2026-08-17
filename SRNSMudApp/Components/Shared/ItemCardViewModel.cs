@@ -8,34 +8,35 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Components.Shared;
 
+public class RequestInfo
+{
+    public bool IsTaggingRequest { get; set; }
+    public TaggingRequestType? RequestType { get; set; }
+    public int? TargetItemId { get; set; }
+    public string? TargetItemContent { get; set; }
+    public int? TargetTagId { get; set; }
+    public string? TargetTagName { get; set; }
+}
+
 /// <summary>
 /// ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
 /// UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
 /// </summary>
 public static class ItemCardViewModel
 {
-    public class RequestInfo
-    {
-        public bool IsTaggingRequest { get; set; }
-        public TaggingRequestType? RequestType { get; set; }
-        public int? TargetItemId { get; set; }
-        public string? TargetItemContent { get; set; }
-        public int? TargetTagId { get; set; }
-        public string? TargetTagName { get; set; }
-    }
-
     public static RequestInfo GetRequestInfo(SRNSMudApp.Data.Item item)
     {
-        if (item.AsRequestOf == null) return new RequestInfo { IsTaggingRequest = false };
-        return new RequestInfo
-        {
-            IsTaggingRequest = true,
-            RequestType = item.AsRequestOf.RequestType,
-            TargetItemId = item.AsRequestOf.TargetItemId,
-            TargetItemContent = item.AsRequestOf.TargetItem?.Content,
-            TargetTagId = item.AsRequestOf.RequestedTagId,
-            TargetTagName = item.AsRequestOf.RequestedTag?.Name
-        };
+        return item.AsRequestOf == null
+            ? new RequestInfo { IsTaggingRequest = false }
+            : new RequestInfo
+            {
+                IsTaggingRequest = true,
+                RequestType = item.AsRequestOf.RequestType,
+                TargetItemId = item.AsRequestOf.TargetItemId,
+                TargetItemContent = item.AsRequestOf.TargetItem?.Content,
+                TargetTagId = item.AsRequestOf.RequestedTagId,
+                TargetTagName = item.AsRequestOf.RequestedTag?.Name
+            };
     }
 
     // ReSharper disable once InconsistentNaming
@@ -58,10 +59,9 @@ public static class ItemCardViewModel
     /// </summary>
     public static int GetItemScore(IEnumerable<TagRelation>? tagRelations)
     {
-        if (tagRelations == null) return 0;
-        return tagRelations
+        return tagRelations?
             .Where(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true)
-            .Sum(tr => tr.Weight);
+            .Sum(tr => tr.Weight) ?? 0;
     }
 
     /// <summary>
@@ -69,8 +69,8 @@ public static class ItemCardViewModel
     /// </summary>
     public static bool IsItemUpvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
-        if (!goodTagId.HasValue || string.IsNullOrEmpty(currentUserId)) return false;
-        return tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight > 0) == true;
+        return goodTagId.HasValue && !string.IsNullOrEmpty(currentUserId) &&
+               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight > 0) == true;
     }
 
     /// <summary>
@@ -78,8 +78,8 @@ public static class ItemCardViewModel
     /// </summary>
     public static bool IsItemDownvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
-        if (!goodTagId.HasValue || string.IsNullOrEmpty(currentUserId)) return false;
-        return tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight < 0) == true;
+        return goodTagId.HasValue && !string.IsNullOrEmpty(currentUserId) &&
+               tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight < 0) == true;
     }
 
     /// <summary>
@@ -91,15 +91,21 @@ public static class ItemCardViewModel
     /// <summary>
     /// テキストから URL を抽出して返す。重複は除去される。
     /// </summary>
-    public static List<string> ExtractUrls(string? text)
+    public static IReadOnlyList<string> ExtractUrls(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return [];
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
         List<string> results = [];
-        var matches = UrlRegex.Matches(text);
+        MatchCollection matches = UrlRegex.Matches(text);
         foreach (Match match in matches)
         {
             if (!results.Contains(match.Value))
+            {
                 results.Add(match.Value);
+            }
         }
         return results;
     }
@@ -109,8 +115,7 @@ public static class ItemCardViewModel
     /// </summary>
     public static string GetShortOwnerName(string? name)
     {
-        if (string.IsNullOrEmpty(name)) return "不明";
-        return name.Length > 7 ? name[..7] : name;
+        return string.IsNullOrEmpty(name) ? "不明" : name.Length > 7 ? name[..7] : name;
     }
 
     /// <summary>
@@ -123,9 +128,15 @@ public static class ItemCardViewModel
         var isDeleted = highlightEvent?.EventType == "Delete";
 
         if (isUpdated || isInserted)
+        {
             return $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}";
+        }
+
         if (isDeleted)
-            return $"{highlightEvent?.PreviousWeight}";
+        {
+            return highlightEvent?.PreviousWeight.ToString() ?? "";
+        }
+
         return relation.Weight.ToString();
     }
 
@@ -139,11 +150,19 @@ public static class ItemCardViewModel
         string[] myChipBackgrounds)
     {
         var isDeleted = highlightEvent?.EventType == "Delete";
-        if (isDeleted) return "#E0E0E0";
-        if (highlightEvent != null) return "#FFEB3B";
-        if (relation.OwnerId == currentUserId)
-            return myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE";
-        return "#FFF9C4";
+        if (isDeleted)
+        {
+            return "#E0E0E0";
+        }
+
+        if (highlightEvent != null)
+        {
+            return "#FFEB3B";
+        }
+
+        return relation.OwnerId == currentUserId
+            ? (myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE")
+            : "#FFF9C4";
     }
 
     /// <summary>
@@ -156,10 +175,18 @@ public static class ItemCardViewModel
         string[] myChipTextColors)
     {
         var isDeleted = highlightEvent?.EventType == "Delete";
-        if (isDeleted) return "#9E9E9E";
-        if (highlightEvent != null) return "#F57F17";
-        if (relation.OwnerId == currentUserId)
-            return myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C";
-        return "#5C4B00";
+        if (isDeleted)
+        {
+            return "#9E9E9E";
+        }
+
+        if (highlightEvent != null)
+        {
+            return "#F57F17";
+        }
+
+        return relation.OwnerId == currentUserId
+            ? (myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C")
+            : "#5C4B00";
     }
 }

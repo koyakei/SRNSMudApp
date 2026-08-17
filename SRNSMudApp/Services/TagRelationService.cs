@@ -41,7 +41,10 @@ public class TagRelationService(ApplicationDbContext context)
             // このメソッドはテストやレガシーAPI向けのため、現在のユーザー宛てにAssetを発行して使用する
             var rightAsset = new RightAsset
             {
-                OwnerId = currentUserId, TargetTagId = tagId, IsBurned = true, BurnedAt = DateTime.UtcNow
+                OwnerId = currentUserId,
+                TargetTagId = tagId,
+                IsBurned = true,
+                BurnedAt = DateTime.UtcNow
             };
             _ = context.RightAssets.Add(rightAsset);
             _ = await context.SaveChangesAsync();
@@ -49,7 +52,10 @@ public class TagRelationService(ApplicationDbContext context)
             // 3. TagRelation を作成
             var relation = new TagRelation
             {
-                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = requiredWeight
+                ItemId = itemId,
+                TagId = tagId,
+                OwnerId = currentUserId,
+                Weight = requiredWeight
             };
             _ = context.TagRelations.Add(relation);
             _ = await context.SaveChangesAsync();

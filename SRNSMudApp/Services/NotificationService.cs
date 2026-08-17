@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Microsoft.EntityFrameworkCore;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
@@ -41,7 +43,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "TagRequest");
             var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
             var msg = $"{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが届いています。";
-            
+
             notifications.Add(new NotificationDto
             {
                 SourceId = req.Id,
@@ -66,7 +68,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) ? "" : $"\n理由: {req.RejectComment}";
             var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
             var msg = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが却下されました。{commentMsg}";
-            
+
             notifications.Add(new NotificationDto
             {
                 SourceId = req.Id,
@@ -82,7 +84,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         {
             var isRead = readStates.Any(rs => rs.SourceId == reply.Id && rs.SourceType == "ItemReply");
             var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
-            
+
             notifications.Add(new NotificationDto
             {
                 SourceId = reply.Id,
@@ -100,7 +102,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
     public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
     {
         await using var context = await dbFactory.CreateDbContextAsync();
-        
+
         var existing = await context.NotificationReadStates!
             .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
 

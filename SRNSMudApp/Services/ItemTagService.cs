@@ -88,7 +88,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             EventType = "Delete",
             PreviousWeight = relation.Weight
         });
-        
+
         var tag = await context.Tags.FindAsync(relation.TagId);
         if (tag != null)
         {

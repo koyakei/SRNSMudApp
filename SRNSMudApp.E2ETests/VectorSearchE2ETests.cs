@@ -98,9 +98,9 @@ public partial class VectorSearchE2ETests : PageTest
         _ = await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
         await Task.Delay(1500);
 
-        await Page.GetByPlaceholder("タグで絞り込み...").FillAsync("反社会的勢力");
+        await Page.GetByPlaceholder("タグ名 または タグ名 @ユーザー名 で検索...").FillAsync("反社会的勢力");
 
-        ILocator autocompleteItem = Page.Locator(".mud-paper .suggestion-item:has-text(\"ヤクザ\")").First;
+        ILocator autocompleteItem = Page.Locator(".mud-paper div.mud-list-item:has-text(\"ヤクザ\")").First;
         await Expect(autocompleteItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
     }
 
