@@ -15,6 +15,7 @@ public abstract class TaggingRequestEntity : BaseEntity, ITaggable
     public Tag RequestedTag { get; set; } = null!;
 
     public TradeStatus Status { get; set; } = TradeStatus.Proposed;
+    public int ProposedWeight { get; set; } = 1;
 
     // The asset that will be burned when this contract is accepted.
     public int? ConsumedRightAssetId { get; set; }

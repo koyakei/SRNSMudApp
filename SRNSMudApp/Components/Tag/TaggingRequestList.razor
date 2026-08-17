@@ -19,7 +19,7 @@
         <MudTd DataLabel="タイプ">
             @if (context.RequestType == TaggingRequestType.Add)
             {
-                <MudChip T="string" Color="Color.Success" Size="Size.Small">追加</MudChip>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">追加 (+@(context.ProposedWeight))</MudChip>
             }
             else if (context.RequestType == TaggingRequestType.Remove)
             {
@@ -27,7 +27,7 @@
             }
             else if (context.RequestType == TaggingRequestType.DecreaseWeight)
             {
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small">Weight減少</MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small">追加 (-@(context.ProposedWeight))</MudChip>
             }
         </MudTd>
         <MudTd DataLabel="対象アイテム">

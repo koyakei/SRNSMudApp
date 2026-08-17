@@ -13,6 +13,7 @@ public class RequestInfo
 {
     public bool IsTaggingRequest { get; set; }
     public TaggingRequestType? RequestType { get; set; }
+    public int? ProposedWeight { get; set; }
     public int? TargetItemId { get; set; }
     public string? TargetItemContent { get; set; }
     public int? TargetTagId { get; set; }
@@ -43,7 +44,8 @@ public static class ItemCardViewModel
                 TargetItemContent = item.AsRequestOf.TargetItem?.Content,
                 TargetTagId = item.AsRequestOf.RequestedTagId,
                 TargetTagName = item.AsRequestOf.RequestedTag?.Name,
-                Status = item.AsRequestOf.Status
+                Status = item.AsRequestOf.Status,
+                ProposedWeight = item.AsRequestOf.ProposedWeight
             };
     }
 

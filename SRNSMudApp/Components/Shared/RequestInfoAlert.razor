@@ -49,7 +49,18 @@
             }
 
             <MudText Typo="Typo.body2" Class="font-weight-bold">
-                @(RequestInfo.RequestType == TaggingRequestType.Add ? "タグ追加リクエスト" : RequestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "ウェイト減少リクエスト")
+                @{
+                    var text = RequestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "タグ追加リクエスト";
+                    if (RequestInfo.RequestType == TaggingRequestType.Add)
+                    {
+                        text += $" +{RequestInfo.ProposedWeight}";
+                    }
+                    else if (RequestInfo.RequestType == TaggingRequestType.DecreaseWeight)
+                    {
+                        text += $" -{RequestInfo.ProposedWeight}";
+                    }
+                }
+                @text
             </MudText>
         </div>
         <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>

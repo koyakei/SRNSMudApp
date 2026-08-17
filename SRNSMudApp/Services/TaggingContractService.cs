@@ -15,6 +15,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         int targetItemId,
         int requestedTagId,
         TaggingRequestType requestType = TaggingRequestType.Add,
+        int proposedWeight = 1,
         string? message = null)
     {
         var requestItem = new Item
@@ -32,6 +33,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             RequestedTagId = requestedTagId,
             Status = TradeStatus.Proposed,
             RequestType = requestType,
+            ProposedWeight = proposedWeight,
             RequesterMessage = message,
             RequestItem = requestItem
         };
@@ -49,7 +51,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         int offeredTargetItemId,
         int offeredTagId,
         int consumedRightAssetId,
-        TaggingRequestType requestType = TaggingRequestType.Add)
+        TaggingRequestType requestType = TaggingRequestType.Add,
+        int proposedWeight = 1)
     {
         var requestItem = new Item
         {
@@ -71,6 +74,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             ConsumedRightAssetId = consumedRightAssetId,
             Status = TradeStatus.Proposed,
             RequestType = requestType,
+            ProposedWeight = proposedWeight,
             RequestItem = requestItem
         };
         _ = dbContext.TaggingRequestEntities!.Add(contract);
@@ -219,14 +223,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             {
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
-                Weight = 1,
+                Weight = contract.ProposedWeight,
                 OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(newRelation);
             _ = await dbContext.SaveChangesAsync();
 
             var previousWeight = tag.CachedWeight;
-            tag.CachedWeight += 1;
+            tag.CachedWeight += contract.ProposedWeight;
             var newWeight = tag.CachedWeight;
 
             var ledger = new TagWeightLedger
@@ -236,7 +240,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 SourceType = "TagRelation",
                 SourceId = newRelation.Id,
                 ConsumedRightAssetId = consumedAssetId,
-                Delta = 1,
+                Delta = contract.ProposedWeight,
                 PreviousWeight = previousWeight,
                 NewWeight = newWeight,
                 IsOwnerAction = true,
@@ -252,7 +256,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 TargetItemId = contract.TargetItemId,
                 FollowedTagId = contract.RequestedTagId,
                 EventType = "Insert",
-                NewWeight = 1
+                NewWeight = contract.ProposedWeight
             });
         }
         else if (contract.RequestType is TaggingRequestType.Remove or TaggingRequestType.DecreaseWeight)
@@ -263,7 +267,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             if (relation != null)
             {
                 var prevWeight = relation.Weight;
-                var delta = contract.RequestType == TaggingRequestType.Remove ? -prevWeight : -1;
+                var delta = contract.RequestType == TaggingRequestType.Remove ? -prevWeight : -contract.ProposedWeight;
 
                 if (contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0)
                 {
@@ -351,14 +355,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             {
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
-                Weight = 1,
+                Weight = contract.ProposedWeight,
                 OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(relation1);
             _ = await dbContext.SaveChangesAsync();
 
             var prevReqWeight = requestedTag.CachedWeight;
-            requestedTag.CachedWeight += 1;
+            requestedTag.CachedWeight += contract.ProposedWeight;
             var newReqWeight = requestedTag.CachedWeight;
 
             var ledger1 = new TagWeightLedger
@@ -368,7 +372,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 SourceType = "TagRelation",
                 SourceId = relation1.Id,
                 ConsumedRightAssetId = requesterAssetId,
-                Delta = 1,
+                Delta = contract.ProposedWeight,
                 PreviousWeight = prevReqWeight,
                 NewWeight = newReqWeight,
                 IsOwnerAction = true,
@@ -384,7 +388,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 TargetItemId = contract.TargetItemId,
                 FollowedTagId = contract.RequestedTagId,
                 EventType = "Insert",
-                NewWeight = 1
+                NewWeight = contract.ProposedWeight
             });
         }
         else if (contract.RequestType == TaggingRequestType.Remove)
@@ -433,14 +437,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             ItemId = contract.OfferedTargetItemId,
             TagId = contract.OfferedTagId,
-            Weight = 1,
+            Weight = contract.ProposedWeight,
             OwnerId = contract.TagOwnerUserId
         };
         _ = dbContext.TagRelations!.Add(relation2);
         _ = await dbContext.SaveChangesAsync();
 
         var prevOffWeight = offeredTag.CachedWeight;
-        offeredTag.CachedWeight += 1;
+        offeredTag.CachedWeight += contract.ProposedWeight;
         var newOffWeight = offeredTag.CachedWeight;
 
         var ledger2 = new TagWeightLedger
@@ -450,7 +454,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             SourceType = "TagRelation",
             SourceId = relation2.Id,
             ConsumedRightAssetId = offeredTagAsset.Id,
-            Delta = 1,
+            Delta = contract.ProposedWeight,
             PreviousWeight = prevOffWeight,
             NewWeight = newOffWeight,
             IsOwnerAction = false,
@@ -466,7 +470,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             TargetItemId = contract.OfferedTargetItemId,
             FollowedTagId = contract.OfferedTagId,
             EventType = "Insert",
-            NewWeight = 1
+            NewWeight = contract.ProposedWeight
         });
     }
 
@@ -520,7 +524,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             {
                 ItemId = contract.TargetItemId,
                 TagId = offer.OfferedTagId,
-                Weight = 1,
+                Weight = contract.ProposedWeight,
                 OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations!.Add(newRelation);
@@ -529,7 +533,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Tag tag = await dbContext.Tags!.FindAsync(offer.OfferedTagId) ??
                       throw new InvalidOperationException("Tag not found");
             var prevWeight = tag.CachedWeight;
-            tag.CachedWeight += 1;
+            tag.CachedWeight += contract.ProposedWeight;
             var newWeight = tag.CachedWeight;
 
             var ledger = new TagWeightLedger
@@ -539,7 +543,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 SourceType = "TagRelation",
                 SourceId = newRelation.Id,
                 ConsumedRightAssetId = consumedAssetId,
-                Delta = 1,
+                Delta = contract.ProposedWeight,
                 PreviousWeight = prevWeight,
                 NewWeight = newWeight,
                 IsOwnerAction = false,
@@ -555,7 +559,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 TargetItemId = contract.TargetItemId,
                 FollowedTagId = offer.OfferedTagId,
                 EventType = "Insert",
-                NewWeight = 1
+                NewWeight = contract.ProposedWeight
             });
         }
         else if (contract.RequestType == TaggingRequestType.Remove)
@@ -650,7 +654,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             {
                 ItemId = contract.TargetItemId,
                 TagId = contract.RequestedTagId,
-                Weight = 1,
+                Weight = contract.ProposedWeight,
                 OwnerId = contract.RequesterUserId
             };
             _ = dbContext.TagRelations.Add(newRelation);
@@ -679,7 +683,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             // Cache & Ledger Update
             Tag? tag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
             var previousWeight = tag.CachedWeight;
-            tag.CachedWeight += 1;
+            tag.CachedWeight += contract.ProposedWeight;
             var newWeight = tag.CachedWeight;
 
             var ledger = new TagWeightLedger
@@ -689,7 +693,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 SourceType = "TagRelation",
                 SourceId = newRelation.Id,
                 ConsumedRightAssetId = consumedAssetId,
-                Delta = 1,
+                Delta = contract.ProposedWeight,
                 PreviousWeight = previousWeight,
                 NewWeight = newWeight,
                 IsOwnerAction = contract.RequestedTag.OwnerId == fulfillerUserId, // if fulfiller is owner
@@ -707,7 +711,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                 TargetItemId = contract.TargetItemId,
                 FollowedTagId = contract.RequestedTagId,
                 EventType = "Insert",
-                NewWeight = 1
+                NewWeight = contract.ProposedWeight
             });
         }
         else if (contract.RequestType == TaggingRequestType.Remove)

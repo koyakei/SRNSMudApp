@@ -15,9 +15,19 @@
             <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
             <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true"/>
 
-            <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
-                @(IsRemovalRequest ? "タグの削除提案" : $"提案するWeight変更: {(WeightDelta > 0 ? "+" : "")}{WeightDelta}")
-            </MudAlert>
+            @if (IsRemovalRequest)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
+                    タグの削除提案
+                </MudAlert>
+            }
+            else
+            {
+                <div class="d-flex align-center gap-4 mt-2 mb-4">
+                    <MudText Typo="Typo.body2">提案するWeight変更（増減）:</MudText>
+                    <MudNumericField @bind-Value="ProposedWeightInput" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px" />
+                </div>
+            }
 
             <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
                 <MudTabPanel Text="無償のお願い (Gratis)">
@@ -75,6 +85,7 @@
     private MudForm? _form;
     private bool _isValid;
     private string _currentUserId = string.Empty;
+    private int ProposedWeightInput { get; set; } = 1;
 
     // Gratis fields
     private string? _gratisMessage;
@@ -89,6 +100,8 @@
     {
         var authState = await AuthState!;
         _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        ProposedWeightInput = WeightDelta != 0 ? WeightDelta : 1;
 
         await LoadMyAssetsAsync();
     }
@@ -135,8 +148,20 @@
         await _form!.ValidateAsync();
         if (!_isValid) return;
 
+        if (ProposedWeightInput == 0 && !IsRemovalRequest)
+        {
+            Snackbar.Add("0以外のWeight変更値を入力してください。", Severity.Error);
+            return;
+        }
+
         var isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
-        var requestType = IsRemovalRequest ? TaggingRequestType.Remove : WeightDelta > 0 ? TaggingRequestType.Add : TaggingRequestType.DecreaseWeight;
+        var requestType = IsRemovalRequest 
+            ? TaggingRequestType.Remove 
+            : ProposedWeightInput > 0 
+                ? TaggingRequestType.Add 
+                : TaggingRequestType.DecreaseWeight;
+                
+        var absoluteWeight = Math.Abs(ProposedWeightInput);
 
         if (isMutual)
         {
@@ -148,7 +173,8 @@
                 _offeredItem!.Id,
                 _offeredTag!.Id,
                 _selectedRightAsset!.Id,
-                requestType
+                requestType,
+                absoluteWeight
             );
         }
         else
@@ -159,6 +185,7 @@
                 TargetItem.Id,
                 RequestedTag.Id,
                 requestType,
+                absoluteWeight,
                 _gratisMessage
             );
         }
