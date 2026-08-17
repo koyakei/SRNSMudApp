@@ -16,7 +16,7 @@
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
     <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mb-4">
         <MudTabPanel Text="アイテムの追加">
-            <AddItem InitialTags="@_selectedFilterTags" OnItemAdded="LoadDataAsync"/>
+            <AddItem InitialTags="@(_selectedFilters.Select(f => f.Tag))" OnItemAdded="LoadDataAsync"/>
         </MudTabPanel>
         <AuthorizeView>
             <Authorized>
@@ -30,14 +30,14 @@
     @* ===== タグ検索セクション ===== *@
     <MudPaper Class="pa-3 mb-4 rounded-xl search-container" Outlined="true">
         @* 選択済みタグチップ *@
-        @if (_selectedFilterTags.Any())
+        @if (_selectedFilters.Any())
         {
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-2 align-center">
-                @foreach (var tag in _selectedFilterTags)
+                @foreach (var filter in _selectedFilters)
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                             OnClose="@(_ => RemoveTagFilter(tag))">
-                        @tag.Name
+                             OnClose="@(_ => RemoveTagFilter(filter))">
+                        @filter.DisplayText
                     </MudChip>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
@@ -48,58 +48,26 @@
             </MudStack>
         }
 
-        @* 検索テキスト入力 *@
-        <MudTextField T="string"
-                      Value="_tagSearchText"
-                      ValueChanged="OnTagSearchTextChanged"
-                      Placeholder="タグで絞り込み..."
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Immediate="true"
-                      DebounceInterval="300"
-                      OnKeyDown="@OnTagSearchKeyDown"
-                      Clearable="true"/>
-
-        @* ===== 候補ドロップダウン ===== *@
-        @if (_showSuggestions)
-        {
-            <div class="suggestion-backdrop" @onclick="CloseSuggestions" @onclick:stopPropagation="true"></div>
-            <div class="suggestion-dropdown-wrapper">
-                <MudPaper Elevation="8" Class="rounded-lg py-1">
-                    @if (_tagSuggestions.Any())
-                    {
-                        @for (var i = 0; i < _tagSuggestions.Count; i++)
-                        {
-                            var tag = _tagSuggestions[i];
-                            var isHighlighted = i == _highlightedIndex;
-                            var count = _tagItemCounts.GetValueOrDefault(tag.Id, 0);
-
-                            <div @onclick="@(() => SelectTagFilter(tag))"
-                                 @onclick:stopPropagation="true"
-                                 class="d-flex justify-space-between align-center w-100 px-4 py-2 cursor-pointer suggestion-item"
-                                 style="@(isHighlighted ? "background-color: rgba(0, 0, 0, 0.08);" : "")">
-                                <MudText Typo="Typo.body2">@tag.Name</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    @count 件
-                                </MudText>
-                            </div>
-                        }
-                    }
-                    else if (!string.IsNullOrWhiteSpace(_tagSearchText))
-                    {
-                        <div class="px-4 py-2">
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">一致するタグがありません</MudText>
-                        </div>
-                    }
-                </MudPaper>
-            </div>
-        }
+        @* 検索テキスト入力 (2段階オートコンプリート) *@
+        <MudAutocomplete T="string"
+                         Value="@_tagSearchText"
+                         ValueChanged="OnAutocompleteValueChanged"
+                         SearchFunc="@SearchTagsAndUsersAsync"
+                         Placeholder="タグ名 または タグ名 ユーザー名 で検索..."
+                         Variant="Variant.Outlined"
+                         Margin="Margin.Dense"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search"
+                         OnAdornmentClick="ExecuteSearch"
+                         OnKeyDown="OnSearchKeyDown"
+                         DebounceInterval="300"
+                         Clearable="true"
+                         ResetValueOnEmptyText="true"
+                         MaxItems="10" />
     </MudPaper>
 
     @* ===== フィルタ結果件数 ===== *@
-    @if (_selectedFilterTags.Any())
+    @if (_selectedFilters.Any())
     {
         <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
             @(_items.Count()) 件のアイテム、@(_foundTags.Count()) 件のタグが見つかりました
@@ -157,12 +125,15 @@
     private IEnumerable<Tag> _foundTags = [];
 
     // ===== タグ検索フィルタ用ステート =====
-    private List<Tag> _selectedFilterTags = [];
+    public class TagFilter
+    {
+        public Tag Tag { get; set; } = null!;
+        public string? UserName { get; set; }
+        public string DisplayText => string.IsNullOrWhiteSpace(UserName) ? Tag.Name : $"{Tag.Name} ({UserName})";
+    }
+
+    private List<TagFilter> _selectedFilters = [];
     private string _tagSearchText = "";
-    private List<Tag> _tagSuggestions = [];
-    private Dictionary<int, int> _tagItemCounts = [];
-    private bool _showSuggestions;
-    private int _highlightedIndex = -1;
 
     // ===== ソート用ステート =====
     public enum SortOrder
@@ -188,12 +159,18 @@
 
         if (query.TryGetValue("tags", out var tagsValues))
         {
-            var tagIds = tagsValues.Select(v => int.TryParse(v, out var id) ? id : 0).Where(id => id > 0).ToList();
-            if (tagIds.Any())
+            foreach (var val in tagsValues)
             {
-                _selectedFilterTags = await context.Tags
-                    .Where(t => tagIds.Contains(t.Id))
-                    .ToListAsync();
+                if (string.IsNullOrWhiteSpace(val)) continue;
+                var parts = val.Split(':');
+                if (int.TryParse(parts[0], out var tagId))
+                {
+                    var tag = await context.Tags.FindAsync(tagId);
+                    if (tag != null)
+                    {
+                        _selectedFilters.Add(new TagFilter { Tag = tag, UserName = parts.Length > 1 ? parts[1] : null });
+                    }
+                }
             }
         }
 
@@ -220,155 +197,173 @@
 
     // ===== タグ検索メソッド =====
 
-    private async Task OnTagSearchTextChanged(string? value)
+    private async Task<IEnumerable<string>> SearchTagsAndUsersAsync(string? value, CancellationToken token)
     {
-        _tagSearchText = value ?? string.Empty;
-        _highlightedIndex = -1;
-
         if (string.IsNullOrWhiteSpace(value))
         {
-            _tagSuggestions.Clear();
-            _tagItemCounts.Clear();
-            _showSuggestions = false;
-            return;
+            return Array.Empty<string>();
         }
 
-        await SearchTagsAsync();
-    }
+        await using var context = await DbFactory.CreateDbContextAsync(token);
 
-    private async Task SearchTagsAsync()
-    {
-        var selectedIds = _selectedFilterTags.Select(t => t.Id).ToHashSet();
-
-        await using var context = await DbFactory.CreateDbContextAsync();
-
-        var query = context.Tags.AsNoTracking().Where(t => !selectedIds.Contains(t.Id));
-
-        try
+        if (!value.Contains(' '))
         {
-            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(_tagSearchText);
-            var queryArray = queryVector.ToArray();
+            // 状態1: スペースがない場合（タグ名検索）
+            var searchText = value;
+            try
+            {
+                var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(searchText);
+                var queryArray = queryVector.ToArray();
 
-            var textMatches = await query
-                .Where(t => t.Name.Contains(_tagSearchText) || t.Content.Contains(_tagSearchText))
-                .ToListAsync();
+                var textMatches = await context.Tags
+                    .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
+                    .AsNoTracking()
+                    .ToListAsync(token);
 
-            var vectorTags = await query
-                .Where(t => t.Embedding != null)
-                .ToListAsync();
+                var vectorTags = await context.Tags
+                    .Where(t => t.Embedding != null)
+                    .AsNoTracking()
+                    .ToListAsync(token);
 
-            var vectorMatches = vectorTags
-                .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
-                .Take(10)
-                .ToList();
-
-            _tagSuggestions =
-            [
-                .. textMatches.Concat(vectorMatches)
-                    .DistinctBy(t => t.Id)
+                var vectorMatches = vectorTags
+                    .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
                     .Take(10)
-            ];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Vector search failed: {ex.Message}");
-            _tagSuggestions = await query
-                .Where(t => t.Name.Contains(_tagSearchText) || t.Content.Contains(_tagSearchText))
-                .OrderBy(t => t.Name)
-                .Take(10)
-                .ToListAsync();
-        }
+                    .ToList();
 
-        if (_tagSuggestions.Any())
-        {
-            var ids = _tagSuggestions.Select(t => t.Id).ToList();
-            _tagItemCounts = await context.TagRelations
-                .Where(tr => ids.Contains(tr.TagId))
-                .GroupBy(tr => tr.TagId)
-                .Select(g => new { TagId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.TagId, x => x.Count);
+                return textMatches.Concat(vectorMatches)
+                    .Select(t => t.Name + " ") // 末尾に半角スペースを付与
+                    .Distinct()
+                    .Take(10);
+            }
+            catch
+            {
+                var textMatches = await context.Tags
+                    .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
+                    .AsNoTracking()
+                    .Select(t => t.Name + " ")
+                    .Distinct()
+                    .Take(10)
+                    .ToListAsync(token);
+                return textMatches;
+            }
         }
         else
         {
-            _tagItemCounts.Clear();
-        }
+            // 状態2: スペースがある場合（ユーザー名検索）
+            var parts = value.Split(' ', 2, StringSplitOptions.None);
+            var tagName = parts[0];
+            var userSearch = parts[1];
 
-        _showSuggestions = true;
+            var usersQuery = context.TagRelations
+                .AsNoTracking()
+                .Where(tr => tr.Tag.Name == tagName)
+                .Select(tr => tr.Owner.UserName)
+                .Where(u => u != null);
+
+            if (!string.IsNullOrWhiteSpace(userSearch))
+            {
+                usersQuery = usersQuery.Where(u => u!.Contains(userSearch));
+            }
+
+            var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
+
+            if (!users.Any() && string.IsNullOrWhiteSpace(userSearch))
+            {
+                return new[] { tagName + " " };
+            }
+
+            return users.Select(u => tagName + " " + u);
+        }
     }
 
-    private async Task OnTagSearchKeyDown(KeyboardEventArgs e)
+    private async Task OnAutocompleteValueChanged(string? value)
     {
-        switch (e.Key)
+        _tagSearchText = value ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_tagSearchText))
         {
-            case "Escape":
-                _showSuggestions = false;
-                _highlightedIndex = -1;
-                break;
-            case "ArrowDown":
-                if (_showSuggestions && _tagSuggestions.Any())
-                    _highlightedIndex = Math.Min(_highlightedIndex + 1, _tagSuggestions.Count - 1);
-                break;
-            case "ArrowUp":
-                if (_showSuggestions && _tagSuggestions.Any())
-                    _highlightedIndex = Math.Max(_highlightedIndex - 1, 0);
-                break;
-            case "Enter":
-                if (_highlightedIndex >= 0 && _highlightedIndex < _tagSuggestions.Count)
-                    await SelectTagFilter(_tagSuggestions[_highlightedIndex]);
-                break;
+            return;
         }
+
+        if (_tagSearchText.EndsWith(" "))
+        {
+            // タグ名だけ選択された状態。検索は実行せず、次の入力を待つ
+            return;
+        }
+
+        if (_tagSearchText.Contains(" "))
+        {
+            // スペースが含まれていて末尾がスペースでない場合（ユーザー名まで確定した段階）
+            await ExecuteSearch();
+        }
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (!string.IsNullOrWhiteSpace(_tagSearchText) && !_tagSearchText.EndsWith(" "))
+            {
+                await ExecuteSearch();
+            }
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_tagSearchText)) return;
+
+        var text = _tagSearchText.Trim();
+        var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return;
+
+        var tagName = parts[0];
+        var userName = parts.Length > 1 ? parts[1] : null;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var tag = await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
+
+        if (tag != null)
+        {
+            if (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
+            {
+                _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
+            }
+        }
+
+        _tagSearchText = "";
+        UpdateUrlQuery();
+        await LoadDataAsync();
     }
 
     private void UpdateUrlQuery()
     {
-        var tagIds = _selectedFilterTags.Select(t => t.Id).ToArray();
+        var filterStrings = _selectedFilters.Select(f => string.IsNullOrWhiteSpace(f.UserName) ? f.Tag.Id.ToString() : $"{f.Tag.Id}:{f.UserName}").ToArray();
         var sortParam = string.Join(",", _sortConditions.Select(c => $"{c.Tag.Id}:{(c.Order == SortOrder.Desc ? "desc" : "asc")}"));
 
         var parameters = new Dictionary<string, object?>
         {
-            { "tags", tagIds.Any() ? tagIds : null },
+            { "tags", filterStrings.Any() ? filterStrings : null },
             { "sort", string.IsNullOrEmpty(sortParam) ? null : sortParam }
         };
         var newUri = NavigationManager.GetUriWithQueryParameters(parameters);
         NavigationManager.NavigateTo(newUri, replace: true);
     }
 
-    private async Task SelectTagFilter(Tag tag)
+    private async Task RemoveTagFilter(TagFilter filter)
     {
-        if (_selectedFilterTags.All(t => t.Id != tag.Id))
-        {
-            _selectedFilterTags.Add(tag);
-        }
-
-        _tagSearchText = "";
-        _tagSuggestions.Clear();
-        _tagItemCounts.Clear();
-        _showSuggestions = false;
-        _highlightedIndex = -1;
-        UpdateUrlQuery();
-        await LoadDataAsync();
-    }
-
-    private async Task RemoveTagFilter(Tag tag)
-    {
-        _selectedFilterTags.RemoveAll(t => t.Id == tag.Id);
-        _sortConditions.RemoveAll(c => c.Tag.Id == tag.Id);
+        _selectedFilters.Remove(filter);
+        _sortConditions.RemoveAll(c => c.Tag.Id == filter.Tag.Id);
         UpdateUrlQuery();
         await LoadDataAsync();
     }
 
     private async Task ClearAllTagFilters()
     {
-        _selectedFilterTags.Clear();
+        _selectedFilters.Clear();
         _sortConditions.Clear();
         UpdateUrlQuery();
         await LoadDataAsync();
-    }
-
-    private void CloseSuggestions()
-    {
-        _showSuggestions = false;
-        _highlightedIndex = -1;
     }
 
     // ===== 既存メソッド =====
@@ -396,11 +391,22 @@
             .ThenInclude(t => t.Owner)
             .AsQueryable();
 
-        // タグフィルタ適用（AND 検索: 選択した全タグを含む Item/Tag のみ）
-        if (_selectedFilterTags.Any())
+        // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
+        if (_selectedFilters.Any())
         {
-            query = _selectedFilterTags.Aggregate(query, (current, tag) => current.Where(i => i.TagRelations.Any(tr => tr.TagId == tag.Id)));
-            tagQuery = _selectedFilterTags.Aggregate(tagQuery, (current, tag) => current.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == tag.Id)));
+            foreach (var filter in _selectedFilters)
+            {
+                if (string.IsNullOrWhiteSpace(filter.UserName))
+                {
+                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id));
+                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id));
+                }
+                else
+                {
+                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
+                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
+                }
+            }
 
             tagQuery = ApplySortToTagQuery(tagQuery);
             _foundTags = await tagQuery.ToListAsync();
@@ -502,10 +508,10 @@
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return Task.FromResult<IEnumerable<Tag>>(_selectedFilterTags);
+            return Task.FromResult<IEnumerable<Tag>>(_selectedFilters.Select(f => f.Tag));
         }
 
-        var matches = _selectedFilterTags.Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        var matches = _selectedFilters.Select(f => f.Tag).Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
         return Task.FromResult(matches);
     }
 
