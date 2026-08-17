@@ -28,7 +28,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         if (!entity.Tags.Any(t => t.Id == tagId))
         {
             entity.Tags.Add(tag);
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
     }
 
@@ -48,8 +48,8 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         Tag? tag = entity.Tags.FirstOrDefault(t => t.Id == tagId);
         if (tag != null)
         {
-            entity.Tags.Remove(tag);
-            await context.SaveChangesAsync();
+            _ = entity.Tags.Remove(tag);
+            _ = await context.SaveChangesAsync();
         }
     }
 
@@ -57,13 +57,8 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         TaggingRequestEntity? request =
-            await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId);
-
-        if (request == null)
-        {
+            await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId) ??
             throw new InvalidOperationException("リクエストが見つかりません。");
-        }
-
         if (request.Status != TradeStatus.Proposed)
         {
             throw new InvalidOperationException("このリクエストは既に処理されています。");
@@ -73,7 +68,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         if (request.TagOwnerUserId != rejectUserId && request.RequesterUserId != rejectUserId)
         {
             // For public offer and bounty, we might need different checks, but for now we follow general rule
-            if (request is not PublicOfferTriggerContract && request is not BountyTaggingContract)
+            if (request is not PublicOfferTriggerContract and not BountyTaggingContract)
             {
                 throw new UnauthorizedAccessException("このリクエストを却下する権限がありません。");
             }
@@ -83,6 +78,6 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         request.RejectedAt = DateTimeOffset.UtcNow;
         request.RejectComment = comment;
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
     }
 }

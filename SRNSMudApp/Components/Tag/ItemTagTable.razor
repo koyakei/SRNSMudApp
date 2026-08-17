@@ -1,16 +1,13 @@
-@using SRNSMudApp.Data
-@using SRNSMudApp.Components.Tag
-
 <div class="d-flex justify-space-between align-center mb-4">
     <MudText Typo="Typo.h5">付けられたタグ</MudText>
-    
-    <MudTextField @bind-Value="_searchString" 
-                  Placeholder="タグ名またはユーザー名で検索" 
-                  Adornment="Adornment.Start" 
-                  AdornmentIcon="@Icons.Material.Filled.Search" 
-                  IconSize="Size.Medium" 
-                  Class="mt-0 search-input" 
-                  Clearable="true" />
+
+    <MudTextField @bind-Value="_searchString"
+                  Placeholder="タグ名またはユーザー名で検索"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  IconSize="Size.Medium"
+                  Class="mt-0 search-input"
+                  Clearable="true"/>
 </div>
 
 <MudTable Items="@TagRelations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Filter="FilterFunc"
@@ -41,12 +38,12 @@
                            CurrentUserId="@CurrentUserId"
                            AllTags="@AllTags"
                            AllTagRelationsToTags="@AllTagRelationsToTags"
-                           OnDataChanged="OnDataChanged" 
-                           ChipIndex="0" />
+                           OnDataChanged="OnDataChanged"
+                           ChipIndex="0"/>
         </MudTd>
     </RowTemplate>
     <PagerContent>
-        <MudTablePager />
+        <MudTablePager/>
     </PagerContent>
 </MudTable>
 
@@ -64,10 +61,11 @@
     {
         if (string.IsNullOrWhiteSpace(_searchString))
             return true;
-        
+
         var nameMatch = relation.Tag?.Name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
         var userMatch = relation.Tag?.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
-        
+
         return nameMatch || userMatch;
     }
+
 }

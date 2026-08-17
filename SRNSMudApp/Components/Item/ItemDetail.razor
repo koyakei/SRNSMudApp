@@ -31,13 +31,13 @@
 
                 @if (_item.TagRelations != null)
                 {
-                    <SRNSMudApp.Components.Tag.ItemTagTable 
+                    <SRNSMudApp.Components.Tag.ItemTagTable
                         TagRelations="@_item.TagRelations"
                         Item="@_item"
                         CurrentUserId="@_currentUserId"
                         AllTags="@_allTags"
                         AllTagRelationsToTags="@_allTagRelationsToTags"
-                        OnDataChanged="LoadDataAsync" />
+                        OnDataChanged="LoadDataAsync"/>
                 }
             </MudTabPanel>
 
@@ -57,7 +57,8 @@
                                                                   SelectedRequestChanged="OnSelectedRequestChanged">
                         <RejectButtonTemplate Context="request">
                             <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
-                                       OnClick="@(() => OpenRejectDialogAsync(request))">リジェクト
+                                       OnClick="@(() => OpenRejectDialogAsync(request))">
+                                リジェクト
                             </MudButton>
                         </RejectButtonTemplate>
                     </SRNSMudApp.Components.Tag.TaggingRequestList>
@@ -185,13 +186,13 @@
         {
             _selectedRequest = _requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
         }
-        
+
         if (AuthState != null)
         {
             var authState = await AuthState;
             _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         }
-        
+
         _allTags = await context.Tags.AsNoTracking().ToListAsync();
         _allTagRelationsToTags = await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
     }

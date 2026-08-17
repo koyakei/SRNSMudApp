@@ -92,7 +92,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             });
         }
 
-        return notifications.OrderByDescending(n => n.CreatedAt).ToList();
+        return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
 
     public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
@@ -104,11 +104,11 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
         if (existing == null)
         {
-            context.NotificationReadStates!.Add(new NotificationReadState
+            _ = context.NotificationReadStates!.Add(new NotificationReadState
             {
                 UserId = userId, SourceId = sourceId, SourceType = sourceType, ReadAt = DateTimeOffset.UtcNow
             });
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
     }
 }

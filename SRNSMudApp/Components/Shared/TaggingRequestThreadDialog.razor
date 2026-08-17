@@ -43,7 +43,9 @@
                     </MudAvatar>
                     <div class="flex-grow-1">
                         <div class="d-flex align-baseline">
-                            <MudText Typo="Typo.subtitle2" Class="mr-2"><b>@TaggingRequest.Owner?.UserName</b></MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mr-2">
+                                <b>@TaggingRequest.Owner?.UserName</b>
+                            </MudText>
                             <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
                                 @TaggingRequest.CreatedDate.ToLocalTime().ToString("g")
                             </MudText>

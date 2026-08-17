@@ -1,0 +1,140 @@
+@using SRNSMudApp.Components.Shared
+@using SRNSMudApp.Data
+@inject NavigationManager NavigationManager
+
+<MudAlert
+    Severity="@(RequestInfo.RequestType == TaggingRequestType.Add ? Severity.Success : RequestInfo.RequestType == TaggingRequestType.Remove ? Severity.Error : Severity.Warning)"
+    Variant="Variant.Outlined"
+    Dense="true"
+    Class="mb-3 py-1 px-3"
+    NoIcon="true">
+    <div class="d-flex align-start flex-wrap" style="gap: 8px;">
+        <!-- アイコン領域（クリック可能） -->
+        <div class="d-flex align-center mt-1">
+            @if (CanCancel)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.CancelScheduleSend" 
+                               Color="Color.Error" 
+                               Size="Size.Small" 
+                               OnClick="OnCancelClicked" 
+                               Class="pa-0 mr-2"
+                               title="リクエストを取り下げる" />
+            }
+            else if (CanApprove)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
+                               Color="Color.Success" 
+                               Size="Size.Small" 
+                               OnClick="OnApproveClicked" 
+                               Class="pa-0 mr-2"
+                               title="リクエストを承認する" />
+            }
+            else if (RequestInfo.Status == TradeStatus.Canceled)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.RemoveDone" 
+                         Size="Size.Small" 
+                         Class="mr-2 canceled-icon" />
+            }
+            else if (RequestInfo.Status == TradeStatus.Executed)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.DoneAll" 
+                         Size="Size.Small" 
+                         Class="mr-2" />
+            }
+            else
+            {
+                <MudIcon Icon="@(RequestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : RequestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline)" 
+                         Size="Size.Small" 
+                         Class="mr-2" />
+            }
+
+            <MudText Typo="Typo.body2" Class="font-weight-bold">
+                @(RequestInfo.RequestType == TaggingRequestType.Add ? "タグ追加リクエスト" : RequestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "ウェイト減少リクエスト")
+            </MudText>
+        </div>
+        <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
+
+        <!-- ターゲットコンテンツ -->
+        <div class="d-flex flex-column justify-center" style="flex: 1; min-width: 200px;">
+            @if (!string.IsNullOrWhiteSpace(RequestInfo.TargetItemContent))
+            {
+                <div class="d-flex align-start gap-1 mt-1" @onclick:stopPropagation="true">
+                    <div class="flex-1" style="min-width: 0;">
+                        <MudLink Href="@($"/ItemDetail/{RequestInfo.TargetItemId}")"
+                                 Color="Color.Default" Underline="Underline.Hover">
+                            <div class="@(!_isTargetExpanded ? "line-clamp-2" : "")"
+                                 style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px; white-space: pre-wrap; word-break: break-word;">
+                                @RequestInfo.TargetItemContent
+                            </div>
+                        </MudLink>
+                    </div>
+                    <MudIconButton
+                        Icon="@(_isTargetExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                        Size="Size.Small"
+                        OnClick="ToggleTargetExpand"
+                        Class="mt-n1 flex-shrink-0"
+                        title="展開/折りたたみ"/>
+                </div>
+            }
+            else
+            {
+                <div class="mt-1" @onclick:stopPropagation="true">
+                    <MudLink Href="@($"/ItemDetail/{RequestInfo.TargetItemId}")"
+                             Color="Color.Default" Underline="Underline.Hover">
+                        <div
+                            style="font-size: 0.85rem; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
+                            (内容なし)
+                        </div>
+                    </MudLink>
+                </div>
+            }
+        </div>
+
+        <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
+        
+        <!-- 対象タグ -->
+        <div class="d-flex align-center mt-1">
+            <MudText Typo="Typo.body2" Class="mr-1">タグ:</MudText>
+            <span @onclick:stopPropagation="true">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                         Color="Color.Primary" Class="ma-0 cursor-pointer"
+                         OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{RequestInfo.TargetTagId}"))">
+                    @RequestInfo.TargetTagName
+                </MudChip>
+            </span>
+        </div>
+    </div>
+</MudAlert>
+
+@code {
+    [Parameter] [EditorRequired] public RequestInfo RequestInfo { get; set; } = null!;
+    
+    [Parameter] public bool CanCancel { get; set; }
+    [Parameter] public bool CanApprove { get; set; }
+    
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnApprove { get; set; }
+
+    private bool _isTargetExpanded;
+
+    private void ToggleTargetExpand()
+    {
+        _isTargetExpanded = !_isTargetExpanded;
+    }
+
+    private async Task OnCancelClicked()
+    {
+        if (OnCancel.HasDelegate)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+
+    private async Task OnApproveClicked()
+    {
+        if (OnApprove.HasDelegate)
+        {
+            await OnApprove.InvokeAsync();
+        }
+    }
+}

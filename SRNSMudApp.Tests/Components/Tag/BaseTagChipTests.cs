@@ -2,9 +2,6 @@
 
 using Bunit;
 
-using Microsoft.Extensions.DependencyInjection;
-
-using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
@@ -27,7 +24,7 @@ public class BaseTagChipTests : TestContext
         // Arrange
         var tagName = "TestTag";
         var weight = 5;
-        
+
         // Act
         IRenderedComponent<BaseTagChip> component = RenderComponent<BaseTagChip>(parameters => parameters
             .Add(p => p.TagName, tagName)
@@ -41,8 +38,10 @@ public class BaseTagChipTests : TestContext
     <div tabindex=""-1"" class=""mud-chip mud-chip-filled mud-chip-size-small mud-chip-color-primary custom-chip"">
       <span class=""mud-chip-content"">
         <div class=""d-flex align-center"">
-          <span class=""d-flex align-center"">
+          <span class=""d-flex align-center mr-1"">
             <a class=""chip-link mr-1"" >{tagName}</a>
+          </span>
+          <span class=""d-flex align-center"">
             <span class=""mx-1 font-weight-bold"">{weight}</span>
           </span>
         </div>
@@ -59,12 +58,13 @@ public class BaseTagChipTests : TestContext
         // Arrange
         var tagName = "TestTag";
         var ownerName = "user123";
-        
+
         // Act
         IRenderedComponent<BaseTagChip> component = RenderComponent<BaseTagChip>(parameters => parameters
             .Add(p => p.TagName, tagName)
             .Add(p => p.OwnerName, ownerName)
-            .Add(p => p.ActionContent, builder => builder.AddMarkupContent(0, "<div class=\"action-mock\">Action</div>"))
+            .Add(p => p.ActionContent,
+                builder => builder.AddMarkupContent(0, "<div class=\"action-mock\">Action</div>"))
         );
 
         // Assert

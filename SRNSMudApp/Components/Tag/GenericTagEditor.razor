@@ -25,13 +25,14 @@
     <div class="d-flex align-center gap-2 mt-2">
         <MudNumericField @bind-Value="_newTagId" Label="追加するタグID" Variant="Variant.Outlined"
                          Margin="Margin.Dense"/>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AddTagAsync">追加
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AddTagAsync">
+            追加
         </MudButton>
     </div>
 </div>
 
 @code {
-    [Parameter][EditorRequired] public TItem TargetEntity { get; set; } = null!;
+    [Parameter] [EditorRequired] public TItem TargetEntity { get; set; } = null!;
     [Parameter] public EventCallback OnTagsChanged { get; set; }
 
     private int _newTagId;

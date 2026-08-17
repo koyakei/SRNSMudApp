@@ -9,7 +9,9 @@
                 <div class="d-flex align-center tag-tree-line" style="gap: 4px; padding: 2px 0;">
                     <span class="tag-tree-indent">
                         <MudText Typo="Typo.body2" Color="Color.Secondary"
-                                 Style="white-space: pre; font-family: monospace;">@line.Indent</MudText>
+                                 Style="white-space: pre; font-family: monospace;">
+                            @line.Indent
+                        </MudText>
                     </span>
                     <span class="tag-tree-icon" style="font-size: 10px; width: 14px; flex-shrink: 0;">@line.Icon</span>
 
@@ -18,14 +20,18 @@
                         <span @onclick:stopPropagation="true" class="tag-tree-name tag-link"
                               style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <MudLink Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;"
-                                     OnClick="@(() => NavigateToTag(line.TagId))">@line.Name</MudLink>
+                                     OnClick="@(() => NavigateToTag(line.TagId))">
+                                @line.Name
+                            </MudLink>
                         </span>
                     }
                     else
                     {
                         <MudText Typo="Typo.body2" Color="Color.Primary"
                                  Style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                                 Class="tag-tree-name">@line.Name</MudText>
+                                 Class="tag-tree-name">
+                            @line.Name
+                        </MudText>
                     }
 
                     @if (!string.IsNullOrEmpty(line.Role))

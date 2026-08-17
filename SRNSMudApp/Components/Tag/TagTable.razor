@@ -106,7 +106,7 @@
                                  Variant="Variant.Outlined"
                                  CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
                                  OnClose="@(_ => RemoveTagToTagRelationAsync(tr))"
-                                 OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tr.Tag?.Id}"))" />
+                                 OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tr.Tag?.Id}"))"/>
                 }
                 @if (hasManyTags)
                 {

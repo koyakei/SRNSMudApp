@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
-using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
@@ -47,7 +46,15 @@ public class ItemTagChipTests : TestContext
     {
         // Arrange
         var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "TestTag", OwnerId = "test-user-id" };
-        var tagRelation = new TagRelation { Id = 1, TagId = 1, Tag = tag, ItemId = 1, Weight = 10, OwnerId = "test-user-id" };
+        var tagRelation = new TagRelation
+        {
+            Id = 1,
+            TagId = 1,
+            Tag = tag,
+            ItemId = 1,
+            Weight = 10,
+            OwnerId = "test-user-id"
+        };
         var item = new SRNSMudApp.Data.Item { Id = 1, Content = "Test Item", OwnerId = "test-user-id" };
 
         // Act

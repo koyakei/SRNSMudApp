@@ -36,9 +36,9 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         }
 
         var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
-        context.TagRelations.Add(newRelation);
+        _ = context.TagRelations.Add(newRelation);
 
-        context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
             TargetType = "Item",
@@ -48,12 +48,12 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             NewWeight = 1
         });
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
 
         var prevWeight = tagFromDb.CachedWeight;
         tagFromDb.CachedWeight += 1;
 
-        context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
         {
             TagId = tagFromDb.Id,
             TagNameSnapshot = tagFromDb.Name,
@@ -67,7 +67,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             OwnerId = currentUserId
         });
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -86,7 +86,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             return "関連付けた本人ではないため、解除する権限がありません。";
         }
 
-        context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
             TargetType = "Item",
@@ -101,7 +101,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight -= relation.Weight;
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -116,9 +116,9 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             });
         }
 
-        context.Remove(relation);
+        _ = context.Remove(relation);
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -145,7 +145,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight += delta;
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -159,7 +159,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
                 OwnerId = currentUserId
             });
 
-            context.TimelineEvents!.Add(new TimelineEvent
+            _ = context.TimelineEvents!.Add(new TimelineEvent
             {
                 OwnerId = currentUserId,
                 TargetType = "Item",
@@ -171,7 +171,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             });
         }
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return UpdateWeightResult.Success;
     }
 
@@ -204,7 +204,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight += delta;
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -219,7 +219,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             });
         }
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -252,7 +252,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         entity.TagId = newTagId;
         entity.UpdatedDate = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -271,9 +271,9 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TargetTagId = targetTagId, TagId = tagId, Weight = 1, OwnerId = currentUserId
         };
-        context.Set<TagRelationToTag>().Add(newRelation);
+        _ = context.Set<TagRelationToTag>().Add(newRelation);
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
 
         Tag? tagFromDb = await context.Tags.FindAsync(tagId);
         if (tagFromDb != null)
@@ -281,7 +281,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             var prevWeight = tagFromDb.CachedWeight;
             tagFromDb.CachedWeight += 1;
 
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
@@ -295,7 +295,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
                 OwnerId = currentUserId
             });
 
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
 
         return null;
@@ -322,7 +322,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight -= entity.Weight;
 
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -337,8 +337,8 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             });
         }
 
-        context.Remove(entity);
-        await context.SaveChangesAsync();
+        _ = context.Remove(entity);
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -382,7 +382,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         entity.ParentTagId = parentTagId;
         entity.UpdatedDate = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return null;
     }
 
@@ -415,8 +415,8 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             TaggingRequestEntityId = requestId, OwnerId = userId, Content = message, CreatedDate = DateTime.UtcNow
         };
 
-        context.Items!.Add(reply);
-        await context.SaveChangesAsync();
+        _ = context.Items!.Add(reply);
+        _ = await context.SaveChangesAsync();
 
         // UIの即時更新用に、保存したリプライに関連情報を結合して返す
         return await context.Items
@@ -450,8 +450,8 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             UpdatedDate = DateTime.UtcNow
         };
 
-        context.Items!.Add(replyItem);
-        await context.SaveChangesAsync();
+        _ = context.Items!.Add(replyItem);
+        _ = await context.SaveChangesAsync();
 
         return await context.Items
             .Include(i => i.Owner)

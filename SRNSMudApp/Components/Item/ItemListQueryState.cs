@@ -105,9 +105,11 @@ public sealed class ItemListQueryState
 
     private static string ExtractQuery(string uriString)
     {
-        var idx = uriString.IndexOf('?', System.StringComparison.Ordinal);
+        var idx = uriString.IndexOf('?', StringComparison.Ordinal);
         return idx >= 0 ? uriString[idx..] : string.Empty;
     }
+
+    public static ItemListQueryState ParseFromUri(Uri uriString) => throw new NotImplementedException();
 
     /// <summary>1件のソート条件（タグID＋昇降順）。</summary>
     public sealed record SortEntry(int TagId, SortOrder Order);

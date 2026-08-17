@@ -35,19 +35,26 @@
                                         <MudCardHeader>
                                             <CardHeaderContent>
                                                 <MudText
-                                                    Typo="Typo.h6">@(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")</MudText>
+                                                    Typo="Typo.h6">
+                                                    @(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")
+                                                </MudText>
                                                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                    送信者: @contract.RequesterUserId</MudText>
+                                                    送信者: @contract.RequesterUserId
+                                                </MudText>
                                             </CardHeaderContent>
                                         </MudCardHeader>
                                         <MudCardContent>
                                             <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
                                             <MudText Typo="Typo.body2"
-                                                     Class="mb-2">@contract.TargetItem.Content</MudText>
+                                                     Class="mb-2">
+                                                @contract.TargetItem.Content
+                                            </MudText>
 
                                             <MudText Typo="Typo.subtitle2">希望タグ</MudText>
                                             <MudText Typo="Typo.body2"
-                                                     Class="mb-2">@contract.RequestedTag.Name</MudText>
+                                                     Class="mb-2">
+                                                @contract.RequestedTag.Name
+                                            </MudText>
 
                                             @if (contract is MutualTaggingContract mutual)
                                             {
@@ -97,19 +104,26 @@
                                         <MudCardHeader>
                                             <CardHeaderContent>
                                                 <MudText
-                                                    Typo="Typo.h6">@(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")</MudText>
+                                                    Typo="Typo.h6">
+                                                    @(contract is MutualTaggingContract ? "相互タグ付け (Mutual)" : "無償のお願い (Gratis)")
+                                                </MudText>
                                                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                    宛先: @contract.TagOwnerUserId</MudText>
+                                                    宛先: @contract.TagOwnerUserId
+                                                </MudText>
                                             </CardHeaderContent>
                                         </MudCardHeader>
                                         <MudCardContent>
                                             <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
                                             <MudText Typo="Typo.body2"
-                                                     Class="mb-2">@contract.TargetItem.Content</MudText>
+                                                     Class="mb-2">
+                                                @contract.TargetItem.Content
+                                            </MudText>
 
                                             <MudText Typo="Typo.subtitle2">希望タグ</MudText>
                                             <MudText Typo="Typo.body2"
-                                                     Class="mb-2">@contract.RequestedTag.Name</MudText>
+                                                     Class="mb-2">
+                                                @contract.RequestedTag.Name
+                                            </MudText>
 
                                             <MudText Typo="Typo.body2" Color="Color.Info" Class="mt-2">
                                                 ステータス: @(contract.Status == TradeStatus.Proposed ? "提案中" : contract.Status.ToString())

@@ -1,0 +1,113 @@
+@using MudBlazor
+
+<span class="position-relative d-inline-flex align-center">
+    <MudChip T="string" Size="Size.Small" Class="action-tag-request-chip custom-chip" Style="@Style" Color="@Color" Variant="@Variant">
+        <div class="d-flex align-center">
+            <!-- アクション領域 (先頭) -->
+            <div class="d-flex align-center mr-1" @onclick:stopPropagation="true">
+                @if (CanApprove)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
+                                   Color="Color.Success" 
+                                   Size="Size.Small" 
+                                   Class="pa-0 mr-2 chip-icon-btn"
+                                   OnClick="OnApproveClicked" 
+                                   title="削除リクエストを承認" />
+                }
+                
+                @if (CanCancel)
+                {
+                    <MudBadge Icon="@Icons.Material.Filled.Close" Color="Color.Error" Overlap="true" Bordered="true" Class="mr-1">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" 
+                                       Color="Color.Inherit" 
+                                       Size="Size.Small" 
+                                       Class="pa-0 chip-icon-btn"
+                                       OnClick="OnCancelClicked" 
+                                       title="削除リクエストをキャンセル" />
+                    </MudBadge>
+                }
+            </div>
+
+            <!-- テキスト領域（タグ名・オーナー） -->
+            <span class="d-flex align-center">
+                <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
+                    @TagName
+                </a>
+                @if (!string.IsNullOrEmpty(OwnerName))
+                {
+                    <span class="ml-1 text-muted" @onclick:stopPropagation="true">(@OwnerName)</span>
+                }
+            </span>
+
+            <!-- Weight表示 -->
+            @if (Weight != 0)
+            {
+                <span class="mx-1 ml-2 font-weight-bold text-muted" @onclick:stopPropagation="true">
+                    @Weight
+                </span>
+            }
+        </div>
+    </MudChip>
+</span>
+
+@code {
+    /// <summary>タグ名</summary>
+    [Parameter] public string TagName { get; set; } = "";
+    
+    /// <summary>タグの所有者名</summary>
+    [Parameter] public string? OwnerName { get; set; }
+    
+    /// <summary>Weight</summary>
+    [Parameter] public int Weight { get; set; }
+
+    /// <summary>
+    /// 削除リクエストを承認できる権限があるかどうか
+    /// </summary>
+    [Parameter] public bool CanApprove { get; set; }
+
+    /// <summary>
+    /// 削除リクエストをキャンセルできる権限があるかどうか（リクエストした本人など）
+    /// </summary>
+    [Parameter] public bool CanCancel { get; set; }
+
+    /// <summary>承認時のコールバック</summary>
+    [Parameter] public EventCallback OnApprove { get; set; }
+    
+    /// <summary>キャンセル時のコールバック</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+    
+    /// <summary>タグクリック時のコールバック</summary>
+    [Parameter] public EventCallback OnTagClick { get; set; }
+
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string? TagStyle { get; set; }
+    
+    /// <summary>削除リクエスト中を表現するためにデフォルトはWarning</summary>
+    [Parameter] public Color Color { get; set; } = Color.Warning;
+    
+    [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
+
+    private async Task OnApproveClicked()
+    {
+        if (OnApprove.HasDelegate)
+        {
+            await OnApprove.InvokeAsync();
+        }
+    }
+
+    private async Task OnCancelClicked()
+    {
+        if (OnCancel.HasDelegate)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+
+    private async Task HandleTagClick()
+    {
+        if (OnTagClick.HasDelegate)
+        {
+            await OnTagClick.InvokeAsync();
+        }
+    }
+}

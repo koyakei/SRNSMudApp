@@ -63,7 +63,8 @@ public class ItemListAutocompleteE2ETests
         await searchInput.WaitForAsync();
 
         // "Item1" と入力
-        await searchInput.FillAsync("Item1");
+        await searchInput.ClickAsync();
+        await searchInput.PressSequentiallyAsync("Item1", new LocatorPressSequentiallyOptions { Delay = 100 });
 
         // サジェストされた "Item1_Tag" を選択
         ILocator goodOption = page.GetByRole(AriaRole.Option)

@@ -22,7 +22,8 @@
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mr-4"
                           Immediate="true" DebounceInterval="300"/>
             <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
-                       OnClick="@DeleteSelectedTags" Disabled="@(string.IsNullOrEmpty(_currentUserId))">選択したタグを削除
+                       OnClick="@DeleteSelectedTags" Disabled="@(string.IsNullOrEmpty(_currentUserId))">
+                選択したタグを削除
             </MudButton>
         </div>
     </MudItem>

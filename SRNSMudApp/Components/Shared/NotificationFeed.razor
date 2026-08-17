@@ -33,7 +33,9 @@
                                 <div class="d-flex flex-column">
                                     <MudText Typo="Typo.body2">@notification.Message</MudText>
                                     <MudText Typo="Typo.caption"
-                                             Color="Color.Secondary">@GetRelativeTime(notification.CreatedAt)</MudText>
+                                             Color="Color.Secondary">
+                                        @GetRelativeTime(notification.CreatedAt)
+                                    </MudText>
                                 </div>
                             </MudListItem>
                             <MudDivider/>

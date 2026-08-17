@@ -23,7 +23,9 @@
                 <MudListItem>
                     <MudText Typo="Typo.subtitle2">獲得できる報酬</MudText>
                     <MudText Typo="Typo.body2"
-                             Color="Color.Success">@($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")</MudText>
+                             Color="Color.Success">
+                        @($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")
+                    </MudText>
                 </MudListItem>
             }
         </MudList>

@@ -1,7 +1,5 @@
-@using Microsoft.EntityFrameworkCore
-@using SRNSMudApp.Data
-@using SRNSMudApp.Components.Shared
 @using SRNSMudApp.Components.Contract
+@using SRNSMudApp.Components.Shared
 @using SRNSMudApp.Services
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -22,15 +20,15 @@
 
     var chipId = $"tag-chip-{Item.Id}-{tagId}";
     var displayWeight = isUpdated || isInserted ? $"{HighlightEvent?.PreviousWeight ?? 0} → {HighlightEvent?.NewWeight}" : isDeleted ? $"{HighlightEvent?.PreviousWeight}" : TagRelation.Weight.ToString();
-    var addBtnColor = weightIncreased ? MudBlazor.Color.Success : MudBlazor.Color.Inherit;
-    
+    var addBtnColor = weightIncreased ? Color.Success : Color.Inherit;
+
     var addedTags = AllTagRelationsToTags
         .Where(ttr => ttr.TargetTagId == tagId && ttr.Tag != null && !ttr.Tag.IsSystem)
         .ToList();
 }
 
 <BaseTagChip ChipId="@chipId"
-             TagName="@(ShowNameAndOwner ? (TagRelation.Tag?.Name ?? "不明") : "")"
+             TagName="@(ShowNameAndOwner ? TagRelation.Tag?.Name ?? "不明" : "")"
              Style="@($"background: {bgColor}; color: {textColor}; font-weight: {(HighlightEvent != null ? "bold" : "normal")}")"
              TagStyle="@(isDeleted ? "text-decoration: line-through;" : "")"
              OwnerName="@(ShowNameAndOwner ? GetShortOwnerName(TagRelation.Tag?.Owner?.UserName) : null)"
@@ -53,9 +51,9 @@
         }
         <MudLink Color="Color.Inherit" Underline="Underline.Hover"
                  Class="mx-1 cursor-pointer font-weight-bold" OnClick="@(async () =>
-                                                                        {
-                                                                            if (!isDeleted) await EditTagRelationWeightAsync();
-                                                                        })">
+                                                                       {
+                                                                           if (!isDeleted) await EditTagRelationWeightAsync();
+                                                                       })">
             @if (isDeleted)
             {
                 <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
@@ -137,8 +135,8 @@
 </BaseTagChip>
 
 @code {
-    [Parameter][EditorRequired] public TagRelation TagRelation { get; set; } = null!;
-    [Parameter][EditorRequired] public Item Item { get; set; } = null!;
+    [Parameter] [EditorRequired] public TagRelation TagRelation { get; set; } = null!;
+    [Parameter] [EditorRequired] public Item Item { get; set; } = null!;
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public List<Tag> AllTags { get; set; } = [];
     [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
@@ -496,4 +494,5 @@
             if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
         }
     }
+
 }

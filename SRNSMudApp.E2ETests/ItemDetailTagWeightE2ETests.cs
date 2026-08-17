@@ -87,8 +87,8 @@ public class ItemDetailTagWeightE2ETests
         ILocator goodTagRow = tagTable.Locator("tr").Filter(new LocatorFilterOptions { HasTextString = "Item1_Tag" })
             .First;
 
-        // 行の中の DataLabel="Weight" のセルの内容が -1 であることを確認
-        ILocator weightCell = goodTagRow.Locator("td[data-label='Weight']");
-        await Assertions.Expect(weightCell).ToHaveTextAsync(new Regex(@"-1"));
+        // 行の中の DataLabel="Actions" のセルの内容が -1 を含んでいることを確認
+        ILocator tagCell = goodTagRow.Locator("td[data-label='Actions']");
+        await Assertions.Expect(tagCell).ToContainTextAsync("-1");
     }
 }

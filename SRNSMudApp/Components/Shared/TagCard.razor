@@ -39,7 +39,9 @@
                                 <span @onclick:stopPropagation="true">
                                     <MudLink Href="@($"/User/UserDetail/{Tag.OwnerId}")"
                                              Color="Color.Inherit"
-                                             Underline="Underline.Hover">@(Tag.Owner?.UserName)</MudLink>
+                                             Underline="Underline.Hover">
+                                        @(Tag.Owner?.UserName)
+                                    </MudLink>
                                 </span>
                             }
                             else
@@ -114,10 +116,13 @@
                                                    Size="Size.Small" Color="Color.Inherit"
                                                    Class="chip-icon-btn mr-1"
                                                    OnClick="@(() => OnAddTagToTagClicked(tr.Tag))"/>
-                                    <span class="d-flex align-center"><a class="chip-link mr-1"
-                                                                         style="@(isDeleted ? "text-decoration: line-through;" : "")"
-                                                                         @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
-                                                                         @onclick:stopPropagation="true">@(tr.Tag?.Name ?? "不明")</a>
+                                    <span class="d-flex align-center">
+                                        <a class="chip-link mr-1"
+                                           style="@(isDeleted ? "text-decoration: line-through;" : "")"
+                                           @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
+                                           @onclick:stopPropagation="true">
+                                            @(tr.Tag?.Name ?? "不明")
+                                        </a>
                                         @if (!isDeleted)
                                         {
                                             <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
@@ -203,7 +208,7 @@
 </MudCard>
 
 @code {
-    [Parameter][EditorRequired] public Tag Tag { get; set; } = null!;
+    [Parameter] [EditorRequired] public Tag Tag { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }

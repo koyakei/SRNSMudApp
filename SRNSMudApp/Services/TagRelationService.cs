@@ -132,18 +132,18 @@ public class TagRelationService(ApplicationDbContext context)
                 rightAsset.BurnedAt = DateTime.UtcNow;
             }
 
-            context.RightAssets.Update(rightAsset);
+            _ = context.RightAssets.Update(rightAsset);
 
             TagRelation? relation =
                 await context.TagRelations.FirstOrDefaultAsync(r => r.ItemId == itemId && r.TagId == tagId);
             if (relation == null)
             {
                 relation = new TagRelation { ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = 0 };
-                context.TagRelations.Add(relation);
+                _ = context.TagRelations.Add(relation);
             }
 
             relation.Weight += manipulationDelta;
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
 
             var previousWeight = tag.CachedWeight;
             tag.CachedWeight += manipulationDelta;
@@ -163,9 +163,9 @@ public class TagRelationService(ApplicationDbContext context)
                 Reason = "TagRelationService.AllocateWeightAsync",
                 OwnerId = currentUserId
             };
-            context.TagWeightLedgers.Add(ledger);
+            _ = context.TagWeightLedgers.Add(ledger);
 
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return TaggingResult.Success;

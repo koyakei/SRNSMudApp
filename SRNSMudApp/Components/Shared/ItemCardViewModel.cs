@@ -1,5 +1,6 @@
 #region
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using SRNSMudApp.Data;
@@ -16,6 +17,7 @@ public class RequestInfo
     public string? TargetItemContent { get; set; }
     public int? TargetTagId { get; set; }
     public string? TargetTagName { get; set; }
+    public TradeStatus? Status { get; set; }
 }
 
 /// <summary>
@@ -40,7 +42,8 @@ public static class ItemCardViewModel
                 TargetItemId = item.AsRequestOf.TargetItemId,
                 TargetItemContent = item.AsRequestOf.TargetItem?.Content,
                 TargetTagId = item.AsRequestOf.RequestedTagId,
-                TargetTagName = item.AsRequestOf.RequestedTag?.Name
+                TargetTagName = item.AsRequestOf.RequestedTag?.Name,
+                Status = item.AsRequestOf.Status
             };
     }
 
@@ -134,12 +137,9 @@ public static class ItemCardViewModel
             return $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}";
         }
 
-        if (isDeleted)
-        {
-            return highlightEvent?.PreviousWeight?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
-        }
-
-        return relation.Weight.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return isDeleted
+            ? highlightEvent?.PreviousWeight?.ToString(CultureInfo.InvariantCulture) ?? ""
+            : relation.Weight.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -157,14 +157,11 @@ public static class ItemCardViewModel
             return "#E0E0E0";
         }
 
-        if (highlightEvent != null)
-        {
-            return "#FFEB3B";
-        }
-
-        return relation.OwnerId == currentUserId
-            ? myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE"
-            : "#FFF9C4";
+        return highlightEvent != null
+            ? "#FFEB3B"
+            : relation.OwnerId == currentUserId
+                ? myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE"
+                : "#FFF9C4";
     }
 
     /// <summary>
@@ -182,13 +179,10 @@ public static class ItemCardViewModel
             return "#9E9E9E";
         }
 
-        if (highlightEvent != null)
-        {
-            return "#F57F17";
-        }
-
-        return relation.OwnerId == currentUserId
-            ? myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C"
-            : "#5C4B00";
+        return highlightEvent != null
+            ? "#F57F17"
+            : relation.OwnerId == currentUserId
+                ? myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C"
+                : "#5C4B00";
     }
 }

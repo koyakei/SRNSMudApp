@@ -1,5 +1,3 @@
-@using MudBlazor
-
 <span id="@ChipId" class="position-relative d-inline-flex align-center">
     <MudChip T="string" Size="Size.Small"
              Class="@($"custom-chip {Class}")"
@@ -68,7 +66,7 @@
     [Parameter] public int Weight { get; set; }
     [Parameter] public string? Style { get; set; }
     [Parameter] public string? TagStyle { get; set; }
-    [Parameter] public MudBlazor.Color Color { get; set; } = MudBlazor.Color.Primary;
+    [Parameter] public Color Color { get; set; } = Color.Primary;
     [Parameter] public Variant Variant { get; set; } = Variant.Filled;
     [Parameter] public string? OwnerName { get; set; }
     [Parameter] public string? CloseIcon { get; set; }

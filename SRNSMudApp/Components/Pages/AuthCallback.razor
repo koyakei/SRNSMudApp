@@ -21,7 +21,13 @@
 
             if (query.TryGetValue("code", out var code) && query.TryGetValue("provider", out var provider))
             {
-                try { await JS.InvokeVoidAsync("console.log", $"[AuthCallback] Found code={code}, provider={provider}"); } catch (JSException) { }
+                try
+                {
+                    await JS.InvokeVoidAsync("console.log", $"[AuthCallback] Found code={code}, provider={provider}");
+                }
+                catch (JSException)
+                {
+                }
 
                 // Call the JS function to post the code to our backend
                 try
@@ -37,7 +43,14 @@
             }
             else
             {
-                try { await JS.InvokeVoidAsync("console.error", $"[AuthCallback] Missing code or provider in query. Query: {uri.Query}"); } catch (JSException) { }
+                try
+                {
+                    await JS.InvokeVoidAsync("console.error", $"[AuthCallback] Missing code or provider in query. Query: {uri.Query}");
+                }
+                catch (JSException)
+                {
+                }
+
                 NavigationManager.NavigateTo("/Account/Login");
             }
         }

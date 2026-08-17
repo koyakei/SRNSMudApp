@@ -271,7 +271,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .OnDelete(DeleteBehavior.Restrict);
 
         // リクエストへのリプライとリクエストのリレーション（カスケード削除）
-        builder.Entity<Item>()
+        _ = builder.Entity<Item>()
             .HasOne(i => i.TaggingRequest)
             .WithMany(tr => tr.Replies)
             .HasForeignKey(i => i.TaggingRequestEntityId)

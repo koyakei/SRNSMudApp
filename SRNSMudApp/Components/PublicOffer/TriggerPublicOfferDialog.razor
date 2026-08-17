@@ -39,7 +39,8 @@
     <DialogActions>
         <MudButton OnClick="Cancel">キャンセル</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit"
-                   Disabled="@(!_isValid || (Offer.RequiredAssetAmount > 0 && !_validAssets.Any()))">実行する
+                   Disabled="@(!_isValid || (Offer.RequiredAssetAmount > 0 && !_validAssets.Any()))">
+            実行する
         </MudButton>
     </DialogActions>
 </MudDialog>
