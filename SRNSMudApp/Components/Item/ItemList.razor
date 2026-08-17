@@ -49,7 +49,8 @@
         }
 
         @* 検索テキスト入力 (2段階オートコンプリート) *@
-        <MudAutocomplete T="string"
+        <MudAutocomplete @ref="_autocomplete"
+                         T="string"
                          Value="@_tagSearchText"
                          ValueChanged="OnAutocompleteValueChanged"
                          SearchFunc="@SearchTagsAndUsersAsync"
@@ -134,6 +135,7 @@
 
     private List<TagFilter> _selectedFilters = [];
     private string _tagSearchText = "";
+    private MudAutocomplete<string>? _autocomplete;
 
     // ===== ソート用ステート =====
     public enum SortOrder
@@ -288,6 +290,20 @@
         if (_tagSearchText.EndsWith(" "))
         {
             // タグ名だけ選択された状態。検索は実行せず、次の入力を待つ
+            // ドロップダウンを再表示してユーザー名をサジェストさせる
+            if (_autocomplete != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(100); // 選択時にメニューが閉じるのを待機
+                    await InvokeAsync(async () =>
+                    {
+                        await _autocomplete.FocusAsync();
+                        await _autocomplete.ToggleMenuAsync();
+                        StateHasChanged();
+                    });
+                });
+            }
             return;
         }
 
