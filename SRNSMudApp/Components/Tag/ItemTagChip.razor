@@ -30,10 +30,10 @@
 }
 
 <BaseTagChip ChipId="@chipId"
-             TagName="@(TagRelation.Tag?.Name ?? "不明")"
+             TagName="@(ShowNameAndOwner ? (TagRelation.Tag?.Name ?? "不明") : "")"
              Style="@($"background: {bgColor}; color: {textColor}; font-weight: {(HighlightEvent != null ? "bold" : "normal")}")"
              TagStyle="@(isDeleted ? "text-decoration: line-through;" : "")"
-             OwnerName="@GetShortOwnerName(TagRelation.Tag?.Owner?.UserName)"
+             OwnerName="@(ShowNameAndOwner ? GetShortOwnerName(TagRelation.Tag?.Owner?.UserName) : null)"
              CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
              OnClose="@(_ => RemoveTagRelationAsync())"
              OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))">
@@ -147,6 +147,7 @@
     [Parameter] public int ChipIndex { get; set; }
     [Parameter] public string[] ChipBackgrounds { get; set; } = ["#EEEDFE"];
     [Parameter] public string[] ChipTextColors { get; set; } = ["#26215C"];
+    [Parameter] public bool ShowNameAndOwner { get; set; } = true;
 
     private bool _isTreePopoverOpen;
 

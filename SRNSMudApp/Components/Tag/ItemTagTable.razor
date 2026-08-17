@@ -33,16 +33,16 @@
             </div>
         </MudTd>
         <MudTd DataLabel="Username">
-            @context.Owner?.UserName
+            @context.Tag?.Owner?.UserName
         </MudTd>
         <MudTd DataLabel="Actions">
-            <ItemTagChip TagRelation="@context"
-                         Item="@Item"
-                         CurrentUserId="@CurrentUserId"
-                         AllTags="@AllTags"
-                         AllTagRelationsToTags="@AllTagRelationsToTags"
-                         OnDataChanged="OnDataChanged" 
-                         ChipIndex="0" />
+            <ActionTagChip TagRelation="@context"
+                           Item="@Item"
+                           CurrentUserId="@CurrentUserId"
+                           AllTags="@AllTags"
+                           AllTagRelationsToTags="@AllTagRelationsToTags"
+                           OnDataChanged="OnDataChanged" 
+                           ChipIndex="0" />
         </MudTd>
     </RowTemplate>
     <PagerContent>
@@ -66,7 +66,7 @@
             return true;
         
         var nameMatch = relation.Tag?.Name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
-        var userMatch = relation.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
+        var userMatch = relation.Tag?.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
         
         return nameMatch || userMatch;
     }

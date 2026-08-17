@@ -1,0 +1,33 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Components.Shared
+@using SRNSMudApp.Components.Contract
+
+<ItemTagChip ShowNameAndOwner="false"
+             TagRelation="TagRelation"
+             Item="Item"
+             CurrentUserId="@CurrentUserId"
+             AllTags="AllTags"
+             AllTagRelationsToTags="AllTagRelationsToTags"
+             HighlightEvent="HighlightEvent"
+             OnDataChanged="OnDataChanged"
+             ChipIndex="ChipIndex"
+             ChipBackgrounds="ChipBackgrounds"
+             ChipTextColors="ChipTextColors" />
+
+@code {
+    [Parameter] public TagRelation TagRelation { get; set; } = null!;
+    [Parameter] public Item Item { get; set; } = null!;
+    [Parameter] public string CurrentUserId { get; set; } = "";
+    [Parameter] public List<Tag> AllTags { get; set; } = [];
+    [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+    [Parameter] public TimelineEvent? HighlightEvent { get; set; }
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+    
+    [Parameter] public int ChipIndex { get; set; }
+    [Parameter] public string[] ChipBackgrounds { get; set; } = [
+        "#E8EAF6", "#E3F2FD", "#E0F7FA", "#E8F5E9", "#F3E5F5", "#FFF3E0", "#FFEBEE"
+    ];
+    [Parameter] public string[] ChipTextColors { get; set; } = [
+        "#1A237E", "#0D47A1", "#006064", "#1B5E20", "#4A148C", "#E65100", "#B71C1C"
+    ];
+}

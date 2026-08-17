@@ -9,6 +9,25 @@
              CloseIcon="@CloseIcon"
              OnClose="@OnClose">
         <div class="d-flex align-center">
+            @if (!string.IsNullOrEmpty(TagName) || OwnerName != null)
+            {
+                <span class="d-flex align-center mr-1">
+                    @if (!string.IsNullOrEmpty(TagName))
+                    {
+                        <a class="chip-link mr-1"
+                           style="@TagStyle"
+                           @onclick="HandleTagClick"
+                           @onclick:stopPropagation="true">
+                            @TagName
+                        </a>
+                    }
+                    @if (OwnerName != null)
+                    {
+                        <span class="ml-1" @onclick:stopPropagation="true">(@OwnerName)</span>
+                    }
+                </span>
+            }
+
             @if (PrefixContent != null)
             {
                 <div class="d-flex align-center" @onclick:stopPropagation="true">
@@ -16,12 +35,6 @@
                 </div>
             }
             <span class="d-flex align-center">
-                <a class="chip-link mr-1"
-                   style="@TagStyle"
-                   @onclick="HandleTagClick"
-                   @onclick:stopPropagation="true">
-                    @TagName
-                </a>
                 @if (WeightContent != null)
                 {
                     <span class="mx-1 d-flex align-center font-weight-bold" @onclick:stopPropagation="true">
@@ -33,10 +46,6 @@
                     <span class="mx-1 font-weight-bold" @onclick:stopPropagation="true">
                         @Weight
                     </span>
-                }
-                @if (OwnerName != null)
-                {
-                    <span class="ml-1" @onclick:stopPropagation="true">(@OwnerName)</span>
                 }
             </span>
             @if (ActionContent != null)
@@ -78,4 +87,5 @@
             await OnClick.InvokeAsync();
         }
     }
+
 }
