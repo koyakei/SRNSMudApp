@@ -112,119 +112,14 @@
             }
         </div>
 
-        @{
-            var allTags = Item.TagRelations?
-                .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
-                .OrderByDescending(tr => tr.Weight)
-                .ToList() ?? [];
-
-            // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelation としてリストに追加して表示する
-            if (HighlightEvents != null)
-            {
-                foreach (var ev in HighlightEvents.Where(e => e.EventType == "Delete"))
-                {
-                    if (ev.FollowedTag != null && allTags.All(t => t.TagId != ev.FollowedTagId))
-                    {
-                        allTags.Add(new TagRelation
-                        {
-                            TagId = ev.FollowedTagId,
-                            Tag = ev.FollowedTag,
-                            Weight = ev.PreviousWeight ?? 0,
-                            OwnerId = ev.OwnerId // fake owner
-                        });
-                    }
-                }
-            }
-
-            // タグが5つ以上あるか判定
-            var hasManyTags = allTags.Count >= 5;
-            // 折りたたみ時の表示数（4つ表示して、1つ以上を +X more にする）
-            const int displayLimit = 4;
-
-            var tagsToDisplay = _areTagsExpanded || !hasManyTags ? allTags : [.. allTags.Take(displayLimit)];
-            var hiddenCount = hasManyTags ? allTags.Count - displayLimit : 0;
-        }
-
-        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="align-items-center">
-            @for (var i = 0; i < tagsToDisplay.Count; i++)
-            {
-                var tr = tagsToDisplay[i];
-                <ItemTagChip TagRelation="tr"
-                             Item="Item"
-                             CurrentUserId="@CurrentUserId"
-                             AllTags="AllTags"
-                             AllTagRelationsToTags="AllTagRelationsToTags"
-                             HighlightEvent="@(HighlightEvents?.FirstOrDefault(e => e.FollowedTagId == (tr.Tag?.Id ?? -1)))"
-                             OnDataChanged="OnDataChanged"
-                             ChipIndex="i"
-                             ChipBackgrounds="_chipBackgrounds"
-                             ChipTextColors="_chipTextColors"/>
-            }
-            @* 5つ以上の場合のみボタンを表示 *@
-            @if (hasManyTags)
-            {
-                if (_areTagsExpanded)
-                {
-                    <MudChip T="string" Size="Size.Small"
-                             OnClick="ToggleTagExpand"
-                             Class="more-chip">
-                        閉じる
-                    </MudChip>
-                }
-                else
-                {
-                    <MudChip T="string" Size="Size.Small"
-                             OnClick="@ToggleTagExpand"
-                             Class="more-chip">
-                        +@hiddenCount more
-                    </MudChip>
-                }
-            }
-
-            <!-- リクエスト中のタグ -->
-            @foreach (var request in _taggingRequests)
-            {
-                // Executed または Canceled の場合は非表示
-                if (request.Status != TradeStatus.Proposed) continue;
-
-                var isAdd = request.RequestType == TaggingRequestType.Add;
-                var hasTag = Item.TagRelations?.Any(tr => tr.TagId == request.RequestedTagId) ?? false;
-
-                // すでに関連付けが存在する追加リクエスト、または関連付けが存在しない削除リクエストは非表示（放置されているリクエスト対策）
-                if (isAdd && hasTag) continue;
-                if (!isAdd && !hasTag) continue;
-
-                var replyCount = request.Replies?.Count ?? 0;
-
-                <MudBadge Content="@replyCount" Color="Color.Primary" Overlap="true"
-                          Visible="@(replyCount > 0)">
-                    <MudChip T="string"
-                             Size="Size.Small"
-                             Color="@(isAdd ? Color.Success : Color.Error)"
-                             Variant="Variant.Outlined"
-                             Icon="@(isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)">
-                        <div class="d-flex align-center">
-                            <a class="chip-link mr-1" style="color: inherit;"
-                               @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{request.RequestedTagId}"))"
-                               @onclick:stopPropagation="true">
-                                @request.RequestedTag?.Name
-                            </a>
-                            <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline"
-                                           Size="Size.Small"
-                                           Color="Color.Inherit"
-                                           Class="pa-0"
-                                           OnClick="@(async () => await OpenThreadDialogAsync(request))"/>
-                        </div>
-                    </MudChip>
-                </MudBadge>
-            }
-
-            <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
-                           Size="Size.Small"
-                           Color="Color.Primary"
-                           OnClick="OnAddTagClicked"
-                           title="タグを追加"/>
-        </MudStack>
+        <ItemTagChipList Item="Item"
+                         CurrentUserId="@CurrentUserId"
+                         AllTags="AllTags"
+                         AllTagRelationsToTags="AllTagRelationsToTags"
+                         HighlightEvents="HighlightEvents"
+                         TaggingRequests="_taggingRequests"
+                         OnDataChanged="OnDataChanged"
+                         OnAddTagClicked="OnAddTagClicked"/>
         <div class="d-flex justify-end mt-2">
             <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline"
                        Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
@@ -297,15 +192,9 @@
     [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
     [Parameter] public List<TimelineEvent>? HighlightEvents { get; set; }
 
-    private readonly string[] _chipBackgrounds = ["#EEEDFE"];
-    private readonly string[] _chipTextColors = ["#26215C"];
-
     private bool _isExpanded;
     private bool _isOverflowing;
-    private bool _areTagsExpanded;
 
-    private int _activePopoverTagId = -1;
-    private string _activePopoverChipKey = "";
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private bool _needsOverflowCheck = true;
@@ -415,10 +304,7 @@
         }
     }
 
-    private void ToggleTagExpand()
-    {
-        _areTagsExpanded = !_areTagsExpanded;
-    }
+
 
     private async Task CancelTaggingRequestAsync()
     {
@@ -452,24 +338,7 @@
         }
     }
 
-    private async Task OpenThreadDialogAsync(TaggingRequestEntity request)
-    {
-        var parameters = new DialogParameters<TaggingRequestThreadDialog>
-        {
-            { x => x.TaggingRequest, request }
-        };
 
-        var options = new DialogOptions
-        {
-            CloseButton = true,
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
-
-        var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>($"Request: {request.RequestedTag?.Name}", parameters, options);
-        await dialog.Result;
-        StateHasChanged();
-    }
 
     private async Task ToggleRepliesAsync()
     {
