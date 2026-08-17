@@ -672,7 +672,7 @@
 
     private bool IsItemUpvoted() => ItemCardViewModel.IsItemUpvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
 
-    private bool IsItemDownvoted() => ItemCardViewModel.IsItemDownvoted(Item.TagRelations, CurrentUserId, CurrentUserBadTagId);
+    private bool IsItemDownvoted() => ItemCardViewModel.IsItemDownvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
 
     private async Task UpvoteItemAsync()
     {
@@ -697,54 +697,120 @@
             await OnEnsureSystemTags.InvokeAsync();
         }
 
-        if (!CurrentUserGoodTagId.HasValue || !CurrentUserBadTagId.HasValue)
+        if (!CurrentUserGoodTagId.HasValue)
         {
             Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
             return;
         }
 
-        var targetTagId = isUpvote ? CurrentUserGoodTagId!.Value : CurrentUserBadTagId!.Value;
-        var oppositeTagId = isUpvote ? CurrentUserBadTagId!.Value : CurrentUserGoodTagId!.Value;
+        var targetWeight = isUpvote ? 1 : -1;
+        var goodTagId = CurrentUserGoodTagId!.Value;
 
         await using var context = await DbFactory.CreateDbContextAsync();
         var relations = await context.TagRelations.Where(tr => tr.ItemId == Item.Id && tr.OwnerId == CurrentUserId).ToListAsync();
 
-        var targetRelation = relations.FirstOrDefault(tr => tr.TagId == targetTagId);
-        var oppositeRelation = relations.FirstOrDefault(tr => tr.TagId == oppositeTagId);
+        var existingRelation = relations.FirstOrDefault(tr => tr.TagId == goodTagId);
 
-        if (targetRelation != null)
+        if (existingRelation != null)
         {
-            context.TagRelations.Remove(targetRelation);
+            var tag = await context.Tags.FindAsync(goodTagId);
+            if (existingRelation.Weight == targetWeight)
+            {
+                // 同じウェイトならキャンセル（削除）
+                var delta = -existingRelation.Weight;
+                if (tag != null)
+                {
+                    var prevWeight = tag.CachedWeight;
+                    tag.CachedWeight += delta;
+                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = tag.Id,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelationDelete",
+                        SourceId = existingRelation.Id,
+                        PreviousWeight = prevWeight,
+                        NewWeight = tag.CachedWeight,
+                        Delta = delta,
+                        IsOwnerAction = true,
+                        Reason = "Vote取り消し",
+                        OwnerId = CurrentUserId
+                    });
+                }
+
+                context.TimelineEvents!.Add(new TimelineEvent
+                {
+                    OwnerId = CurrentUserId,
+                    TargetType = "Item",
+                    TargetItemId = Item.Id,
+                    FollowedTagId = goodTagId,
+                    EventType = "Delete",
+                    PreviousWeight = existingRelation.Weight
+                });
+
+                context.TagRelations.Remove(existingRelation);
+                var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+                if (localTarget != null) Item.TagRelations.Remove(localTarget);
+            }
+            else
+            {
+                // 逆のウェイトなら更新
+                var delta = targetWeight - existingRelation.Weight;
+                existingRelation.Weight = targetWeight;
+                existingRelation.UpdatedDate = DateTime.UtcNow;
+
+                if (tag != null)
+                {
+                    var prevWeight = tag.CachedWeight;
+                    tag.CachedWeight += delta;
+                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = tag.Id,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelationUpdate",
+                        SourceId = existingRelation.Id,
+                        PreviousWeight = prevWeight,
+                        NewWeight = tag.CachedWeight,
+                        Delta = delta,
+                        IsOwnerAction = true,
+                        Reason = "Vote変更",
+                        OwnerId = CurrentUserId
+                    });
+                }
+
+                context.TimelineEvents!.Add(new TimelineEvent
+                {
+                    OwnerId = CurrentUserId,
+                    TargetType = "Item",
+                    TargetItemId = Item.Id,
+                    FollowedTagId = goodTagId,
+                    EventType = "Update",
+                    PreviousWeight = existingRelation.Weight - delta,
+                    NewWeight = existingRelation.Weight
+                });
+
+                var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+                if (localTarget != null)
+                {
+                    localTarget.Weight = targetWeight;
+                }
+            }
         }
         else
         {
-            context.TagRelations.Add(new TagRelation
+            var newRelation = new TagRelation
             {
                 ItemId = Item.Id,
-                TagId = targetTagId,
+                TagId = goodTagId,
                 OwnerId = CurrentUserId,
-                Weight = 1
-            });
-
-            if (oppositeRelation != null)
-            {
-                context.TagRelations.Remove(oppositeRelation);
-            }
+                Weight = targetWeight,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            context.TagRelations.Add(newRelation);
+            Item.TagRelations.Add(newRelation);
         }
 
         await context.SaveChangesAsync();
-        
-        // ローカルにも反映（削除分のみ。追加はリロードを待つ）
-        if (targetRelation != null)
-        {
-            var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == targetRelation.Id);
-            if (localTarget != null) Item.TagRelations.Remove(localTarget);
-        }
-        else if (oppositeRelation != null)
-        {
-            var localOpposite = Item.TagRelations.FirstOrDefault(tr => tr.Id == oppositeRelation.Id);
-            if (localOpposite != null) Item.TagRelations.Remove(localOpposite);
-        }
 
         if (OnDataChanged.HasDelegate)
         {
@@ -854,6 +920,26 @@
             EventType = "Insert",
             NewWeight = 1
         });
+
+        await context.SaveChangesAsync();
+
+        var prevWeight = tagFromDb.CachedWeight;
+        tagFromDb.CachedWeight += 1;
+
+        context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tagFromDb.Id,
+            TagNameSnapshot = tagFromDb.Name,
+            SourceType = "TagRelationInsert",
+            SourceId = newRelation.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tagFromDb.CachedWeight,
+            Delta = 1,
+            IsOwnerAction = true,
+            Reason = "タグの新規追加",
+            OwnerId = CurrentUserId
+        });
+
         await context.SaveChangesAsync();
 
         // ローカルに即時反映
@@ -894,20 +980,42 @@
         }
 
         await using var context = await DbFactory.CreateDbContextAsync();
-        var entityToRemove = await context.TagRelations.FindAsync(relation.Id);
+        var entityToRemove = await context.TagRelations.Include(tr => tr.Tag).FirstOrDefaultAsync(tr => tr.Id == relation.Id);
         if (entityToRemove != null)
         {
+            var tag = entityToRemove.Tag;
+            if (tag != null)
+            {
+                var prevWeight = tag.CachedWeight;
+                tag.CachedWeight -= entityToRemove.Weight;
+
+                context.TagWeightLedgers!.Add(new TagWeightLedger
+                {
+                    TagId = tag.Id,
+                    TagNameSnapshot = tag.Name,
+                    SourceType = "TagRelationDelete",
+                    SourceId = entityToRemove.Id,
+                    PreviousWeight = prevWeight,
+                    NewWeight = tag.CachedWeight,
+                    Delta = -entityToRemove.Weight,
+                    IsOwnerAction = true,
+                    Reason = "タグの削除",
+                    OwnerId = CurrentUserId
+                });
+            }
+
+            context.TimelineEvents!.Add(new TimelineEvent
+            {
+                OwnerId = CurrentUserId,
+                TargetType = "Item",
+                TargetItemId = Item.Id,
+                FollowedTagId = relation.TagId,
+                EventType = "Delete",
+                PreviousWeight = relation.Weight
+            });
+
             context.TagRelations.Remove(entityToRemove);
         }
-        context.TimelineEvents!.Add(new TimelineEvent
-        {
-            OwnerId = CurrentUserId,
-            TargetType = "Item",
-            TargetItemId = Item.Id,
-            FollowedTagId = relation.TagId,
-            EventType = "Delete",
-            PreviousWeight = relation.Weight
-        });
         await context.SaveChangesAsync();
 
         // 画面上に即時反映させるためローカルのコレクションからも削除する

@@ -440,6 +440,27 @@
         });
         await context.SaveChangesAsync();
 
+        var tagFromDb = await context.Tags.FindAsync(selectedTag.Id);
+        if (tagFromDb != null)
+        {
+            var prevWeight = tagFromDb.CachedWeight;
+            tagFromDb.CachedWeight += 1;
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tagFromDb.Id,
+                TagNameSnapshot = tagFromDb.Name,
+                SourceType = "TagRelationToTagInsert",
+                SourceId = newRelation.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tagFromDb.CachedWeight,
+                Delta = 1,
+                IsOwnerAction = true,
+                Reason = "タグの新規追加",
+                OwnerId = CurrentUserId
+            });
+            await context.SaveChangesAsync();
+        }
+
         Snackbar.Add("タグを追加しました。", Severity.Success);
         if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
     }
@@ -453,9 +474,29 @@
         }
 
         await using var context = await DbFactory.CreateDbContextAsync();
-        var entity = await context.TagRelationToTags.FindAsync(relation.Id);
+        var entity = await context.TagRelationToTags.Include(tr => tr.Tag).FirstOrDefaultAsync(tr => tr.Id == relation.Id);
         if (entity != null)
         {
+            var tag = entity.Tag;
+            if (tag != null)
+            {
+                var prevWeight = tag.CachedWeight;
+                tag.CachedWeight -= entity.Weight;
+                context.TagWeightLedgers!.Add(new TagWeightLedger
+                {
+                    TagId = tag.Id,
+                    TagNameSnapshot = tag.Name,
+                    SourceType = "TagRelationToTagDelete",
+                    SourceId = entity.Id,
+                    PreviousWeight = prevWeight,
+                    NewWeight = tag.CachedWeight,
+                    Delta = -entity.Weight,
+                    IsOwnerAction = true,
+                    Reason = "タグの関連付け解除",
+                    OwnerId = CurrentUserId
+                });
+            }
+
             context.Remove(entity);
             context.TimelineEvents!.Add(new TimelineEvent
             {

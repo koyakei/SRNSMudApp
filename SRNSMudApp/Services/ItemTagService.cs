@@ -27,13 +27,15 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == tagId);
         if (alreadyExists) return "このタグは既に追加されています。";
 
-        context.TagRelations.Add(new TagRelation
+        var newRelation = new TagRelation
         {
             ItemId = itemId,
             TagId = tagId,
             Weight = 1,
             OwnerId = currentUserId
-        });
+        };
+        context.TagRelations.Add(newRelation);
+
         context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
@@ -42,6 +44,25 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             FollowedTagId = tagId,
             EventType = "Insert",
             NewWeight = 1
+        });
+
+        await context.SaveChangesAsync();
+
+        var prevWeight = tagFromDb.CachedWeight;
+        tagFromDb.CachedWeight += 1;
+
+        context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tagFromDb.Id,
+            TagNameSnapshot = tagFromDb.Name,
+            SourceType = "TagRelationInsert",
+            SourceId = newRelation.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tagFromDb.CachedWeight,
+            Delta = 1,
+            IsOwnerAction = true,
+            Reason = "タグの新規追加",
+            OwnerId = currentUserId
         });
 
         await context.SaveChangesAsync();
@@ -67,6 +88,27 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             EventType = "Delete",
             PreviousWeight = relation.Weight
         });
+        
+        var tag = await context.Tags.FindAsync(relation.TagId);
+        if (tag != null)
+        {
+            var prevWeight = tag.CachedWeight;
+            tag.CachedWeight -= relation.Weight;
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tag.Id,
+                TagNameSnapshot = tag.Name,
+                SourceType = "TagRelationDelete",
+                SourceId = relation.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tag.CachedWeight,
+                Delta = -relation.Weight,
+                IsOwnerAction = true,
+                Reason = "タグの削除",
+                OwnerId = currentUserId
+            });
+        }
+
         context.Remove(relation);
 
         await context.SaveChangesAsync();
@@ -190,15 +232,40 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == tagId);
         if (alreadyExists) return "このタグは既に追加されています。";
 
-        context.Set<TagRelationToTag>().Add(new TagRelationToTag
+        var newRelation = new TagRelationToTag
         {
             TargetTagId = targetTagId,
             TagId = tagId,
             Weight = 1,
             OwnerId = currentUserId
-        });
+        };
+        context.Set<TagRelationToTag>().Add(newRelation);
 
         await context.SaveChangesAsync();
+
+        var tagFromDb = await context.Tags.FindAsync(tagId);
+        if (tagFromDb != null)
+        {
+            var prevWeight = tagFromDb.CachedWeight;
+            tagFromDb.CachedWeight += 1;
+
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tagFromDb.Id,
+                TagNameSnapshot = tagFromDb.Name,
+                SourceType = "TagRelationToTagInsert",
+                SourceId = newRelation.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tagFromDb.CachedWeight,
+                Delta = 1,
+                IsOwnerAction = true,
+                Reason = "タグの新規追加",
+                OwnerId = currentUserId
+            });
+
+            await context.SaveChangesAsync();
+        }
+
         return null;
     }
 
@@ -211,6 +278,27 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         if (entity.OwnerId != currentUserId)
             return "関連付けた本人ではないため、解除する権限がありません。";
+
+        var tag = await context.Tags.FindAsync(entity.TagId);
+        if (tag != null)
+        {
+            var prevWeight = tag.CachedWeight;
+            tag.CachedWeight -= entity.Weight;
+
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tag.Id,
+                TagNameSnapshot = tag.Name,
+                SourceType = "TagRelationToTagDelete",
+                SourceId = entity.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tag.CachedWeight,
+                Delta = -entity.Weight,
+                IsOwnerAction = true,
+                Reason = "タグの関連付け解除",
+                OwnerId = currentUserId
+            });
+        }
 
         context.Remove(entity);
         await context.SaveChangesAsync();

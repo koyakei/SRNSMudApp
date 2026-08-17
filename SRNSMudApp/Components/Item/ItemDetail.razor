@@ -30,6 +30,7 @@
 
                 <MudText Typo="Typo.h5" Class="mt-8 mb-4">付けられたタグ</MudText>
                 <SRNSMudApp.Components.Tag.TagTable Tags="@(_item.TagRelations.Select(tr => tr.Tag).Where(t => t != null))"
+                                                    OverrideWeights="@(_item.TagRelations.GroupBy(tr => tr.TagId).ToDictionary(g => g.Key, g => g.Sum(tr => tr.Weight)))"
                                                     OnDataChanged="LoadDataAsync" ShowCreateButton="false"
                                                     OnRemoveTag="RemoveItemTagAsync"/>
             </MudTabPanel>

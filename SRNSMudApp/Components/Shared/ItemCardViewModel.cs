@@ -54,15 +54,14 @@ public static class ItemCardViewModel
     }
 
     /// <summary>
-    /// アイテムの TagRelation コレクションから投票スコア（good - bad）を計算する。
+    /// アイテムの TagRelation コレクションから投票スコア（good の Weight の合計）を計算する。
     /// </summary>
     public static int GetItemScore(IEnumerable<TagRelation>? tagRelations)
     {
         if (tagRelations == null) return 0;
-        var relations = tagRelations.ToList();
-        var goodCount = relations.Count(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true);
-        var badCount = relations.Count(tr => tr.Tag?.Name == "bad" && tr.Tag?.IsSystem == true);
-        return goodCount - badCount;
+        return tagRelations
+            .Where(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true)
+            .Sum(tr => tr.Weight);
     }
 
     /// <summary>
@@ -71,16 +70,16 @@ public static class ItemCardViewModel
     public static bool IsItemUpvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
         if (!goodTagId.HasValue || string.IsNullOrEmpty(currentUserId)) return false;
-        return tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId) == true;
+        return tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight > 0) == true;
     }
 
     /// <summary>
     /// 現在のユーザーがアイテムにダウンボート済みかどうかを返す。
     /// </summary>
-    public static bool IsItemDownvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? badTagId)
+    public static bool IsItemDownvoted(IEnumerable<TagRelation>? tagRelations, string? currentUserId, int? goodTagId)
     {
-        if (!badTagId.HasValue || string.IsNullOrEmpty(currentUserId)) return false;
-        return tagRelations?.Any(tr => tr.TagId == badTagId.Value && tr.OwnerId == currentUserId) == true;
+        if (!goodTagId.HasValue || string.IsNullOrEmpty(currentUserId)) return false;
+        return tagRelations?.Any(tr => tr.TagId == goodTagId.Value && tr.OwnerId == currentUserId && tr.Weight < 0) == true;
     }
 
     /// <summary>

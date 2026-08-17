@@ -54,7 +54,7 @@
                          Value="@_tagSearchText"
                          ValueChanged="OnAutocompleteValueChanged"
                          SearchFunc="@SearchTagsAndUsersAsync"
-                         Placeholder="タグ名 または タグ名 ユーザー名 で検索..."
+                         Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..."
                          Variant="Variant.Outlined"
                          Margin="Margin.Dense"
                          Adornment="Adornment.Start"
@@ -208,9 +208,9 @@
 
         await using var context = await DbFactory.CreateDbContextAsync(token);
 
-        if (!value.Contains(' '))
+        if (!value.Contains(" @"))
         {
-            // 状態1: スペースがない場合（タグ名検索）
+            // 状態1: " @" がない場合（タグ名検索）
             var searchText = value;
             try
             {
@@ -233,7 +233,7 @@
                     .ToList();
 
                 return textMatches.Concat(vectorMatches)
-                    .Select(t => t.Name + " ") // 末尾に半角スペースを付与
+                    .Select(t => t.Name + " @") // 末尾に " @" を付与
                     .Distinct()
                     .Take(10);
             }
@@ -242,7 +242,7 @@
                 var textMatches = await context.Tags
                     .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
                     .AsNoTracking()
-                    .Select(t => t.Name + " ")
+                    .Select(t => t.Name + " @")
                     .Distinct()
                     .Take(10)
                     .ToListAsync(token);
@@ -251,8 +251,8 @@
         }
         else
         {
-            // 状態2: スペースがある場合（ユーザー名検索）
-            var parts = value.Split(' ', 2, StringSplitOptions.None);
+            // 状態2: " @" がある場合（ユーザー名検索）
+            var parts = value.Split(" @", 2, StringSplitOptions.None);
             var tagName = parts[0];
             var userSearch = parts[1];
 
@@ -271,10 +271,10 @@
 
             if (!users.Any() && string.IsNullOrWhiteSpace(userSearch))
             {
-                return new[] { tagName + " " };
+                return new[] { tagName + " @" };
             }
 
-            return users.Select(u => tagName + " " + u);
+            return users.Select(u => tagName + " @" + u);
         }
     }
 
@@ -287,7 +287,7 @@
             return;
         }
 
-        if (_tagSearchText.EndsWith(" "))
+        if (_tagSearchText.EndsWith(" @"))
         {
             // タグ名だけ選択された状態。検索は実行せず、次の入力を待つ
             // ドロップダウンを再表示してユーザー名をサジェストさせる
@@ -307,9 +307,9 @@
             return;
         }
 
-        if (_tagSearchText.Contains(" "))
+        if (_tagSearchText.Contains(" @"))
         {
-            // スペースが含まれていて末尾がスペースでない場合（ユーザー名まで確定した段階）
+            // " @" が含まれていて末尾が " @" でない場合（ユーザー名まで確定した段階）
             await ExecuteSearch();
         }
     }
@@ -318,7 +318,7 @@
     {
         if (e.Key == "Enter")
         {
-            if (!string.IsNullOrWhiteSpace(_tagSearchText) && !_tagSearchText.EndsWith(" "))
+            if (!string.IsNullOrWhiteSpace(_tagSearchText) && !_tagSearchText.EndsWith(" @"))
             {
                 await ExecuteSearch();
             }
@@ -330,7 +330,7 @@
         if (string.IsNullOrWhiteSpace(_tagSearchText)) return;
 
         var text = _tagSearchText.Trim();
-        var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var parts = text.Split(" @", 2, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return;
 
         var tagName = parts[0];

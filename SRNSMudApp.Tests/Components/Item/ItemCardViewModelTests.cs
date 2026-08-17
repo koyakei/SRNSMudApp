@@ -41,13 +41,13 @@ public class ItemCardViewModelTests
     // ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetItemScore_WithTwoGoodAndOneBad_ReturnsOne()
+    public void GetItemScore_WithTwoGoodAndOneDownvote_ReturnsOne()
     {
         var relations = new List<TagRelation>
         {
-            new() { OwnerId = "u1", Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u2", Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
-            new() { OwnerId = "u3", Tag = new SRNSMudApp.Data.Tag { Name = "bad", IsSystem = true, OwnerId = "sys" } }
+            new() { OwnerId = "u1", Weight = 1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
+            new() { OwnerId = "u2", Weight = 1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } },
+            new() { OwnerId = "u3", Weight = -1, Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys" } }
         };
 
         var score = ItemCardViewModel.GetItemScore(relations);
