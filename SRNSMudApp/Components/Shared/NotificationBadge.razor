@@ -1,0 +1,32 @@
+@using System.Security.Claims
+@using SRNSMudApp.Services
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+
+@if (_userId != null)
+{
+    <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)">
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="notifications" />
+    </MudBadge>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private string? _userId;
+    private int _unreadCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask;
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (_userId != null)
+            {
+                _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
+            }
+        }
+    }
+}

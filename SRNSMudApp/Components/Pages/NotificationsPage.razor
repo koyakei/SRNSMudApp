@@ -1,0 +1,232 @@
+@page "/notifications"
+@using System.Security.Claims
+@using SRNSMudApp.Models
+@using SRNSMudApp.Services
+@using MudBlazor
+@using SRNSMudApp.Data
+@using Microsoft.EntityFrameworkCore
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudPaper Elevation="1" Class="pa-4">
+        <MudText Typo="Typo.h5" Class="mb-4">通知</MudText>
+        
+        @if (_isLoading)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="mx-auto my-4 d-block" />
+        }
+        else if (_notifications.Count == 0)
+        {
+            <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary" Class="pa-4">
+                通知はありません
+            </MudText>
+        }
+        else
+        {
+            <MudList T="NotificationDto" Clickable="false" Class="pa-0">
+                @foreach (var notification in _notifications)
+                {
+                    <MudListItem T="NotificationDto" Class="px-0 py-3"
+                                 Style="@(notification.IsRead ? "" : "background-color: var(--mud-palette-action-default); border-radius: 8px;")">
+                        <div class="d-flex flex-column w-100 px-4">
+                            <div class="d-flex flex-row align-center mb-2 cursor-pointer" @onclick="@(() => HandleNotificationClick(notification))">
+                                <div class="mr-4">
+                                    @if (Enum.TryParse<Color>(notification.IconColor, out var color))
+                                    {
+                                        <MudAvatar Color="color" Variant="Variant.Filled" Size="Size.Small">
+                                            <MudIcon Icon="@notification.Icon" Size="Size.Small"/>
+                                        </MudAvatar>
+                                    }
+                                    else
+                                    {
+                                        <MudAvatar Color="Color.Default" Variant="Variant.Filled" Size="Size.Small">
+                                            <MudIcon Icon="@notification.Icon" Size="Size.Small" />
+                                        </MudAvatar>
+                                    }
+                                </div>
+                                <div class="d-flex flex-column flex-grow-1">
+                                    <div class="d-flex justify-space-between w-100">
+                                        <MudText Typo="Typo.subtitle2" Style="@(!notification.IsRead ? "font-weight: bold;" : "")">
+                                            @notification.ActorName
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @GetRelativeTime(notification.CreatedAt)
+                                        </MudText>
+                                    </div>
+                                    <MudText Typo="Typo.body2" Style="@(!notification.IsRead ? "font-weight: bold;" : "")">
+                                        @notification.Message
+                                    </MudText>
+                                </div>
+                            </div>
+                            
+                            @if (notification.AssociatedItem != null)
+                            {
+                                <div class="pl-11 mt-1">
+                                    @{
+                                        var highlightEvents = new List<TimelineEvent>();
+                                        if (notification.HighlightTagId.HasValue)
+                                        {
+                                            highlightEvents.Add(new TimelineEvent { EventType = "Update", FollowedTagId = notification.HighlightTagId.Value, OwnerId = _userId ?? "" });
+                                        }
+                                    }
+                                    <SRNSMudApp.Components.Shared.ItemCard Item="@notification.AssociatedItem"
+                                                                           AllTags="@_allTags"
+                                                                           AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                                           CurrentUserId="@_userId"
+                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                           HighlightEvents="highlightEvents" />
+                                </div>
+                            }
+                        </div>
+                    </MudListItem>
+                    <MudDivider />
+                }
+            </MudList>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private string? _userId;
+    private List<NotificationDto> _notifications = new();
+    private bool _isLoading = true;
+
+    private List<Tag> _allTags = [];
+    private List<TagRelationToTag> _allTagRelationsToTags = [];
+    private int? _currentUserGoodTagId;
+    private int? _currentUserBadTagId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask;
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (_userId != null)
+            {
+                _notifications = await NotificationService.GetUserNotificationsAsync(_userId);
+                
+                await FetchTagsAsync();
+                await FetchAssociatedItemsAsync();
+            }
+        }
+        _isLoading = false;
+    }
+
+    private async Task FetchTagsAsync()
+    {
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _allTags = await context.Tags
+            .AsNoTracking()
+            .ToListAsync();
+
+        _allTagRelationsToTags = await context.TagRelationToTags
+            .Include(tr => tr.Tag)
+            .Include(tr => tr.TargetTag)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (!string.IsNullOrEmpty(_userId))
+        {
+            var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _userId && t.Name == "good" && t.IsSystem);
+            var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _userId && t.Name == "bad" && t.IsSystem);
+            _currentUserGoodTagId = goodTag?.Id;
+            _currentUserBadTagId = badTag?.Id;
+        }
+    }
+
+    private async Task FetchAssociatedItemsAsync()
+    {
+        var itemIds = _notifications
+            .Where(n => n.AssociatedItemId != 0)
+            .Select(n => n.AssociatedItemId)
+            .Distinct()
+            .ToList();
+
+        if (!itemIds.Any()) return;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var items = await context.Items
+            .AsNoTracking()
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+            .Include(i => i.AsRequestOf)
+                .ThenInclude(r => r.TargetItem)
+            .Include(i => i.AsRequestOf)
+                .ThenInclude(r => r.RequestedTag)
+            .Where(i => itemIds.Contains(i.Id))
+            .ToListAsync();
+
+        var itemDict = items.ToDictionary(i => i.Id);
+        foreach (var notification in _notifications)
+        {
+            if (notification.AssociatedItemId != 0 && itemDict.TryGetValue(notification.AssociatedItemId, out var item))
+            {
+                notification.AssociatedItem = item;
+            }
+        }
+    }
+
+    public async Task EnsureSystemTagsExistAsync()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+        if (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) return;
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _userId && t.Name == "good" && t.IsSystem);
+        var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _userId && t.Name == "bad" && t.IsSystem);
+
+        var created = false;
+        if (goodTag == null)
+        {
+            goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _userId!, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+            context.Tags.Add(goodTag);
+            created = true;
+        }
+
+        if (badTag == null)
+        {
+            badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _userId!, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+            context.Tags.Add(badTag);
+            created = true;
+        }
+
+        if (created)
+        {
+            await context.SaveChangesAsync();
+            await FetchTagsAsync(); 
+        }
+        else
+        {
+            _currentUserGoodTagId = goodTag.Id;
+            _currentUserBadTagId = badTag.Id;
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationDto notification)
+    {
+        if (!notification.IsRead && _userId != null)
+        {
+            await NotificationService.MarkAsReadAsync(_userId, notification.SourceId, notification.Type);
+        }
+        NavigationManager.NavigateTo(notification.TargetUrl);
+    }
+
+    private static string GetRelativeTime(DateTimeOffset dateTime)
+    {
+        var timeSpan = DateTimeOffset.UtcNow - dateTime;
+        if (timeSpan <= TimeSpan.FromSeconds(60)) return $"{timeSpan.Seconds}秒前";
+        if (timeSpan <= TimeSpan.FromMinutes(60)) return $"{timeSpan.Minutes}分前";
+        if (timeSpan <= TimeSpan.FromHours(24)) return $"{timeSpan.Hours}時間前";
+        return $"{timeSpan.Days}日前";
+    }
+}
