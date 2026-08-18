@@ -11,7 +11,7 @@
     <MudStack Spacing="3">
         @foreach (var tag in Tags)
         {
-            <SRNSMudApp.Components.Shared.TagCard Tag="@tag"
+            <SRNSMudApp.Components.UI.TagCard Tag="@tag"
                                                   AllTags="@_allTags"
                                                   CurrentUserId="@_currentUserId"
                                                   CurrentUserGoodTagId="@_currentUserGoodTagId"
@@ -30,7 +30,7 @@
     <MudStack Spacing="3" Class="@(Tags.Any() ? "mt-4" : "")">
         @foreach (var item in Items)
         {
-            <SRNSMudApp.Components.Shared.ItemCard Item="@item"
+            <SRNSMudApp.Components.UI.ItemCard Item="@item"
                                                    AllTags="@_allTags"
                                                    AllTagRelationsToTags="@_allTagRelationsToTags"
                                                    CurrentUserId="@_currentUserId"

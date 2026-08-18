@@ -49,7 +49,7 @@ public class ItemListQueryStateTests
 
         Assert.Single(state.SortEntries);
         Assert.Equal(3, state.SortEntries[0].TagId);
-        Assert.Equal(ItemListQueryState.SortOrder.Desc, state.SortEntries[0].Order);
+        Assert.Equal(SortOrder.Desc, state.SortEntries[0].Order);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class ItemListQueryStateTests
         var state = ItemListQueryState.ParseFromUri("http://localhost/Item/ItemList?sort=5:asc");
 
         Assert.Single(state.SortEntries);
-        Assert.Equal(ItemListQueryState.SortOrder.Asc, state.SortEntries[0].Order);
+        Assert.Equal(SortOrder.Asc, state.SortEntries[0].Order);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class ItemListQueryStateTests
     {
         var state = new ItemListQueryState
         {
-            TagIds = [], SortEntries = [new ItemListQueryState.SortEntry(5, ItemListQueryState.SortOrder.Desc)]
+            TagIds = [], SortEntries = [new SortEntry(5, SortOrder.Desc)]
         };
 
         Dictionary<string, object?> parameters = state.BuildParameters();

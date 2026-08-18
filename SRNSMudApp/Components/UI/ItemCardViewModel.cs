@@ -7,7 +7,7 @@ using SRNSMudApp.Data;
 
 #endregion
 
-namespace SRNSMudApp.Components.Shared;
+namespace SRNSMudApp.Components.UI;
 
 public class RequestInfo
 {

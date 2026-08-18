@@ -17,7 +17,7 @@ public sealed class ItemListQueryState
     // ネストした型
     // ────────────────────────────────────────────────────────────
 
-    public enum SortOrder { Desc, Asc }
+
 
     /// <summary>フィルタとして選択されているタグIDのリスト。</summary>
     public IReadOnlyList<int> TagIds { get; init; } = [];
@@ -64,7 +64,12 @@ public sealed class ItemListQueryState
                 var kvp = part.Split(':');
                 if (kvp.Length == 2 && int.TryParse(kvp[0], out var tagId))
                 {
-                    SortOrder order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
+                    SortOrder order = kvp[1] switch
+                    {
+                        "asc" => SortOrder.Asc,
+                        "desc" => SortOrder.Desc,
+                        _ => SortOrder.Desc
+                    };
                     sortEntries.Add(new SortEntry(tagId, order));
                 }
             }
@@ -111,6 +116,4 @@ public sealed class ItemListQueryState
 
     public static ItemListQueryState ParseFromUri(Uri uriString) => throw new NotImplementedException();
 
-    /// <summary>1件のソート条件（タグID＋昇降順）。</summary>
-    public sealed record SortEntry(int TagId, SortOrder Order);
 }

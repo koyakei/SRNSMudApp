@@ -1,6 +1,6 @@
 #region
 
-using SRNSMudApp.Components.Shared;
+using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 
 #endregion

@@ -67,14 +67,14 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Type = "TagRequest",
                 Message = msg,
                 CreatedAt = new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
-                TargetUrl = $"/ItemDetail/{req.TargetItemId}",
+                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
                 Icon = MudBlazor.Icons.Material.Filled.Mail,
                 IconColor = "Primary",
                 AssociatedItemId = req.TargetItemId,
                 HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.Shared.RequestInfo
+                RequestInfo = new Components.UI.RequestInfo
                 {
                     IsTaggingRequest = true,
                     RequestType = req.RequestType,
@@ -101,14 +101,14 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Type = "RequestRejected",
                 Message = msg,
                 CreatedAt = req.RejectedAt ?? new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
-                TargetUrl = $"/ItemDetail/{req.TargetItemId}",
+                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
                 Icon = MudBlazor.Icons.Material.Filled.Cancel,
                 IconColor = "Error",
                 AssociatedItemId = req.TargetItemId,
                 HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.Shared.RequestInfo
+                RequestInfo = new Components.UI.RequestInfo
                 {
                     IsTaggingRequest = true,
                     RequestType = req.RequestType,
@@ -135,14 +135,14 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Message = msg,
                 // Using UpdatedDate as an approximation of when it was executed
                 CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
-                TargetUrl = $"/ItemDetail/{req.TargetItemId}",
+                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
                 Icon = MudBlazor.Icons.Material.Filled.CheckCircle,
                 IconColor = "Success",
                 AssociatedItemId = req.TargetItemId,
                 HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.Shared.RequestInfo
+                RequestInfo = new Components.UI.RequestInfo
                 {
                     IsTaggingRequest = true,
                     RequestType = req.RequestType,
@@ -167,7 +167,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Type = "ItemReply",
                 Message = $"{ownerName}さんがあなたのアイテムにリプライしました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = $"/ItemDetail/{reply.ParentItemId}",
+                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.ParentItemId}"),
                 IsRead = isRead,
                 ActorName = ownerName,
                 Icon = MudBlazor.Icons.Material.Filled.Reply,
@@ -187,7 +187,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Type = "RequestReply",
                 Message = $"{ownerName}さんがあなたのリクエストに返信しました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = $"/ItemDetail/{reply.TaggingRequestEntityId}", // Adjust according to your routing for request detail
+                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.TaggingRequestEntityId}"), // Adjust according to your routing for request detail
                 IsRead = isRead,
                 ActorName = ownerName,
                 Icon = MudBlazor.Icons.Material.Filled.Forum,

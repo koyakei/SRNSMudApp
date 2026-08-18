@@ -160,8 +160,10 @@
                 _newReplyMessage = string.Empty;
 
                 // 親のTaggingRequestインスタンスにも追加しておく（状態の同期）
-                TaggingRequest.Replies ??= new List<Item>();
-                TaggingRequest.Replies.Add(newReply);
+                if (!TaggingRequest.Replies.Contains(newReply))
+                {
+                    TaggingRequest.Replies.Add(newReply);
+                }
             }
         }
         finally

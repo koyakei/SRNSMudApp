@@ -26,7 +26,7 @@
                         <div class="mb-4">
                             @if (group.TargetType == "Item" && group.Item != null)
                             {
-                                <SRNSMudApp.Components.Shared.ItemCard Item="@group.Item"
+                                <SRNSMudApp.Components.UI.ItemCard Item="@group.Item"
                                                                        AllTags="@_allTags"
                                                                        AllTagRelationsToTags="@_allTagRelationsToTags"
                                                                        CurrentUserId="@_currentUserId"
@@ -38,7 +38,7 @@
                             }
                             else if (group.TargetType == "Tag" && group.Tag != null)
                             {
-                                <SRNSMudApp.Components.Shared.TagCard Tag="@group.Tag"
+                                <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag"
                                                                       AllTags="@_allTags"
                                                                       CurrentUserId="@_currentUserId"
                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"

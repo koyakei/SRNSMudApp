@@ -72,7 +72,7 @@
                                     @if (notification.RequestInfo != null)
                                     {
                                         var isPending = notification.Type == "TagRequest" && notification.RequestInfo.Status == TradeStatus.Proposed;
-                                        <SRNSMudApp.Components.Shared.RequestInfoAlert 
+                                        <SRNSMudApp.Components.UI.RequestInfoAlert 
                                             RequestInfo="notification.RequestInfo"
                                             CanApprove="isPending"
                                             CanReject="isPending"
@@ -86,7 +86,7 @@
                                             highlightEvents.Add(new TimelineEvent { EventType = "Update", FollowedTagId = notification.HighlightTagId.Value, OwnerId = _userId ?? "" });
                                         }
                                     }
-                                    <SRNSMudApp.Components.Shared.ItemCard Item="@notification.AssociatedItem"
+                                    <SRNSMudApp.Components.UI.ItemCard Item="@notification.AssociatedItem"
                                                                            AllTags="@_allTags"
                                                                            AllTagRelationsToTags="@_allTagRelationsToTags"
                                                                            CurrentUserId="@_userId"
@@ -233,7 +233,7 @@
         {
             await NotificationService.MarkAsReadAsync(_userId, notification.SourceId, notification.Type);
         }
-        NavigationManager.NavigateTo(notification.TargetUrl);
+        NavigationManager.NavigateTo(notification.TargetUrl.ToHref());
     }
 
     private static string GetRelativeTime(DateTimeOffset dateTime)
@@ -256,7 +256,7 @@
             // UIを更新
             if (notification.RequestInfo != null)
             {
-                notification.RequestInfo = new SRNSMudApp.Components.Shared.RequestInfo
+                notification.RequestInfo = new SRNSMudApp.Components.UI.RequestInfo
                 {
                     IsTaggingRequest = notification.RequestInfo.IsTaggingRequest,
                     RequestType = notification.RequestInfo.RequestType,
@@ -281,7 +281,7 @@
         if (_userId == null) return;
         
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.Shared.RejectRequestDialog>("リクエストを却下", options);
+        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.UI.RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -295,7 +295,7 @@
                 // UIを更新
                 if (notification.RequestInfo != null)
                 {
-                    notification.RequestInfo = new SRNSMudApp.Components.Shared.RequestInfo
+                    notification.RequestInfo = new SRNSMudApp.Components.UI.RequestInfo
                     {
                         IsTaggingRequest = notification.RequestInfo.IsTaggingRequest,
                         RequestType = notification.RequestInfo.RequestType,

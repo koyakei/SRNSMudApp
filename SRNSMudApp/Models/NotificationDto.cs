@@ -8,7 +8,7 @@ public class NotificationDto
     public string Type { get; set; } = string.Empty; // "TagRequest" | "ItemReply" | "RequestRejected" | "RequestApproved" | "RequestReply"
     public string Message { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
-    public string TargetUrl { get; set; } = string.Empty;
+    public NotificationTarget TargetUrl { get; set; } = new RelativeUrl("#");
     public bool IsRead { get; set; }
     public string ActorName { get; set; } = string.Empty;
     public string Icon { get; set; } = string.Empty;
@@ -16,5 +16,5 @@ public class NotificationDto
     public int AssociatedItemId { get; set; }
     public Item? AssociatedItem { get; set; }
     public int? HighlightTagId { get; set; }
-    public SRNSMudApp.Components.Shared.RequestInfo? RequestInfo { get; set; }
+    public SRNSMudApp.Components.UI.RequestInfo? RequestInfo { get; set; }
 }

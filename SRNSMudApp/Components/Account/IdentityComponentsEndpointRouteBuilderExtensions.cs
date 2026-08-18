@@ -152,3 +152,4 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
         });
     }
 }
+

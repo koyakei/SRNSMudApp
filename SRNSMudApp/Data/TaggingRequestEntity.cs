@@ -25,12 +25,12 @@ public abstract class TaggingRequestEntity : BaseEntity, ITaggable
     public Item? RequestItem { get; set; }
 
     public TaggingRequestType RequestType { get; set; } = TaggingRequestType.Add;
-    public ICollection<Item> Replies { get; set; } = [];
+    public ICollection<Item> Replies { get; init; } = [];
 
     [MaxLength(1000)] public string? RejectComment { get; set; }
 
     public DateTimeOffset? RejectedAt { get; set; }
 
     // ITaggable Implementation
-    public virtual ICollection<Tag> Tags { get; set; } = [];
+    public virtual ICollection<Tag> Tags { get; init; } = [];
 }
