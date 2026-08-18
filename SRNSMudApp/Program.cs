@@ -151,7 +151,6 @@ using (IServiceScope scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
-    app.UseWebAssemblyDebugging();
     _ = app.UseMigrationsEndPoint();
     _ = app.UseDeveloperExceptionPage();
 }

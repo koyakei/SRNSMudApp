@@ -163,7 +163,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
-
         _ = builder.Entity<TimelineEvent>()
             .HasOne(e => e.FollowedTag)
             .WithMany()
@@ -424,7 +423,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 2. TagRelation の作成
             var relation = new TagRelation
             {
-                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = weightDelta
+                ItemId = itemId,
+                TagId = tagId,
+                OwnerId = currentUserId,
+                Weight = weightDelta
             };
             _ = TagRelations.Add(relation);
 
@@ -493,7 +495,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 2. RightAsset の発行と即時消費 (Burn)
             var rightAsset = new RightAsset
             {
-                OwnerId = currentUserId, TargetTagId = tagId, IsBurned = true, BurnedAt = DateTime.UtcNow
+                OwnerId = currentUserId,
+                TargetTagId = tagId,
+                IsBurned = true,
+                BurnedAt = DateTime.UtcNow
             };
             _ = RightAssets.Add(rightAsset);
             _ = await SaveChangesAsync(); // IDを発行するためにSave
@@ -501,7 +506,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 3. TagRelation の作成
             var relation = new TagRelation
             {
-                ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = 1 // 基本値
+                ItemId = itemId,
+                TagId = tagId,
+                OwnerId = currentUserId,
+                Weight = 1 // 基本値
             };
             _ = TagRelations.Add(relation);
 
@@ -509,7 +517,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // 4. Tag.CachedWeight の更新と以前の値の取得
             var previousWeight = tag.CachedWeight;
-            tag.CachedWeight += 1;
+            tag.CachedWeight++;
             var newWeight = tag.CachedWeight;
 
             // 5. 元帳 (Ledger) への記帳

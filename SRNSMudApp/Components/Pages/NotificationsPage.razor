@@ -245,13 +245,6 @@
         return $"{timeSpan.Days}日前";
     }
 
-    private bool _testClicked = false;
-    private void OnTestClick()
-    {
-        Console.WriteLine("[DEBUG] TEST CLICK HIT!");
-        _testClicked = true;
-    }
-
     private async Task ApproveRequestAsync(NotificationDto notification)
     {
         if (_userId == null) return;

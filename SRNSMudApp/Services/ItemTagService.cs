@@ -269,7 +269,10 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         var newRelation = new TagRelationToTag
         {
-            TargetTagId = targetTagId, TagId = tagId, Weight = 1, OwnerId = currentUserId
+            TargetTagId = targetTagId,
+            TagId = tagId,
+            Weight = 1,
+            OwnerId = currentUserId
         };
         _ = context.Set<TagRelationToTag>().Add(newRelation);
 
@@ -412,7 +415,10 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         var reply = new Item
         {
-            TaggingRequestEntityId = requestId, OwnerId = userId, Content = message, CreatedDate = DateTime.UtcNow
+            TaggingRequestEntityId = requestId,
+            OwnerId = userId,
+            Content = message,
+            CreatedDate = DateTime.UtcNow
         };
 
         _ = context.Items!.Add(reply);

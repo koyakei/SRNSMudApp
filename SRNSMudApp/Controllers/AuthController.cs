@@ -17,7 +17,6 @@ public class AuthController(
     RiskAssessmentService riskService,
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
-    ApplicationDbContext dbContext,
     ILogger<AuthController> logger) : ControllerBase
 {
     private readonly ILogger<AuthController> _logger = logger;

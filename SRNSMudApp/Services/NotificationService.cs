@@ -44,8 +44,8 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         List<Item> requestReplies = await context.Items!
             .Include(i => i.TaggingRequest)
             .Include(i => i.Owner)
-            .Where(i => i.TaggingRequestEntityId != null && 
-                        i.TaggingRequest!.RequesterUserId == userId && 
+            .Where(i => i.TaggingRequestEntityId != null &&
+                        i.TaggingRequest!.RequesterUserId == userId &&
                         i.OwnerId != userId)
             .ToListAsync();
 
@@ -216,7 +216,10 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         {
             _ = context.NotificationReadStates!.Add(new NotificationReadState
             {
-                UserId = userId, SourceId = sourceId, SourceType = sourceType, ReadAt = DateTimeOffset.UtcNow
+                UserId = userId,
+                SourceId = sourceId,
+                SourceType = sourceType,
+                ReadAt = DateTimeOffset.UtcNow
             });
             _ = await context.SaveChangesAsync();
         }
