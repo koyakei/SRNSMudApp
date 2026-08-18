@@ -1,7 +1,20 @@
 {
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit",
-    "source.organizeImports": "explicit"
-  }
+  // 1. C#およびDotRush環境の最適化
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  },
+  "csharp-dev-tools.roslyn.roslynatorEnabled": true,
+  // 2. Database Clientのデフォルト挙動設定
+  "database-client.defaultSelectLimit": 200,
+  "database-client.confirmWhenUpdateWithoutWhere": true,
+  "database-client.telemetry.usesOnlineServices": false,
+  // 3. Antigravity エージェントのセキュリティガバナンス
+  "antigravity.enableTelemetry": false,
+  "antigravity.agentSecurityMode": "strict",
+  "antigravity.deniedCommands": [
+    "rm -rf",
+    "git push --force",
+    "docker-compose down -v"
+  ]
 }

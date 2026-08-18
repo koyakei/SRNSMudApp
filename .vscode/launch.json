@@ -1,33 +1,21 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Antigravity: Launch WebApp (.NET Core)",
+            "name": "Debug SRNSMudApp (Server)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/SRNSMudApp/bin/Debug/net11.0/SRNSMudApp.dll",
             "args": [],
             "cwd": "${workspaceFolder}/SRNSMudApp",
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
-            },
+            "stopAtEntry": false,
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://localhost:5009"
+                "ASPNETCORE_ENVIRONMENT": "Development"
             },
-            "sourceFileMap": {
-                "/Views": "${workspaceFolder}/Views"
+            "launchBrowser": {
+                "enabled": false
             }
-        },
-        {
-            "name": "ReSharper: Launch .NET Project",
-            "type": "dotnet",
-            "request": "launch"
         }
     ]
 }
