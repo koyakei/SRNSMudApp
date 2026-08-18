@@ -10,111 +10,109 @@
 @inject ITaggingService TaggingService
 @inject IDialogService DialogService
 
+@using SRNSMudApp.Components.UI
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models
+@using System.Diagnostics
+
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
-    @if (_item == null)
+    @(_pageState switch
     {
-        <MudText>読み込み中...</MudText>
-    }
-    else
-    {
-        <div class="d-flex align-center mb-4">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                           OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
-            <MudText Typo="Typo.h5">アイテム詳細</MudText>
-        </div>
+        Loading => @<MudText>読み込み中...</MudText>,
+        Failed f => @<MudAlert Severity="Severity.Error">@f.Error.Message</MudAlert>,
+        Empty e => @<MudText>@e.Message</MudText>,
+        Loaded<ItemDetailData> data => @<div>
+            <div class="d-flex align-center mb-4">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+                <MudText Typo="Typo.h5">アイテム詳細</MudText>
+            </div>
 
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"
-                 ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
-            <MudTabPanel Text="詳細 (Details)">
-                <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { _item }"
-                                                           OnDataChanged="LoadDataAsync"/>
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"
+                     ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
+                <MudTabPanel Text="詳細 (Details)">
+                    <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { data.Data.Item }"
+                                                               OnDataChanged="LoadDataAsync"/>
 
-                @if (_item.TagRelations != null)
-                {
-                    <SRNSMudApp.Components.Tag.ItemTagTable
-                        TagRelations="@_item.TagRelations"
-                        Item="@_item"
-                        CurrentUserId="@_currentUserId"
-                        AllTags="@_allTags"
-                        AllTagRelationsToTags="@_allTagRelationsToTags"
-                        OnDataChanged="LoadDataAsync"/>
-                }
-            </MudTabPanel>
+                    @if (data.Data.Item.TagRelations != null)
+                    {
+                        <SRNSMudApp.Components.Tag.ItemTagTable
+                            TagRelations="@data.Data.Item.TagRelations"
+                            Item="@data.Data.Item"
+                            CurrentUserId="@_currentUserId"
+                            AllTags="@_allTags"
+                            AllTagRelationsToTags="@_allTagRelationsToTags"
+                            OnDataChanged="LoadDataAsync"/>
+                    }
+                </MudTabPanel>
 
-            <MudTabPanel Text="関連リクエスト (Related Requests)">
-                @if (_requests == null)
-                {
-                    <MudText>読み込み中...</MudText>
-                }
-                else if (!_requests.Any())
-                {
-                    <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
-                }
-                else
-                {
-                    <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@_requests" OnRequestChanged="LoadDataAsync"
-                                                                  SelectedRequest="_selectedRequest"
-                                                                  SelectedRequestChanged="OnSelectedRequestChanged">
-                        <RejectButtonTemplate Context="request">
-                            <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
-                                       OnClick="@(() => OpenRejectDialogAsync(request))">
-                                リジェクト
-                            </MudButton>
-                        </RejectButtonTemplate>
-                    </SRNSMudApp.Components.Tag.TaggingRequestList>
-                }
-            </MudTabPanel>
+                <MudTabPanel Text="関連リクエスト (Related Requests)">
+                    @if (!data.Data.Requests.Any())
+                    {
+                        <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
+                    }
+                    else
+                    {
+                        <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Data.Requests" OnRequestChanged="LoadDataAsync"
+                                                                      SelectedRequest="_selectedRequest"
+                                                                      SelectedRequestChanged="OnSelectedRequestChanged">
+                            <RejectButtonTemplate Context="request">
+                                <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
+                                           OnClick="@(() => OpenRejectDialogAsync(request))">
+                                    リジェクト
+                                </MudButton>
+                            </RejectButtonTemplate>
+                        </SRNSMudApp.Components.Tag.TaggingRequestList>
+                    }
+                </MudTabPanel>
 
-            <MudTabPanel Text="タグ履歴">
-                @if (_ledgers == null)
-                {
-                    <div class="d-flex justify-center my-4">
-                        <MudProgressCircular Color="Color.Default" Indeterminate="true"/>
-                    </div>
-                }
-                else if (!_ledgers.Any())
-                {
-                    <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
-                }
-                else
-                {
-                    <MudList T="TagWeightLedger">
-                        @foreach (var ledger in _ledgers)
-                        {
-                            <MudListItem>
-                                <div class="d-flex align-center">
-                                    <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
-                                        @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
-                                    </MudChip>
-                                    <MudText Typo="Typo.body2"
-                                             Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
-                                             Class="mr-2">
-                                        @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Class="mr-2">
-                                        @ledger.Owner?.UserName
-                                    </MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
-                                        @ledger.CreatedDate.ToLocalTime().ToString("g")
-                                    </MudText>
-                                </div>
-                            </MudListItem>
-                        }
-                    </MudList>
-                }
-            </MudTabPanel>
-        </MudTabs>
-    }
+                <MudTabPanel Text="タグ履歴">
+                    @if (!data.Data.Ledgers.Any())
+                    {
+                        <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
+                    }
+                    else
+                    {
+                        <MudList T="TagWeightLedger">
+                            @foreach (var ledger in data.Data.Ledgers)
+                            {
+                                <MudListItem>
+                                    <div class="d-flex align-center">
+                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                            @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
+                                        </MudChip>
+                                        <MudText Typo="Typo.body2"
+                                                 Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
+                                                 Class="mr-2">
+                                            @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Class="mr-2">
+                                            @ledger.Owner?.UserName
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
+                                            @ledger.CreatedDate.ToLocalTime().ToString("g")
+                                        </MudText>
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudTabPanel>
+            </MudTabs>
+        </div>,
+        _ => throw new UnreachableException()
+    })
 </MudContainer>
 
 @code {
+    public record ItemDetailData(Item Item, List<TaggingRequestEntity> Requests, List<TagWeightLedger> Ledgers);
+
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     [Parameter] public int ItemId { get; set; }
 
-    private Item? _item;
-    private List<TaggingRequestEntity>? _requests;
-    private List<TagWeightLedger>? _ledgers;
+    private AsyncPageState<ItemDetailData> _pageState = new Loading();
+
     private string _currentUserId = "";
     private List<Tag> _allTags = [];
     private List<TagRelationToTag> _allTagRelationsToTags = [];
@@ -144,7 +142,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_item != null && _item.Id != ItemId)
+        if (_pageState is Loaded<ItemDetailData> loaded && loaded.Data.Item.Id != ItemId)
         {
             await LoadDataAsync();
         }
@@ -153,49 +151,68 @@
 
     private async Task LoadDataAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _item = await context.Items
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.TargetTagRelations)
-            .ThenInclude(ttr => ttr.Tag)
-            .ThenInclude(t => t.Owner)
-            .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.TargetItem)
-            .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.RequestedTag)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(i => i.Id == ItemId);
-
-        _requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
-
-        _ledgers = await context.TagWeightLedgers
-            .Include(l => l.Owner)
-            .Include(l => l.TagRelation)
-            .ThenInclude(tr => tr.Tag)
-            .Where(l => l.TagRelation != null && l.TagRelation.ItemId == ItemId)
-            .OrderByDescending(l => l.CreatedDate)
-            .AsNoTracking()
-            .ToListAsync();
-
-        if (SelectedRequestIdQuery.HasValue && _requests != null)
+        try
         {
-            _selectedRequest = _requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
-        }
+            _pageState = new Loading();
+            StateHasChanged();
+            
+            await using var context = await DbFactory.CreateDbContextAsync();
+            var item = await context.Items
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                .ThenInclude(t => t.Owner)
+                .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                .ThenInclude(t => t.TargetTagRelations)
+                .ThenInclude(ttr => ttr.Tag)
+                .ThenInclude(t => t.Owner)
+                .Include(i => i.AsRequestOf)
+                .ThenInclude(r => r.TargetItem)
+                .Include(i => i.AsRequestOf)
+                .ThenInclude(r => r.RequestedTag)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(i => i.Id == ItemId);
 
-        if (AuthState != null)
+            if (item == null)
+            {
+                _pageState = new Empty("アイテムが見つかりません。");
+                return;
+            }
+
+            var requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
+
+            var ledgers = await context.TagWeightLedgers
+                .Include(l => l.Owner)
+                .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr.Tag)
+                .Where(l => l.TagRelation != null && l.TagRelation.ItemId == ItemId)
+                .OrderByDescending(l => l.CreatedDate)
+                .AsNoTracking()
+                .ToListAsync();
+
+            if (SelectedRequestIdQuery.HasValue && requests != null)
+            {
+                _selectedRequest = requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
+            }
+
+            if (AuthState != null)
+            {
+                var authState = await AuthState;
+                _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            }
+
+            _allTags = await context.Tags.AsNoTracking().ToListAsync();
+            _allTagRelationsToTags = await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
+
+            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(item, requests, ledgers));
+        }
+        catch (Exception ex)
         {
-            var authState = await AuthState;
-            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            _pageState = new Failed(ex);
         }
-
-        _allTags = await context.Tags.AsNoTracking().ToListAsync();
-        _allTagRelationsToTags = await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
     }
+
 
     private void OnSelectedRequestChanged(TaggingRequestEntity? request)
     {
@@ -226,9 +243,9 @@
                 await TaggingService.RejectRequestAsync(request.Id, currentUserId, comment);
                 Snackbar.Add("リクエストを却下しました。", Severity.Success);
 
-                if (_requests != null)
+                if (_pageState is Loaded<ItemDetailData> loaded)
                 {
-                    _requests.Remove(request);
+                    loaded.Data.Requests.Remove(request);
                     StateHasChanged();
                 }
             }

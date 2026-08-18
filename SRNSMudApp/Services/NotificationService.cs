@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
 
@@ -58,101 +59,105 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         foreach (TaggingRequestEntity req in tagRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "TagRequest");
-            var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
-            var msg = $"{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが届いています。";
+            var typeStr = req.RequestType switch
+            {
+                TaggingRequestType.Add => "追加",
+                TaggingRequestType.DecreaseWeight => "削除",
+                _ => "不明"
+            };
+            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
+            var msg = $"{tagName}の{typeStr}リクエストが届いています。";
 
             notifications.Add(new NotificationDto
             {
                 SourceId = req.Id,
-                Type = "TagRequest",
+                Kind = new TagRequestNotification(
+                    RequestId: req.Id,
+                    RequestType: req.RequestType,
+                    TargetItemId: req.TargetItemId,
+                    TargetTagName: req.RequestedTag?.Name,
+                    TargetTagId: req.RequestedTagId,
+                    ProposedWeight: req.ProposedWeight,
+                    Status: req.Status
+                ),
                 Message = msg,
                 CreatedAt = new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
-                Icon = MudBlazor.Icons.Material.Filled.Mail,
-                IconColor = "Primary",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.UI.RequestInfo
-                {
-                    IsTaggingRequest = true,
-                    RequestType = req.RequestType,
-                    ProposedWeight = req.ProposedWeight,
-                    TargetItemId = req.TargetItemId,
-                    TargetItemContent = req.TargetItem?.Content,
-                    TargetTagId = req.RequestedTagId,
-                    TargetTagName = req.RequestedTag?.Name,
-                    Status = req.Status
-                }
+                HighlightTagId = req.RequestedTagId
             });
         }
 
         foreach (TaggingRequestEntity req in rejectedRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
-            var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) ? "" : $"\n理由: {req.RejectComment}";
-            var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
-            var msg = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが却下されました。{commentMsg}";
+            var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) switch
+            {
+                true => "",
+                false => $"\n理由: {req.RejectComment}"
+            };
+            var typeStr = req.RequestType switch
+            {
+                TaggingRequestType.Add => "追加",
+                TaggingRequestType.DecreaseWeight => "削除",
+                _ => "不明"
+            };
+            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
+            var msg = $"あなたの{tagName}の{typeStr}リクエストが却下されました。{commentMsg}";
 
             notifications.Add(new NotificationDto
             {
                 SourceId = req.Id,
-                Type = "RequestRejected",
+                Kind = new RequestRejectedNotification(
+                    RequestId: req.Id,
+                    TagName: req.RequestedTag?.Name,
+                    RequestType: req.RequestType,
+                    RejectComment: req.RejectComment,
+                    TargetItemId: req.TargetItemId,
+                    TargetTagId: req.RequestedTagId
+                ),
                 Message = msg,
                 CreatedAt = req.RejectedAt ?? new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
-                Icon = MudBlazor.Icons.Material.Filled.Cancel,
-                IconColor = "Error",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.UI.RequestInfo
-                {
-                    IsTaggingRequest = true,
-                    RequestType = req.RequestType,
-                    ProposedWeight = req.ProposedWeight,
-                    TargetItemId = req.TargetItemId,
-                    TargetItemContent = req.TargetItem?.Content,
-                    TargetTagId = req.RequestedTagId,
-                    TargetTagName = req.RequestedTag?.Name,
-                    Status = req.Status
-                }
+                HighlightTagId = req.RequestedTagId
             });
         }
 
         foreach (TaggingRequestEntity req in approvedRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestApproved");
-            var typeStr = req.RequestType == TaggingRequestType.Add ? "追加" : "削除";
-            var msg = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{typeStr}リクエストが承認されました。";
+            var typeStr = req.RequestType switch
+            {
+                TaggingRequestType.Add => "追加",
+                TaggingRequestType.DecreaseWeight => "削除",
+                _ => "不明"
+            };
+            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
+            var msg = $"あなたの{tagName}の{typeStr}リクエストが承認されました。";
 
             notifications.Add(new NotificationDto
             {
                 SourceId = req.Id,
-                Type = "RequestApproved",
+                Kind = new RequestApprovedNotification(
+                    RequestId: req.Id,
+                    TagName: req.RequestedTag?.Name,
+                    RequestType: req.RequestType,
+                    TargetItemId: req.TargetItemId,
+                    TargetTagId: req.RequestedTagId
+                ),
                 Message = msg,
                 // Using UpdatedDate as an approximation of when it was executed
                 CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
-                Icon = MudBlazor.Icons.Material.Filled.CheckCircle,
-                IconColor = "Success",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId,
-                RequestInfo = new Components.UI.RequestInfo
-                {
-                    IsTaggingRequest = true,
-                    RequestType = req.RequestType,
-                    ProposedWeight = req.ProposedWeight,
-                    TargetItemId = req.TargetItemId,
-                    TargetItemContent = req.TargetItem?.Content,
-                    TargetTagId = req.RequestedTagId,
-                    TargetTagName = req.RequestedTag?.Name,
-                    Status = req.Status
-                }
+                HighlightTagId = req.RequestedTagId
             });
         }
 
@@ -164,14 +169,16 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             notifications.Add(new NotificationDto
             {
                 SourceId = reply.Id,
-                Type = "ItemReply",
+                Kind = new ItemReplyNotification(
+                    ReplyItemId: reply.Id,
+                    ParentItemId: reply.ParentItemId ?? 0,
+                    ActorName: ownerName
+                ),
                 Message = $"{ownerName}さんがあなたのアイテムにリプライしました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{reply.ParentItemId}"),
                 IsRead = isRead,
                 ActorName = ownerName,
-                Icon = MudBlazor.Icons.Material.Filled.Reply,
-                IconColor = "Info",
                 AssociatedItemId = reply.Id
             });
         }
@@ -184,14 +191,16 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             notifications.Add(new NotificationDto
             {
                 SourceId = reply.Id,
-                Type = "RequestReply",
+                Kind = new RequestReplyNotification(
+                    ReplyItemId: reply.Id,
+                    RequestId: reply.TaggingRequestEntityId ?? 0,
+                    ActorName: ownerName
+                ),
                 Message = $"{ownerName}さんがあなたのリクエストに返信しました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{reply.TaggingRequestEntityId}"), // Adjust according to your routing for request detail
                 IsRead = isRead,
                 ActorName = ownerName,
-                Icon = MudBlazor.Icons.Material.Filled.Forum,
-                IconColor = "Secondary",
                 AssociatedItemId = reply.Id
             });
         }
@@ -212,16 +221,24 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         NotificationReadState? existing = await context.NotificationReadStates!
             .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
 
-        if (existing == null)
+        Option<NotificationReadState> option = Option<NotificationReadState>.Create(existing);
+        await (option switch
         {
-            _ = context.NotificationReadStates!.Add(new NotificationReadState
-            {
-                UserId = userId,
-                SourceId = sourceId,
-                SourceType = sourceType,
-                ReadAt = DateTimeOffset.UtcNow
-            });
-            _ = await context.SaveChangesAsync();
-        }
+            None _ => AddNewReadStateAsync(context, userId, sourceId, sourceType),
+            Some<NotificationReadState> _ => Task.CompletedTask,
+            null => Task.CompletedTask
+        });
+    }
+
+    private static async Task AddNewReadStateAsync(ApplicationDbContext context, string userId, int sourceId, string sourceType)
+    {
+        _ = context.NotificationReadStates!.Add(new NotificationReadState
+        {
+            UserId = userId,
+            SourceId = sourceId,
+            SourceType = sourceType,
+            ReadAt = DateTimeOffset.UtcNow
+        });
+        _ = await context.SaveChangesAsync();
     }
 }

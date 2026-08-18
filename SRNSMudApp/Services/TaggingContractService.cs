@@ -107,24 +107,15 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             throw new InvalidOperationException("実行・承認できない状態の契約です。");
         }
 
-        if (entity is PublicOfferTriggerContract)
+        switch (entity)
         {
-            if (entity.RequesterUserId != currentUserId)
-            {
+            case PublicOfferTriggerContract when entity.RequesterUserId != currentUserId:
                 throw new InvalidOperationException("実行できない契約です。");
-            }
-        }
-        else if (entity is BountyTaggingContract)
-        {
-            // Anyone can fulfill a Bounty (except maybe we could restrict it if we wanted, but by design anyone can)
-            // But they MUST have a valid asset to burn, which is checked in ExecuteBountyAsync
-        }
-        else
-        {
-            if (entity.TagOwnerUserId != currentUserId)
-            {
+            case BountyTaggingContract:
+                // Anyone can fulfill a Bounty
+                break;
+            case not PublicOfferTriggerContract and not BountyTaggingContract when entity.TagOwnerUserId != currentUserId:
                 throw new InvalidOperationException("承認できない契約です。");
-            }
         }
 
         await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
@@ -217,87 +208,38 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         Tag tag = (contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId)) ??
                   throw new InvalidOperationException("Tag not found");
 
-        if (contract.RequestType == TaggingRequestType.Add)
+        switch (contract.RequestType)
         {
-            var newRelation = new TagRelation
-            {
-                ItemId = contract.TargetItemId,
-                TagId = contract.RequestedTagId,
-                Weight = contract.ProposedWeight,
-                OwnerId = contract.RequesterUserId
-            };
-            _ = dbContext.TagRelations!.Add(newRelation);
-            _ = await dbContext.SaveChangesAsync();
-
-            var previousWeight = tag.CachedWeight;
-            tag.CachedWeight += contract.ProposedWeight;
-            var newWeight = tag.CachedWeight;
-
-            var ledger = new TagWeightLedger
-            {
-                TagId = contract.RequestedTagId,
-                TagNameSnapshot = tag.Name,
-                SourceType = "TagRelation",
-                SourceId = newRelation.Id,
-                ConsumedRightAssetId = consumedAssetId,
-                Delta = contract.ProposedWeight,
-                PreviousWeight = previousWeight,
-                NewWeight = newWeight,
-                IsOwnerAction = true,
-                Reason = "Gratis Tagging Contract Accepted",
-                OwnerId = executorUserId
-            };
-            _ = dbContext.TagWeightLedgers!.Add(ledger);
-
-            _ = dbContext.TimelineEvents!.Add(new TimelineEvent
-            {
-                OwnerId = executorUserId,
-                TargetType = "Item",
-                TargetItemId = contract.TargetItemId,
-                FollowedTagId = contract.RequestedTagId,
-                EventType = "Insert",
-                NewWeight = contract.ProposedWeight
-            });
-        }
-        else if (contract.RequestType is TaggingRequestType.Remove or TaggingRequestType.DecreaseWeight)
-        {
-            TagRelation? relation = await dbContext.TagRelations!
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
-
-            if (relation != null)
-            {
-                var prevWeight = relation.Weight;
-                var delta = contract.RequestType == TaggingRequestType.Remove ? -prevWeight : -contract.ProposedWeight;
-
-                if (contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0)
+            case TaggingRequestType.Add:
+                var newRelation = new TagRelation
                 {
-                    _ = dbContext.TagRelations.Remove(relation);
-                }
-                else
-                {
-                    relation.Weight += delta;
-                }
+                    ItemId = contract.TargetItemId,
+                    TagId = contract.RequestedTagId,
+                    Weight = contract.ProposedWeight,
+                    OwnerId = contract.RequesterUserId
+                };
+                _ = dbContext.TagRelations!.Add(newRelation);
+                _ = await dbContext.SaveChangesAsync();
 
-                var previousWeight = tag.CachedWeight;
-                tag.CachedWeight += delta;
-                var newWeight = tag.CachedWeight;
+                var previousWeightAdd = tag.CachedWeight;
+                tag.CachedWeight += contract.ProposedWeight;
+                var newWeightAdd = tag.CachedWeight;
 
-                var ledger = new TagWeightLedger
+                var ledgerAdd = new TagWeightLedger
                 {
                     TagId = contract.RequestedTagId,
                     TagNameSnapshot = tag.Name,
                     SourceType = "TagRelation",
-                    SourceId = relation.Id,
+                    SourceId = newRelation.Id,
                     ConsumedRightAssetId = consumedAssetId,
-                    Delta = delta,
-                    PreviousWeight = previousWeight,
-                    NewWeight = newWeight,
+                    Delta = contract.ProposedWeight,
+                    PreviousWeight = previousWeightAdd,
+                    NewWeight = newWeightAdd,
                     IsOwnerAction = true,
-                    Reason =
-                        $"Gratis Tagging Contract Accepted ({(contract.RequestType == TaggingRequestType.Remove ? "Remove" : "Decrease Weight")})",
+                    Reason = "Gratis Tagging Contract Accepted",
                     OwnerId = executorUserId
                 };
-                _ = dbContext.TagWeightLedgers!.Add(ledger);
+                _ = dbContext.TagWeightLedgers!.Add(ledgerAdd);
 
                 _ = dbContext.TimelineEvents!.Add(new TimelineEvent
                 {
@@ -305,16 +247,57 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     TargetType = "Item",
                     TargetItemId = contract.TargetItemId,
                     FollowedTagId = contract.RequestedTagId,
-                    EventType =
-                        contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0
-                            ? "Delete"
-                            : "Update",
-                    PreviousWeight = prevWeight,
-                    NewWeight = contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0
-                        ? 0
-                        : prevWeight + delta
+                    EventType = "Insert",
+                    NewWeight = contract.ProposedWeight
                 });
-            }
+                break;
+            case TaggingRequestType.Remove:
+            case TaggingRequestType.DecreaseWeight:
+                TagRelation? relation = await dbContext.TagRelations!
+                    .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
+                if (relation != null)
+                {
+                    int prevWeight = relation.Weight;
+                    int delta = contract.RequestType == TaggingRequestType.Remove ? -prevWeight : -contract.ProposedWeight;
+
+                    if (contract.RequestType == TaggingRequestType.Remove || prevWeight + delta <= 0)
+                    {
+                        _ = dbContext.TagRelations.Remove(relation);
+                    }
+                    else
+                    {
+                        relation.Weight += delta;
+                    }
+
+                    int previousTagWeight = tag.CachedWeight;
+                    tag.CachedWeight += delta;
+
+                    _ = dbContext.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = contract.RequestedTagId,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelation",
+                        SourceId = relation.Id,
+                        ConsumedRightAssetId = consumedAssetId,
+                        Delta = delta,
+                        PreviousWeight = previousTagWeight,
+                        NewWeight = tag.CachedWeight,
+                        IsOwnerAction = true,
+                        Reason = $"Gratis Tagging Contract Accepted ({(contract.RequestType == TaggingRequestType.Remove ? "Remove" : "Decrease Weight")})",
+                        OwnerId = executorUserId
+                    });
+
+                    _ = dbContext.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = executorUserId,
+                        TargetType = "Item",
+                        TargetItemId = contract.TargetItemId,
+                        FollowedTagId = contract.RequestedTagId,
+                        EventType = "Update",
+                        NewWeight = contract.ProposedWeight
+                    });
+                }
+                break;
         }
     }
 
@@ -349,60 +332,21 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             throw new InvalidOperationException("Tag not found");
         }
 
-        if (contract.RequestType == TaggingRequestType.Add)
+        switch (contract.RequestType)
         {
-            var relation1 = new TagRelation
-            {
-                ItemId = contract.TargetItemId,
-                TagId = contract.RequestedTagId,
-                Weight = contract.ProposedWeight,
-                OwnerId = contract.RequesterUserId
-            };
-            _ = dbContext.TagRelations!.Add(relation1);
-            _ = await dbContext.SaveChangesAsync();
-
-            var prevReqWeight = requestedTag.CachedWeight;
-            requestedTag.CachedWeight += contract.ProposedWeight;
-            var newReqWeight = requestedTag.CachedWeight;
-
-            var ledger1 = new TagWeightLedger
-            {
-                TagId = contract.RequestedTagId,
-                TagNameSnapshot = requestedTag.Name,
-                SourceType = "TagRelation",
-                SourceId = relation1.Id,
-                ConsumedRightAssetId = requesterAssetId,
-                Delta = contract.ProposedWeight,
-                PreviousWeight = prevReqWeight,
-                NewWeight = newReqWeight,
-                IsOwnerAction = true,
-                Reason = "Mutual Tagging Contract Accepted (Requested)",
-                OwnerId = executorUserId
-            };
-            _ = dbContext.TagWeightLedgers!.Add(ledger1);
-
-            _ = dbContext.TimelineEvents!.Add(new TimelineEvent
-            {
-                OwnerId = executorUserId,
-                TargetType = "Item",
-                TargetItemId = contract.TargetItemId,
-                FollowedTagId = contract.RequestedTagId,
-                EventType = "Insert",
-                NewWeight = contract.ProposedWeight
-            });
-        }
-        else if (contract.RequestType == TaggingRequestType.Remove)
-        {
-            TagRelation? relation1 = await dbContext.TagRelations!
-                .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
-
-            if (relation1 != null)
-            {
-                var prevWeight = relation1.Weight;
-                _ = dbContext.TagRelations.Remove(relation1);
+            case TaggingRequestType.Add:
+                var relation1 = new TagRelation
+                {
+                    ItemId = contract.TargetItemId,
+                    TagId = contract.RequestedTagId,
+                    Weight = contract.ProposedWeight,
+                    OwnerId = contract.RequesterUserId
+                };
+                _ = dbContext.TagRelations!.Add(relation1);
+                _ = await dbContext.SaveChangesAsync();
 
                 var prevReqWeight = requestedTag.CachedWeight;
-                requestedTag.CachedWeight -= prevWeight;
+                requestedTag.CachedWeight += contract.ProposedWeight;
                 var newReqWeight = requestedTag.CachedWeight;
 
                 var ledger1 = new TagWeightLedger
@@ -412,11 +356,11 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     SourceType = "TagRelation",
                     SourceId = relation1.Id,
                     ConsumedRightAssetId = requesterAssetId,
-                    Delta = -prevWeight,
+                    Delta = contract.ProposedWeight,
                     PreviousWeight = prevReqWeight,
                     NewWeight = newReqWeight,
                     IsOwnerAction = true,
-                    Reason = "Mutual Tagging Contract Accepted (Requested Remove)",
+                    Reason = "Mutual Tagging Contract Accepted (Requested)",
                     OwnerId = executorUserId
                 };
                 _ = dbContext.TagWeightLedgers!.Add(ledger1);
@@ -427,10 +371,50 @@ public class TaggingContractService(ApplicationDbContext dbContext)
                     TargetType = "Item",
                     TargetItemId = contract.TargetItemId,
                     FollowedTagId = contract.RequestedTagId,
-                    EventType = "Delete",
-                    PreviousWeight = prevWeight
+                    EventType = "Insert",
+                    NewWeight = contract.ProposedWeight
                 });
-            }
+                break;
+            case TaggingRequestType.Remove:
+                TagRelation? relation1Remove = await dbContext.TagRelations!
+                    .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
+
+                if (relation1Remove != null)
+                {
+                    var prevWeight = relation1Remove.Weight;
+                    _ = dbContext.TagRelations.Remove(relation1Remove);
+
+                    var prevReqWeightRem = requestedTag.CachedWeight;
+                    requestedTag.CachedWeight -= prevWeight;
+                    var newReqWeightRem = requestedTag.CachedWeight;
+
+                    var ledger1Rem = new TagWeightLedger
+                    {
+                        TagId = contract.RequestedTagId,
+                        TagNameSnapshot = requestedTag.Name,
+                        SourceType = "TagRelation",
+                        SourceId = relation1Remove.Id,
+                        ConsumedRightAssetId = requesterAssetId,
+                        Delta = -prevWeight,
+                        PreviousWeight = prevReqWeightRem,
+                        NewWeight = newReqWeightRem,
+                        IsOwnerAction = true,
+                        Reason = "Mutual Tagging Contract Accepted (Requested Remove)",
+                        OwnerId = executorUserId
+                    };
+                    _ = dbContext.TagWeightLedgers!.Add(ledger1Rem);
+
+                    _ = dbContext.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = executorUserId,
+                        TargetType = "Item",
+                        TargetItemId = contract.TargetItemId,
+                        FollowedTagId = contract.RequestedTagId,
+                        EventType = "Delete",
+                        PreviousWeight = prevWeight
+                    });
+                }
+                break;
         }
 
         var relation2 = new TagRelation

@@ -1,0 +1,45 @@
+@using SRNSMudApp.Data
+@using System.Diagnostics
+
+@RenderContent()
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public TaggingRequestEntity Contract { get; set; } = null!;
+
+    private RenderFragment RenderContent() => builder =>
+    {
+        RenderFragment content = Contract switch
+        {
+            MutualTaggingContract mutual => 
+                (RenderFragment)(@<text>
+                    <MudDivider Class="my-2"/>
+                    <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
+                    <MudText Typo="Typo.body2">@mutual.OfferedTargetItem.Content</MudText>
+                    <MudText Typo="Typo.body2">@mutual.OfferedTag.Name</MudText>
+                </text>),
+            GratisTaggingContract gratis when !string.IsNullOrEmpty(gratis.RequesterMessage) => 
+                (RenderFragment)(@<text>
+                    <MudDivider Class="my-2"/>
+                    <MudText Typo="Typo.subtitle2">メッセージ</MudText>
+                    <MudText Typo="Typo.body2">@gratis.RequesterMessage</MudText>
+                </text>),
+            GratisTaggingContract => (RenderFragment)(@<text></text>),
+            BountyTaggingContract bounty => 
+                (RenderFragment)(@<text>
+                    <MudDivider Class="my-2"/>
+                    <MudText Typo="Typo.subtitle2">報酬</MudText>
+                    <MudText Typo="Typo.body2">Bounty (AssetId: @bounty.OfferedRewardAssetId)</MudText>
+                </text>),
+            PublicOfferTriggerContract => 
+                (RenderFragment)(@<text>
+                    <MudDivider Class="my-2"/>
+                    <MudText Typo="Typo.subtitle2">Public Offer Trigger</MudText>
+                </text>),
+            _ => throw new UnreachableException()
+        };
+
+        content(builder);
+    };
+}

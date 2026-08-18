@@ -13,7 +13,7 @@ trigger: always_on
 - **C# 15
 
 ## 2. 全体的なコーディングの原則 (General Coding Principles)
-- **C#の最新機能を使用**: パターンマッチング、レコード型 (Records)、Primary Constructors などを積極的に使用すること。
+- **C#15の新機能を使用**: パターンマッチング、レコード型 (Records)、Primary Constructors , Union type などを積極的に使用すること。
 - **関心事の分離 (SoC)**: UIコンポーネント (`.razor`) に複雑なビジネスロジックを書かない。ロジックは Service クラスに分離し、DI (Dependency Injection) で注入すること。
 - **非同期プログラミング**: I/Oバウンドな操作（DBアクセス、Gemini API呼び出し）はすべて `async/await` を使用し、同期的なブロック (`.Result` や `.Wait()`) は絶対に避けること。
 

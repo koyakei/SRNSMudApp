@@ -38,16 +38,16 @@
                         <div class="d-flex flex-column w-100 px-4">
                             <div class="d-flex flex-row align-center mb-2 cursor-pointer" @onclick="@(() => HandleNotificationClick(notification))">
                                 <div class="mr-4">
-                                    @if (Enum.TryParse<Color>(notification.IconColor, out var color))
+                                    @if (Enum.TryParse<Color>(notification.Kind.IconColor, out var color))
                                     {
                                         <MudAvatar Color="color" Variant="Variant.Filled" Size="Size.Small">
-                                            <MudIcon Icon="@notification.Icon" Size="Size.Small"/>
+                                            <MudIcon Icon="@notification.Kind.Icon" Size="Size.Small"/>
                                         </MudAvatar>
                                     }
                                     else
                                     {
                                         <MudAvatar Color="Color.Default" Variant="Variant.Filled" Size="Size.Small">
-                                            <MudIcon Icon="@notification.Icon" Size="Size.Small" />
+                                            <MudIcon Icon="@notification.Kind.Icon" Size="Size.Small" />
                                         </MudAvatar>
                                     }
                                 </div>
@@ -69,11 +69,23 @@
                             @if (notification.AssociatedItem != null)
                             {
                                 <div class="pl-11 mt-1">
-                                    @if (notification.RequestInfo != null)
+                                    @if (notification.Kind is TagRequestNotification reqNote)
                                     {
-                                        var isPending = notification.Type == "TagRequest" && notification.RequestInfo.Status == TradeStatus.Proposed;
+                                        var isPending = reqNote.Status == TradeStatus.Proposed;
+                                        // RequestInfoを動的に生成して渡す
+                                        var reqInfo = new SRNSMudApp.Components.UI.RequestInfo
+                                        {
+                                            IsTaggingRequest = true,
+                                            RequestType = reqNote.RequestType,
+                                            ProposedWeight = reqNote.ProposedWeight,
+                                            TargetItemId = reqNote.TargetItemId,
+                                            TargetItemContent = notification.AssociatedItem?.Content,
+                                            TargetTagId = reqNote.TargetTagId,
+                                            TargetTagName = reqNote.TargetTagName,
+                                            Status = reqNote.Status
+                                        };
                                         <SRNSMudApp.Components.UI.RequestInfoAlert 
-                                            RequestInfo="notification.RequestInfo"
+                                            RequestInfo="reqInfo"
                                             CanApprove="isPending"
                                             CanReject="isPending"
                                             OnApprove="@(() => ApproveRequestAsync(notification))"
@@ -231,7 +243,7 @@
     {
         if (!notification.IsRead && _userId != null)
         {
-            await NotificationService.MarkAsReadAsync(_userId, notification.SourceId, notification.Type);
+            await NotificationService.MarkAsReadAsync(_userId, notification.SourceId, notification.Kind.SourceType);
         }
         NavigationManager.NavigateTo(notification.TargetUrl.ToHref());
     }
@@ -254,19 +266,17 @@
             Snackbar.Add("リクエストを承認しました。", Severity.Success);
             
             // UIを更新
-            if (notification.RequestInfo != null)
+            if (notification.Kind is TagRequestNotification reqNote)
             {
-                notification.RequestInfo = new SRNSMudApp.Components.UI.RequestInfo
+                var index = _notifications.IndexOf(notification);
+                if (index != -1)
                 {
-                    IsTaggingRequest = notification.RequestInfo.IsTaggingRequest,
-                    RequestType = notification.RequestInfo.RequestType,
-                    ProposedWeight = notification.RequestInfo.ProposedWeight,
-                    TargetItemId = notification.RequestInfo.TargetItemId,
-                    TargetItemContent = notification.RequestInfo.TargetItemContent,
-                    TargetTagId = notification.RequestInfo.TargetTagId,
-                    TargetTagName = notification.RequestInfo.TargetTagName,
-                    Status = TradeStatus.Executed
-                };
+                    _notifications[index] = notification with 
+                    { 
+                        Kind = reqNote with { Status = TradeStatus.Executed },
+                        IsRead = true 
+                    };
+                }
             }
             StateHasChanged();
         }
@@ -293,21 +303,18 @@
                 Snackbar.Add("リクエストを却下しました。", Severity.Success);
                 
                 // UIを更新
-                if (notification.RequestInfo != null)
+                if (notification.Kind is TagRequestNotification reqNote)
                 {
-                    notification.RequestInfo = new SRNSMudApp.Components.UI.RequestInfo
+                    var index = _notifications.IndexOf(notification);
+                    if (index != -1)
                     {
-                        IsTaggingRequest = notification.RequestInfo.IsTaggingRequest,
-                        RequestType = notification.RequestInfo.RequestType,
-                        ProposedWeight = notification.RequestInfo.ProposedWeight,
-                        TargetItemId = notification.RequestInfo.TargetItemId,
-                        TargetItemContent = notification.RequestInfo.TargetItemContent,
-                        TargetTagId = notification.RequestInfo.TargetTagId,
-                        TargetTagName = notification.RequestInfo.TargetTagName,
-                        Status = TradeStatus.Rejected
-                    };
-                }
-                StateHasChanged();
+                        _notifications[index] = notification with 
+                        { 
+                            Kind = reqNote with { Status = TradeStatus.Rejected },
+                            IsRead = true 
+                        };
+                    }
+                }StateHasChanged();
             }
             catch (Exception ex)
             {
