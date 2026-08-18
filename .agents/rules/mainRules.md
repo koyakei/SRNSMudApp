@@ -1,17 +1,25 @@
+---
+trigger: always_on
+---
+
 # Project Context & AI Prompt Rules
 
 ## 1. プロジェクト概要 (Project Overview)
-- **Framework**: .NET (最新版), ASP.NET Core Blazor Web App
+- **Framework**: .NET (11.0), ASP.NET Core Blazor Web App
 - **UI Library**: MudBlazor (v9.7)
 - **Interactivity**: Blazor Server (InteractiveServer モード)
 - **Authentication**: Individual Accounts (ASP.NET Core Identity)
 - **AI Integration**: Gemini API
-- **IDE**: JetBrains Rider
+- **C# 15
 
 ## 2. 全体的なコーディングの原則 (General Coding Principles)
 - **C#の最新機能を使用**: パターンマッチング、レコード型 (Records)、Primary Constructors などを積極的に使用すること。
 - **関心事の分離 (SoC)**: UIコンポーネント (`.razor`) に複雑なビジネスロジックを書かない。ロジックは Service クラスに分離し、DI (Dependency Injection) で注入すること。
 - **非同期プログラミング**: I/Oバウンドな操作（DBアクセス、Gemini API呼び出し）はすべて `async/await` を使用し、同期的なブロック (`.Result` や `.Wait()`) は絶対に避けること。
+
+## if文撲滅
+システムの取り得る状態を直和型（Sum Type）として厳密に定義し、UIの振る舞いの決定を手続き的な「条件分岐（if / else）」ではなく、コンパイラによって保証された「網羅的パターンマッチング（Exhaustive Pattern Matching）」による安全な型ダウンキャストに委譲する
+そのために unionを積極的に利用する
 
 ## 3. Blazor Server (InteractiveServer) のル－ル
 - **SignalRの意識**: Blazor ServerはSignalR接続上で動作するため、メモリリークに注意する。イベントハンドラの購読解除 (`IDisposable` の実装) を徹底すること。
@@ -51,3 +59,4 @@
 ## テスト方針
 - 新しい実装をしたら　E2ETests と Tests を実行しパスするか確かめる
 - 新しい実装をしたらテストを実装する。
+
