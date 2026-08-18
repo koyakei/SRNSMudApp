@@ -3,6 +3,7 @@
 using System.Security.Claims;
 
 using Bunit;
+using Moq;
 using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components.Forms;
@@ -27,9 +28,15 @@ public class ImportTagTests : TestContext
     public ImportTagTests()
     {
         _ = Services.AddMudServices();
-        TestAuthorizationContext authContext = this.AddTestAuthorization();
-        authContext.SetAuthorized("test-user-id");
-        authContext.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-user-id"));
+        var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+        var authState = new Microsoft.AspNetCore.Components.Authorization.AuthenticationState(claimsPrincipal);
+
+        var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
+        authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
+        Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
+        Services.AddAuthorizationCore();
 
         var dbName = Guid.NewGuid().ToString();
         _ = Services.AddDbContext<ApplicationDbContext>(options =>

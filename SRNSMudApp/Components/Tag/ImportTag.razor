@@ -121,8 +121,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthState!;
-        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (AuthState is not null)
+        {
+            var authState = await AuthState;
+            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
     }
 
     private void UploadFiles(IBrowserFile? file)

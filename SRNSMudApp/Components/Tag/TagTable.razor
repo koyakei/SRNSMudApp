@@ -146,8 +146,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthState!;
-        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        if (AuthState is not null)
+        {
+            var authState = await AuthState;
+            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        }
 
         await using var context = await DbFactory.CreateDbContextAsync();
         _allTagsCache = await context.Tags.AsNoTracking().ToListAsync();
