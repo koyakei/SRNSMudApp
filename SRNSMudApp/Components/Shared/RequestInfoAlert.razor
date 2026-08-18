@@ -13,54 +13,48 @@
         <div class="d-flex align-center mt-1">
             @if (CanCancel)
             {
-                <MudIconButton Icon="@Icons.Material.Filled.CancelScheduleSend" 
-                               Color="Color.Error" 
-                               Size="Size.Small" 
-                               OnClick="OnCancelClicked" 
+                <MudIconButton Icon="@Icons.Material.Filled.CancelScheduleSend"
+                               Color="Color.Error"
+                               Size="Size.Small"
+                               OnClick="OnCancelClicked"
                                Class="pa-0 mr-2"
-                               title="リクエストを取り下げる" />
+                               title="リクエストを取り下げる"/>
             }
             else if (CanApprove || CanReject)
             {
                 @if (CanApprove)
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
-                                   Color="Color.Success" 
-                                   Size="Size.Small" 
-                                   OnClick="OnApproveClicked" 
-                                   Class="pa-0 mr-1"
-                                   title="リクエストを承認する" />
+                    <button type="button" @onclick="OnApproveClicked" @onclick:stopPropagation="true" class="mud-button-root mud-icon-button mud-success-text hover:mud-success-hover mud-ripple mud-ripple-icon mud-icon-button-size-small pa-0 mr-1" title="リクエストを承認する">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                    </button>
                 }
                 @if (CanReject)
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" 
-                                   Color="Color.Error" 
-                                   Size="Size.Small" 
-                                   OnClick="OnRejectClicked" 
-                                   Class="pa-0 mr-2"
-                                   title="リクエストを却下する" />
+                    <button type="button" @onclick="OnRejectClicked" @onclick:stopPropagation="true" class="mud-button-root mud-icon-button mud-error-text hover:mud-error-hover mud-ripple mud-ripple-icon mud-icon-button-size-small pa-0 mr-2" title="リクエストを却下する">
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" />
+                    </button>
                 }
             }
             else if (RequestInfo.Status == TradeStatus.Canceled)
             {
-                <MudIcon Icon="@Icons.Material.Filled.RemoveDone" 
-                         Size="Size.Small" 
-                         Class="mr-2 canceled-icon" />
+                <MudIcon Icon="@Icons.Material.Filled.RemoveDone"
+                         Size="Size.Small"
+                         Class="mr-2 canceled-icon"/>
             }
             else if (RequestInfo.Status == TradeStatus.Executed)
             {
-                <MudIcon Icon="@Icons.Material.Filled.DoneAll" 
-                         Size="Size.Small" 
-                         Class="mr-2" />
+                <MudIcon Icon="@Icons.Material.Filled.DoneAll"
+                         Size="Size.Small"
+                         Class="mr-2"/>
             }
             else
             {
-                <MudIcon Icon="@(RequestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : RequestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline)" 
-                         Size="Size.Small" 
-                         Class="mr-2" />
+                <MudIcon Icon="@(RequestInfo.RequestType == TaggingRequestType.Add ? Icons.Material.Filled.AddCircleOutline : RequestInfo.RequestType == TaggingRequestType.Remove ? Icons.Material.Outlined.Delete : Icons.Material.Outlined.RemoveCircleOutline)"
+                         Size="Size.Small"
+                         Class="mr-2"/>
             }
 
-            <MudText Typo="Typo.body2" Class="font-weight-bold">
+            <MudText Typo="Typo.body2" Class="font-weight-bold" Style="user-select: text; -webkit-user-select: text;">
                 @{
                     var text = RequestInfo.RequestType == TaggingRequestType.Remove ? "タグ削除リクエスト" : "タグ追加リクエスト";
                     if (RequestInfo.RequestType == TaggingRequestType.Add)
@@ -117,7 +111,7 @@
         </div>
 
         <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
-        
+
         <!-- 対象タグ -->
         <div class="d-flex align-center mt-1">
             <MudText Typo="Typo.body2" Class="mr-1">タグ:</MudText>
@@ -134,11 +128,11 @@
 
 @code {
     [Parameter] [EditorRequired] public RequestInfo RequestInfo { get; set; } = null!;
-    
+
     [Parameter] public bool CanCancel { get; set; }
     [Parameter] public bool CanApprove { get; set; }
     [Parameter] public bool CanReject { get; set; }
-    
+
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public EventCallback OnApprove { get; set; }
     [Parameter] public EventCallback OnReject { get; set; }
@@ -191,4 +185,5 @@
         if (RequestInfo.Status == TradeStatus.Proposed) return Color.Warning;
         return Color.Default;
     }
+
 }
