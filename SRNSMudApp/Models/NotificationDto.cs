@@ -16,4 +16,5 @@ public class NotificationDto
     public int AssociatedItemId { get; set; }
     public Item? AssociatedItem { get; set; }
     public int? HighlightTagId { get; set; }
+    public SRNSMudApp.Components.Shared.RequestInfo? RequestInfo { get; set; }
 }

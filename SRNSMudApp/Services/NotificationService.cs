@@ -73,7 +73,18 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Icon = MudBlazor.Icons.Material.Filled.Mail,
                 IconColor = "Primary",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
+                HighlightTagId = req.RequestedTagId,
+                RequestInfo = new Components.Shared.RequestInfo
+                {
+                    IsTaggingRequest = true,
+                    RequestType = req.RequestType,
+                    ProposedWeight = req.ProposedWeight,
+                    TargetItemId = req.TargetItemId,
+                    TargetItemContent = req.TargetItem?.Content,
+                    TargetTagId = req.RequestedTagId,
+                    TargetTagName = req.RequestedTag?.Name,
+                    Status = req.Status
+                }
             });
         }
 
@@ -96,7 +107,18 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Icon = MudBlazor.Icons.Material.Filled.Cancel,
                 IconColor = "Error",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
+                HighlightTagId = req.RequestedTagId,
+                RequestInfo = new Components.Shared.RequestInfo
+                {
+                    IsTaggingRequest = true,
+                    RequestType = req.RequestType,
+                    ProposedWeight = req.ProposedWeight,
+                    TargetItemId = req.TargetItemId,
+                    TargetItemContent = req.TargetItem?.Content,
+                    TargetTagId = req.RequestedTagId,
+                    TargetTagName = req.RequestedTag?.Name,
+                    Status = req.Status
+                }
             });
         }
 
@@ -119,7 +141,18 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 Icon = MudBlazor.Icons.Material.Filled.CheckCircle,
                 IconColor = "Success",
                 AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
+                HighlightTagId = req.RequestedTagId,
+                RequestInfo = new Components.Shared.RequestInfo
+                {
+                    IsTaggingRequest = true,
+                    RequestType = req.RequestType,
+                    ProposedWeight = req.ProposedWeight,
+                    TargetItemId = req.TargetItemId,
+                    TargetItemContent = req.TargetItem?.Content,
+                    TargetTagId = req.RequestedTagId,
+                    TargetTagName = req.RequestedTag?.Name,
+                    Status = req.Status
+                }
             });
         }
 

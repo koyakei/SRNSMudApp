@@ -62,6 +62,9 @@
                 }
                 @text
             </MudText>
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor()" Variant="Variant.Text" Class="ml-2 mt-n1 mb-n1">
+                @GetStatusText()
+            </MudChip>
         </div>
         <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
 
@@ -147,5 +150,23 @@
         {
             await OnApprove.InvokeAsync();
         }
+    }
+
+    private string GetStatusText()
+    {
+        if (RequestInfo.Status == TradeStatus.Executed) return "処理済み";
+        if (RequestInfo.Status == TradeStatus.Canceled) return "取り下げ済み";
+        if (RequestInfo.Status == TradeStatus.Rejected) return "却下済み";
+        if (RequestInfo.Status == TradeStatus.Proposed) return "承認待ち";
+        return "不明";
+    }
+
+    private Color GetStatusColor()
+    {
+        if (RequestInfo.Status == TradeStatus.Executed) return Color.Success;
+        if (RequestInfo.Status == TradeStatus.Canceled) return Color.Default;
+        if (RequestInfo.Status == TradeStatus.Rejected) return Color.Error;
+        if (RequestInfo.Status == TradeStatus.Proposed) return Color.Warning;
+        return Color.Default;
     }
 }

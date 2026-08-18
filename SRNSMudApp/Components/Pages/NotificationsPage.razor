@@ -64,6 +64,10 @@
                             @if (notification.AssociatedItem != null)
                             {
                                 <div class="pl-11 mt-1">
+                                    @if (notification.RequestInfo != null)
+                                    {
+                                        <SRNSMudApp.Components.Shared.RequestInfoAlert RequestInfo="notification.RequestInfo" />
+                                    }
                                     @{
                                         var highlightEvents = new List<TimelineEvent>();
                                         if (notification.HighlightTagId.HasValue)
