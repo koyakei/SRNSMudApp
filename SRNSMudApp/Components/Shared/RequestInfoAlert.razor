@@ -20,14 +20,26 @@
                                Class="pa-0 mr-2"
                                title="リクエストを取り下げる" />
             }
-            else if (CanApprove)
+            else if (CanApprove || CanReject)
             {
-                <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
-                               Color="Color.Success" 
-                               Size="Size.Small" 
-                               OnClick="OnApproveClicked" 
-                               Class="pa-0 mr-2"
-                               title="リクエストを承認する" />
+                @if (CanApprove)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
+                                   Color="Color.Success" 
+                                   Size="Size.Small" 
+                                   OnClick="OnApproveClicked" 
+                                   Class="pa-0 mr-1"
+                                   title="リクエストを承認する" />
+                }
+                @if (CanReject)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" 
+                                   Color="Color.Error" 
+                                   Size="Size.Small" 
+                                   OnClick="OnRejectClicked" 
+                                   Class="pa-0 mr-2"
+                                   title="リクエストを却下する" />
+                }
             }
             else if (RequestInfo.Status == TradeStatus.Canceled)
             {
@@ -125,9 +137,11 @@
     
     [Parameter] public bool CanCancel { get; set; }
     [Parameter] public bool CanApprove { get; set; }
+    [Parameter] public bool CanReject { get; set; }
     
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public EventCallback OnApprove { get; set; }
+    [Parameter] public EventCallback OnReject { get; set; }
 
     private bool _isTargetExpanded;
 
@@ -149,6 +163,14 @@
         if (OnApprove.HasDelegate)
         {
             await OnApprove.InvokeAsync();
+        }
+    }
+
+    private async Task OnRejectClicked()
+    {
+        if (OnReject.HasDelegate)
+        {
+            await OnReject.InvokeAsync();
         }
     }
 
