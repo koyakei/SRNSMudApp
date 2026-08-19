@@ -267,11 +267,11 @@
 
     private async Task ExecuteRemovalAsync()
     {
-        var error = await ItemTagService.RemoveTagRelationAsync(TagRelation.Id, CurrentUserId);
-        await (error switch
+        // awaitの結果を直接switchで評価する（変数を宣言しない）
+        await (await ItemTagService.RemoveTagRelationAsync(TagRelation.Id, CurrentUserId) switch
         {
             null => HandleSuccessfulRemoval(),
-            _ => HandleError(error)
+            string err => HandleError(err) // 型宣言を伴うパターンマッチで安全に受け取る
         });
     }
     
