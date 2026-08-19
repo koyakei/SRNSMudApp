@@ -18,8 +18,11 @@ trigger: always_on
 - **非同期プログラミング**: I/Oバウンドな操作（DBアクセス、Gemini API呼び出し）はすべて `async/await` を使用し、同期的なブロック (`.Result` や `.Wait()`) は絶対に避けること。
 
 ## if文撲滅
-システムの取り得る状態を直和型（Sum Type）として厳密に定義し、UIの振る舞いの決定を手続き的な「条件分岐（if / else）」ではなく、コンパイラによって保証された「網羅的パターンマッチング（Exhaustive Pattern Matching）」による安全な型ダウンキャストに委譲する
+システムの取り得る状態を直和型（Sum Type）として厳密に定義し、UIの振る舞いの決定を手続き的な「条件分岐（if , else,三項演算子)」ではなく、コンパイラによって保証された「網羅的パターンマッチング（Exhaustive Pattern Matching）」による安全な型ダウンキャストに委譲する
 そのために unionを積極的に利用する
+
+## 再代入撲滅
+var を使わず const readonly を使う
 
 ## 3. Blazor Server (InteractiveServer) のル－ル
 - **SignalRの意識**: Blazor ServerはSignalR接続上で動作するため、メモリリークに注意する。イベントハンドラの購読解除 (`IDisposable` の実装) を徹底すること。
