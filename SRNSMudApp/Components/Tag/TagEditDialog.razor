@@ -51,10 +51,11 @@
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_editName))
+        switch (string.IsNullOrWhiteSpace(_editName))
         {
-            Snackbar.Add("タグ名は空にできません。", Severity.Warning);
-            return;
+            case true:
+                Snackbar.Add("タグ名は空にできません。", Severity.Warning);
+                return;
         }
 
         try
@@ -62,31 +63,32 @@
             await using var context = await DbFactory.CreateDbContextAsync();
             var tagToUpdate = await context.Tags.FindAsync(Tag.Id);
 
-            if (tagToUpdate != null)
+            switch (tagToUpdate)
             {
-                tagToUpdate.Name = _editName;
-                tagToUpdate.Content = _editContent;
+                case not null:
+                    tagToUpdate.Name = _editName;
+                    tagToUpdate.Content = _editContent;
 
-                // タグ名が変更された場合などに備え、ベクトルも再生成する
-                try
-                {
-                    var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(_editName);
-                    tagToUpdate.Embedding = embedding.ToArray();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
-                }
+                    // タグ名が変更された場合などに備え、ベクトルも再生成する
+                    try
+                    {
+                        var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(_editName);
+                        tagToUpdate.Embedding = embedding.ToArray();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
+                    }
 
-                await context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
 
-                // 成功した場合はダイアログを閉じ、結果として true を返す
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            else
-            {
-                Snackbar.Add("対象のタグが見つかりませんでした。", Severity.Error);
-                MudDialog.Cancel();
+                    // 成功した場合はダイアログを閉じ、結果として true を返す
+                    MudDialog.Close(DialogResult.Ok(true));
+                    break;
+                case null:
+                    Snackbar.Add("対象のタグが見つかりませんでした。", Severity.Error);
+                    MudDialog.Cancel();
+                    break;
             }
         }
         catch (Exception ex)

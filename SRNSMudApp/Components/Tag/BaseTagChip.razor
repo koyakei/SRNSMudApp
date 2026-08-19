@@ -7,56 +7,70 @@
              CloseIcon="@CloseIcon"
              OnClose="@OnClose">
         <div class="d-flex align-center">
-            @if (!string.IsNullOrEmpty(TagName) || OwnerName != null)
+            @switch (string.IsNullOrEmpty(TagName), OwnerName != null)
             {
-                <span class="d-flex align-center mr-1">
-                    @if (!string.IsNullOrEmpty(TagName))
-                    {
-                        <a class="chip-link mr-1"
-                           style="@TagStyle"
-                           @onclick="HandleTagClick"
-                           @onclick:stopPropagation="true">
-                            @TagName
-                        </a>
-                    }
-                    @if (OwnerName != null)
-                    {
-                        <span class="ml-1" @onclick:stopPropagation="true">(@OwnerName)</span>
-                    }
-                </span>
+                case (false, _):
+                case (_, true):
+                    <span class="d-flex align-center mr-1">
+                        @switch (string.IsNullOrEmpty(TagName))
+                        {
+                            case false:
+                                <a class="chip-link mr-1"
+                                   style="@TagStyle"
+                                   @onclick="HandleTagClick"
+                                   @onclick:stopPropagation="true">
+                                    @TagName
+                                </a>
+                                break;
+                        }
+                        @switch (OwnerName)
+                        {
+                            case not null:
+                                <span class="ml-1" @onclick:stopPropagation="true">(@OwnerName)</span>
+                                break;
+                        }
+                    </span>
+                    break;
             }
 
-            @if (PrefixContent != null)
+            @switch (PrefixContent)
             {
-                <div class="d-flex align-center" @onclick:stopPropagation="true">
-                    @PrefixContent
-                </div>
+                case not null:
+                    <div class="d-flex align-center" @onclick:stopPropagation="true">
+                        @PrefixContent
+                    </div>
+                    break;
             }
             <span class="d-flex align-center">
-                @if (WeightContent != null)
+                @switch (WeightContent)
                 {
-                    <span class="mx-1 d-flex align-center font-weight-bold" @onclick:stopPropagation="true">
-                        @WeightContent
-                    </span>
-                }
-                else if (Weight != 0)
-                {
-                    <span class="mx-1 font-weight-bold" @onclick:stopPropagation="true">
-                        @Weight
-                    </span>
+                    case not null:
+                        <span class="mx-1 d-flex align-center font-weight-bold" @onclick:stopPropagation="true">
+                            @WeightContent
+                        </span>
+                        break;
+                    case null when Weight != 0:
+                        <span class="mx-1 font-weight-bold" @onclick:stopPropagation="true">
+                            @Weight
+                        </span>
+                        break;
                 }
             </span>
-            @if (ActionContent != null)
+            @switch (ActionContent)
             {
-                <div class="d-flex align-center" @onclick:stopPropagation="true">
-                    @ActionContent
-                </div>
+                case not null:
+                    <div class="d-flex align-center" @onclick:stopPropagation="true">
+                        @ActionContent
+                    </div>
+                    break;
             }
         </div>
     </MudChip>
-    @if (PopoverContent != null)
+    @switch (PopoverContent)
     {
-        @PopoverContent
+        case not null:
+            @PopoverContent
+            break;
     }
 </span>
 
@@ -80,9 +94,11 @@
 
     private async Task HandleTagClick()
     {
-        if (OnClick.HasDelegate)
+        switch (OnClick.HasDelegate)
         {
-            await OnClick.InvokeAsync();
+            case true:
+                await OnClick.InvokeAsync();
+                break;
         }
     }
 

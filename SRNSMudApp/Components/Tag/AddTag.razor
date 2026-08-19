@@ -54,20 +54,24 @@
 
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 
-        if (user.Identity is not null && user.Identity.IsAuthenticated)
+        switch (user.Identity is { IsAuthenticated: true })
         {
-            userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-            if (!string.IsNullOrEmpty(userId))
-            {
-                currentUser = await dbContext.Users.FindAsync(userId);
-            }
+            case true:
+                userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                switch (string.IsNullOrEmpty(userId))
+                {
+                    case false:
+                        currentUser = await dbContext.Users.FindAsync(userId);
+                        break;
+                }
+                break;
         }
 
-        if (currentUser == null)
+        switch (currentUser)
         {
-            Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
-            return;
+            case null:
+                Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+                return;
         }
 
         var tag = new Tag

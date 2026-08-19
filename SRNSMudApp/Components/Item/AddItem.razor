@@ -11,57 +11,60 @@
 @inject UserManager<ApplicationUser> UserManager
 
 <div class="w-100 pb-2">
-    @if (_newItem == null)
+    @switch (_newItem)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
-        <MudText>読み込み中...</MudText>
-    }
-    else
-    {
-        <EditForm Model="@_newItem" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit"
-                  FormName="AddItem" class="w-100">
-            <DataAnnotationsValidator/>
+        case null:
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            <MudText>読み込み中...</MudText>
+            break;
+        case not null:
+            <EditForm Model="@_newItem" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit"
+                      FormName="AddItem" class="w-100">
+                <DataAnnotationsValidator/>
 
-            <div class="d-flex gap-4 align-start">
-                <div class="flex-grow-1 d-flex flex-column additem-content">
-                    <MudTextField @bind-Value="_newItem.Content"
-                                  For="@(() => _newItem.Content)"
-                                  name="_newItem.Content"
-                                  Placeholder="新しいアイテムのコンテンツを入力..."
-                                  Variant="Variant.Outlined"
-                                  Lines="3"
-                                  MaxLength="1000"
-                                  Counter="1000"
-                                  Required="true"
-                                  RequiredError="コンテンツは必須です。"
-                                  Immediate="true"/>
+                <div class="d-flex gap-4 align-start">
+                    <div class="flex-grow-1 d-flex flex-column additem-content">
+                        <MudTextField @bind-Value="_newItem.Content"
+                                      For="@(() => _newItem.Content)"
+                                      name="_newItem.Content"
+                                      Placeholder="新しいアイテムのコンテンツを入力..."
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="1000"
+                                      Counter="1000"
+                                      Required="true"
+                                      RequiredError="コンテンツは必須です。"
+                                      Immediate="true"/>
 
-                    @* 抽出したURLのプレビューを表示 *@
-                    @{
-                        var urls = ExtractUrls(_newItem.Content);
-                    }
-                    @if (urls.Any())
-                    {
-                        <div class="d-flex flex-column gap-2 mt-2">
-                            @foreach (var url in urls.Take(3)) // 最大3件程度に制限
-                            {
-                                <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
-                            }
-                        </div>
-                    }
+                        @* 抽出したURLのプレビューを表示 *@
+                        @{
+                            var urls = ExtractUrls(_newItem.Content);
+                        }
+                        @switch (urls.Any())
+                        {
+                            case true:
+                                <div class="d-flex flex-column gap-2 mt-2">
+                                    @foreach (var url in urls.Take(3)) // 最大3件程度に制限
+                                    {
+                                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
+                                    }
+                                </div>
+                                break;
+                        }
+                    </div>
+
+                    <div class="d-flex flex-column align-center mt-2 additem-submit">
+                        <MudButton ButtonType="ButtonType.Submit"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   Class="w-100">
+                            保存
+                        </MudButton>
+                    </div>
                 </div>
-
-                <div class="d-flex flex-column align-center mt-2 additem-submit">
-                    <MudButton ButtonType="ButtonType.Submit"
-                               Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               Size="Size.Large"
-                               Class="w-100">
-                        保存
-                    </MudButton>
-                </div>
-            </div>
-        </EditForm>
+            </EditForm>
+            break;
     }
 </div>
 
@@ -77,79 +80,87 @@
     protected override async Task OnInitializedAsync()
     {
         // 2. フォーム送信時（POST）の再読み込みで、入力済みデータを上書きしないようにガードする
-        if (_newItem == null)
+        switch (_newItem)
         {
-            var authState = await AuthenticationStateTask;
-            var user = authState.User;
+            case null:
+                var authState = await AuthenticationStateTask;
+                var user = authState.User;
 
-            var userId = string.Empty;
+                var userId = string.Empty;
 
-            if (user.Identity is not null && user.Identity.IsAuthenticated)
-            {
-                userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
-            }
+                switch (user.Identity is not null && user.Identity.IsAuthenticated)
+                {
+                    case true:
+                        userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+                        break;
+                }
 
-            _newItem = new Item
-            {
-                Content = string.Empty,
-                OwnerId = userId
-            };
+                _newItem = new Item
+                {
+                    Content = string.Empty,
+                    OwnerId = userId
+                };
+                break;
         }
     }
 
     private async Task HandleValidSubmit()
     {
-        if (!string.IsNullOrWhiteSpace(_newItem!.Content))
+        switch (string.IsNullOrWhiteSpace(_newItem!.Content))
         {
-            try
-            {
-                await using (var context = await DbFactory.CreateDbContextAsync())
+            case false:
+                try
                 {
-                    context.Items.Add(_newItem);
-
-                    if (InitialTags != null && InitialTags.Any())
+                    await using (var context = await DbFactory.CreateDbContextAsync())
                     {
-                        var tagRelations = new List<TagRelation>();
-                        foreach (var tag in InitialTags)
+                        context.Items.Add(_newItem);
+
+                        switch (InitialTags != null && InitialTags.Any())
                         {
-                            tagRelations.Add(new TagRelation
-                            {
-                                TagId = tag.Id,
-                                Weight = 1,
-                                OwnerId = _newItem.OwnerId
-                            });
+                            case true:
+                                var tagRelations = new List<TagRelation>();
+                                foreach (var tag in InitialTags!)
+                                {
+                                    tagRelations.Add(new TagRelation
+                                    {
+                                        TagId = tag.Id,
+                                        Weight = 1,
+                                        OwnerId = _newItem.OwnerId
+                                    });
+                                }
+
+                                _newItem.TagRelations = tagRelations;
+                                break;
                         }
 
-                        _newItem.TagRelations = tagRelations;
+                        await context.SaveChangesAsync();
                     }
 
-                    await context.SaveChangesAsync();
+                    _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
+
+                    Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
+
+                    switch (OnItemAdded.HasDelegate)
+                    {
+                        case true:
+                            await OnItemAdded.InvokeAsync();
+                            break;
+                        case false:
+                            NavigationManager.NavigateTo(NavigationManager.Uri, true);
+                            break;
+                    }
                 }
-
-                _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
-
-                Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
-
-                if (OnItemAdded.HasDelegate)
+                catch (Exception ex)
                 {
-                    await OnItemAdded.InvokeAsync();
+                    var msg = $"[AddItem ERROR] {ex}";
+                    Console.WriteLine(msg);
+                    File.WriteAllText("/tmp/additem_error.txt", msg);
+                    Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
                 }
-                else
-                {
-                    NavigationManager.NavigateTo(NavigationManager.Uri, true);
-                }
-            }
-            catch (Exception ex)
-            {
-                var msg = $"[AddItem ERROR] {ex}";
-                Console.WriteLine(msg);
-                File.WriteAllText("/tmp/additem_error.txt", msg);
-                Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
-            }
-        }
-        else
-        {
-            Console.WriteLine("Empty content");
+                break;
+            case true:
+                Console.WriteLine("Empty content");
+                break;
         }
     }
 
@@ -168,14 +179,19 @@
 
     private static List<string> ExtractUrls(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return [];
+        switch (string.IsNullOrWhiteSpace(text))
+        {
+            case true: return [];
+        }
         var results = new List<string>();
         var matches = UrlRegex.Matches(text);
         foreach (Match match in matches)
         {
-            if (!results.Contains(match.Value))
+            switch (!results.Contains(match.Value))
             {
-                results.Add(match.Value);
+                case true:
+                    results.Add(match.Value);
+                    break;
             }
         }
 

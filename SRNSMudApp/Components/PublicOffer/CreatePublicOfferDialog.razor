@@ -44,9 +44,11 @@
         await using var dbContext = await DbFactory.CreateDbContextAsync(token);
         var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId);
 
-        if (!string.IsNullOrEmpty(value))
+        switch (!string.IsNullOrEmpty(value))
         {
-            query = query.Where(t => t.Name.Contains(value));
+            case true:
+                query = query.Where(t => t.Name.Contains(value));
+                break;
         }
 
         return await query.Take(10).ToListAsync(token);
@@ -55,7 +57,10 @@
     private async Task Submit()
     {
         await _form!.ValidateAsync();
-        if (!_isValid || _selectedTag == null) return;
+        switch (!_isValid || _selectedTag == null)
+        {
+            case true: return;
+        }
 
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 

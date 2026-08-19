@@ -48,21 +48,24 @@
         </MudButton>
     </MudFileUpload>
 
-    @if (_file != null)
+    @switch (_file)
     {
-        <MudText Typo="Typo.body2" Class="mt-2">選択されたファイル: @_file.Name (@_file.Size bytes)</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Success" Class="mt-4" OnClick="@ImportData"
-                   Disabled="@(_isImporting || _selectedParentTag == null)">
-            @if (_isImporting)
-            {
-                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                <MudText Class="ms-2">インポート中...</MudText>
-            }
-            else
-            {
-                <MudText>インポート実行</MudText>
-            }
-        </MudButton>
+        case not null:
+            <MudText Typo="Typo.body2" Class="mt-2">選択されたファイル: @_file.Name (@_file.Size bytes)</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" Class="mt-4" OnClick="@ImportData"
+                       Disabled="@(_isImporting || _selectedParentTag == null)">
+                @switch (_isImporting)
+                {
+                    case true:
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                        <MudText Class="ms-2">インポート中...</MudText>
+                        break;
+                    case false:
+                        <MudText>インポート実行</MudText>
+                        break;
+                }
+            </MudButton>
+            break;
     }
 </MudPaper>
 
@@ -77,23 +80,27 @@
 
     private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
     {
-        if (string.IsNullOrEmpty(_currentUserId)) return [];
+        switch (string.IsNullOrEmpty(_currentUserId))
+        {
+            case true: return [];
+        }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync(token);
         var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId).AsQueryable();
 
-        if (string.IsNullOrEmpty(value))
+        switch (string.IsNullOrEmpty(value))
         {
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
+            case true:
+                return await query.AsNoTracking().Take(50).ToListAsync(token);
         }
 
         try
         {
-            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value);
+            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value!);
             var queryArray = queryVector.ToArray();
 
             var textMatches = await query
-                .Where(x => x.Name.Contains(value) || (x.Content != null && x.Content.Contains(value)))
+                .Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)))
                 .AsNoTracking()
                 .ToListAsync(token);
 
@@ -114,17 +121,19 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Vector search failed: {ex.Message}");
-            query = query.Where(x => x.Name.Contains(value) || (x.Content != null && x.Content.Contains(value)));
+            query = query.Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)));
             return await query.AsNoTracking().Take(50).ToListAsync(token);
         }
     }
 
     protected override async Task OnInitializedAsync()
     {
-        if (AuthState is not null)
+        switch (AuthState)
         {
-            var authState = await AuthState;
-            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            case not null:
+                var authState = await AuthState;
+                _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                break;
         }
     }
 
@@ -135,22 +144,25 @@
 
     private async Task ImportData()
     {
-        if (_selectedParentTag == null)
+        switch (_selectedParentTag)
         {
-            Snackbar.Add("親タグを選択してください", Severity.Warning);
-            return;
+            case null:
+                Snackbar.Add("親タグを選択してください", Severity.Warning);
+                return;
         }
 
-        if (_file == null)
+        switch (_file)
         {
-            Snackbar.Add("ファイルが選択されていません", Severity.Warning);
-            return;
+            case null:
+                Snackbar.Add("ファイルが選択されていません", Severity.Warning);
+                return;
         }
 
-        if (string.IsNullOrEmpty(_currentUserId))
+        switch (string.IsNullOrEmpty(_currentUserId))
         {
-            Snackbar.Add("ログインが必要です", Severity.Error);
-            return;
+            case true:
+                Snackbar.Add("ログインが必要です", Severity.Error);
+                return;
         }
 
         _isImporting = true;
@@ -178,64 +190,76 @@
             await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
             Tag? baseParentTag = null;
-            if (_selectedParentTag != null && existingTags.TryGetValue(_selectedParentTag.Name, out var trackedBaseTag))
+            Tag? trackedBaseTag = null;
+            switch (_selectedParentTag != null && existingTags.TryGetValue(_selectedParentTag.Name, out trackedBaseTag))
             {
-                baseParentTag = trackedBaseTag;
+                case true:
+                    baseParentTag = trackedBaseTag;
+                    break;
             }
 
             foreach (var line in lines)
             {
                 var tagNames = line.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
-                if (tagNames.Count == 0) continue;
+                switch (tagNames.Count)
+                {
+                    case 0: continue;
+                }
 
                 var currentParentTag = baseParentTag;
 
                 foreach (var tagName in tagNames)
                 {
                     // Validate tag name
-                    if (!_tagNameRegex.IsMatch(tagName))
+                    switch (_tagNameRegex.IsMatch(tagName))
                     {
-                        throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
+                        case false:
+                            throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
                     }
 
-                    if (!existingTags.TryGetValue(tagName, out var tag))
+                    switch (existingTags.TryGetValue(tagName, out var tag))
                     {
-                        // Tag doesn't exist, create it
-                        var newTag = new Tag
-                        {
-                            Name = tagName,
-                            OwnerId = _currentUserId,
-                            ParentTag = currentParentTag,
-                            CreatedDate = DateTime.UtcNow,
-                            UpdatedDate = DateTime.UtcNow
-                        };
+                        case false:
+                            // Tag doesn't exist, create it
+                            var newTag = new Tag
+                            {
+                                Name = tagName,
+                                OwnerId = _currentUserId,
+                                ParentTag = currentParentTag,
+                                CreatedDate = DateTime.UtcNow,
+                                UpdatedDate = DateTime.UtcNow
+                            };
 
-                        try
-                        {
-                            var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(tagName);
-                            newTag.Embedding = embedding.ToArray();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Embedding generation failed: {ex.Message}");
-                        }
+                            try
+                            {
+                                var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                                newTag.Embedding = embedding.ToArray();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Embedding generation failed: {ex.Message}");
+                            }
 
-                        dbContext.Tags.Add(newTag);
+                            dbContext.Tags.Add(newTag);
 
-                        existingTags[tagName] = newTag;
-                        currentParentTag = newTag;
-                        createdCount++;
-                        continue;
+                            existingTags[tagName] = newTag;
+                            currentParentTag = newTag;
+                            createdCount++;
+                            continue;
                     }
 
-                    if (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
+                    switch (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
                     {
-                        // Avoid circular reference
-                        if (!IsDescendantOrSelf(tag, currentParentTag))
-                        {
-                            tag.ParentTag = currentParentTag;
-                            tag.ParentTagId = null; // Let EF Core manage the FK via navigation property
-                        }
+                        case true:
+                            // Avoid circular reference
+                            switch (!IsDescendantOrSelf(tag, currentParentTag!))
+                            {
+                                case true:
+                                    tag.ParentTag = currentParentTag;
+                                    tag.ParentTagId = null; // Let EF Core manage the FK via navigation property
+                                    break;
+                            }
+                            break;
                     }
 
                     currentParentTag = tag;
@@ -264,12 +288,18 @@
 
     private static bool IsDescendantOrSelf(Tag parent, Tag target)
     {
-        if (ReferenceEquals(parent, target)) return true;
+        switch (ReferenceEquals(parent, target))
+        {
+            case true: return true;
+        }
 
         var current = target;
         while (current?.ParentTag != null)
         {
-            if (ReferenceEquals(current.ParentTag, parent)) return true;
+            switch (ReferenceEquals(current.ParentTag, parent))
+            {
+                case true: return true;
+            }
             current = current.ParentTag;
         }
 

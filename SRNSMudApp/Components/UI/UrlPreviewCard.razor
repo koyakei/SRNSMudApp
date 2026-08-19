@@ -3,66 +3,69 @@
 @namespace SRNSMudApp.Components.UI
 @inject LinkPreviewService PreviewService
 
-@if (_isLoading)
+@switch (_isLoading)
 {
-    <MudCard Outlined="true" Class="mt-2 rounded-lg">
-        <MudCardContent Class="d-flex align-center pa-2">
-            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-3"/>
-            <MudText Typo="Typo.body2">リンク情報を取得中...</MudText>
-        </MudCardContent>
-    </MudCard>
-}
-else if (_previewData != null && _previewData.IsSuccess)
-{
-    <MudCard Outlined="true" Class="mt-2 mb-2 rounded-lg preview-card"
-             @onclick="NavigateToUrl">
-        <div class="d-flex flex-row">
-            @if (!string.IsNullOrEmpty(_previewData.ImageUrl))
-            {
-                <div class="preview-img-container">
-                    <MudImage Src="@_previewData.ImageUrl" Alt="Preview Image" ObjectFit="ObjectFit.Cover" Width="120"
-                              Height="120"
-                              Class="preview-img"/>
-                </div>
-            }
-            <MudCardContent Class="pa-3 d-flex flex-column justify-center preview-content">
-                <MudText Typo="Typo.subtitle2"
-                         Class="preview-title">
-                    @_previewData.Title
-                </MudText>
-                @* ===== Text Fragment (選択テキスト) または 通常の Description ===== *@
-                @if (!string.IsNullOrEmpty(_selectedText))
+    case true:
+        <MudCard Outlined="true" Class="mt-2 rounded-lg">
+            <MudCardContent Class="d-flex align-center pa-2">
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-3"/>
+                <MudText Typo="Typo.body2">リンク情報を取得中...</MudText>
+            </MudCardContent>
+        </MudCard>
+        break;
+    case false when _previewData is { IsSuccess: true }:
+        <MudCard Outlined="true" Class="mt-2 mb-2 rounded-lg preview-card"
+                 @onclick="NavigateToUrl">
+            <div class="d-flex flex-row">
+                @switch (string.IsNullOrEmpty(_previewData.ImageUrl))
                 {
-                    <div
-                        class="preview-highlight">
-                        <div class="d-flex align-center highlight-header">
-                            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small"
-                                     Class="highlight-icon"/>
-                            <MudText Typo="Typo.caption" Class="highlight-title">
-                                選択テキスト
-                            </MudText>
+                    case false:
+                        <div class="preview-img-container">
+                            <MudImage Src="@_previewData.ImageUrl" Alt="Preview Image" ObjectFit="ObjectFit.Cover" Width="120"
+                                      Height="120"
+                                      Class="preview-img"/>
                         </div>
-                        <MudText Typo="Typo.caption" Color="Color.Primary" Class="highlight-text">
-                            @_selectedText
+                        break;
+                }
+                <MudCardContent Class="pa-3 d-flex flex-column justify-center preview-content">
+                    <MudText Typo="Typo.subtitle2"
+                             Class="preview-title">
+                        @_previewData.Title
+                    </MudText>
+                    @switch (string.IsNullOrEmpty(_selectedText), string.IsNullOrEmpty(_previewData.Description))
+                    {
+                        case (false, _):
+                            <div
+                                class="preview-highlight">
+                                <div class="d-flex align-center highlight-header">
+                                    <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small"
+                                             Class="highlight-icon"/>
+                                    <MudText Typo="Typo.caption" Class="highlight-title">
+                                        選択テキスト
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.caption" Color="Color.Primary" Class="highlight-text">
+                                    @_selectedText
+                                </MudText>
+                            </div>
+                            break;
+                        case (true, false):
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="preview-description">
+                                @_previewData.Description
+                            </MudText>
+                            break;
+                    }
+                    <div class="d-flex align-center mt-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" Color="Color.Secondary"
+                                 Class="mr-1 site-icon"/>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="site-name">
+                            @(string.IsNullOrEmpty(_previewData.SiteName) switch { false => _previewData.SiteName, true => new Uri(_previewData.Url).Host })
                         </MudText>
                     </div>
-                }
-                else if (!string.IsNullOrEmpty(_previewData.Description))
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="preview-description">
-                        @_previewData.Description
-                    </MudText>
-                }
-                <div class="d-flex align-center mt-2">
-                    <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" Color="Color.Secondary"
-                             Class="mr-1 site-icon"/>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="site-name">
-                        @(!string.IsNullOrEmpty(_previewData.SiteName) ? _previewData.SiteName : new Uri(_previewData.Url).Host)
-                    </MudText>
-                </div>
-            </MudCardContent>
-        </div>
-    </MudCard>
+                </MudCardContent>
+            </div>
+        </MudCard>
+        break;
 }
 
 @code {
@@ -76,7 +79,10 @@ else if (_previewData != null && _previewData.IsSuccess)
 
     protected override async Task OnParametersSetAsync()
     {
-        if (string.IsNullOrWhiteSpace(Url)) return;
+        switch (string.IsNullOrWhiteSpace(Url))
+        {
+            case true: return;
+        }
 
         _selectedText = ExtractTextFragment(Url);
 
@@ -86,80 +92,89 @@ else if (_previewData != null && _previewData.IsSuccess)
         _previewData = await PreviewService.GetPreviewAsync(Url);
 
         _isLoading = false;
-        // StateHasChanged();
     }
 
     private async Task NavigateToUrl()
     {
-        if (!string.IsNullOrEmpty(Url))
+        switch (string.IsNullOrEmpty(Url))
         {
-            try
-            {
-                await JS.InvokeVoidAsync("open", Url, "_blank");
-            }
-            catch (Exception)
-            {
-            }
+            case false:
+                try
+                {
+                    await JS.InvokeVoidAsync("open", Url, "_blank");
+                }
+                catch (Exception)
+                {
+                }
+                break;
         }
     }
 
-    /// <summary>
-    ///     URL の #:~:text= フラグメント（Text Fragments）からブラウザの選択テキストを抽出する。
-    ///     Brave/Chrome の「選択箇所へのリンクをコピー」で生成されるURLに対応。
-    ///     仕様: https://wicg.github.io/scroll-to-text-fragment/
-    /// </summary>
     private static string? ExtractTextFragment(string url)
     {
         const string marker = "#:~:text=";
         var markerIndex = url.IndexOf(marker, StringComparison.Ordinal);
-        if (markerIndex < 0) return null;
+        
+        return markerIndex switch
+        {
+            < 0 => null,
+            _ => ProcessTextFragment(url, markerIndex, marker)
+        };
+    }
 
-        // マーカー以降の文字列を取得
+    private static string? ProcessTextFragment(string url, int markerIndex, string marker)
+    {
         var raw = url[(markerIndex + marker.Length)..];
-
-        // &text= で複数フラグメントを分割
         var parts = raw.Split(["&text="], StringSplitOptions.RemoveEmptyEntries);
 
         var results = new List<string>();
         foreach (var part in parts)
         {
-            // URLデコード
-            string decoded;
-            try
-            {
-                decoded = Uri.UnescapeDataString(part);
-            }
-            catch
-            {
-                decoded = part;
-            }
+            var text = TryDecode(part);
 
-            // Text Fragment の構造: [prefix-,]start[,end][,-suffix]
-            // prefix- は "-," の前、-suffix は ",-" の後
-            var text = decoded;
-
-            // -suffix を除去: 最後の ",-" 以降を削除
             var suffixSep = text.LastIndexOf(",-", StringComparison.Ordinal);
-            if (suffixSep >= 0)
-                text = text[..suffixSep];
+            text = suffixSep switch
+            {
+                >= 0 => text[..suffixSep],
+                _ => text
+            };
 
-            // prefix- を除去: 最初の "-," 以降を使用
             var prefixSep = text.IndexOf("-,", StringComparison.Ordinal);
-            if (prefixSep >= 0)
-                text = text[(prefixSep + 2)..];
+            text = prefixSep switch
+            {
+                >= 0 => text[(prefixSep + 2)..],
+                _ => text
+            };
 
-            // start と end を "," で分割して "〜" で結合
             var segments = text.Split(',')
                 .Select(s => s.Trim())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToArray();
 
-            if (segments.Length == 0) continue;
-            var joined = string.Join("〜", segments);
-            results.Add(joined);
+            switch (segments.Length)
+            {
+                case > 0:
+                    results.Add(string.Join("〜", segments));
+                    break;
+            }
         }
 
-        return results.Count > 0 ? string.Join(" | ", results) : null;
+        return results.Count switch
+        {
+            > 0 => string.Join(" | ", results),
+            _ => null
+        };
     }
 
+    private static string TryDecode(string part)
+    {
+        try
+        {
+            return Uri.UnescapeDataString(part);
+        }
+        catch
+        {
+            return part;
+        }
+    }
 }

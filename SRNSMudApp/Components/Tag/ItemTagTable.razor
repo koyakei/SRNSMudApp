@@ -59,8 +59,10 @@
 
     private bool FilterFunc(TagRelation relation)
     {
-        if (string.IsNullOrWhiteSpace(_searchString))
-            return true;
+        switch (string.IsNullOrWhiteSpace(_searchString))
+        {
+            case true: return true;
+        }
 
         var nameMatch = relation.Tag?.Name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
         var userMatch = relation.Tag?.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;

@@ -15,18 +15,19 @@
             <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
             <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true"/>
 
-            @if (IsRemovalRequest)
+            @switch (IsRemovalRequest)
             {
-                <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
-                    タグの削除提案
-                </MudAlert>
-            }
-            else
-            {
-                <div class="d-flex align-center gap-4 mt-2 mb-4">
-                    <MudText Typo="Typo.body2">提案するWeight変更（増減）:</MudText>
-                    <MudNumericField @bind-Value="ProposedWeightInput" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px" />
-                </div>
+                case true:
+                    <MudAlert Severity="Severity.Info" Class="mt-2 mb-4">
+                        タグの削除提案
+                    </MudAlert>
+                    break;
+                case false:
+                    <div class="d-flex align-center gap-4 mt-2 mb-4">
+                        <MudText Typo="Typo.body2">提案するWeight変更（増減）:</MudText>
+                        <MudNumericField @bind-Value="ProposedWeightInput" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px" />
+                    </div>
+                    break;
             }
 
             <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
@@ -118,40 +119,46 @@
     private async Task<IEnumerable<Item>> SearchItems(string? value, CancellationToken token)
     {
         await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        if (string.IsNullOrEmpty(value))
+        switch (string.IsNullOrEmpty(value))
         {
-            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+            case true:
+                return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+            case false:
+                return await dbContext.Items
+                    .Where(i => i.Content.Contains(value))
+                    .Take(10)
+                    .ToListAsync(token);
         }
-
-        return await dbContext.Items
-            .Where(i => i.Content.Contains(value))
-            .Take(10)
-            .ToListAsync(token);
     }
 
     private async Task<IEnumerable<Tag>> SearchTags(string? value, CancellationToken token)
     {
         await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        if (string.IsNullOrEmpty(value))
+        switch (string.IsNullOrEmpty(value))
         {
-            return await dbContext.Tags.Take(10).ToListAsync(token);
+            case true:
+                return await dbContext.Tags.Take(10).ToListAsync(token);
+            case false:
+                return await dbContext.Tags
+                    .Where(t => t.Name.Contains(value))
+                    .Take(10)
+                    .ToListAsync(token);
         }
-
-        return await dbContext.Tags
-            .Where(t => t.Name.Contains(value))
-            .Take(10)
-            .ToListAsync(token);
     }
 
     private async Task Submit()
     {
         await _form!.ValidateAsync();
-        if (!_isValid) return;
-
-        if (ProposedWeightInput == 0 && !IsRemovalRequest)
+        switch (!_isValid)
         {
-            Snackbar.Add("0以外のWeight変更値を入力してください。", Severity.Error);
-            return;
+            case true: return;
+        }
+
+        switch (ProposedWeightInput == 0 && !IsRemovalRequest)
+        {
+            case true:
+                Snackbar.Add("0以外のWeight変更値を入力してください。", Severity.Error);
+                return;
         }
 
         var isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
@@ -163,31 +170,32 @@
                 
         var absoluteWeight = Math.Abs(ProposedWeightInput);
 
-        if (isMutual)
+        switch (isMutual)
         {
-            await ContractService.ProposeMutualContractAsync(
-                _currentUserId,
-                RequestedTag.OwnerId,
-                TargetItem.Id,
-                RequestedTag.Id,
-                _offeredItem!.Id,
-                _offeredTag!.Id,
-                _selectedRightAsset!.Id,
-                requestType,
-                absoluteWeight
-            );
-        }
-        else
-        {
-            await ContractService.ProposeGratisContractAsync(
-                _currentUserId,
-                RequestedTag.OwnerId,
-                TargetItem.Id,
-                RequestedTag.Id,
-                requestType,
-                absoluteWeight,
-                _gratisMessage
-            );
+            case true:
+                await ContractService.ProposeMutualContractAsync(
+                    _currentUserId,
+                    RequestedTag.OwnerId,
+                    TargetItem.Id,
+                    RequestedTag.Id,
+                    _offeredItem!.Id,
+                    _offeredTag!.Id,
+                    _selectedRightAsset!.Id,
+                    requestType,
+                    absoluteWeight
+                );
+                break;
+            case false:
+                await ContractService.ProposeGratisContractAsync(
+                    _currentUserId,
+                    RequestedTag.OwnerId,
+                    TargetItem.Id,
+                    RequestedTag.Id,
+                    requestType,
+                    absoluteWeight,
+                    _gratisMessage
+                );
+                break;
         }
 
         Snackbar.Add("コントラクトを提案しました。", Severity.Success);

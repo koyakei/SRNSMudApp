@@ -28,91 +28,95 @@
                 <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
                     <MudTabPanel Text="受信トレイ (Inbox)">
                         <div class="pa-4">
-                            @if (!loaded.Data.IncomingContracts.Any())
+                            @switch (!loaded.Data.IncomingContracts.Any())
                             {
-                                <MudAlert Severity="Severity.Info">現在、受信したコントラクトの提案はありません。</MudAlert>
-                            }
-                            else
-                            {
-                                <MudGrid>
-                                    @foreach (var contract in loaded.Data.IncomingContracts)
-                                    {
-                                        <MudItem xs="12" sm="6" md="4">
-                                            <MudCard Elevation="3">
-                                                <MudCardHeader>
-                                                    <CardHeaderContent>
-                                                        <MudText Typo="Typo.h6">@contract.RequestedTag.Name</MudText>
-                                                        <MudText Typo="Typo.body2">対象アイテム: @contract.TargetItem.Content</MudText>
-                                                    </CardHeaderContent>
-                                                </MudCardHeader>
-                                                <MudCardContent>
-                                                    <MudChip T="string" Color="Color.Info" Size="Size.Small">
-                                                        @(contract.Status == TradeStatus.Proposed ? "提案中" : 
-                                                          contract.Status == TradeStatus.Executed ? "承認済み" : 
-                                                          contract.Status == TradeStatus.Rejected ? "拒否" : 
-                                                          contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
-                                                    </MudChip>
-                                                    <ContractCardContent Contract="contract" />
-                                                </MudCardContent>
-                                                <MudCardActions>
-                                                    <MudButton Color="Color.Success" Variant="Variant.Filled"
-                                                               OnClick="() => AcceptContract(contract)">
-                                                        承認する
-                                                    </MudButton>
-                                                    <MudButton Color="Color.Error" Variant="Variant.Text" Class="ml-2"
-                                                               OnClick="() => RejectContract(contract)">
-                                                        拒否する
-                                                    </MudButton>
-                                                </MudCardActions>
-                                            </MudCard>
-                                        </MudItem>
-                                    }
-                                </MudGrid>
+                                case true:
+                                    <MudAlert Severity="Severity.Info">現在、受信したコントラクトの提案はありません。</MudAlert>
+                                    break;
+                                case false:
+                                    <MudGrid>
+                                        @foreach (var contract in loaded.Data.IncomingContracts)
+                                        {
+                                            <MudItem xs="12" sm="6" md="4">
+                                                <MudCard Elevation="3">
+                                                    <MudCardHeader>
+                                                        <CardHeaderContent>
+                                                            <MudText Typo="Typo.h6">@contract.RequestedTag.Name</MudText>
+                                                            <MudText Typo="Typo.body2">対象アイテム: @contract.TargetItem.Content</MudText>
+                                                        </CardHeaderContent>
+                                                    </MudCardHeader>
+                                                    <MudCardContent>
+                                                        <MudChip T="string" Color="Color.Info" Size="Size.Small">
+                                                            @(contract.Status == TradeStatus.Proposed ? "提案中" : 
+                                                              contract.Status == TradeStatus.Executed ? "承認済み" : 
+                                                              contract.Status == TradeStatus.Rejected ? "拒否" : 
+                                                              contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
+                                                        </MudChip>
+                                                        <ContractCardContent Contract="contract" />
+                                                    </MudCardContent>
+                                                    <MudCardActions>
+                                                        <MudButton Color="Color.Success" Variant="Variant.Filled"
+                                                                   OnClick="() => AcceptContract(contract)">
+                                                            承認する
+                                                        </MudButton>
+                                                        <MudButton Color="Color.Error" Variant="Variant.Text" Class="ml-2"
+                                                                   OnClick="() => RejectContract(contract)">
+                                                            拒否する
+                                                        </MudButton>
+                                                    </MudCardActions>
+                                                </MudCard>
+                                            </MudItem>
+                                        }
+                                    </MudGrid>
+                                    break;
                             }
                         </div>
                     </MudTabPanel>
                     
                     <MudTabPanel Text="送信済み (Outbox)">
                         <div class="pa-4">
-                            @if (!loaded.Data.OutgoingContracts.Any())
+                            @switch (!loaded.Data.OutgoingContracts.Any())
                             {
-                                <MudAlert Severity="Severity.Info">現在、送信したコントラクトの提案はありません。</MudAlert>
-                            }
-                            else
-                            {
-                                <MudGrid>
-                                    @foreach (var contract in loaded.Data.OutgoingContracts)
-                                    {
-                                        <MudItem xs="12" sm="6" md="4">
-                                            <MudCard Elevation="3">
-                                                <MudCardHeader>
-                                                    <CardHeaderContent>
-                                                        <MudText Typo="Typo.h6">@contract.RequestedTag.Name</MudText>
-                                                        <MudText Typo="Typo.body2">対象アイテム: @contract.TargetItem.Content</MudText>
-                                                    </CardHeaderContent>
-                                                </MudCardHeader>
-                                                <MudCardContent>
-                                                    <MudChip T="string" Color="Color.Info" Size="Size.Small">
-                                                        @(contract.Status == TradeStatus.Proposed ? "提案中" : 
-                                                          contract.Status == TradeStatus.Executed ? "承認済み" : 
-                                                          contract.Status == TradeStatus.Rejected ? "拒否" : 
-                                                          contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
-                                                    </MudChip>
-                                                    <ContractCardContent Contract="contract" />
-                                                </MudCardContent>
-                                                <MudCardActions>
-                                                    @if (contract.Status == TradeStatus.Proposed)
-                                                    {
-                                                        <MudButton Color="Color.Error" Variant="Variant.Text"
-                                                                   OnClick="() => CancelContract(contract)">
-                                                            取り下げる
-                                                        </MudButton>
-                                                    }
-                                                </MudCardActions>
-                                            </MudCard>
-                                        </MudItem>
-                                    }
-                                </MudGrid>
+                                case true:
+                                    <MudAlert Severity="Severity.Info">現在、送信したコントラクトの提案はありません。</MudAlert>
+                                    break;
+                                case false:
+                                    <MudGrid>
+                                        @foreach (var contract in loaded.Data.OutgoingContracts)
+                                        {
+                                            <MudItem xs="12" sm="6" md="4">
+                                                <MudCard Elevation="3">
+                                                    <MudCardHeader>
+                                                        <CardHeaderContent>
+                                                            <MudText Typo="Typo.h6">@contract.RequestedTag.Name</MudText>
+                                                            <MudText Typo="Typo.body2">対象アイテム: @contract.TargetItem.Content</MudText>
+                                                        </CardHeaderContent>
+                                                    </MudCardHeader>
+                                                    <MudCardContent>
+                                                        <MudChip T="string" Color="Color.Info" Size="Size.Small">
+                                                            @(contract.Status == TradeStatus.Proposed ? "提案中" : 
+                                                              contract.Status == TradeStatus.Executed ? "承認済み" : 
+                                                              contract.Status == TradeStatus.Rejected ? "拒否" : 
+                                                              contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
+                                                        </MudChip>
+                                                        <ContractCardContent Contract="contract" />
+                                                    </MudCardContent>
+                                                    <MudCardActions>
+                                                        @switch (contract.Status == TradeStatus.Proposed)
+                                                        {
+                                                            case true:
+                                                                <MudButton Color="Color.Error" Variant="Variant.Text"
+                                                                           OnClick="() => CancelContract(contract)">
+                                                                    取り下げる
+                                                                </MudButton>
+                                                                break;
+                                                        }
+                                                    </MudCardActions>
+                                                </MudCard>
+                                            </MudItem>
+                                        }
+                                    </MudGrid>
+                                    break;
                             }
                         </div>
                     </MudTabPanel>

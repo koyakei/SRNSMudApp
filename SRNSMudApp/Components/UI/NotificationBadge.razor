@@ -3,11 +3,13 @@
 @inject INotificationService NotificationService
 @inject NavigationManager NavigationManager
 
-@if (_userId != null)
+@switch (_userId)
 {
-    <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)">
-        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="notifications" />
-    </MudBadge>
+    case not null:
+        <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="notifications" />
+        </MudBadge>
+        break;
 }
 
 @code {
@@ -20,13 +22,17 @@
     {
         var authState = await AuthenticationStateTask;
         var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
+        switch (user.Identity?.IsAuthenticated)
         {
-            _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (_userId != null)
-            {
-                _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
-            }
+            case true:
+                _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                switch (_userId)
+                {
+                    case not null:
+                        _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
+                        break;
+                }
+                break;
         }
     }
 }

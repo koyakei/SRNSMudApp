@@ -101,18 +101,20 @@ public static class ItemCardViewModel
     /// </summary>
     public static IReadOnlyList<string> ExtractUrls(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        switch (string.IsNullOrWhiteSpace(text))
         {
-            return [];
+            case true: return [];
         }
 
         List<string> results = [];
         MatchCollection matches = UrlRegex.Matches(text);
         foreach (Match match in matches)
         {
-            if (!results.Contains(match.Value))
+            switch (!results.Contains(match.Value))
             {
-                results.Add(match.Value);
+                case true:
+                    results.Add(match.Value);
+                    break;
             }
         }
 
@@ -134,14 +136,15 @@ public static class ItemCardViewModel
         var isInserted = highlightEvent?.EventType == "Insert";
         var isDeleted = highlightEvent?.EventType == "Delete";
 
-        if (isUpdated || isInserted)
+        return (isUpdated || isInserted) switch
         {
-            return $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}";
-        }
-
-        return isDeleted
-            ? highlightEvent?.PreviousWeight?.ToString(CultureInfo.InvariantCulture) ?? ""
-            : relation.Weight.ToString(CultureInfo.InvariantCulture);
+            true => $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}",
+            false => isDeleted switch
+            {
+                true => highlightEvent?.PreviousWeight?.ToString(CultureInfo.InvariantCulture) ?? "",
+                false => relation.Weight.ToString(CultureInfo.InvariantCulture)
+            }
+        };
     }
 
     /// <summary>
@@ -154,16 +157,19 @@ public static class ItemCardViewModel
         string[] myChipBackgrounds)
     {
         var isDeleted = highlightEvent?.EventType == "Delete";
-        if (isDeleted)
+        return isDeleted switch
         {
-            return "#E0E0E0";
-        }
-
-        return highlightEvent != null
-            ? "#FFEB3B"
-            : relation.OwnerId == currentUserId
-                ? myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE"
-                : "#FFF9C4";
+            true => "#E0E0E0",
+            false => (highlightEvent != null) switch
+            {
+                true => "#FFEB3B",
+                false => (relation.OwnerId == currentUserId) switch
+                {
+                    true => myChipBackgrounds.Length > 0 ? myChipBackgrounds[0] : "#EEEDFE",
+                    false => "#FFF9C4"
+                }
+            }
+        };
     }
 
     /// <summary>
@@ -176,15 +182,18 @@ public static class ItemCardViewModel
         string[] myChipTextColors)
     {
         var isDeleted = highlightEvent?.EventType == "Delete";
-        if (isDeleted)
+        return isDeleted switch
         {
-            return "#9E9E9E";
-        }
-
-        return highlightEvent != null
-            ? "#F57F17"
-            : relation.OwnerId == currentUserId
-                ? myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C"
-                : "#5C4B00";
+            true => "#9E9E9E",
+            false => (highlightEvent != null) switch
+            {
+                true => "#F57F17",
+                false => (relation.OwnerId == currentUserId) switch
+                {
+                    true => myChipTextColors.Length > 0 ? myChipTextColors[0] : "#26215C",
+                    false => "#5C4B00"
+                }
+            }
+        };
     }
 }

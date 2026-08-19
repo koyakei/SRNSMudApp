@@ -6,42 +6,46 @@
 @implements IAsyncDisposable
 
 @* ===== タグリスト ===== *@
-@if (Tags.Any())
+@switch (Tags.Any())
 {
-    <MudStack Spacing="3">
-        @foreach (var tag in Tags)
-        {
-            <SRNSMudApp.Components.UI.TagCard Tag="@tag"
-                                                  AllTags="@_allTags"
-                                                  CurrentUserId="@_currentUserId"
-                                                  CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                  CurrentUserBadTagId="@_currentUserBadTagId"
-                                                  OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                  OnDataChanged="NotifyChangedAsync"
-                                                  IsFocused="@(_focusTagId == tag.Id)"
-                                                  OnFocus="SetFocusTag"/>
-        }
-    </MudStack>
+    case true:
+        <MudStack Spacing="3">
+            @foreach (var tag in Tags)
+            {
+                <SRNSMudApp.Components.UI.TagCard Tag="@tag"
+                                                      AllTags="@_allTags"
+                                                      CurrentUserId="@_currentUserId"
+                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                      CurrentUserBadTagId="@_currentUserBadTagId"
+                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                      OnDataChanged="NotifyChangedAsync"
+                                                      IsFocused="@(_focusTagId == tag.Id)"
+                                                      OnFocus="SetFocusTag"/>
+            }
+        </MudStack>
+        break;
 }
 
 @* ===== アイテムリスト ===== *@
-@if (Items.Any())
+@switch (Items.Any())
 {
-    <MudStack Spacing="3" Class="@(Tags.Any() ? "mt-4" : "")">
-        @foreach (var item in Items)
-        {
-            <SRNSMudApp.Components.UI.ItemCard Item="@item"
-                                                   AllTags="@_allTags"
-                                                   AllTagRelationsToTags="@_allTagRelationsToTags"
-                                                   CurrentUserId="@_currentUserId"
-                                                   CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                   CurrentUserBadTagId="@_currentUserBadTagId"
-                                                   OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                   OnDataChanged="NotifyChangedAsync"
-                                                   IsFocused="@(_focusItemId == item.Id)"
-                                                   OnFocus="SetFocusItem"/>
-        }
-    </MudStack>
+    case true:
+        <MudStack Spacing="3" Class="@(Tags.Any() ? "mt-4" : "")">
+            @foreach (var item in Items)
+            {
+                <SRNSMudApp.Components.UI.ItemCard Item="@item"
+                                                       AllTags="@_allTags"
+                                                       AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                       CurrentUserId="@_currentUserId"
+                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                       CurrentUserBadTagId="@_currentUserBadTagId"
+                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                       OnDataChanged="NotifyChangedAsync"
+                                                       IsFocused="@(_focusItemId == item.Id)"
+                                                       OnFocus="SetFocusItem"/>
+            }
+        </MudStack>
+        break;
 }
 
 @code {
@@ -71,14 +75,19 @@
     {
         var uri = new Uri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
-        if (query.TryGetValue("focusTag", out var focusTagStr) && int.TryParse(focusTagStr, out var focusTag))
+
+        switch (query.TryGetValue("focusTag", out var focusTagStr))
         {
-            _focusTagId = focusTag;
+            case true when int.TryParse(focusTagStr, out var focusTag):
+                _focusTagId = focusTag;
+                break;
         }
 
-        if (query.TryGetValue("focusItem", out var focusItemStr) && int.TryParse(focusItemStr, out var focusItem))
+        switch (query.TryGetValue("focusItem", out var focusItemStr))
         {
-            _focusItemId = focusItem;
+            case true when int.TryParse(focusItemStr, out var focusItem):
+                _focusItemId = focusItem;
+                break;
         }
 
         var authState = await AuthState!;
@@ -99,57 +108,67 @@
             .AsNoTracking()
             .ToListAsync();
 
-        if (!string.IsNullOrEmpty(_currentUserId))
+        switch (string.IsNullOrEmpty(_currentUserId))
         {
-            var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
-            var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
-            _currentUserGoodTagId = goodTag?.Id;
-            _currentUserBadTagId = badTag?.Id;
+            case false:
+                var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
+                var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+                _currentUserGoodTagId = goodTag?.Id;
+                _currentUserBadTagId = badTag?.Id;
+                break;
         }
     }
 
     private async Task NotifyChangedAsync()
     {
         await FetchTagsAsync();
-        if (OnDataChanged.HasDelegate)
+        switch (OnDataChanged.HasDelegate)
         {
-            await OnDataChanged.InvokeAsync();
+            case true:
+                await OnDataChanged.InvokeAsync();
+                break;
         }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_hasScrolledToFocus && (Items.Any() || Tags.Any()))
+        switch (!_hasScrolledToFocus && (Items.Any() || Tags.Any()))
         {
-            _hasScrolledToFocus = true;
-            if (_focusTagId.HasValue)
-            {
-                try
+            case true:
+                _hasScrolledToFocus = true;
+                switch ((_focusTagId.HasValue, _focusItemId.HasValue))
                 {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#tag-card-{_focusTagId.Value}");
+                    case (true, _):
+                        try
+                        {
+                            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#tag-card-{_focusTagId.Value}");
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                        break;
+                    case (false, true):
+                        try
+                        {
+                            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#item-card-{_focusItemId.Value}");
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                        break;
                 }
-                catch (Exception)
-                {
-                    // ignored
-                }
-            }
-            else if (_focusItemId.HasValue)
-            {
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#item-card-{_focusItemId.Value}");
-                }
-                catch (Exception)
-                {
-                    // ignored
-                }
-            }
+                break;
         }
     }
 
     private void SetFocusTag(int tagId)
     {
-        if (_focusTagId == tagId) return;
+        switch (_focusTagId == tagId)
+        {
+            case true: return;
+        }
         _focusTagId = tagId;
         _focusItemId = null;
         UpdateFocusUrl();
@@ -157,7 +176,10 @@
 
     private void SetFocusItem(int itemId)
     {
-        if (_focusItemId == itemId) return;
+        switch (_focusItemId == itemId)
+        {
+            case true: return;
+        }
         _focusItemId = itemId;
         _focusTagId = null;
         UpdateFocusUrl();
@@ -165,7 +187,10 @@
 
     private void UpdateFocusUrl()
     {
-        if (!EnableUrlUpdate) return;
+        switch (EnableUrlUpdate)
+        {
+            case false: return;
+        }
 
         var parameters = new Dictionary<string, object?>
         {
@@ -178,37 +203,49 @@
 
     public async Task EnsureSystemTagsExistAsync()
     {
-        if (string.IsNullOrEmpty(_currentUserId)) return;
-        if (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) return;
+        switch (string.IsNullOrEmpty(_currentUserId))
+        {
+            case true: return;
+        }
+        
+        switch (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue)
+        {
+            case true: return;
+        }
 
         await using var context = await DbFactory.CreateDbContextAsync();
         var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
         var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
 
         var created = false;
-        if (goodTag == null)
+        switch (goodTag)
         {
-            goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-            context.Tags.Add(goodTag);
-            created = true;
+            case null:
+                goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+                context.Tags.Add(goodTag);
+                created = true;
+                break;
         }
 
-        if (badTag == null)
+        switch (badTag)
         {
-            badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-            context.Tags.Add(badTag);
-            created = true;
+            case null:
+                badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
+                context.Tags.Add(badTag);
+                created = true;
+                break;
         }
 
-        if (created)
+        switch (created)
         {
-            await context.SaveChangesAsync();
-            await FetchTagsAsync(); // Reload all tags list
-        }
-        else
-        {
-            _currentUserGoodTagId = goodTag.Id;
-            _currentUserBadTagId = badTag.Id;
+            case true:
+                await context.SaveChangesAsync();
+                await FetchTagsAsync();
+                break;
+            case false:
+                _currentUserGoodTagId = goodTag.Id;
+                _currentUserBadTagId = badTag.Id;
+                break;
         }
     }
 

@@ -9,26 +9,28 @@
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
     <MudText Typo="Typo.h5" GutterBottom="true">デバッグ: Admin権限の取得</MudText>
 
-    @if (!Env.IsDevelopment())
+    @switch (Env.IsDevelopment())
     {
-        <MudAlert Severity="Severity.Error">このページは開発環境でのみ利用可能です。</MudAlert>
-    }
-    else
-    {
-        <MudText Class="mb-4">
-            開発用機能です。現在のログインユーザーに「Admin」ロールを付与します。
-        </MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@GrantAdminAsync" Disabled="@_isLoading">
-            @if (_isLoading)
-            {
-                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                <MudText Class="ms-2">処理中...</MudText>
-            }
-            else
-            {
-                <MudText>自分をAdminにする</MudText>
-            }
-        </MudButton>
+        case false:
+            <MudAlert Severity="Severity.Error">このページは開発環境でのみ利用可能です。</MudAlert>
+            break;
+        case true:
+            <MudText Class="mb-4">
+                開発用機能です。現在のログインユーザーに「Admin」ロールを付与します。
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@GrantAdminAsync" Disabled="@_isLoading">
+                @switch (_isLoading)
+                {
+                    case true:
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                        <MudText Class="ms-2">処理中...</MudText>
+                        break;
+                    case false:
+                        <MudText>自分をAdminにする</MudText>
+                        break;
+                }
+            </MudButton>
+            break;
     }
 </MudContainer>
 
@@ -39,7 +41,10 @@
 
     private async Task GrantAdminAsync()
     {
-        if (!Env.IsDevelopment()) return;
+        switch (Env.IsDevelopment())
+        {
+            case false: return;
+        }
 
         _isLoading = true;
         try
@@ -47,31 +52,38 @@
             var authState = await AuthState!;
             var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (string.IsNullOrEmpty(userId))
+            switch (string.IsNullOrEmpty(userId))
             {
-                Snackbar.Add("ログインしていません。", Severity.Warning);
-                return;
+                case true:
+                    Snackbar.Add("ログインしていません。", Severity.Warning);
+                    return;
             }
 
             var user = await UserManager.FindByIdAsync(userId);
-            if (user == null)
+            switch (user)
             {
-                Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
-                return;
+                case null:
+                    Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+                    return;
             }
 
             var result = await UserManager.AddToRoleAsync(user, "Admin");
-            if (result.Succeeded)
+            switch (result.Succeeded)
             {
-                Snackbar.Add("Adminロールを付与しました！再ログインすると反映されます。", Severity.Success);
-            }
-            else if (result.Errors.Any(e => e.Code == "UserAlreadyInRole"))
-            {
-                Snackbar.Add("既にAdminロールを持っています。", Severity.Info);
-            }
-            else
-            {
-                Snackbar.Add("権限付与に失敗しました: " + string.Join(", ", result.Errors.Select(e => e.Description)), Severity.Error);
+                case true:
+                    Snackbar.Add("Adminロールを付与しました！再ログインすると反映されます。", Severity.Success);
+                    break;
+                case false:
+                    switch (result.Errors.Any(e => e.Code == "UserAlreadyInRole"))
+                    {
+                        case true:
+                            Snackbar.Add("既にAdminロールを持っています。", Severity.Info);
+                            break;
+                        case false:
+                            Snackbar.Add("権限付与に失敗しました: " + string.Join(", ", result.Errors.Select(e => e.Description)), Severity.Error);
+                            break;
+                    }
+                    break;
             }
         }
         catch (Exception ex)

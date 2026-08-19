@@ -5,26 +5,30 @@
         <div class="d-flex align-center">
             <!-- アクション領域 (先頭) -->
             <div class="d-flex align-center mr-1" @onclick:stopPropagation="true">
-                @if (CanApprove)
+                @switch (CanApprove)
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
-                                   Color="Color.Success" 
-                                   Size="Size.Small" 
-                                   Class="pa-0 mr-2 chip-icon-btn"
-                                   OnClick="OnApproveClicked" 
-                                   title="削除リクエストを承認" />
+                    case true:
+                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
+                                       Color="Color.Success" 
+                                       Size="Size.Small" 
+                                       Class="pa-0 mr-2 chip-icon-btn"
+                                       OnClick="OnApproveClicked" 
+                                       title="削除リクエストを承認" />
+                        break;
                 }
                 
-                @if (CanCancel)
+                @switch (CanCancel)
                 {
-                    <MudBadge Icon="@Icons.Material.Filled.Close" Color="Color.Error" Overlap="true" Bordered="true" Class="mr-1">
-                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" 
-                                       Color="Color.Inherit" 
-                                       Size="Size.Small" 
-                                       Class="pa-0 chip-icon-btn"
-                                       OnClick="OnCancelClicked" 
-                                       title="削除リクエストをキャンセル" />
-                    </MudBadge>
+                    case true:
+                        <MudBadge Icon="@Icons.Material.Filled.Close" Color="Color.Error" Overlap="true" Bordered="true" Class="mr-1">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" 
+                                           Color="Color.Inherit" 
+                                           Size="Size.Small" 
+                                           Class="pa-0 chip-icon-btn"
+                                           OnClick="OnCancelClicked" 
+                                           title="削除リクエストをキャンセル" />
+                        </MudBadge>
+                        break;
                 }
             </div>
 
@@ -33,18 +37,22 @@
                 <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
                     @TagName
                 </a>
-                @if (!string.IsNullOrEmpty(OwnerName))
+                @switch (string.IsNullOrEmpty(OwnerName))
                 {
-                    <span class="ml-1 text-muted" @onclick:stopPropagation="true">(@OwnerName)</span>
+                    case false:
+                        <span class="ml-1 text-muted" @onclick:stopPropagation="true">(@OwnerName)</span>
+                        break;
                 }
             </span>
 
             <!-- Weight表示 -->
-            @if (Weight != 0)
+            @switch (Weight != 0)
             {
-                <span class="mx-1 ml-2 font-weight-bold text-muted" @onclick:stopPropagation="true">
-                    @Weight
-                </span>
+                case true:
+                    <span class="mx-1 ml-2 font-weight-bold text-muted" @onclick:stopPropagation="true">
+                        @Weight
+                    </span>
+                    break;
             }
         </div>
     </MudChip>
@@ -89,25 +97,31 @@
 
     private async Task OnApproveClicked()
     {
-        if (OnApprove.HasDelegate)
+        switch (OnApprove.HasDelegate)
         {
-            await OnApprove.InvokeAsync();
+            case true:
+                await OnApprove.InvokeAsync();
+                break;
         }
     }
 
     private async Task OnCancelClicked()
     {
-        if (OnCancel.HasDelegate)
+        switch (OnCancel.HasDelegate)
         {
-            await OnCancel.InvokeAsync();
+            case true:
+                await OnCancel.InvokeAsync();
+                break;
         }
     }
 
     private async Task HandleTagClick()
     {
-        if (OnTagClick.HasDelegate)
+        switch (OnTagClick.HasDelegate)
         {
-            await OnTagClick.InvokeAsync();
+            case true:
+                await OnTagClick.InvokeAsync();
+                break;
         }
     }
 }

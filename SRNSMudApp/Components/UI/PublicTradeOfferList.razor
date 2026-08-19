@@ -15,13 +15,14 @@
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="ステータス">
-            @if (context.IsActive)
+            @switch (context.IsActive)
             {
-                <MudChip T="string" Color="Color.Success" Size="Size.Small">有効</MudChip>
-            }
-            else
-            {
-                <MudChip T="string" Color="Color.Default" Size="Size.Small">無効</MudChip>
+                case true:
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">有効</MudChip>
+                    break;
+                case false:
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small">無効</MudChip>
+                    break;
             }
         </MudTd>
         <MudTd DataLabel="オファー日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
@@ -56,10 +57,12 @@
         var dialog = await DialogService.ShowAsync<TriggerPublicOfferDialog>("オファーを受諾", parameters);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled)
+        switch (result)
         {
-            Snackbar.Add("オファーを受諾し、リクエストを作成しました。", Severity.Success);
-            await OnOfferTriggered.InvokeAsync();
+            case { Canceled: false }:
+                Snackbar.Add("オファーを受諾し、リクエストを作成しました。", Severity.Success);
+                await OnOfferTriggered.InvokeAsync();
+                break;
         }
     }
 

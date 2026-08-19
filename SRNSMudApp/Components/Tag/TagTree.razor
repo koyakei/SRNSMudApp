@@ -50,10 +50,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (AuthState is not null)
+        switch (AuthState)
         {
-            var authState = await AuthState;
-            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            case not null:
+                var authState = await AuthState;
+                _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                break;
         }
 
         await LoadDataAsync();
@@ -74,35 +76,34 @@
 
             foreach (var tag in _tags)
             {
-                if (visited.Contains(tag.Id)) continue;
+                switch (visited.Contains(tag.Id))
+                {
+                    case true: continue;
+                }
 
                 var current = tag;
                 List<Tag> path = [];
 
-                while (current != null)
+                while (current != null && !recursionStack.Contains(current.Id) && !visited.Contains(current.Id))
                 {
-                    if (recursionStack.Contains(current.Id))
-                    {
-                        current.ParentTagId = null;
-
-                        var dbTag = await context.Tags.FindAsync(current.Id);
-                        if (dbTag is not null)
-                        {
-                            dbTag.ParentTagId = null;
-                        }
-
-                        hasCycles = true;
-                        break;
-                    }
-
-                    if (visited.Contains(current.Id)) break;
-
                     recursionStack.Add(current.Id);
                     path.Add(current);
+                    current = current.ParentTagId.HasValue ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value) : null;
+                }
 
-                    current = current.ParentTagId.HasValue
-                        ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value)
-                        : null;
+                switch (current)
+                {
+                    case not null when recursionStack.Contains(current.Id):
+                        current.ParentTagId = null;
+                        var dbTag = await context.Tags.FindAsync(current.Id);
+                        switch (dbTag)
+                        {
+                            case not null:
+                                dbTag.ParentTagId = null;
+                                break;
+                        }
+                        hasCycles = true;
+                        break;
                 }
 
                 foreach (var p in path)
@@ -112,9 +113,11 @@
                 }
             }
 
-            if (hasCycles)
+            switch (hasCycles)
             {
-                await context.SaveChangesAsync();
+                case true:
+                    await context.SaveChangesAsync();
+                    break;
             }
         }
         catch (Exception ex)
@@ -127,32 +130,35 @@
     {
         // _dataLoaded が true になるまでツリーを初期化しない
         // （OnInitializedAsync の await 中に firstRender が先に来る場合がある）
-        if (!_isTreeInitialized && _dataLoaded)
+        switch (!_isTreeInitialized && _dataLoaded)
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            var treeDataJson = GetSerializedTreeData();
-            var isLoggedIn = !string.IsNullOrEmpty(_currentUserId);
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container", treeDataJson, _dotNetRef, isLoggedIn, SelectedTagId);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+            case true:
+                _dotNetRef = DotNetObjectReference.Create(this);
+                var treeDataJson = GetSerializedTreeData();
+                var isLoggedIn = !string.IsNullOrEmpty(_currentUserId);
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container", treeDataJson, _dotNetRef, isLoggedIn, SelectedTagId);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
 
-            _isTreeInitialized = true;
+                _isTreeInitialized = true;
+                break;
         }
     }
 
     private IEnumerable<Tag> GetFilteredTags()
     {
-        if (string.IsNullOrWhiteSpace(_searchText))
+        switch (string.IsNullOrWhiteSpace(_searchText))
         {
-            return _tags
-                .OrderByDescending(t => t.OwnerId == _currentUserId)
-                .ThenBy(t => t.Name)
-                .Take(2000);
+            case true:
+                return _tags
+                    .OrderByDescending(t => t.OwnerId == _currentUserId)
+                    .ThenBy(t => t.Name)
+                    .Take(2000);
         }
 
         var baseTags = _tags.Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -163,16 +169,17 @@
             resultIds.Add(tag.Id);
 
             var current = tag;
-            while (current.ParentTagId.HasValue)
+            bool stopAncestors = false;
+            while (current.ParentTagId.HasValue && !stopAncestors)
             {
                 var parent = _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value);
-                if (parent == null) break;
-
-                // If parent is already in the set, its ancestors are also already in the set
-                if (!resultIds.Add(parent.Id))
-                    break;
-
-                current = parent;
+                stopAncestors = parent == null || !resultIds.Add(parent.Id);
+                switch (stopAncestors)
+                {
+                    case false:
+                        current = parent!;
+                        break;
+                }
             }
         }
 
@@ -185,32 +192,34 @@
         List<object> result = [];
         List<Tag> children;
 
-        if (parentId == null)
+        switch (parentId)
         {
-            var allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
-            children =
-            [
-                .. tagList
-                    .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
-                    .OrderBy(t => t.Name)
-            ];
-        }
-        else
-        {
-            children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
+            case null:
+                var allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
+                children =
+                [
+                    .. tagList
+                        .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
+                        .OrderBy(t => t.Name)
+                ];
+                break;
+            default:
+                children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
+                break;
         }
 
         foreach (var child in children)
         {
             var nodeChildren = BuildTreeDataForJqTree(child.Id, tagList);
-            if (nodeChildren.Count == 0)
+            switch (nodeChildren.Count)
             {
-                result.Add(new
-                {
-                    id = child.Id,
-                    name = child.Name
-                });
-                continue;
+                case 0:
+                    result.Add(new
+                    {
+                        id = child.Id,
+                        name = child.Name
+                    });
+                    continue;
             }
 
             result.Add(new
@@ -236,23 +245,28 @@
     private async Task OnSearchTextChanged(string? text)
     {
         _searchText = text;
-        if (_isTreeInitialized)
+        switch (_isTreeInitialized)
         {
-            var treeDataJson = GetSerializedTreeData();
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+            case true:
+                var treeDataJson = GetSerializedTreeData();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                break;
         }
     }
 
     private async Task DeleteSelectedTags()
     {
-        if (string.IsNullOrEmpty(_currentUserId)) return;
+        switch (string.IsNullOrEmpty(_currentUserId))
+        {
+            case true: return;
+        }
 
         List<int> selectedIds = [];
         try
@@ -264,10 +278,12 @@
             // ignored
         }
 
-        if (selectedIds == null || selectedIds.Count == 0)
+        switch (selectedIds)
         {
-            Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
-            return;
+            case null:
+            case { Count: 0 }:
+                Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
+                return;
         }
 
         var hasDeleted = false;
@@ -282,63 +298,73 @@
             var systemTags = selectedTagsFromDb.Where(t => t.IsSystem).ToList();
             var authorizedIds = selectedTagsFromDb.Where(t => t.OwnerId == _currentUserId && !t.IsSystem).Select(t => t.Id).ToList();
 
-            if (unauthorizedTags.Count > 0)
+            switch (unauthorizedTags.Count > 0)
             {
-                var skippedNames = string.Join(", ", unauthorizedTags.Select(t => t.Name));
-                Snackbar.Add($"削除権限がないためスキップしました: {skippedNames}", Severity.Warning);
+                case true:
+                    var skippedNames = string.Join(", ", unauthorizedTags.Select(t => t.Name));
+                    Snackbar.Add($"削除権限がないためスキップしました: {skippedNames}", Severity.Warning);
+                    break;
             }
 
-            if (systemTags.Count > 0)
+            switch (systemTags.Count > 0)
             {
-                var skippedNames = string.Join(", ", systemTags.Select(t => t.Name));
-                Snackbar.Add($"システムタグは削除できないためスキップしました: {skippedNames}", Severity.Warning);
+                case true:
+                    var skippedNames = string.Join(", ", systemTags.Select(t => t.Name));
+                    Snackbar.Add($"システムタグは削除できないためスキップしました: {skippedNames}", Severity.Warning);
+                    break;
             }
 
-            if (authorizedIds.Count > 0)
+            switch (authorizedIds.Count > 0)
             {
-                var tagsToDelete = await context.Tags
-                    .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == _currentUserId)
-                    .ToListAsync();
-
-                if (tagsToDelete.Count > 0)
-                {
-                    // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
-                    var relationsToDelete = await context.TagRelationToTags
-                        .Where(tr => authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
+                case true:
+                    var tagsToDelete = await context.Tags
+                        .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == _currentUserId)
                         .ToListAsync();
 
-                    if (relationsToDelete.Count > 0)
+                    switch (tagsToDelete.Count > 0)
                     {
-                        context.TagRelationToTags.RemoveRange(relationsToDelete);
+                        case true:
+                            // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
+                            var relationsToDelete = await context.TagRelationToTags
+                                .Where(tr => authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
+                                .ToListAsync();
+
+                            switch (relationsToDelete.Count > 0)
+                            {
+                                case true:
+                                    context.TagRelationToTags.RemoveRange(relationsToDelete);
+                                    break;
+                            }
+
+                            // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
+                            var orphanedChildren = await context.Tags
+                                .Where(t => t.ParentTagId.HasValue && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
+                                .ToListAsync();
+
+                            foreach (var child in orphanedChildren)
+                            {
+                                child.ParentTagId = null;
+                            }
+
+                            // SQLiteの自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
+                            foreach (var tag in tagsToDelete)
+                            {
+                                tag.ParentTagId = null;
+                            }
+
+                            await context.SaveChangesAsync();
+
+                            // タグ本体の削除
+                            context.Tags.RemoveRange(tagsToDelete);
+                            await context.SaveChangesAsync();
+
+                            hasDeleted = true;
+                            Snackbar.Add($"{tagsToDelete.Count}個のタグを削除しました。", Severity.Success);
+                            break;
                     }
 
-                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
-                    var orphanedChildren = await context.Tags
-                        .Where(t => t.ParentTagId.HasValue && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
-                        .ToListAsync();
-
-                    foreach (var child in orphanedChildren)
-                    {
-                        child.ParentTagId = null;
-                    }
-
-                    // SQLiteの自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
-                    foreach (var tag in tagsToDelete)
-                    {
-                        tag.ParentTagId = null;
-                    }
-
-                    await context.SaveChangesAsync();
-
-                    // タグ本体の削除
-                    context.Tags.RemoveRange(tagsToDelete);
-                    await context.SaveChangesAsync();
-
-                    hasDeleted = true;
-                    Snackbar.Add($"{tagsToDelete.Count}個のタグを削除しました。", Severity.Success);
-                }
-
-                await transaction.CommitAsync();
+                    await transaction.CommitAsync();
+                    break;
             }
         }
         catch (Exception ex)
@@ -346,22 +372,26 @@
             Snackbar.Add($"削除中にエラーが発生しました: {ex.Message}", Severity.Error);
         }
 
-        if (hasDeleted)
+        switch (hasDeleted)
         {
-            await LoadDataAsync();
-            StateHasChanged();
-            if (_isTreeInitialized)
-            {
-                var treeDataJson = GetSerializedTreeData();
-                try
+            case true:
+                await LoadDataAsync();
+                StateHasChanged();
+                switch (_isTreeInitialized)
                 {
-                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                    case true:
+                        var treeDataJson = GetSerializedTreeData();
+                        try
+                        {
+                            await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                        break;
                 }
-                catch (Exception)
-                {
-                    // ignored
-                }
-            }
+                break;
         }
     }
 
@@ -369,55 +399,62 @@
     [JSInvokable]
     public async Task AddChildTagByNodeId(int parentId)
     {
-        if (string.IsNullOrEmpty(_currentUserId)) return;
+        switch (string.IsNullOrEmpty(_currentUserId))
+        {
+            case true: return;
+        }
 
         var dialog = await DialogService.ShowAsync<TagCreateChildDialog>("子タグの追加");
         var result = await dialog.Result;
 
-        if (result is not null && !result.Canceled && result.Data is TagCreateChildDialog.Result data)
+        switch (result)
         {
-            try
-            {
-                var newTag = new Tag
+            case { Canceled: false, Data: TagCreateChildDialog.Result data }:
+                try
                 {
-                    Name = data.Name,
-                    Content = data.Content,
-                    ParentTagId = parentId,
-                    OwnerId = _currentUserId,
-                    CachedWeight = 0,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                };
-
-                await using var context = await DbFactory.CreateDbContextAsync();
-                context.Tags.Add(newTag);
-                await context.SaveChangesAsync();
-
-                Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
-
-                await LoadDataAsync();
-                StateHasChanged();
-                if (_isTreeInitialized)
-                {
-                    var treeDataJson = GetSerializedTreeData();
-                    try
+                    var newTag = new Tag
                     {
-                        await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
-                    }
-                    catch (Exception)
+                        Name = data.Name,
+                        Content = data.Content,
+                        ParentTagId = parentId,
+                        OwnerId = _currentUserId,
+                        CachedWeight = 0,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    };
+
+                    await using var context = await DbFactory.CreateDbContextAsync();
+                    context.Tags.Add(newTag);
+                    await context.SaveChangesAsync();
+
+                    Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
+
+                    await LoadDataAsync();
+                    StateHasChanged();
+                    switch (_isTreeInitialized)
                     {
-                        // ignored
+                        case true:
+                            var treeDataJson = GetSerializedTreeData();
+                            try
+                            {
+                                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                            }
+                            catch (Exception)
+                            {
+                                // ignored
+                            }
+                            break;
                     }
                 }
-            }
-            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
-            {
-                Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
-            }
+                catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
+                {
+                    Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+                }
+                break;
         }
     }
 
@@ -427,45 +464,58 @@
         var movedItem = _tags.FirstOrDefault(t => t.Id == movedNodeId);
         var targetItem = _tags.FirstOrDefault(t => t.Id == targetNodeId);
 
-        if (movedItem == null || targetItem == null) return;
+        switch ((movedItem, targetItem))
+        {
+            case (null, _):
+            case (_, null):
+                return;
+        }
 
         // 権限チェック: 自分のタグ以外は移動不可とする
-        if (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
+        switch (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
         {
-            Snackbar.Add("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
-            if (!_isTreeInitialized) return;
+            case true:
+                Snackbar.Add("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
+                switch (_isTreeInitialized)
+                {
+                    case false: return;
+                }
 
-            var treeDataJson = GetSerializedTreeData();
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+                var treeDataJson = GetSerializedTreeData();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
 
-            return;
+                return;
         }
 
         // 自分自身の子孫へのドロップは無効（循環参照を防ぐ）
         // movedItem が targetItem の祖先（または自身）であるかを確認する
-        if (IsDescendantOrSelf(movedItem, targetItem))
+        switch (IsDescendantOrSelf(movedItem, targetItem))
         {
-            Snackbar.Add($"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
-            if (!_isTreeInitialized) return;
+            case true:
+                Snackbar.Add($"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
+                switch (_isTreeInitialized)
+                {
+                    case false: return;
+                }
 
-            var treeDataJson = GetSerializedTreeData();
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+                var treeDataJson2 = GetSerializedTreeData();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson2);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
 
-            return;
+                return;
         }
 
         movedItem.ParentTagId = position switch
@@ -479,12 +529,14 @@
         {
             await using var context = await DbFactory.CreateDbContextAsync();
             var tagToUpdate = await context.Tags.FindAsync(movedItem.Id);
-            if (tagToUpdate != null)
+            switch (tagToUpdate)
             {
-                tagToUpdate.ParentTagId = movedItem.ParentTagId;
-                tagToUpdate.UpdatedDate = DateTime.UtcNow;
-                await context.SaveChangesAsync();
-                Snackbar.Add("タグ構造を更新しました。", Severity.Success);
+                case not null:
+                    tagToUpdate.ParentTagId = movedItem.ParentTagId;
+                    tagToUpdate.UpdatedDate = DateTime.UtcNow;
+                    await context.SaveChangesAsync();
+                    Snackbar.Add("タグ構造を更新しました。", Severity.Success);
+                    break;
             }
         }
         catch (Exception ex)
@@ -495,23 +547,28 @@
         StateHasChanged();
 
         // jqTreeのデータを更新
-        if (_isTreeInitialized)
+        switch (_isTreeInitialized)
         {
-            var treeDataJson = GetSerializedTreeData();
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+            case true:
+                var treeDataJson3 = GetSerializedTreeData();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.loadData", "jqtree-container", treeDataJson3);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                break;
         }
     }
 
     private bool IsDescendantOrSelf(Tag parent, Tag target)
     {
-        if (parent.Id == target.Id) return true;
+        switch (parent.Id == target.Id)
+        {
+            case true: return true;
+        }
 
         var children = _tags.Where(t => t.ParentTagId == parent.Id);
         return children.Any(child => IsDescendantOrSelf(child, target));
@@ -536,16 +593,18 @@
         _dotNetRef?.Dispose();
         try
         {
-            if (_isTreeInitialized)
+            switch (_isTreeInitialized)
             {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container");
-                }
-                catch (Exception)
-                {
-                    // ignored
-                }
+                case true:
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container");
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+                    break;
             }
         }
         catch

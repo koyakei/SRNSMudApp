@@ -19,47 +19,58 @@
                 <MudText Typo="Typo.subtitle2">付与するタグ</MudText>
                 <MudText Typo="Typo.body2">@Bounty.RequestedTag.Name</MudText>
             </MudListItem>
-            @if (Bounty.OfferedRewardAsset != null)
+            @switch (Bounty.OfferedRewardAsset)
             {
-                <MudListItem>
-                    <MudText Typo="Typo.subtitle2">獲得できる報酬</MudText>
-                    <MudText Typo="Typo.body2"
-                             Color="Color.Success">
-                        @($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")
-                    </MudText>
-                </MudListItem>
+                case not null:
+                    <MudListItem>
+                        <MudText Typo="Typo.subtitle2">獲得できる報酬</MudText>
+                        <MudText Typo="Typo.body2"
+                                 Color="Color.Success">
+                            @($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")
+                        </MudText>
+                    </MudListItem>
+                    break;
             }
         </MudList>
 
-        @if (_isLoading)
+        @switch (_isLoading)
         {
-            <MudProgressCircular Indeterminate="true"/>
-        }
-        else if (_canFulfillAsOwner)
-        {
-            <MudAlert Severity="Severity.Info" Class="mt-4">
-                あなたはタグ「@Bounty.RequestedTag.Name」のオーナーです。アセットを消費せずに依頼を完了できます。
-            </MudAlert>
-        }
-        else if (_myValidAssets.Any())
-        {
-            <MudForm @ref="_form" @bind-IsValid="@_isValid">
-                <MudSelect T="RightAsset" Label="消費するアセットを選択" @bind-Value="_selectedAsset" Required="true"
-                           RequiredError="消費するアセットを選択してください"
-                           ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")"
-                           Class="mt-4">
-                    @foreach (var asset in _myValidAssets)
-                    {
-                        <MudSelectItem Value="@asset"/>
-                    }
-                </MudSelect>
-            </MudForm>
-        }
-        else
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-4">
-                この依頼を完了するために必要な「@Bounty.RequestedTag.Name」の権利（RightAsset）を所持していません。
-            </MudAlert>
+            case true:
+                <MudProgressCircular Indeterminate="true"/>
+                break;
+            case false:
+                @switch (_canFulfillAsOwner)
+                {
+                    case true:
+                        <MudAlert Severity="Severity.Info" Class="mt-4">
+                            あなたはタグ「@Bounty.RequestedTag.Name」のオーナーです。アセットを消費せずに依頼を完了できます。
+                        </MudAlert>
+                        break;
+                    case false:
+                        @switch (_myValidAssets.Any())
+                        {
+                            case true:
+                                <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                                    <MudSelect T="RightAsset" Label="消費するアセットを選択" @bind-Value="_selectedAsset" Required="true"
+                                               RequiredError="消費するアセットを選択してください"
+                                               ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")"
+                                               Class="mt-4">
+                                        @foreach (var asset in _myValidAssets)
+                                        {
+                                            <MudSelectItem Value="@asset"/>
+                                        }
+                                    </MudSelect>
+                                </MudForm>
+                                break;
+                            case false:
+                                <MudAlert Severity="Severity.Error" Class="mt-4">
+                                    この依頼を完了するために必要な「@Bounty.RequestedTag.Name」の権利（RightAsset）を所持していません。
+                                </MudAlert>
+                                break;
+                        }
+                        break;
+                }
+                break;
         }
     </DialogContent>
     <DialogActions>
@@ -100,17 +111,21 @@
 
         _canFulfillAsOwner = Bounty.RequestedTag.OwnerId == _currentUserId;
 
-        if (!_canFulfillAsOwner)
+        switch (!_canFulfillAsOwner)
         {
-            _myValidAssets = await dbContext.RightAssets
-                .Include(a => a.TargetTag)
-                .Where(a => a.OwnerId == _currentUserId && a.TargetTagId == Bounty.RequestedTagId && !a.IsBurned)
-                .ToListAsync();
+            case true:
+                _myValidAssets = await dbContext.RightAssets
+                    .Include(a => a.TargetTag)
+                    .Where(a => a.OwnerId == _currentUserId && a.TargetTagId == Bounty.RequestedTagId && !a.IsBurned)
+                    .ToListAsync();
 
-            if (_myValidAssets.Count == 1)
-            {
-                _selectedAsset = _myValidAssets.First();
-            }
+                switch (_myValidAssets.Count == 1)
+                {
+                    case true:
+                        _selectedAsset = _myValidAssets.First();
+                        break;
+                }
+                break;
         }
 
         _isLoading = false;
@@ -118,19 +133,33 @@
 
     private bool CanSubmit()
     {
-        if (_isLoading) return false;
-        if (_canFulfillAsOwner) return true;
-        return _myValidAssets.Any() && _selectedAsset != null && _isValid;
+        return _isLoading switch
+        {
+            true => false,
+            false => _canFulfillAsOwner switch
+            {
+                true => true,
+                false => _myValidAssets.Any() && _selectedAsset != null && _isValid
+            }
+        };
     }
 
     private async Task Submit()
     {
-        if (!CanSubmit()) return;
-
-        if (!_canFulfillAsOwner)
+        switch (!CanSubmit())
         {
-            await _form!.ValidateAsync();
-            if (!_isValid) return;
+            case true: return;
+        }
+
+        switch (!_canFulfillAsOwner)
+        {
+            case true:
+                await _form!.ValidateAsync();
+                switch (!_isValid)
+                {
+                    case true: return;
+                }
+                break;
         }
 
         var result = await ContractService.AcceptContractAsync(Bounty.Id, _currentUserId, _canFulfillAsOwner ? null : _selectedAsset?.Id);

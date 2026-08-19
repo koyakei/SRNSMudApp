@@ -8,41 +8,47 @@
 @inject IJSRuntime JSRuntime
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-10">
-    @if (isLoading)
+    @switch (isLoading)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
-    }
-    else if (user == null)
-    {
-        <MudAlert Severity="Severity.Error">ユーザーが見つかりませんでした。</MudAlert>
-    }
-    else
-    {
-        <div class="d-flex align-center mb-4">
-            <MudText Typo="Typo.h5">@user.UserName</MudText>
-        </div>
+        case true:
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            break;
+        case false:
+            @switch (user)
+            {
+                case null:
+                    <MudAlert Severity="Severity.Error">ユーザーが見つかりませんでした。</MudAlert>
+                    break;
+                case not null:
+                    <div class="d-flex align-center mb-4">
+                        <MudText Typo="Typo.h5">@user.UserName</MudText>
+                    </div>
 
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mt-4"
-                 ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
-            <MudTabPanel Text="アクティビティ (Item & Tag)">
-                <SRNSMudApp.Components.UI.ResourceList Tags="userTags" Items="userItems"
-                                                           OnDataChanged="LoadDataAsync" EnableUrlUpdate="false"/>
-            </MudTabPanel>
-            <MudTabPanel Text="作成したタグツリー">
-                <MudCard Elevation="0" Outlined="true">
-                    <MudCardContent>
-                        @if (userTags != null && userTags.Count > 0)
-                        {
-                            <div id="jqtree-container-user-detail" class="tree-container"></div>
-                        }
-                        else
-                        {
-                            <MudText>作成したタグはありません。</MudText>
-                        }
-                    </MudCardContent>
-                </MudCard>
-            </MudTabPanel>
-        </MudTabs>
+                    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mt-4"
+                             ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
+                        <MudTabPanel Text="アクティビティ (Item & Tag)">
+                            <SRNSMudApp.Components.UI.ResourceList Tags="userTags" Items="userItems"
+                                                                       OnDataChanged="LoadDataAsync" EnableUrlUpdate="false"/>
+                        </MudTabPanel>
+                        <MudTabPanel Text="作成したタグツリー">
+                            <MudCard Elevation="0" Outlined="true">
+                                <MudCardContent>
+                                    @switch (userTags != null && userTags.Count > 0)
+                                    {
+                                        case true:
+                                            <div id="jqtree-container-user-detail" class="tree-container"></div>
+                                            break;
+                                        case false:
+                                            <MudText>作成したタグはありません。</MudText>
+                                            break;
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        </MudTabPanel>
+                    </MudTabs>
+                    break;
+            }
+            break;
     }
 </MudContainer>
 
@@ -75,27 +81,29 @@
             await using var dbContext = await DbFactory.CreateDbContextAsync();
             user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
 
-            if (user != null)
+            switch (user)
             {
-                userTags = await dbContext.Tags
-                    .Include(t => t.Owner)
-                    .Include(t => t.TargetTagRelations)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .AsNoTracking()
-                    .Where(t => t.OwnerId == UserId)
-                    .OrderByDescending(t => t.UpdatedDate)
-                    .ToListAsync();
+                case not null:
+                    userTags = await dbContext.Tags
+                        .Include(t => t.Owner)
+                        .Include(t => t.TargetTagRelations)
+                        .ThenInclude(tr => tr.Tag)
+                        .ThenInclude(t => t.Owner)
+                        .AsNoTracking()
+                        .Where(t => t.OwnerId == UserId)
+                        .OrderByDescending(t => t.UpdatedDate)
+                        .ToListAsync();
 
-                userItems = await dbContext.Items
-                    .Include(i => i.Owner)
-                    .Include(i => i.TagRelations)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .AsNoTracking()
-                    .Where(i => i.OwnerId == UserId)
-                    .OrderByDescending(i => i.UpdatedDate)
-                    .ToListAsync();
+                    userItems = await dbContext.Items
+                        .Include(i => i.Owner)
+                        .Include(i => i.TagRelations)
+                        .ThenInclude(tr => tr.Tag)
+                        .ThenInclude(t => t.Owner)
+                        .AsNoTracking()
+                        .Where(i => i.OwnerId == UserId)
+                        .OrderByDescending(i => i.UpdatedDate)
+                        .ToListAsync();
+                    break;
             }
         }
         finally
@@ -106,20 +114,22 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!isLoading && !_isTreeInitialized && user != null && userTags.Count > 0 && _activeTabIndex == 1)
+        switch (!isLoading && !_isTreeInitialized && user != null && userTags.Count > 0 && _activeTabIndex == 1)
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            var treeDataJson = GetSerializedTreeData();
-            // isLoggedIn = false にしてドラッグ＆ドロップや追加を無効化（閲覧専用）
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container-user-detail", treeDataJson, _dotNetRef, false);
-            }
-            catch (Exception)
-            {
-            }
+            case true:
+                _dotNetRef = DotNetObjectReference.Create(this);
+                var treeDataJson = GetSerializedTreeData();
+                // isLoggedIn = false にしてドラッグ＆ドロップや追加を無効化（閲覧専用）
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", "jqtree-container-user-detail", treeDataJson, _dotNetRef, false);
+                }
+                catch (Exception)
+                {
+                }
 
-            _isTreeInitialized = true;
+                _isTreeInitialized = true;
+                break;
         }
     }
 
@@ -143,22 +153,24 @@
             var childNodes = tagList.Where(t => t.ParentTagId == node.Id).ToList();
             var nodeChildren = BuildTreeDataForJqTree(childNodes, tagList);
 
-            if (nodeChildren.Count == 0)
+            switch (nodeChildren.Count == 0)
             {
-                result.Add(new
-                {
-                    id = node.Id,
-                    name = node.Name
-                });
-                continue;
+                case true:
+                    result.Add(new
+                    {
+                        id = node.Id,
+                        name = node.Name
+                    });
+                    continue;
+                case false:
+                    result.Add(new
+                    {
+                        id = node.Id,
+                        name = node.Name,
+                        children = nodeChildren
+                    });
+                    break;
             }
-
-            result.Add(new
-            {
-                id = node.Id,
-                name = node.Name,
-                children = nodeChildren
-            });
         }
 
         return result;
@@ -182,15 +194,17 @@
         _dotNetRef?.Dispose();
         try
         {
-            if (_isTreeInitialized)
+            switch (_isTreeInitialized)
             {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container-user-detail");
-                }
-                catch (Exception)
-                {
-                }
+                case true:
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", "jqtree-container-user-detail");
+                    }
+                    catch (Exception)
+                    {
+                    }
+                    break;
             }
         }
         catch

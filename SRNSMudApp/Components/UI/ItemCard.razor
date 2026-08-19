@@ -25,16 +25,20 @@
         @{
             var requestInfo = ItemCardViewModel.GetRequestInfo(Item);
         }
-        @if (requestInfo.IsTaggingRequest)
+        @switch (requestInfo.IsTaggingRequest)
         {
-            var canCancel = !string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
-            var canApprove = !string.IsNullOrEmpty(CurrentUserId) && Item.AsRequestOf?.TagOwnerUserId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
-            
-            <RequestInfoAlert RequestInfo="requestInfo"
-                              CanCancel="canCancel"
-                              CanApprove="canApprove"
-                              OnCancel="CancelTaggingRequestAsync"
-                              OnApprove="ApproveTaggingRequestAsync" />
+            case true:
+                var canCancel = !string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
+                var canApprove = !string.IsNullOrEmpty(CurrentUserId) && Item.AsRequestOf?.TagOwnerUserId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
+                
+                <RequestInfoAlert RequestInfo="requestInfo"
+                                  CanCancel="canCancel"
+                                  CanApprove="canApprove"
+                                  OnCancel="CancelTaggingRequestAsync"
+                                  OnApprove="ApproveTaggingRequestAsync" />
+                break;
+            case false:
+                break;
         }
 
         <div class="d-flex justify-space-between align-start">
@@ -54,38 +58,47 @@
                 @{
                     var urls = ExtractUrls(content);
                 }
-                @if (urls.Any())
+                @switch (urls.Any())
                 {
-                    <div class="d-flex flex-column gap-2 mb-2 mt-2">
-                        @foreach (var url in urls.Take(3))
-                        {
-                            <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
-                        }
-                    </div>
+                    case true:
+                        <div class="d-flex flex-column gap-2 mb-2 mt-2">
+                            @foreach (var url in urls.Take(3))
+                            {
+                                <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
+                            }
+                        </div>
+                        break;
+                    case false:
+                        break;
                 }
-                @if (showExpandBtn)
+                @switch (showExpandBtn)
                 {
-                    <MudLink OnClick="ToggleExpand" Color="Color.Primary"
-                             Typo="Typo.body2" Underline="Underline.Hover" Class="cursor-pointer">
-                        @(_isExpanded ? "閉じる" : "もっと見る")
-                    </MudLink>
+                    case true:
+                        <MudLink OnClick="ToggleExpand" Color="Color.Primary"
+                                 Typo="Typo.body2" Underline="Underline.Hover" Class="cursor-pointer">
+                            @(_isExpanded switch { true => "閉じる", false => "もっと見る" })
+                        </MudLink>
+                        break;
+                    case false:
+                        break;
                 }
                 <MudText Typo="Typo.caption" Color="Color.Secondary"
                          Class="mb-2 mt-2 d-block">
                     投稿者:
-                    @if (!string.IsNullOrEmpty(Item.OwnerId))
+                    @switch (string.IsNullOrEmpty(Item.OwnerId))
                     {
-                        <span @onclick:stopPropagation="true">
-                            <MudLink Href="@($"/User/UserDetail/{Item.OwnerId}")"
-                                     Color="Color.Inherit"
-                                     Underline="Underline.Hover">
-                                @(Item.Owner?.UserName)
-                            </MudLink>
-                        </span>
-                    }
-                    else
-                    {
-                        @(Item.Owner?.UserName ?? "不明")
+                        case false:
+                            <span @onclick:stopPropagation="true">
+                                <MudLink Href="@($"/User/UserDetail/{Item.OwnerId}")"
+                                         Color="Color.Inherit"
+                                         Underline="Underline.Hover">
+                                    @(Item.Owner?.UserName)
+                                </MudLink>
+                            </span>
+                            break;
+                        case true:
+                            @(Item.Owner?.UserName ?? "不明")
+                            break;
                     }
                     <span class="mx-1">|</span>
                     最終更新:
@@ -98,17 +111,20 @@
                 </MudText>
             </div>
 
-            @* ログイン中のユーザーがオーナーの場合のみ操作ボタンを表示 *@
-            @if (!string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId)
+            @switch (!string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId)
             {
-                <div class="d-flex">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                   Color="Color.Primary" OnClick="EditItemAsync"
-                                   title="このアイテムを編集"/>
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                   Color="Color.Error" OnClick="DeleteItemAsync"
-                                   title="このアイテムを削除"/>
-                </div>
+                case true:
+                    <div class="d-flex">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       Color="Color.Primary" OnClick="EditItemAsync"
+                                       title="このアイテムを編集"/>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                       Color="Color.Error" OnClick="DeleteItemAsync"
+                                       title="このアイテムを削除"/>
+                    </div>
+                    break;
+                case false:
+                    break;
             }
         </div>
 
@@ -134,22 +150,26 @@
     <MudDivider Class="my-3"/>
     <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
 
-    @if (_replies.Any())
+    @switch (_replies.Any())
     {
-        <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
-            @foreach (var reply in _replies)
-            {
-                <ItemCard Item="reply"
-                          CurrentUserId="@CurrentUserId"
-                          CurrentUserGoodTagId="@CurrentUserGoodTagId"
-                          CurrentUserBadTagId="@CurrentUserBadTagId"
-                          OnDataChanged="LoadRepliesAsync"
-                          AllTags="AllTags"
-                          AllTagRelationsToTags="AllTagRelationsToTags"
-                          HighlightEvents="HighlightEvents"
-                          OnEnsureSystemTags="OnEnsureSystemTags"/>
-            }
-        </div>
+        case true:
+            <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
+                @foreach (var reply in _replies)
+                {
+                    <ItemCard Item="reply"
+                              CurrentUserId="@CurrentUserId"
+                              CurrentUserGoodTagId="@CurrentUserGoodTagId"
+                              CurrentUserBadTagId="@CurrentUserBadTagId"
+                              OnDataChanged="LoadRepliesAsync"
+                              AllTags="AllTags"
+                              AllTagRelationsToTags="AllTagRelationsToTags"
+                              HighlightEvents="HighlightEvents"
+                              OnEnsureSystemTags="OnEnsureSystemTags"/>
+                }
+            </div>
+            break;
+        case false:
+            break;
     }
 
     <div class="d-flex align-end gap-2 mt-2">
@@ -164,14 +184,15 @@
                    Color="Color.Primary"
                    OnClick="SubmitReplyAsync"
                    Disabled="@(string.IsNullOrWhiteSpace(_newReplyContent) || _isSubmittingReply)">
-            @if (_isSubmittingReply)
+            @switch (_isSubmittingReply)
             {
-                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                <span class="ms-2">送信中</span>
-            }
-            else
-            {
-                <span>送信</span>
+                case true:
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                    <span class="ms-2">送信中</span>
+                    break;
+                case false:
+                    <span>送信</span>
+                    break;
             }
         </MudButton>
     </div>
@@ -195,7 +216,6 @@
     private bool _isExpanded;
     private bool _isOverflowing;
 
-
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private bool _needsOverflowCheck = true;
 
@@ -209,48 +229,61 @@
     protected override async Task OnParametersSetAsync()
     {
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
-        if (_isRepliesExpanded)
+        await (_isRepliesExpanded switch
         {
-            await LoadRepliesAsync();
-        }
+            true => LoadRepliesAsync(),
+            false => Task.CompletedTask
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        await (firstRender switch
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            try
-            {
-                await JS.InvokeVoidAsync("contentOverflowHelper.init", _dotNetRef);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+            true => HandleFirstRenderAsync(),
+            false => Task.CompletedTask
+        });
 
-            try
-            {
-                await JS.InvokeVoidAsync("contentOverflowHelper.initScrollObserver");
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+        await (_needsOverflowCheck switch
+        {
+            true => HandleOverflowCheckAsync(),
+            false => Task.CompletedTask
+        });
+    }
+
+    private async Task HandleFirstRenderAsync()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.init", _dotNetRef);
+        }
+        catch (Exception)
+        {
+            // ignored
         }
 
-        if (_needsOverflowCheck)
+        try
         {
-            _needsOverflowCheck = false;
-            await UpdateOverflowStateAsync();
-            try
-            {
-                await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#item-card-{Item.Id}");
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
+            await JS.InvokeVoidAsync("contentOverflowHelper.initScrollObserver");
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+    }
+
+    private async Task HandleOverflowCheckAsync()
+    {
+        _needsOverflowCheck = false;
+        await UpdateOverflowStateAsync();
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#item-card-{Item.Id}");
+        }
+        catch (Exception)
+        {
+            // ignored
         }
     }
 
@@ -264,24 +297,32 @@
     [JSInvokable]
     public void OnElementFocusedByScroll(string elementId)
     {
-        if (elementId == $"item-card-{Item.Id}")
+        switch (elementId == $"item-card-{Item.Id}")
         {
-            OnFocus.InvokeAsync(Item.Id);
+            case true:
+                OnFocus.InvokeAsync(Item.Id);
+                break;
         }
     }
 
     private async Task UpdateOverflowStateAsync()
     {
-        if (_isExpanded) return;
+        switch (_isExpanded)
+        {
+            case true:
+                return;
+        }
 
         try
         {
             var overflowIds = await JS.InvokeAsync<int[]>("contentOverflowHelper.checkOverflow", new[] { Item.Id });
             var isOverflowing = overflowIds.Contains(Item.Id);
-            if (_isOverflowing != isOverflowing)
+            switch (_isOverflowing != isOverflowing)
             {
-                _isOverflowing = isOverflowing;
-                StateHasChanged();
+                case true:
+                    _isOverflowing = isOverflowing;
+                    StateHasChanged();
+                    break;
             }
         }
         catch (Exception)
@@ -298,23 +339,31 @@
     private void ToggleExpand()
     {
         _isExpanded = !_isExpanded;
-        if (!_isExpanded)
+        switch (!_isExpanded)
         {
-            _needsOverflowCheck = true; // Re-check when collapsing
+            case true:
+                _needsOverflowCheck = true; // Re-check when collapsing
+                break;
         }
     }
 
-
-
     private async Task CancelTaggingRequestAsync()
     {
-        if (Item.AsRequestOf == null) return;
+        switch (Item.AsRequestOf)
+        {
+            case null:
+                return;
+        }
         try
         {
             await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
             Item.AsRequestOf.Status = TradeStatus.Canceled;
             Snackbar.Add("リクエストを取り下げました。", Severity.Success);
-            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            await (OnDataChanged.HasDelegate switch
+            {
+                true => OnDataChanged.InvokeAsync(),
+                false => Task.CompletedTask
+            });
         }
         catch (Exception ex)
         {
@@ -324,13 +373,21 @@
 
     private async Task ApproveTaggingRequestAsync()
     {
-        if (Item.AsRequestOf == null) return;
+        switch (Item.AsRequestOf)
+        {
+            case null:
+                return;
+        }
         try
         {
             await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
             Item.AsRequestOf.Status = TradeStatus.Executed;
             Snackbar.Add("リクエストを承認しました。", Severity.Success);
-            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+            await (OnDataChanged.HasDelegate switch
+            {
+                true => OnDataChanged.InvokeAsync(),
+                false => Task.CompletedTask
+            });
         }
         catch (Exception ex)
         {
@@ -338,15 +395,14 @@
         }
     }
 
-
-
     private async Task ToggleRepliesAsync()
     {
         _isRepliesExpanded = !_isRepliesExpanded;
-        if (_isRepliesExpanded && !_replies.Any())
+        await ((_isRepliesExpanded && !_replies.Any()) switch
         {
-            await LoadRepliesAsync();
-        }
+            true => LoadRepliesAsync(),
+            false => Task.CompletedTask
+        });
     }
 
     private async Task LoadRepliesAsync()
@@ -356,16 +412,22 @@
 
     private async Task SubmitReplyAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newReplyContent) || string.IsNullOrEmpty(CurrentUserId)) return;
+        switch (string.IsNullOrWhiteSpace(_newReplyContent) || string.IsNullOrEmpty(CurrentUserId))
+        {
+            case true:
+                return;
+        }
 
         _isSubmittingReply = true;
         try
         {
             var addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
-            if (addedReply != null)
+            switch (addedReply)
             {
-                _newReplyContent = "";
-                await LoadRepliesAsync();
+                case not null:
+                    _newReplyContent = "";
+                    await LoadRepliesAsync();
+                    break;
             }
         }
         finally
@@ -412,21 +474,24 @@
 
     private async Task ToggleItemVoteAsync(bool isUpvote)
     {
-        if (string.IsNullOrEmpty(CurrentUserId))
+        switch (string.IsNullOrEmpty(CurrentUserId))
         {
-            Snackbar.Add("ログインが必要です。", Severity.Warning);
-            return;
+            case true:
+                Snackbar.Add("ログインが必要です。", Severity.Warning);
+                return;
         }
 
-        if (OnEnsureSystemTags.HasDelegate)
+        await (OnEnsureSystemTags.HasDelegate switch
         {
-            await OnEnsureSystemTags.InvokeAsync();
-        }
+            true => OnEnsureSystemTags.InvokeAsync(),
+            false => Task.CompletedTask
+        });
 
-        if (!CurrentUserGoodTagId.HasValue)
+        switch (CurrentUserGoodTagId.HasValue)
         {
-            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
-            return;
+            case false:
+                Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+                return;
         }
 
         var targetWeight = isUpvote ? 1 : -1;
@@ -437,30 +502,47 @@
 
         var existingRelation = relations.FirstOrDefault(tr => tr.TagId == goodTagId);
 
-        if (existingRelation != null)
+        await (existingRelation switch
         {
-            var tag = await context.Tags.FindAsync(goodTagId);
-            if (existingRelation.Weight == targetWeight)
-            {
-                // 同じウェイトならキャンセル（削除）
-                var delta = -existingRelation.Weight;
-                if (tag != null)
+            not null => HandleExistingVoteAsync(context, existingRelation, targetWeight, goodTagId),
+            null => HandleNewVoteAsync(context, targetWeight, goodTagId)
+        });
+
+        await context.SaveChangesAsync();
+
+        await (OnDataChanged.HasDelegate switch
+        {
+            true => OnDataChanged.InvokeAsync(),
+            false => Task.CompletedTask
+        });
+    }
+
+    private async Task HandleExistingVoteAsync(ApplicationDbContext context, TagRelation existingRelation, int targetWeight, int goodTagId)
+    {
+        var tag = await context.Tags.FindAsync(goodTagId);
+        switch (existingRelation.Weight == targetWeight)
+        {
+            case true:
+                var deltaCancel = -existingRelation.Weight;
+                switch (tag)
                 {
-                    var prevWeight = tag.CachedWeight;
-                    tag.CachedWeight += delta;
-                    context.TagWeightLedgers!.Add(new TagWeightLedger
-                    {
-                        TagId = tag.Id,
-                        TagNameSnapshot = tag.Name,
-                        SourceType = "TagRelationDelete",
-                        SourceId = existingRelation.Id,
-                        PreviousWeight = prevWeight,
-                        NewWeight = tag.CachedWeight,
-                        Delta = delta,
-                        IsOwnerAction = true,
-                        Reason = "Vote取り消し",
-                        OwnerId = CurrentUserId
-                    });
+                    case not null:
+                        var prevWeightCancel = tag.CachedWeight;
+                        tag.CachedWeight += deltaCancel;
+                        context.TagWeightLedgers!.Add(new TagWeightLedger
+                        {
+                            TagId = tag.Id,
+                            TagNameSnapshot = tag.Name,
+                            SourceType = "TagRelationDelete",
+                            SourceId = existingRelation.Id,
+                            PreviousWeight = prevWeightCancel,
+                            NewWeight = tag.CachedWeight,
+                            Delta = deltaCancel,
+                            IsOwnerAction = true,
+                            Reason = "Vote取り消し",
+                            OwnerId = CurrentUserId
+                        });
+                        break;
                 }
 
                 context.TimelineEvents!.Add(new TimelineEvent
@@ -474,33 +556,38 @@
                 });
 
                 context.TagRelations.Remove(existingRelation);
-                var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
-                if (localTarget != null) Item.TagRelations.Remove(localTarget);
-            }
-            else
-            {
-                // 逆のウェイトなら更新
-                var delta = targetWeight - existingRelation.Weight;
+                var localTargetCancel = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+                switch (localTargetCancel)
+                {
+                    case not null:
+                        Item.TagRelations.Remove(localTargetCancel);
+                        break;
+                }
+                break;
+            case false:
+                var deltaUpdate = targetWeight - existingRelation.Weight;
                 existingRelation.Weight = targetWeight;
                 existingRelation.UpdatedDate = DateTime.UtcNow;
 
-                if (tag != null)
+                switch (tag)
                 {
-                    var prevWeight = tag.CachedWeight;
-                    tag.CachedWeight += delta;
-                    context.TagWeightLedgers!.Add(new TagWeightLedger
-                    {
-                        TagId = tag.Id,
-                        TagNameSnapshot = tag.Name,
-                        SourceType = "TagRelationUpdate",
-                        SourceId = existingRelation.Id,
-                        PreviousWeight = prevWeight,
-                        NewWeight = tag.CachedWeight,
-                        Delta = delta,
-                        IsOwnerAction = true,
-                        Reason = "Vote変更",
-                        OwnerId = CurrentUserId
-                    });
+                    case not null:
+                        var prevWeightUpdate = tag.CachedWeight;
+                        tag.CachedWeight += deltaUpdate;
+                        context.TagWeightLedgers!.Add(new TagWeightLedger
+                        {
+                            TagId = tag.Id,
+                            TagNameSnapshot = tag.Name,
+                            SourceType = "TagRelationUpdate",
+                            SourceId = existingRelation.Id,
+                            PreviousWeight = prevWeightUpdate,
+                            NewWeight = tag.CachedWeight,
+                            Delta = deltaUpdate,
+                            IsOwnerAction = true,
+                            Reason = "Vote変更",
+                            OwnerId = CurrentUserId
+                        });
+                        break;
                 }
 
                 context.TimelineEvents!.Add(new TimelineEvent
@@ -510,47 +597,45 @@
                     TargetItemId = Item.Id,
                     FollowedTagId = goodTagId,
                     EventType = "Update",
-                    PreviousWeight = existingRelation.Weight - delta,
+                    PreviousWeight = existingRelation.Weight - deltaUpdate,
                     NewWeight = existingRelation.Weight
                 });
 
-                var localTarget = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
-                if (localTarget != null)
+                var localTargetUpdate = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+                switch (localTargetUpdate)
                 {
-                    localTarget.Weight = targetWeight;
+                    case not null:
+                        localTargetUpdate.Weight = targetWeight;
+                        break;
                 }
-            }
+                break;
         }
-        else
-        {
-            var newRelation = new TagRelation
-            {
-                ItemId = Item.Id,
-                TagId = goodTagId,
-                OwnerId = CurrentUserId,
-                Weight = targetWeight,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            context.TagRelations.Add(newRelation);
-            Item.TagRelations.Add(newRelation);
-        }
+    }
 
-        await context.SaveChangesAsync();
-
-        if (OnDataChanged.HasDelegate)
+    private Task HandleNewVoteAsync(ApplicationDbContext context, int targetWeight, int goodTagId)
+    {
+        var newRelation = new TagRelation
         {
-            await OnDataChanged.InvokeAsync();
-        }
+            ItemId = Item.Id,
+            TagId = goodTagId,
+            OwnerId = CurrentUserId,
+            Weight = targetWeight,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+        context.TagRelations.Add(newRelation);
+        Item.TagRelations.Add(newRelation);
+        return Task.CompletedTask;
     }
 
     // --- Edit/Delete Logic ---
     private async Task EditItemAsync()
     {
-        if (Item.OwnerId != CurrentUserId)
+        switch (Item.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
-            return;
+            case true:
+                Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
+                return;
         }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
@@ -558,25 +643,36 @@
         var dialog = await DialogService.ShowAsync<ItemEditDialog>("アイテムの編集", parameters, options);
         var result = await dialog.Result;
 
-        if (result is not null && !result.Canceled)
+        switch (result)
         {
-            if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
-            Snackbar.Add("アイテムを更新しました。", Severity.Success);
+            case { Canceled: false }:
+                await (OnDataChanged.HasDelegate switch
+                {
+                    true => OnDataChanged.InvokeAsync(),
+                    false => Task.CompletedTask
+                });
+                Snackbar.Add("アイテムを更新しました。", Severity.Success);
+                break;
         }
     }
 
     private async Task DeleteItemAsync()
     {
-        if (Item.OwnerId != CurrentUserId)
+        switch (Item.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
-            return;
+            case true:
+                Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
+                return;
         }
 
         await using var context = await DbFactory.CreateDbContextAsync();
         context.Items.Remove(Item);
         await context.SaveChangesAsync();
-        if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        await (OnDataChanged.HasDelegate switch
+        {
+            true => OnDataChanged.InvokeAsync(),
+            false => Task.CompletedTask
+        });
 
         Snackbar.Add("アイテムを削除しました。", Severity.Success);
     }
@@ -588,9 +684,11 @@
         var dialog = await DialogService.ShowAsync<TagAddDialog>("タグの追加", options);
         var result = await dialog.Result;
 
-        if (result is not null && !result.Canceled && result.Data is Tag selectedTag)
+        switch (result)
         {
-            await AddTagToItemAsync(selectedTag);
+            case { Canceled: false, Data: Tag selectedTag }:
+                await AddTagToItemAsync(selectedTag);
+                break;
         }
     }
 
@@ -598,37 +696,58 @@
     {
         await using var context = await DbFactory.CreateDbContextAsync();
         var tagFromDb = await context.Tags.Include(t => t.Owner).FirstOrDefaultAsync(t => t.Id == selectedTag.Id);
-        if (tagFromDb == null) return;
-
-        if (tagFromDb.OwnerId != CurrentUserId)
+        switch (tagFromDb)
         {
-            var parameters = new DialogParameters<ProposeContractDialog>
-            {
-                { x => x.TargetItem, Item },
-                { x => x.RequestedTag, tagFromDb },
-                { x => x.WeightDelta, 1 } // Adding a tag is equivalent to +1 weight request
-            };
-            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-            var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
-            var result = await dialog.Result;
-            if (result is not null && !result.Canceled)
-            {
-                // Reload requests
-                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
-                StateHasChanged();
-                if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
-            }
+            case null:
+                return;
+        }
 
-            return;
+        switch (tagFromDb.OwnerId != CurrentUserId)
+        {
+            case true:
+                await ProposeTaggingContractAsync(tagFromDb);
+                return;
         }
 
         var alreadyExists = Item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
-        if (alreadyExists)
+        switch (alreadyExists)
         {
-            Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
-            return;
+            case true:
+                Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+                return;
         }
 
+        await ExecuteAddTagToItemAsync(context, selectedTag, tagFromDb);
+    }
+
+    private async Task ProposeTaggingContractAsync(Tag tagFromDb)
+    {
+        var parameters = new DialogParameters<ProposeContractDialog>
+        {
+            { x => x.TargetItem, Item },
+            { x => x.RequestedTag, tagFromDb },
+            { x => x.WeightDelta, 1 }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+        var result = await dialog.Result;
+        
+        switch (result)
+        {
+            case { Canceled: false }:
+                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+                StateHasChanged();
+                await (OnDataChanged.HasDelegate switch
+                {
+                    true => OnDataChanged.InvokeAsync(),
+                    false => Task.CompletedTask
+                });
+                break;
+        }
+    }
+
+    private async Task ExecuteAddTagToItemAsync(ApplicationDbContext context, Tag selectedTag, Tag tagFromDb)
+    {
         var newRelation = new TagRelation
         {
             ItemId = Item.Id,
@@ -669,31 +788,33 @@
 
         await context.SaveChangesAsync();
 
-        // ローカルに即時反映
         Item.TagRelations ??= new List<TagRelation>();
         newRelation.Tag = tagFromDb;
         Item.TagRelations.Add(newRelation);
 
         Snackbar.Add("タグを追加しました。", Severity.Success);
-        if (OnDataChanged.HasDelegate) await OnDataChanged.InvokeAsync();
+        await (OnDataChanged.HasDelegate switch
+        {
+            true => OnDataChanged.InvokeAsync(),
+            false => Task.CompletedTask
+        });
     }
-
-    // The logic inside ItemCard has been moved to ItemTagChip.razor
 
     public async ValueTask DisposeAsync()
     {
-        if (_dotNetRef != null)
+        switch (_dotNetRef)
         {
-            try
-            {
-                await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-
-            _dotNetRef.Dispose();
+            case not null:
+                try
+                {
+                    await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                _dotNetRef.Dispose();
+                break;
         }
     }
 

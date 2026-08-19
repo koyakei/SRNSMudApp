@@ -37,9 +37,9 @@
 
     private void Submit()
     {
-        if (string.IsNullOrWhiteSpace(_name))
+        switch (string.IsNullOrWhiteSpace(_name))
         {
-            return;
+            case true: return;
         }
 
         MudDialog.Close(DialogResult.Ok(new Result(_name, _content ?? "")));

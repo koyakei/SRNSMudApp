@@ -19,20 +19,24 @@
                              Required="true" RequiredError="アイテムを選択してください"
                              ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
 
-            @if (Offer.RequiredAssetAmount > 0)
+            @switch (Offer.RequiredAssetAmount > 0)
             {
-                <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedAsset" Clearable="true"
-                           Required="true" RequiredError="要求量以上のアセットを選択してください"
-                           ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利 (量: {a.Amount})" : "")">
-                    @foreach (var asset in _validAssets)
+                case true:
+                    <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedAsset" Clearable="true"
+                               Required="true" RequiredError="要求量以上のアセットを選択してください"
+                               ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利 (量: {a.Amount})" : "")">
+                        @foreach (var asset in _validAssets)
+                        {
+                            <MudSelectItem Value="@asset"/>
+                        }
+                    </MudSelect>
+                    @switch (!_validAssets.Any())
                     {
-                        <MudSelectItem Value="@asset"/>
+                        case true:
+                            <MudText Color="Color.Error" Typo="Typo.caption">条件を満たすアセットを所有していません。</MudText>
+                            break;
                     }
-                </MudSelect>
-                @if (!_validAssets.Any())
-                {
-                    <MudText Color="Color.Error" Typo="Typo.caption">条件を満たすアセットを所有していません。</MudText>
-                }
+                    break;
             }
         </MudForm>
     </DialogContent>
@@ -64,9 +68,11 @@
         var authState = await AuthState!;
         _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
-        if (Offer.RequiredAssetAmount > 0)
+        switch (Offer.RequiredAssetAmount > 0)
         {
-            await LoadMyAssetsAsync();
+            case true:
+                await LoadMyAssetsAsync();
+                break;
         }
     }
 
@@ -85,22 +91,29 @@
     private async Task<IEnumerable<Item>> SearchItems(string? value, CancellationToken token)
     {
         await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        if (string.IsNullOrEmpty(value))
+        switch (string.IsNullOrEmpty(value))
         {
-            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+            case true:
+                return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+            case false:
+                return await dbContext.Items
+                    .Where(i => i.Content.Contains(value))
+                    .Take(10)
+                    .ToListAsync(token);
         }
-
-        return await dbContext.Items
-            .Where(i => i.Content.Contains(value))
-            .Take(10)
-            .ToListAsync(token);
     }
 
     private async Task Submit()
     {
         await _form!.ValidateAsync();
-        if (!_isValid || _selectedItem == null) return;
-        if (Offer.RequiredAssetAmount > 0 && _selectedAsset == null) return;
+        switch (!_isValid || _selectedItem == null)
+        {
+            case true: return;
+        }
+        switch (Offer.RequiredAssetAmount > 0 && _selectedAsset == null)
+        {
+            case true: return;
+        }
 
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 

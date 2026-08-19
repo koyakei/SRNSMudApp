@@ -29,9 +29,11 @@
     protected override void OnInitialized()
     {
         var currentToken = AntiforgeryStateProvider.GetAntiforgeryToken();
-        if (currentToken != null)
+        switch (currentToken)
         {
-            requestTokenValue = currentToken.Value;
+            case not null:
+                requestTokenValue = currentToken.Value;
+                break;
         }
     }
 

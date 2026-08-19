@@ -4,29 +4,31 @@
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 
-@if (_visible)
+@switch (_visible)
 {
-    <MudBadge Content="@_replyCount" Color="Color.Primary" Overlap="true"
-              Visible="@(_replyCount > 0)">
-        <MudChip T="string"
-                 Size="Size.Small"
-                 Color="@(_isAdd ? Color.Success : Color.Error)"
-                 Variant="Variant.Outlined"
-                 Icon="@(_isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)">
-            <div class="d-flex align-center">
-                <a class="chip-link mr-1" style="color: inherit;"
-                   @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{Request.RequestedTagId}"))"
-                   @onclick:stopPropagation="true">
-                    @Request.RequestedTag?.Name
-                </a>
-                <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline"
-                               Size="Size.Small"
-                               Color="Color.Inherit"
-                               Class="pa-0"
-                               OnClick="OpenThreadDialogAsync"/>
-            </div>
-        </MudChip>
-    </MudBadge>
+    case true:
+        <MudBadge Content="@_replyCount" Color="Color.Primary" Overlap="true"
+                  Visible="@(_replyCount > 0)">
+            <MudChip T="string"
+                     Size="Size.Small"
+                     Color="@(_isAdd ? Color.Success : Color.Error)"
+                     Variant="Variant.Outlined"
+                     Icon="@(_isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)">
+                <div class="d-flex align-center">
+                    <a class="chip-link mr-1" style="color: inherit;"
+                       @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{Request.RequestedTagId}"))"
+                       @onclick:stopPropagation="true">
+                        @Request.RequestedTag?.Name
+                    </a>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline"
+                                   Size="Size.Small"
+                                   Color="Color.Inherit"
+                                   Class="pa-0"
+                                   OnClick="OpenThreadDialogAsync"/>
+                </div>
+            </MudChip>
+        </MudBadge>
+        break;
 }
 
 @code {
@@ -41,25 +43,23 @@
     protected override void OnParametersSet()
     {
         // Executed または Canceled の場合は非表示
-        if (Request.Status != TradeStatus.Proposed)
+        switch (Request.Status)
         {
-            _visible = false;
-            return;
+            case not TradeStatus.Proposed:
+                _visible = false;
+                return;
         }
 
         _isAdd = Request.RequestType == TaggingRequestType.Add;
         var hasTag = Item.TagRelations?.Any(tr => tr.TagId == Request.RequestedTagId) ?? false;
 
         // すでに関連付けが存在する追加リクエスト、または関連付けが存在しない削除リクエストは非表示（放置されているリクエスト対策）
-        if (_isAdd && hasTag)
+        switch (_isAdd, hasTag)
         {
-            _visible = false;
-            return;
-        }
-        if (!_isAdd && !hasTag)
-        {
-            _visible = false;
-            return;
+            case (true, true):
+            case (false, false):
+                _visible = false;
+                return;
         }
 
         _replyCount = Request.Replies?.Count ?? 0;
@@ -83,9 +83,11 @@
         var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>($"Request: {Request.RequestedTag?.Name}", parameters, options);
         await dialog.Result;
         
-        if (OnDataChanged.HasDelegate)
+        switch (OnDataChanged.HasDelegate)
         {
-            await OnDataChanged.InvokeAsync();
+            case true:
+                await OnDataChanged.InvokeAsync();
+                break;
         }
     }
 }

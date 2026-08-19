@@ -34,68 +34,72 @@
                     <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { data.Data.Item }"
                                                                OnDataChanged="LoadDataAsync"/>
 
-                    @if (data.Data.Item.TagRelations != null)
+                    @switch (data.Data.Item.TagRelations)
                     {
-                        <SRNSMudApp.Components.Tag.ItemTagTable
-                            TagRelations="@data.Data.Item.TagRelations"
-                            Item="@data.Data.Item"
-                            CurrentUserId="@_currentUserId"
-                            AllTags="@_allTags"
-                            AllTagRelationsToTags="@_allTagRelationsToTags"
-                            OnDataChanged="LoadDataAsync"/>
+                        case not null:
+                            <SRNSMudApp.Components.Tag.ItemTagTable
+                                TagRelations="@data.Data.Item.TagRelations"
+                                Item="@data.Data.Item"
+                                CurrentUserId="@_currentUserId"
+                                AllTags="@_allTags"
+                                AllTagRelationsToTags="@_allTagRelationsToTags"
+                                OnDataChanged="LoadDataAsync"/>
+                            break;
                     }
                 </MudTabPanel>
 
                 <MudTabPanel Text="関連リクエスト (Related Requests)">
-                    @if (!data.Data.Requests.Any())
+                    @switch (!data.Data.Requests.Any())
                     {
-                        <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
-                    }
-                    else
-                    {
-                        <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Data.Requests" OnRequestChanged="LoadDataAsync"
-                                                                      SelectedRequest="_selectedRequest"
-                                                                      SelectedRequestChanged="OnSelectedRequestChanged">
-                            <RejectButtonTemplate Context="request">
-                                <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
-                                           OnClick="@(() => OpenRejectDialogAsync(request))">
-                                    リジェクト
-                                </MudButton>
-                            </RejectButtonTemplate>
-                        </SRNSMudApp.Components.Tag.TaggingRequestList>
+                        case true:
+                            <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
+                            break;
+                        case false:
+                            <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Data.Requests" OnRequestChanged="LoadDataAsync"
+                                                                          SelectedRequest="_selectedRequest"
+                                                                          SelectedRequestChanged="OnSelectedRequestChanged">
+                                <RejectButtonTemplate Context="request">
+                                    <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
+                                               OnClick="@(() => OpenRejectDialogAsync(request))">
+                                        リジェクト
+                                    </MudButton>
+                                </RejectButtonTemplate>
+                            </SRNSMudApp.Components.Tag.TaggingRequestList>
+                            break;
                     }
                 </MudTabPanel>
 
                 <MudTabPanel Text="タグ履歴">
-                    @if (!data.Data.Ledgers.Any())
+                    @switch (!data.Data.Ledgers.Any())
                     {
-                        <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
-                    }
-                    else
-                    {
-                        <MudList T="TagWeightLedger">
-                            @foreach (var ledger in data.Data.Ledgers)
-                            {
-                                <MudListItem>
-                                    <div class="d-flex align-center">
-                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
-                                            @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
-                                        </MudChip>
-                                        <MudText Typo="Typo.body2"
-                                                 Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
-                                                 Class="mr-2">
-                                            @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
-                                        </MudText>
-                                        <MudText Typo="Typo.body2" Class="mr-2">
-                                            @ledger.Owner?.UserName
-                                        </MudText>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
-                                            @ledger.CreatedDate.ToLocalTime().ToString("g")
-                                        </MudText>
-                                    </div>
-                                </MudListItem>
-                            }
-                        </MudList>
+                        case true:
+                            <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
+                            break;
+                        case false:
+                            <MudList T="TagWeightLedger">
+                                @foreach (var ledger in data.Data.Ledgers)
+                                {
+                                    <MudListItem>
+                                        <div class="d-flex align-center">
+                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                                @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
+                                            </MudChip>
+                                            <MudText Typo="Typo.body2"
+                                                     Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
+                                                     Class="mr-2">
+                                                @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Class="mr-2">
+                                                @ledger.Owner?.UserName
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
+                                                @ledger.CreatedDate.ToLocalTime().ToString("g")
+                                            </MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                            break;
                     }
                 </MudTabPanel>
             </MudTabs>
@@ -128,23 +132,23 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (ActiveTabQuery == "requests")
+        _activeTabIndex = ActiveTabQuery switch
         {
-            _activeTabIndex = 1;
-        }
-        else if (ActiveTabQuery == "history")
-        {
-            _activeTabIndex = 2;
-        }
+            "requests" => 1,
+            "history" => 2,
+            _ => 0
+        };
 
         await LoadDataAsync();
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_pageState is Loaded<ItemDetailData> loaded && loaded.Data.Item.Id != ItemId)
+        switch (_pageState)
         {
-            await LoadDataAsync();
+            case Loaded<ItemDetailData> loaded when loaded.Data.Item.Id != ItemId:
+                await LoadDataAsync();
+                break;
         }
     }
 
@@ -174,10 +178,11 @@
                 .AsNoTracking()
                 .FirstOrDefaultAsync(i => i.Id == ItemId);
 
-            if (item == null)
+            switch (item)
             {
-                _pageState = new Empty("アイテムが見つかりません。");
-                return;
+                case null:
+                    _pageState = new Empty("アイテムが見つかりません。");
+                    return;
             }
 
             var requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
@@ -191,21 +196,25 @@
                 .AsNoTracking()
                 .ToListAsync();
 
-            if (SelectedRequestIdQuery.HasValue && requests != null)
+            switch (SelectedRequestIdQuery.HasValue && requests != null)
             {
-                _selectedRequest = requests.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
+                case true:
+                    _selectedRequest = requests!.FirstOrDefault(r => r.Id == SelectedRequestIdQuery.Value);
+                    break;
             }
 
-            if (AuthState != null)
+            switch (AuthState)
             {
-                var authState = await AuthState;
-                _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+                case not null:
+                    var authState = await AuthState;
+                    _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+                    break;
             }
 
             _allTags = await context.Tags.AsNoTracking().ToListAsync();
             _allTagRelationsToTags = await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
 
-            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(item, requests, ledgers));
+            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(item, requests ?? [], ledgers));
         }
         catch (Exception ex)
         {
@@ -229,30 +238,37 @@
         var authState = await AuthState!;
         var currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (currentUserId == null) return;
+        switch (currentUserId)
+        {
+            case null: return;
+        }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled)
+        switch (result)
         {
-            try
-            {
-                var comment = result.Data as string;
-                await TaggingService.RejectRequestAsync(request.Id, currentUserId, comment);
-                Snackbar.Add("リクエストを却下しました。", Severity.Success);
-
-                if (_pageState is Loaded<ItemDetailData> loaded)
+            case { Canceled: false }:
+                try
                 {
-                    loaded.Data.Requests.Remove(request);
-                    StateHasChanged();
+                    var comment = result.Data as string;
+                    await TaggingService.RejectRequestAsync(request.Id, currentUserId, comment);
+                    Snackbar.Add("リクエストを却下しました。", Severity.Success);
+
+                    switch (_pageState)
+                    {
+                        case Loaded<ItemDetailData> loaded:
+                            loaded.Data.Requests.Remove(request);
+                            StateHasChanged();
+                            break;
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
-            }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
+                }
+                break;
         }
     }
 

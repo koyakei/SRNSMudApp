@@ -17,17 +17,17 @@
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="タイプ">
-            @if (context.RequestType == TaggingRequestType.Add)
+            @switch (context.RequestType)
             {
-                <MudChip T="string" Color="Color.Success" Size="Size.Small">追加 (+@(context.ProposedWeight))</MudChip>
-            }
-            else if (context.RequestType == TaggingRequestType.Remove)
-            {
-                <MudChip T="string" Color="Color.Error" Size="Size.Small">削除</MudChip>
-            }
-            else if (context.RequestType == TaggingRequestType.DecreaseWeight)
-            {
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small">追加 (-@(context.ProposedWeight))</MudChip>
+                case TaggingRequestType.Add:
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">追加 (+@(context.ProposedWeight))</MudChip>
+                    break;
+                case TaggingRequestType.Remove:
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small">削除</MudChip>
+                    break;
+                case TaggingRequestType.DecreaseWeight:
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">追加 (-@(context.ProposedWeight))</MudChip>
+                    break;
             }
         </MudTd>
         <MudTd DataLabel="対象アイテム">
@@ -42,23 +42,26 @@
                        OnClick="@(() => OpenThreadDialog(context))" Class="mr-2">
                 詳細・スレッド
             </MudButton>
-            @if (CanApprove(context))
+            @switch (CanApprove(context))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
-                           OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
-                    承認
-                </MudButton>
+                case true:
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
+                        承認
+                    </MudButton>
+                    break;
             }
-            @if (RejectButtonTemplate != null)
+            @switch (RejectButtonTemplate)
             {
-                @RejectButtonTemplate(context)
-            }
-            else if (CanApprove(context))
-            {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                           StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
-                    却下
-                </MudButton>
+                case not null:
+                    @RejectButtonTemplate(context)
+                    break;
+                case null when CanApprove(context):
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
+                        却下
+                    </MudButton>
+                    break;
             }
         </MudTd>
     </RowTemplate>
@@ -73,12 +76,13 @@
 
     private string SelectedRowClassFunc(TaggingRequestEntity element, int rowNumber)
     {
-        if (SelectedRequest != null && SelectedRequest.Id == element.Id)
+        switch (SelectedRequest)
         {
-            return "mud-table-row-selected";
+            case not null when SelectedRequest.Id == element.Id:
+                return "mud-table-row-selected";
+            default:
+                return string.Empty;
         }
-
-        return string.Empty;
     }
 
     private async Task OnRowClicked(TableRowClickEventArgs<TaggingRequestEntity> args)
@@ -99,17 +103,29 @@
 
     private bool CanApprove(TaggingRequestEntity request)
     {
-        if (request.Status != TradeStatus.Proposed) return false;
-
-        if (request.ContractType == "Trigger") return request.RequesterUserId == _currentUserId;
-        if (request.ContractType == "Bounty") return true; // Anyone can theoretically fulfill a bounty
-
-        return request.TagOwnerUserId == _currentUserId;
+        switch (request.Status)
+        {
+            case not TradeStatus.Proposed:
+                return false;
+            default:
+                switch (request.ContractType)
+                {
+                    case "Trigger":
+                        return request.RequesterUserId == _currentUserId;
+                    case "Bounty":
+                        return true; // Anyone can theoretically fulfill a bounty
+                    default:
+                        return request.TagOwnerUserId == _currentUserId;
+                }
+        }
     }
 
     private async Task ApproveRequestAsync(TaggingRequestEntity request)
     {
-        if (_currentUserId == null) return;
+        switch (_currentUserId)
+        {
+            case null: return;
+        }
 
         try
         {
@@ -125,25 +141,30 @@
 
     private async Task RejectRequestAsync(TaggingRequestEntity request)
     {
-        if (_currentUserId == null) return;
+        switch (_currentUserId)
+        {
+            case null: return;
+        }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled)
+        switch (result)
         {
-            try
-            {
-                var comment = result.Data as string;
-                await TaggingService.RejectRequestAsync(request.Id, _currentUserId, comment);
-                Snackbar.Add("リクエストを却下しました。", Severity.Success);
-                await OnRequestChanged.InvokeAsync();
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
-            }
+            case { Canceled: false }:
+                try
+                {
+                    var comment = result.Data as string;
+                    await TaggingService.RejectRequestAsync(request.Id, _currentUserId, comment);
+                    Snackbar.Add("リクエストを却下しました。", Severity.Success);
+                    await OnRequestChanged.InvokeAsync();
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
+                }
+                break;
         }
     }
 
@@ -157,9 +178,11 @@
         var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>("リクエストスレッド", parameters, options);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled)
+        switch (result)
         {
-            await OnRequestChanged.InvokeAsync();
+            case { Canceled: false }:
+                await OnRequestChanged.InvokeAsync();
+                break;
         }
     }
 

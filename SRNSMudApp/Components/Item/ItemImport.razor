@@ -15,14 +15,15 @@
                    StartIcon="@Icons.Material.Filled.UploadFile"
                    for="csv-upload"
                    Disabled="@_isUploading">
-            @if (_isUploading)
+            @switch (_isUploading)
             {
-                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                <MudText Class="ms-2">処理中...</MudText>
-            }
-            else
-            {
-                <MudText>CSVファイルを選択</MudText>
+                case true:
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                    <MudText Class="ms-2">処理中...</MudText>
+                    break;
+                case false:
+                    <MudText>CSVファイルを選択</MudText>
+                    break;
             }
         </MudButton>
     </MudStack>
@@ -44,22 +45,23 @@
 
     private async Task OnCsvUpload(InputFileChangeEventArgs e)
     {
-        if (string.IsNullOrEmpty(_currentUserId))
+        switch (string.IsNullOrEmpty(_currentUserId))
         {
-            Snackbar.Add("ログインが必要です。", Severity.Error);
-            return;
+            case true:
+                Snackbar.Add("ログインが必要です。", Severity.Error);
+                return;
         }
 
         _isUploading = true;
-        // StateHasChanged();
 
         try
         {
             var file = e.File;
-            if (file.Size > 5 * 1024 * 1024) // 5MB limit
+            switch (file.Size > 5 * 1024 * 1024) // 5MB limit
             {
-                Snackbar.Add("ファイルサイズが大きすぎます。5MB以下のファイルを選択してください。", Severity.Error);
-                return;
+                case true:
+                    Snackbar.Add("ファイルサイズが大きすぎます。5MB以下のファイルを選択してください。", Severity.Error);
+                    return;
             }
 
             await ProcessCsvFile(file);
@@ -71,7 +73,6 @@
         finally
         {
             _isUploading = false;
-            // StateHasChanged();
         }
     }
 
@@ -83,19 +84,25 @@
         {
             while (await reader.ReadLineAsync() is { } line)
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                var values = line.Split(',').Select(v => v.Trim()).ToArray();
-                if (values.Length > 0 && !string.IsNullOrWhiteSpace(values[0]))
+                switch (string.IsNullOrWhiteSpace(line))
                 {
-                    linesToProcess.Add(values);
+                    case true: continue;
+                }
+                var values = line.Split(',').Select(v => v.Trim()).ToArray();
+                switch (values.Length > 0 && !string.IsNullOrWhiteSpace(values[0]))
+                {
+                    case true:
+                        linesToProcess.Add(values);
+                        break;
                 }
             }
         }
 
-        if (!linesToProcess.Any())
+        switch (!linesToProcess.Any())
         {
-            Snackbar.Add("処理するデータがありませんでした。", Severity.Info);
-            return;
+            case true:
+                Snackbar.Add("処理するデータがありませんでした。", Severity.Info);
+                return;
         }
 
         await using var context = await DbFactory.CreateDbContextAsync();
@@ -120,9 +127,11 @@
                 existingTags[tagName] = newTag;
             }
 
-            if (newTags.Any())
+            switch (newTags.Any())
             {
-                context.Tags.AddRange(newTags);
+                case true:
+                    context.Tags.AddRange(newTags);
+                    break;
             }
 
             foreach (var values in linesToProcess)
@@ -139,11 +148,14 @@
                 var tagNamesInLine = values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
                 foreach (var tagName in tagNamesInLine)
                 {
-                    if (!existingTags.TryGetValue(tagName, out var tag)) continue;
+                    switch (!existingTags.TryGetValue(tagName, out var tag))
+                    {
+                        case true: continue;
+                    }
                     var newRelation = new TagRelation
                     {
                         Item = newItem,
-                        Tag = tag,
+                        Tag = tag!,
                         Weight = 1,
                         OwnerId = _currentUserId
                     };

@@ -19,62 +19,69 @@
         タグ付けを依頼する
     </MudButton>
 
-    @if (_isLoading)
+    @switch (_isLoading)
     {
-        <MudProgressCircular Indeterminate="true"/>
-    }
-    else if (!_bounties.Any())
-    {
-        <MudAlert Severity="Severity.Info">現在、募集中のバウンティはありません。</MudAlert>
-    }
-    else
-    {
-        <MudGrid>
-            @foreach (var bounty in _bounties)
+        case true:
+            <MudProgressCircular Indeterminate="true"/>
+            break;
+        case false:
+            @switch (!_bounties.Any())
             {
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="3">
-                        <MudCardHeader>
-                            <CardHeaderContent>
-                                <MudText Typo="Typo.h6">@bounty.RequestedTag.Name</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                    依頼者: @bounty.RequesterUserId
-                                </MudText>
-                            </CardHeaderContent>
-                        </MudCardHeader>
-                        <MudCardContent>
-                            <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
-                            <MudText Typo="Typo.body2" Class="mb-2">@bounty.TargetItem.Content</MudText>
+                case true:
+                    <MudAlert Severity="Severity.Info">現在、募集中のバウンティはありません。</MudAlert>
+                    break;
+                case false:
+                    <MudGrid>
+                        @foreach (var bounty in _bounties)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Elevation="3">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudText Typo="Typo.h6">@bounty.RequestedTag.Name</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                依頼者: @bounty.RequesterUserId
+                                            </MudText>
+                                        </CardHeaderContent>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
+                                        <MudText Typo="Typo.body2" Class="mb-2">@bounty.TargetItem.Content</MudText>
 
-                            @if (bounty.OfferedRewardAsset != null)
-                            {
-                                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
-                                          Style="font-size: 0.8rem;">
-                                    報酬: @bounty.OfferedRewardAsset.TargetTag?.Name の権利
-                                </MudAlert>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">（無償のウィッシュリスト）</MudText>
-                            }
-                        </MudCardContent>
-                        <MudCardActions>
-                            @if (bounty.RequesterUserId == _currentUserId)
-                            {
-                                <MudButton Disabled="true" Variant="Variant.Text">自分の依頼</MudButton>
-                            }
-                            else
-                            {
-                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
-                                           OnClick="() => FulfillBounty(bounty)">
-                                    依頼を完了する
-                                </MudButton>
-                            }
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
+                                        @switch (bounty.OfferedRewardAsset)
+                                        {
+                                            case not null:
+                                                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
+                                                          Style="font-size: 0.8rem;">
+                                                    報酬: @bounty.OfferedRewardAsset.TargetTag?.Name の権利
+                                                </MudAlert>
+                                                break;
+                                            case null:
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">（無償のウィッシュリスト）</MudText>
+                                                break;
+                                        }
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        @switch (bounty.RequesterUserId == _currentUserId)
+                                        {
+                                            case true:
+                                                <MudButton Disabled="true" Variant="Variant.Text">自分の依頼</MudButton>
+                                                break;
+                                            case false:
+                                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
+                                                           OnClick="() => FulfillBounty(bounty)">
+                                                    依頼を完了する
+                                                </MudButton>
+                                                break;
+                                        }
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                    break;
             }
-        </MudGrid>
+            break;
     }
 </MudContainer>
 
@@ -117,9 +124,11 @@
         var dialog = await DialogService.ShowAsync<BountyCreateDialog>("タグ付けの依頼を作成", options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        switch (!result.Canceled)
         {
-            await LoadDataAsync();
+            case true:
+                await LoadDataAsync();
+                break;
         }
     }
 
@@ -130,9 +139,11 @@
         var dialog = await DialogService.ShowAsync<FulfillBountyDialog>("依頼を叶える", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        switch (!result.Canceled)
         {
-            await LoadDataAsync();
+            case true:
+                await LoadDataAsync();
+                break;
         }
     }
 

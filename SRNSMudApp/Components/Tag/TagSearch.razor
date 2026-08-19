@@ -1,16 +1,13 @@
 @page "/Tag/TagSearch"
 @using System.Numerics.Tensors
 @using SRNSMudApp.Services
-@* 修正1: コンポーネントをインタラクティブ（動的）にする *@
 @rendermode InteractiveServer
-@* 修正2: 連続入力でのエラー（同時実行エラー）を防ぐため、Factory経由に変更 *@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject ITagEmbeddingService TagEmbeddingService
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
     <MudText Typo="Typo.h5" GutterBottom="true">タグ検索</MudText>
 
-    @* MudAutocomplete は Enterキー不要で、文字を入力するたびに自動で SearchFunc が走ります *@
     <MudAutocomplete T="Tag"
                      Label="タグを検索"
                      @bind-Value="SelectedTag"
@@ -36,11 +33,13 @@
         </NoItemsTemplate>
     </MudAutocomplete>
 
-    @if (SelectedTag != null)
+    @switch (SelectedTag)
     {
-        <MudAlert Severity="Severity.Info" Class="mt-4">
-            選択されたタグ: 名前 = @SelectedTag.Name, ウェイト = @SelectedTag.CachedWeight
-        </MudAlert>
+        case not null:
+            <MudAlert Severity="Severity.Info" Class="mt-4">
+                選択されたタグ: 名前 = @SelectedTag.Name, ウェイト = @SelectedTag.CachedWeight
+            </MudAlert>
+            break;
     }
 </MudContainer>
 
@@ -49,16 +48,18 @@
 
     private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
     {
-        // 文字入力のたびに新しいDbContextを生成し、直前の処理との衝突（クラッシュ）を防ぐ
         await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-
         var query = dbContext.Tags.AsQueryable();
 
-        if (string.IsNullOrEmpty(value))
+        return await (string.IsNullOrEmpty(value) switch
         {
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
-        }
+            true => query.AsNoTracking().Take(50).ToListAsync(token).ContinueWith(t => (IEnumerable<Tag>)t.Result, token),
+            false => ExecuteSearchAsync(query, value, token)
+        });
+    }
 
+    private async Task<IEnumerable<Tag>> ExecuteSearchAsync(IQueryable<Tag> query, string value, CancellationToken token)
+    {
         try
         {
             var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value);
@@ -93,5 +94,4 @@
             return await query.AsNoTracking().Take(50).ToListAsync(token);
         }
     }
-
 }

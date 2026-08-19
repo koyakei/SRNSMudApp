@@ -89,12 +89,14 @@
             </MudNavLink>
         </NotAuthorized>
     </AuthorizeView>
-    @if (Env.IsDevelopment())
+    @switch (Env.IsDevelopment())
     {
-        <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix"
-                    Icon="@Icons.Material.Filled.AdminPanelSettings">
-            Make Me Admin
-        </MudNavLink>
+        case true:
+            <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.AdminPanelSettings">
+                Make Me Admin
+            </MudNavLink>
+            break;
     }
 </MudNavMenu>
 

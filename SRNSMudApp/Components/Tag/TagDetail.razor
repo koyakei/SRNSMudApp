@@ -6,72 +6,77 @@
 @inject NavigationManager NavigationManager
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
-    @if (_tag == null)
+    @switch (_tag)
     {
-        <MudText>読み込み中...</MudText>
-    }
-    else
-    {
-        <div class="d-flex align-center mb-4">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                           OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
-            <MudText Typo="Typo.h5">タグ詳細</MudText>
-            <MudSpacer/>
-            @if (_currentUserId != null)
-            {
-                <MudButton Variant="@(_isFollowing ? Variant.Outlined : Variant.Filled)"
-                           Color="@(_isFollowing ? Color.Default : Color.Primary)"
-                           StartIcon="@(_isFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
-                           OnClick="@ToggleFollowAsync"
-                           Class="mr-2">
-                    @(_isFollowing ? "フォロー解除" : "フォロー")
-                </MudButton>
-            }
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
-                       OnClick="@OpenEditDialog">
-                編集
-            </MudButton>
-        </div>
-
-        <MudCard Outlined="true" Class="mb-4 rounded-xl">
-            <MudCardContent>
-                <MudText Typo="Typo.h4" Class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Class="mr-2"/>
-                    @_tag.Name
-                </MudText>
-                @if (!string.IsNullOrEmpty(_tag.Content))
+        case null:
+            <MudText>読み込み中...</MudText>
+            break;
+        case not null:
+            <div class="d-flex align-center mb-4">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+                <MudText Typo="Typo.h5">タグ詳細</MudText>
+                <MudSpacer/>
+                @switch (_currentUserId)
                 {
-                    <MudText Typo="Typo.body1" Class="mt-4">@_tag.Content</MudText>
+                    case not null:
+                        <MudButton Variant="@(_isFollowing ? Variant.Outlined : Variant.Filled)"
+                                   Color="@(_isFollowing ? Color.Default : Color.Primary)"
+                                   StartIcon="@(_isFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
+                                   OnClick="@ToggleFollowAsync"
+                                   Class="mr-2">
+                            @(_isFollowing ? "フォロー解除" : "フォロー")
+                        </MudButton>
+                        break;
                 }
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
-                    作成者: @(_tag.Owner?.UserName ?? "不明")
-                </MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
-                    作成日時: @(_tag.CreatedDate.ToLocalTime().ToString("g"))
-                </MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
-                    更新日時: @(_tag.UpdatedDate.ToLocalTime().ToString("g"))
-                </MudText>
-            </MudCardContent>
-        </MudCard>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@OpenEditDialog">
+                    編集
+                </MudButton>
+            </div>
 
-        @* 関連するアイテムとタグのリストを表示 *@
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4 mt-4">
-            <MudTabPanel Text="関連アイテム / タグ">
-                <SRNSMudApp.Components.UI.ResourceList Tags="_relatedTags" Items="_relatedItems"
-                                                           OnDataChanged="LoadDataAsync"/>
-            </MudTabPanel>
-            <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
-                <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync"/>
-            </MudTabPanel>
-            <MudTabPanel Text="Weight 履歴 / 取引履歴">
-                <SRNSMudApp.Components.UI.TagWeightLedgerList Ledgers="_weightLedgers"/>
-            </MudTabPanel>
-            <MudTabPanel Text="関連オファー">
-                <SRNSMudApp.Components.UI.PublicTradeOfferList Offers="_publicOffers"
-                                                                   OnOfferTriggered="LoadDataAsync"/>
-            </MudTabPanel>
-        </MudTabs>
+            <MudCard Outlined="true" Class="mb-4 rounded-xl">
+                <MudCardContent>
+                    <MudText Typo="Typo.h4" Class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Class="mr-2"/>
+                        @_tag.Name
+                    </MudText>
+                    @switch (string.IsNullOrEmpty(_tag.Content))
+                    {
+                        case false:
+                            <MudText Typo="Typo.body1" Class="mt-4">@_tag.Content</MudText>
+                            break;
+                    }
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
+                        作成者: @(_tag.Owner?.UserName ?? "不明")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                        作成日時: @(_tag.CreatedDate.ToLocalTime().ToString("g"))
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                        更新日時: @(_tag.UpdatedDate.ToLocalTime().ToString("g"))
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+
+            @* 関連するアイテムとタグのリストを表示 *@
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4 mt-4">
+                <MudTabPanel Text="関連アイテム / タグ">
+                    <SRNSMudApp.Components.UI.ResourceList Tags="_relatedTags" Items="_relatedItems"
+                                                               OnDataChanged="LoadDataAsync"/>
+                </MudTabPanel>
+                <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
+                    <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync"/>
+                </MudTabPanel>
+                <MudTabPanel Text="Weight 履歴 / 取引履歴">
+                    <SRNSMudApp.Components.UI.TagWeightLedgerList Ledgers="_weightLedgers"/>
+                </MudTabPanel>
+                <MudTabPanel Text="関連オファー">
+                    <SRNSMudApp.Components.UI.PublicTradeOfferList Offers="_publicOffers"
+                                                                       OnOfferTriggered="LoadDataAsync"/>
+                </MudTabPanel>
+            </MudTabs>
+            break;
     }
 </MudContainer>
 
@@ -98,10 +103,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // TagIdが変わった時にデータを再読み込み
-        if (_tag != null && _tag.Id != TagId)
+        switch (_tag)
         {
-            await LoadDataAsync();
+            case { Id: var id } when id != TagId:
+                await LoadDataAsync();
+                break;
         }
     }
 
@@ -113,70 +119,75 @@
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == TagId);
 
-        if (_tag != null)
+        switch (_tag)
         {
-            if (_currentUserId != null)
-            {
-                _isFollowing = await context.UserTagFollows!
-                    .AnyAsync(utf => utf.TagId == TagId && utf.OwnerId == _currentUserId);
-            }
+            case not null:
+                switch (_currentUserId)
+                {
+                    case not null:
+                        _isFollowing = await context.UserTagFollows!
+                            .AnyAsync(utf => utf.TagId == TagId && utf.OwnerId == _currentUserId);
+                        break;
+                }
 
-            _relatedItems = await context.Items
-                .Include(i => i.Owner)
-                .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
-                .ThenInclude(t => t.Owner)
-                .Include(i => i.AsRequestOf)
-                .ThenInclude(r => r.TargetItem)
-                .Include(i => i.AsRequestOf)
-                .ThenInclude(r => r.RequestedTag)
-                .Where(i => i.TagRelations.Any(tr => tr.TagId == TagId))
-                .OrderByDescending(i => i.UpdatedDate)
-                .AsNoTracking()
-                .ToListAsync();
+                _relatedItems = await context.Items
+                    .Include(i => i.Owner)
+                    .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .Include(i => i.AsRequestOf)
+                    .ThenInclude(r => r.TargetItem)
+                    .Include(i => i.AsRequestOf)
+                    .ThenInclude(r => r.RequestedTag)
+                    .Where(i => i.TagRelations.Any(tr => tr.TagId == TagId))
+                    .OrderByDescending(i => i.UpdatedDate)
+                    .AsNoTracking()
+                    .ToListAsync();
 
-            _relatedTags = await context.Tags
-                .Include(t => t.Owner)
-                .Include(t => t.TargetTagRelations)
-                .ThenInclude(tr => tr.Tag)
-                .ThenInclude(t => t.Owner)
-                .Where(t => t.TargetTagRelations.Any(tr => tr.TagId == TagId))
-                .OrderByDescending(t => t.UpdatedDate)
-                .AsNoTracking()
-                .ToListAsync();
+                _relatedTags = await context.Tags
+                    .Include(t => t.Owner)
+                    .Include(t => t.TargetTagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+                    .Where(t => t.TargetTagRelations.Any(tr => tr.TagId == TagId))
+                    .OrderByDescending(t => t.UpdatedDate)
+                    .AsNoTracking()
+                    .ToListAsync();
 
-            _weightLedgers = await context.TagWeightLedgers!
-                .Include(l => l.Owner)
-                .Where(l => l.TagId == TagId)
-                .OrderByDescending(l => l.CreatedDate)
-                .AsNoTracking()
-                .ToListAsync();
+                _weightLedgers = await context.TagWeightLedgers!
+                    .Include(l => l.Owner)
+                    .Where(l => l.TagId == TagId)
+                    .OrderByDescending(l => l.CreatedDate)
+                    .AsNoTracking()
+                    .ToListAsync();
 
-            _publicOffers = await context.PublicTradeOffers!
-                .Include(o => o.Owner)
-                .Include(o => o.OfferedTag)
-                .Where(o => o.OfferedTagId == TagId)
-                .OrderByDescending(o => o.CreatedDate)
-                .AsNoTracking()
-                .ToListAsync();
+                _publicOffers = await context.PublicTradeOffers!
+                    .Include(o => o.Owner)
+                    .Include(o => o.OfferedTag)
+                    .Where(o => o.OfferedTagId == TagId)
+                    .OrderByDescending(o => o.CreatedDate)
+                    .AsNoTracking()
+                    .ToListAsync();
 
-            _pendingRequests = await context.TaggingRequestEntities!
-                .Include(r => r.TargetItem)
-                .Include(r => r.Owner)
-                .Include(r => r.RequestedTag)
-                .Include(r => r.Replies)
-                .Where(r => r.RequestedTagId == TagId && r.Status == TradeStatus.Proposed)
-                .OrderByDescending(r => r.CreatedDate)
-                .AsNoTracking()
-                .ToListAsync();
-
-            // StateHasChanged();
+                _pendingRequests = await context.TaggingRequestEntities!
+                    .Include(r => r.TargetItem)
+                    .Include(r => r.Owner)
+                    .Include(r => r.RequestedTag)
+                    .Include(r => r.Replies)
+                    .Where(r => r.RequestedTagId == TagId && r.Status == TradeStatus.Proposed)
+                    .OrderByDescending(r => r.CreatedDate)
+                    .AsNoTracking()
+                    .ToListAsync();
+                break;
         }
     }
 
     private async Task OpenEditDialog()
     {
-        if (_tag == null) return;
+        switch (_tag)
+        {
+            case null: return;
+        }
 
         var parameters = new DialogParameters
         {
@@ -186,34 +197,42 @@
         var dialog = await DialogService.ShowAsync<TagEditDialog>("タグを編集", parameters);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled)
+        switch (result)
         {
-            await LoadDataAsync();
+            case { Canceled: false }:
+                await LoadDataAsync();
+                break;
         }
     }
 
     private async Task ToggleFollowAsync()
     {
-        if (_currentUserId == null || _tag == null) return;
+        switch ((_currentUserId, _tag))
+        {
+            case (null, _):
+            case (_, null):
+                return;
+        }
 
         await using var context = await DbFactory.CreateDbContextAsync();
         var followRecord = await context.UserTagFollows!
             .FirstOrDefaultAsync(utf => utf.TagId == TagId && utf.OwnerId == _currentUserId);
 
-        if (followRecord != null)
+        switch (followRecord)
         {
-            context.UserTagFollows!.Remove(followRecord);
-            _isFollowing = false;
-        }
-        else
-        {
-            var newFollow = new UserTagFollow
-            {
-                TagId = TagId,
-                OwnerId = _currentUserId
-            };
-            context.UserTagFollows!.Add(newFollow);
-            _isFollowing = true;
+            case not null:
+                context.UserTagFollows!.Remove(followRecord);
+                _isFollowing = false;
+                break;
+            case null:
+                var newFollow = new UserTagFollow
+                {
+                    TagId = TagId,
+                    OwnerId = _currentUserId
+                };
+                context.UserTagFollows!.Add(newFollow);
+                _isFollowing = true;
+                break;
         }
 
         await context.SaveChangesAsync();

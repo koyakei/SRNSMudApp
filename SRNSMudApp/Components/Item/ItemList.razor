@@ -31,8 +31,9 @@
     @* ===== タグ検索セクション ===== *@
     <MudPaper Class="pa-3 mb-4 rounded-xl search-container" Outlined="true">
         @* 選択済みタグチップ *@
-        @if (_selectedFilters.Any())
+        @switch (_selectedFilters.Any())
         {
+            case true:
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-2 align-center">
                 @foreach (var filter in _selectedFilters)
                 {
@@ -47,6 +48,7 @@
                     すべてクリア
                 </MudButton>
             </MudStack>
+            break;
         }
 
         @* 検索テキスト入力 (2段階オートコンプリート) *@
@@ -69,11 +71,13 @@
     </MudPaper>
 
     @* ===== フィルタ結果件数 ===== *@
-    @if (_selectedFilters.Any())
+    @switch (_selectedFilters.Any())
     {
+        case true:
         <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
             @(_items.Count()) 件のアイテム、@(_foundTags.Count()) 件のタグが見つかりました
         </MudText>
+        break;
     }
 
     <div class="d-flex flex-column gap-2 mb-4">
@@ -96,8 +100,9 @@
             </MudButton>
         </div>
 
-        @if (_sortConditions.Any())
+        @switch (_sortConditions.Any())
         {
+            case true:
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="align-center">
                 <MudText Typo="Typo.body2" Color="Color.Secondary">ソート優先度 (左から):</MudText>
                 @foreach (var condition in _sortConditions)
@@ -115,6 +120,7 @@
                     </MudChip>
                 }
             </MudStack>
+            break;
         }
     </div>
 
@@ -160,39 +166,56 @@
 
         await using var context = await DbFactory.CreateDbContextAsync();
 
-        if (query.TryGetValue("tags", out var tagsValues))
+        switch (query.TryGetValue("tags", out var tagsValues))
         {
-            foreach (var val in tagsValues)
-            {
-                if (string.IsNullOrWhiteSpace(val)) continue;
-                var parts = val.Split(':');
-                if (int.TryParse(parts[0], out var tagId))
+            case true:
+                foreach (var val in tagsValues)
                 {
-                    var tag = await context.Tags.FindAsync(tagId);
-                    if (tag != null)
+                    switch (string.IsNullOrWhiteSpace(val))
                     {
-                        _selectedFilters.Add(new TagFilter { Tag = tag, UserName = parts.Length > 1 ? parts[1] : null });
+                        case true: continue;
+                    }
+                    var parts = val.Split(':');
+                    int tagId;
+                    switch (int.TryParse(parts[0], out tagId))
+                    {
+                        case true:
+                            var tag = await context.Tags.FindAsync(tagId);
+                            switch (tag)
+                            {
+                                case not null:
+                                    _selectedFilters.Add(new TagFilter { Tag = tag, UserName = parts.Length > 1 ? parts[1] : null });
+                                    break;
+                            }
+                            break;
                     }
                 }
-            }
+                break;
         }
 
-        if (query.TryGetValue("sort", out var sortStr))
+        switch (query.TryGetValue("sort", out var sortStr))
         {
-            var parts = sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var part in parts)
-            {
-                var kvp = part.Split(':');
-                if (kvp.Length == 2 && int.TryParse(kvp[0], out var tagId))
+            case true:
+                var parts = sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var part in parts)
                 {
-                    var order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
-                    var tag = await context.Tags.FindAsync(tagId);
-                    if (tag != null)
+                    var kvp = part.Split(':');
+                    int tagId = 0;
+                    switch (kvp.Length == 2 && int.TryParse(kvp[0], out tagId))
                     {
-                        _sortConditions.Add(new SortCondition { Tag = tag, Order = order });
+                        case true:
+                            var order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
+                            var tag = await context.Tags.FindAsync(tagId);
+                            switch (tag)
+                            {
+                                case not null:
+                                    _sortConditions.Add(new SortCondition { Tag = tag, Order = order });
+                                    break;
+                            }
+                            break;
                     }
                 }
-            }
+                break;
         }
 
         await LoadDataAsync();
@@ -202,79 +225,78 @@
 
     private async Task<IEnumerable<string>> SearchTagsAndUsersAsync(string? value, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        switch (string.IsNullOrWhiteSpace(value))
         {
-            return Array.Empty<string>();
+            case true: return Array.Empty<string>();
         }
 
         await using var context = await DbFactory.CreateDbContextAsync(token);
 
-        if (!value.Contains(" @"))
+        switch (value.Contains(" @"))
         {
-            // 状態1: " @" がない場合（タグ名検索）
-            var searchText = value;
-            try
-            {
-                var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(searchText);
-                var queryArray = queryVector.ToArray();
+            case false:
+                var searchText = value;
+                try
+                {
+                    var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(searchText);
+                    var queryArray = queryVector.ToArray();
 
-                var textMatches = await context.Tags
-                    .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
+                    var textMatches = await context.Tags
+                        .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
+                        .AsNoTracking()
+                        .ToListAsync(token);
+
+                    var vectorTags = await context.Tags
+                        .Where(t => t.Embedding != null)
+                        .AsNoTracking()
+                        .ToListAsync(token);
+
+                    var vectorMatches = vectorTags
+                        .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
+                        .Take(10)
+                        .ToList();
+
+                    return textMatches.Concat(vectorMatches)
+                        .Select(t => t.Name + " @") // 末尾に " @" を付与
+                        .Distinct()
+                        .Take(10);
+                }
+                catch
+                {
+                    var textMatches = await context.Tags
+                        .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
+                        .AsNoTracking()
+                        .Select(t => t.Name + " @")
+                        .Distinct()
+                        .Take(10)
+                        .ToListAsync(token);
+                    return textMatches;
+                }
+            case true:
+                var parts = value.Split(" @", 2);
+                var tagName = parts[0];
+                var userSearch = parts[1];
+
+                var usersQuery = context.TagRelations
                     .AsNoTracking()
-                    .ToListAsync(token);
+                    .Where(tr => tr.Tag.Name == tagName)
+                    .Select(tr => tr.Owner.UserName)
+                    .Where(u => u != null);
 
-                var vectorTags = await context.Tags
-                    .Where(t => t.Embedding != null)
-                    .AsNoTracking()
-                    .ToListAsync(token);
+                usersQuery = string.IsNullOrWhiteSpace(userSearch) switch
+                {
+                    false => usersQuery.Where(u => u!.Contains(userSearch)),
+                    true => usersQuery
+                };
 
-                var vectorMatches = vectorTags
-                    .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
-                    .Take(10)
-                    .ToList();
+                var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
 
-                return textMatches.Concat(vectorMatches)
-                    .Select(t => t.Name + " @") // 末尾に " @" を付与
-                    .Distinct()
-                    .Take(10);
-            }
-            catch
-            {
-                var textMatches = await context.Tags
-                    .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
-                    .AsNoTracking()
-                    .Select(t => t.Name + " @")
-                    .Distinct()
-                    .Take(10)
-                    .ToListAsync(token);
-                return textMatches;
-            }
+                return (!users.Any() && string.IsNullOrWhiteSpace(userSearch)) switch
+                {
+                    true => new[] { tagName + " @" },
+                    false => users.Select(u => tagName + " @" + u)
+                };
         }
-
-        // 状態2: " @" がある場合（ユーザー名検索）
-        var parts = value.Split(" @", 2);
-        var tagName = parts[0];
-        var userSearch = parts[1];
-
-        var usersQuery = context.TagRelations
-            .AsNoTracking()
-            .Where(tr => tr.Tag.Name == tagName)
-            .Select(tr => tr.Owner.UserName)
-            .Where(u => u != null);
-
-        if (!string.IsNullOrWhiteSpace(userSearch))
-        {
-            usersQuery = usersQuery.Where(u => u!.Contains(userSearch));
-        }
-
-        var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
-
-        if (!users.Any() && string.IsNullOrWhiteSpace(userSearch))
-        {
-            return new[] { tagName + " @" };
-        }
-
-        return users.Select(u => tagName + " @" + u);
     }
 
     private async Task OnAutocompleteValueChanged(string? value)
@@ -289,18 +311,20 @@
             case IncompleteSearch:
                 // タグ名だけ選択された状態。検索は実行せず、次の入力を待つ
                 // ドロップダウンを再表示してユーザー名をサジェストさせる
-                if (_autocomplete != null)
+                switch (_autocomplete)
                 {
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(100); // 選択時にメニューが閉じるのを待機
-                        await InvokeAsync(async () =>
+                    case not null:
+                        _ = Task.Run(async () =>
                         {
-                            await _autocomplete.FocusAsync();
-                            await _autocomplete.ToggleMenuAsync();
-                            StateHasChanged();
+                            await Task.Delay(100); // 選択時にメニューが閉じるのを待機
+                            await InvokeAsync(async () =>
+                            {
+                                await _autocomplete.FocusAsync();
+                                await _autocomplete.ToggleMenuAsync();
+                                StateHasChanged();
+                            });
                         });
-                    });
+                        break;
                 }
                 break;
             case TagWithUserSearch tagWithUserSearch:
@@ -314,9 +338,11 @@
 
     private async Task OnSearchKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
+        switch (e.Key == "Enter")
         {
-            await ExecuteSearch();
+            case true:
+                await ExecuteSearch();
+                break;
         }
     }
 
@@ -344,12 +370,16 @@
         await using var context = await DbFactory.CreateDbContextAsync();
         var tag = await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
 
-        if (tag != null)
+        switch (tag)
         {
-            if (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
-            {
-                _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
-            }
+            case not null:
+                switch (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
+                {
+                    case true:
+                        _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
+                        break;
+                }
+                break;
         }
 
         _tagSearchText = "";
@@ -413,28 +443,30 @@
             .AsQueryable();
 
         // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
-        if (_selectedFilters.Any())
+        switch (_selectedFilters.Any())
         {
-            foreach (var filter in _selectedFilters)
-            {
-                if (string.IsNullOrWhiteSpace(filter.UserName))
+            case true:
+                foreach (var filter in _selectedFilters)
                 {
-                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id));
-                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id));
+                    switch (string.IsNullOrWhiteSpace(filter.UserName))
+                    {
+                        case true:
+                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id));
+                            tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id));
+                            break;
+                        case false:
+                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
+                            tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
+                            break;
+                    }
                 }
-                else
-                {
-                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
-                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
-                }
-            }
 
-            tagQuery = ApplySortToTagQuery(tagQuery);
-            _foundTags = await tagQuery.ToListAsync();
-        }
-        else
-        {
-            _foundTags = new List<Tag>();
+                tagQuery = ApplySortToTagQuery(tagQuery);
+                _foundTags = await tagQuery.ToListAsync();
+                break;
+            case false:
+                _foundTags = new List<Tag>();
+                break;
         }
 
         query = ApplySortToItemQuery(query);
@@ -445,9 +477,10 @@
 
     private IQueryable<Item> ApplySortToItemQuery(IQueryable<Item> query)
     {
-        if (!_sortConditions.Any())
+        switch (!_sortConditions.Any())
         {
-            return query.OrderByDescending(i => i.UpdatedDate);
+            case true:
+                return query.OrderByDescending(i => i.UpdatedDate);
         }
 
         IOrderedQueryable<Item>? orderedQuery = null;
@@ -455,17 +488,18 @@
         foreach (var condition in _sortConditions)
         {
             var targetId = condition.Tag.Id;
-            if (orderedQuery == null)
+            switch (orderedQuery)
             {
-                orderedQuery = condition.Order == SortOrder.Desc
-                    ? query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
-            else
-            {
-                orderedQuery = condition.Order == SortOrder.Desc
-                    ? orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                case null:
+                    orderedQuery = condition.Order == SortOrder.Desc
+                        ? query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                        : query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                    break;
+                case not null:
+                    orderedQuery = condition.Order == SortOrder.Desc
+                        ? orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                        : orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                    break;
             }
         }
 
@@ -474,9 +508,10 @@
 
     private IQueryable<Tag> ApplySortToTagQuery(IQueryable<Tag> query)
     {
-        if (!_sortConditions.Any())
+        switch (!_sortConditions.Any())
         {
-            return query.OrderByDescending(t => t.UpdatedDate);
+            case true:
+                return query.OrderByDescending(t => t.UpdatedDate);
         }
 
         IOrderedQueryable<Tag>? orderedQuery = null;
@@ -484,17 +519,18 @@
         foreach (var condition in _sortConditions)
         {
             var targetId = condition.Tag.Id;
-            if (orderedQuery == null)
+            switch (orderedQuery)
             {
-                orderedQuery = condition.Order == SortOrder.Desc
-                    ? query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
-            else
-            {
-                orderedQuery = condition.Order == SortOrder.Desc
-                    ? orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                case null:
+                    orderedQuery = condition.Order == SortOrder.Desc
+                        ? query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                        : query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                    break;
+                case not null:
+                    orderedQuery = condition.Order == SortOrder.Desc
+                        ? orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                        : orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+                    break;
             }
         }
 
@@ -503,11 +539,13 @@
 
     private async Task OnSortTargetTagAdded(Tag? tag)
     {
-        if (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
+        switch (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
         {
-            _sortConditions.Add(new SortCondition { Tag = tag, Order = SortOrder.Desc });
-            UpdateUrlQuery();
-            await LoadDataAsync();
+            case true:
+                _sortConditions.Add(new SortCondition { Tag = tag, Order = SortOrder.Desc });
+                UpdateUrlQuery();
+                await LoadDataAsync();
+                break;
         }
     }
 
@@ -527,9 +565,10 @@
 
     private Task<IEnumerable<Tag>> SearchSortTagsAsync(string? value, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        switch (string.IsNullOrWhiteSpace(value))
         {
-            return Task.FromResult<IEnumerable<Tag>>(_selectedFilters.Select(f => f.Tag));
+            case true:
+                return Task.FromResult<IEnumerable<Tag>>(_selectedFilters.Select(f => f.Tag));
         }
 
         var matches = _selectedFilters.Select(f => f.Tag).Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
@@ -563,7 +602,10 @@
 
             foreach (var rel in relations)
             {
-                if (!allTags.TryGetValue(rel.TagId, out var tag)) continue;
+                switch (allTags.TryGetValue(rel.TagId, out var tag))
+                {
+                    case false: continue;
+                }
 
                 var exportTag = new ExportTagDto
                 {
@@ -585,13 +627,15 @@
                 var attachedRelations = tagToTags.Where(trt => trt.TargetTagId == tag.Id).ToList();
                 foreach (var attachedRel in attachedRelations)
                 {
-                    if (allTags.TryGetValue(attachedRel.TagId, out var attachedTag))
+                    switch (allTags.TryGetValue(attachedRel.TagId, out var attachedTag))
                     {
-                        exportTag.RelatedTags.Add(new ExportTagSimpleDto
-                        {
-                            Name = attachedTag.Name,
-                            Content = attachedTag.Content
-                        });
+                        case true:
+                            exportTag.RelatedTags.Add(new ExportTagSimpleDto
+                            {
+                                Name = attachedTag.Name,
+                                Content = attachedTag.Content
+                            });
+                            break;
                     }
                 }
 
@@ -602,16 +646,18 @@
             foreach (var url in urls.Take(3))
             {
                 var preview = await LinkPreviewService.GetPreviewAsync(url);
-                if (preview is { IsSuccess: true })
+                switch (preview)
                 {
-                    exportItem.LinkPreviews.Add(new ExportLinkPreviewDto
-                    {
-                        Url = preview.Url,
-                        Title = preview.Title,
-                        Description = preview.Description,
-                        ImageUrl = preview.ImageUrl,
-                        SiteName = preview.SiteName
-                    });
+                    case { IsSuccess: true }:
+                        exportItem.LinkPreviews.Add(new ExportLinkPreviewDto
+                        {
+                            Url = preview.Url,
+                            Title = preview.Title,
+                            Description = preview.Description,
+                            ImageUrl = preview.ImageUrl,
+                            SiteName = preview.SiteName
+                        });
+                        break;
                 }
             }
 
@@ -667,14 +713,19 @@
 
     private static List<string> ExtractUrls(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return [];
+        switch (string.IsNullOrWhiteSpace(text))
+        {
+            case true: return [];
+        }
         List<string> results = [];
         var matches = UrlRegex.Matches(text);
         foreach (Match match in matches)
         {
-            if (!results.Contains(match.Value))
+            switch (!results.Contains(match.Value))
             {
-                results.Add(match.Value);
+                case true:
+                    results.Add(match.Value);
+                    break;
             }
         }
 

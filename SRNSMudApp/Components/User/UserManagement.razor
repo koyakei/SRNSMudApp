@@ -10,30 +10,31 @@
     <MudText Typo="Typo.h4" GutterBottom="true">ユーザー管理</MudText>
     <MudText Typo="Typo.body1" Class="mb-4">管理者（Admin）権限の付与・剥奪を行います。</MudText>
 
-    @if (_users == null)
+    @switch (_users)
     {
-        <MudProgressCircular Indeterminate="true"/>
-    }
-    else
-    {
-        <MudTable Items="@_users" Hover="true" Dense="true" Elevation="3">
-            <HeaderContent>
-                <MudTh>ID</MudTh>
-                <MudTh>Email (Username)</MudTh>
-                <MudTh>Admin権限</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="ID">@context.User.Id</MudTd>
-                <MudTd DataLabel="Email">@context.User.UserName</MudTd>
-                <MudTd DataLabel="Admin権限">
-                    <MudSwitch T="bool" Value="@context.IsAdmin" ValueChanged="@(val => ToggleAdminAsync(context, val))"
-                               Color="Color.Primary"/>
-                </MudTd>
-            </RowTemplate>
-            <PagerContent>
-                <MudTablePager/>
-            </PagerContent>
-        </MudTable>
+        case null:
+            <MudProgressCircular Indeterminate="true"/>
+            break;
+        case not null:
+            <MudTable Items="@_users" Hover="true" Dense="true" Elevation="3">
+                <HeaderContent>
+                    <MudTh>ID</MudTh>
+                    <MudTh>Email (Username)</MudTh>
+                    <MudTh>Admin権限</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="ID">@context.User.Id</MudTd>
+                    <MudTd DataLabel="Email">@context.User.UserName</MudTd>
+                    <MudTd DataLabel="Admin権限">
+                        <MudSwitch T="bool" Value="@context.IsAdmin" ValueChanged="@(val => ToggleAdminAsync(context, val))"
+                                   Color="Color.Primary"/>
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager/>
+                </PagerContent>
+            </MudTable>
+            break;
     }
 </MudContainer>
 
@@ -68,29 +69,34 @@
 
     private async Task ToggleAdminAsync(UserViewModel vm, bool newIsAdmin)
     {
-        if (vm.IsAdmin == newIsAdmin) return;
+        switch (vm.IsAdmin == newIsAdmin)
+        {
+            case true: return;
+        }
 
         // Fetch fresh user instance via UserManager to ensure proper tracking and avoid concurrency issues
         var user = await UserManager.FindByIdAsync(vm.User.Id);
-        if (user == null)
+        switch (user)
         {
-            Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
-            return;
+            case null:
+                Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
+                return;
         }
 
         var result = newIsAdmin
             ? await UserManager.AddToRoleAsync(user, "Admin")
             : await UserManager.RemoveFromRoleAsync(user, "Admin");
 
-        if (result.Succeeded)
+        switch (result.Succeeded)
         {
-            vm.IsAdmin = newIsAdmin;
-            Snackbar.Add(newIsAdmin ? $"{user.UserName} にAdmin権限を付与しました。" : $"{user.UserName} のAdmin権限を剥奪しました。", Severity.Success);
-        }
-        else
-        {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            Snackbar.Add($"権限の変更に失敗しました: {errors}", Severity.Error);
+            case true:
+                vm.IsAdmin = newIsAdmin;
+                Snackbar.Add(newIsAdmin ? $"{user.UserName} にAdmin権限を付与しました。" : $"{user.UserName} のAdmin権限を剥奪しました。", Severity.Success);
+                break;
+            case false:
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                Snackbar.Add($"権限の変更に失敗しました: {errors}", Severity.Error);
+                break;
         }
     }
 
