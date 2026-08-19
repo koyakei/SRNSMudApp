@@ -73,6 +73,7 @@
             var vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
 
             var vectorMatches = vectorTags
+                .Where(x => x.Embedding.Length == queryArray.Length)
                 .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
                 .Take(50)
                 .ToList();

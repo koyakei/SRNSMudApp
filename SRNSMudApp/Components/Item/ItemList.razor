@@ -252,6 +252,7 @@
                         .ToListAsync(token);
 
                     var vectorMatches = vectorTags
+                        .Where(t => t.Embedding.Length == queryArray.Length)
                         .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
                         .Take(10)
                         .ToList();
