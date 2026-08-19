@@ -22,7 +22,7 @@ trigger: always_on
 そのために unionを積極的に利用する
 
 ## 再代入撲滅
-var を使わず const readonly を使う
+イミュータブルなデータ構造や純粋関数を優先する
 
 ## 3. Blazor Server (InteractiveServer) のル－ル
 - **SignalRの意識**: Blazor ServerはSignalR接続上で動作するため、メモリリークに注意する。イベントハンドラの購読解除 (`IDisposable` の実装) を徹底すること。
@@ -62,4 +62,3 @@ var を使わず const readonly を使う
 ## テスト方針
 - 新しい実装をしたら　E2ETests と Tests を実行しパスするか確かめる
 - 新しい実装をしたらテストを実装する。
-

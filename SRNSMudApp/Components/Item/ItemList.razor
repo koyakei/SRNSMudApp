@@ -100,9 +100,7 @@
             </MudButton>
         </div>
 
-        @switch (_sortConditions.Any())
-        {
-            case true:
+        
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="align-center">
                 <MudText Typo="Typo.body2" Color="Color.Secondary">ソート優先度 (左から):</MudText>
                 @foreach (var condition in _sortConditions)
@@ -120,8 +118,6 @@
                     </MudChip>
                 }
             </MudStack>
-            break;
-        }
     </div>
 
     <SRNSMudApp.Components.UI.ResourceList Tags="_foundTags" Items="_items" OnDataChanged="LoadDataAsync"/>
