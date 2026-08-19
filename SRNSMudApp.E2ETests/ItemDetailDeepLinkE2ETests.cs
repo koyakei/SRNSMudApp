@@ -52,8 +52,9 @@ public class ItemDetailDeepLinkE2ETests : PageTest
 
         await db.SaveChangesAsync();
 
-        var request = new GratisTaggingContract
+        var request = new TaggingRequestEntity
         {
+            ContractType = "Gratis",
             OwnerId = user.Id,
             RequesterUserId = user.Id,
             TagOwnerUserId = user.Id,

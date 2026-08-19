@@ -76,8 +76,9 @@ public class TagRemoveBugE2ETests : PageTest
             db.TagRelations.Add(relation);
 
             // User2 (ItemOwner) creates a Remove request
-            var contract = new GratisTaggingContract
-            {
+            var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = itemOwner.Id,
                 RequesterUserId = itemOwner.Id,
                 TagOwnerUserId = tagOwner.Id,

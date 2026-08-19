@@ -10,29 +10,29 @@
 
     private RenderFragment RenderContent() => builder =>
     {
-        RenderFragment content = Contract switch
+        RenderFragment content = Contract.ContractType switch
         {
-            MutualTaggingContract mutual => 
+            "Mutual" => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
-                    <MudText Typo="Typo.body2">@mutual.OfferedTargetItem.Content</MudText>
-                    <MudText Typo="Typo.body2">@mutual.OfferedTag.Name</MudText>
+                    <MudText Typo="Typo.body2">@Contract.OfferedTargetItem?.Content</MudText>
+                    <MudText Typo="Typo.body2">@Contract.OfferedTag?.Name</MudText>
                 </text>),
-            GratisTaggingContract gratis when !string.IsNullOrEmpty(gratis.RequesterMessage) => 
+            "Gratis" when !string.IsNullOrEmpty(Contract.RequesterMessage) => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">メッセージ</MudText>
-                    <MudText Typo="Typo.body2">@gratis.RequesterMessage</MudText>
+                    <MudText Typo="Typo.body2">@Contract.RequesterMessage</MudText>
                 </text>),
-            GratisTaggingContract => (RenderFragment)(@<text></text>),
-            BountyTaggingContract bounty => 
+            "Gratis" => (RenderFragment)(@<text></text>),
+            "Bounty" => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">報酬</MudText>
-                    <MudText Typo="Typo.body2">Bounty (AssetId: @bounty.OfferedRewardAssetId)</MudText>
+                    <MudText Typo="Typo.body2">Bounty (AssetId: @Contract.OfferedRewardAssetId)</MudText>
                 </text>),
-            PublicOfferTriggerContract => 
+            "Trigger" => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">Public Offer Trigger</MudText>

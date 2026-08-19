@@ -176,8 +176,8 @@
     {
         if (request.Status != TradeStatus.Proposed) return false;
 
-        if (request is PublicOfferTriggerContract) return request.RequesterUserId == _currentUserId;
-        if (request is BountyTaggingContract) return true;
+        if (request.ContractType == "Trigger") return request.RequesterUserId == _currentUserId;
+        if (request.ContractType == "Bounty") return true;
 
         return request.TagOwnerUserId == _currentUserId;
     }

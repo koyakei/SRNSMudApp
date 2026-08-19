@@ -1,3 +1,4 @@
+using SRNSMudApp.Models.Unions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -44,8 +45,7 @@ public class ItemTagServiceTests : IDisposable
         var user = new ApplicationUser { Id = userId, UserName = "TestUser" };
         _dbContext.Users.Add(user);
 
-        var request = new GratisTaggingContract
-        {
+        var request = new TaggingRequestEntity { ContractType = "Gratis", 
             OwnerId = userId,
             TargetItemId = 1,
             RequestedTagId = 1,

@@ -181,14 +181,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.TargetTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // --- TaggingRequestEntity TPH Configuration ---
+        // --- TaggingRequestEntity Configuration ---
         _ = builder.Entity<TaggingRequestEntity>()
-            .ToTable("TaggingRequestContracts")
-            .HasDiscriminator<string>("ContractType")
-            .HasValue<GratisTaggingContract>("Gratis")
-            .HasValue<MutualTaggingContract>("Mutual")
-            .HasValue<PublicOfferTriggerContract>("Trigger")
-            .HasValue<BountyTaggingContract>("Bounty");
+            .ToTable("TaggingRequestContracts");
 
         // Restrict BaseEntity.OwnerId to prevent multiple cascade paths
         _ = builder.Entity<TaggingRequestEntity>()
@@ -227,19 +222,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasMany(e => e.Tags)
             .WithMany();
 
-        _ = builder.Entity<BountyTaggingContract>()
+        // Merged subclass navigation properties
+        _ = builder.Entity<TaggingRequestEntity>()
             .HasOne(e => e.OfferedRewardAsset)
             .WithMany()
             .HasForeignKey(e => e.OfferedRewardAssetId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        _ = builder.Entity<MutualTaggingContract>()
+        _ = builder.Entity<TaggingRequestEntity>()
             .HasOne(e => e.OfferedTargetItem)
             .WithMany()
             .HasForeignKey(e => e.OfferedTargetItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        _ = builder.Entity<MutualTaggingContract>()
+        _ = builder.Entity<TaggingRequestEntity>()
             .HasOne(e => e.OfferedTag)
             .WithMany()
             .HasForeignKey(e => e.OfferedTagId)
@@ -263,7 +259,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.OfferedTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        _ = builder.Entity<PublicOfferTriggerContract>()
+        _ = builder.Entity<TaggingRequestEntity>()
             .HasOne(e => e.TargetPublicTradeOffer)
             .WithMany()
             .HasForeignKey(e => e.TargetPublicTradeOfferId)

@@ -104,8 +104,9 @@ public class DuplicateTaggingRequestCancelE2ETests : PageTest
             itemId = item.Id;
 
             // ユーザーA のリクエスト
-            var contractA = new GratisTaggingContract
-            {
+            var contractA = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = userAId,
                 RequesterUserId = userAId,
                 TagOwnerUserId = tagOwnerUserId,
@@ -117,8 +118,9 @@ public class DuplicateTaggingRequestCancelE2ETests : PageTest
             };
 
             // ユーザーB のリクエスト（同じタグ・同じアイテム）
-            var contractB = new GratisTaggingContract
-            {
+            var contractB = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = userBId,
                 RequesterUserId = userBId,
                 TagOwnerUserId = tagOwnerUserId,

@@ -116,8 +116,9 @@
 
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 
-        var bounty = new BountyTaggingContract
+        var bounty = new TaggingRequestEntity
         {
+            ContractType = "Bounty",
             OwnerId = _currentUserId,
             RequesterUserId = _currentUserId,
             TagOwnerUserId = _selectedTag.OwnerId, // Base property for who owns the requested tag

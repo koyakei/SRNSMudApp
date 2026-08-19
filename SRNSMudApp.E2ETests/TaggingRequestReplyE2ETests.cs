@@ -80,8 +80,9 @@ public class TaggingRequestReplyE2ETests : PageTest
             Item item = await db.Items.FirstAsync(i => i.Content == itemContent);
             Tag tag = await db.Tags.FirstAsync(t => t.Name == tagName);
 
-            var contract = new GratisTaggingContract
-            {
+            var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = requesterUser.Id,
                 RequesterUserId = requesterUser.Id,
                 TagOwnerUserId = tagOwnerUser.Id,

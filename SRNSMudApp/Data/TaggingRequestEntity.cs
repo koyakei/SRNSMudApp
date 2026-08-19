@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SRNSMudApp.Data;
 
-public abstract class TaggingRequestEntity : BaseEntity, ITaggable
+public class TaggingRequestEntity : BaseEntity, ITaggable
 {
     [MaxLength(50)] public string RequesterUserId { get; set; } = string.Empty;
 
@@ -30,6 +30,29 @@ public abstract class TaggingRequestEntity : BaseEntity, ITaggable
     [MaxLength(1000)] public string? RejectComment { get; set; }
 
     public DateTimeOffset? RejectedAt { get; set; }
+
+    // --- Merged Subclass Properties ---
+
+    // Type discriminator equivalent
+    [MaxLength(50)] public string ContractType { get; set; } = string.Empty;
+
+    // From GratisTaggingContract
+    [MaxLength(200)] public string? RequesterMessage { get; set; }
+
+    // From MutualTaggingContract
+    public int? OfferedTargetItemId { get; set; }
+    public Item? OfferedTargetItem { get; set; }
+
+    public int? OfferedTagId { get; set; }
+    public Tag? OfferedTag { get; set; }
+
+    // From PublicOfferTriggerContract
+    public int? TargetPublicTradeOfferId { get; set; }
+    public PublicTradeOffer? TargetPublicTradeOffer { get; set; }
+
+    // From BountyTaggingContract
+    public int? OfferedRewardAssetId { get; set; }
+    public RightAsset? OfferedRewardAsset { get; set; }
 
     // ITaggable Implementation
     public virtual ICollection<Tag> Tags { get; init; } = [];

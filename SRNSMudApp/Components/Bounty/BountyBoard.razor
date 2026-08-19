@@ -83,7 +83,7 @@
 
     private bool _isLoading = true;
     private string _currentUserId = string.Empty;
-    private List<BountyTaggingContract> _bounties = [];
+    private List<TaggingRequestEntity> _bounties = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,7 +99,7 @@
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 
         _bounties = await dbContext.TaggingRequestEntities
-            .OfType<BountyTaggingContract>()
+            .Where(b => b.ContractType == "Bounty")
             .Include(b => b.TargetItem)
             .Include(b => b.RequestedTag)
             .Include(b => b.OfferedRewardAsset).ThenInclude(a => a.TargetTag)
@@ -123,7 +123,7 @@
         }
     }
 
-    private async Task FulfillBounty(BountyTaggingContract bounty)
+    private async Task FulfillBounty(TaggingRequestEntity bounty)
     {
         var parameters = new DialogParameters<FulfillBountyDialog> { { x => x.Bounty, bounty } };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };

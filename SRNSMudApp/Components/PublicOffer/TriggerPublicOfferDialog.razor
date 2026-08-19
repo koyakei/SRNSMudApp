@@ -104,8 +104,9 @@
 
         await using var dbContext = await DbFactory.CreateDbContextAsync();
 
-        var triggerContract = new PublicOfferTriggerContract
+        var triggerContract = new TaggingRequestEntity
         {
+            ContractType = "Trigger",
             OwnerId = _currentUserId,
             RequesterUserId = _currentUserId,
             TagOwnerUserId = Offer.OwnerId,

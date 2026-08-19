@@ -1,40 +1,81 @@
 #region
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
-
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 
 #endregion
 
 namespace SRNSMudApp.Services;
 
-/// <summary>
-///     IItemTagService の EF Core 実装。
-///     ItemCard.razor の @code から DbFactory を直接使っていたロジックをここに集約する。
-/// </summary>
+public record OperationAuthorized;
+public record OperationUnauthorized(string Reason);
+[SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
+public union AuthorizationState(OperationAuthorized, OperationUnauthorized);
+
+public record TagRelationExists;
+public record TagRelationDoesNotExist;
+[SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
+public union TagRelationState(TagRelationExists, TagRelationDoesNotExist);
+
+public record SameTag;
+public record DifferentTag;
+[SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
+public union TagComparisonState(SameTag, DifferentTag);
+
+public record SameWeight;
+public record DifferentWeight;
+[SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
+public union WeightComparisonState(SameWeight, DifferentWeight);
+
 public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
 {
+    private static AuthorizationState CheckAuth(bool isAuthorized, string unauthMessage) =>
+        isAuthorized switch
+        {
+            true => new OperationAuthorized(),
+            false => new OperationUnauthorized(unauthMessage)
+        };
+
+    private static TagRelationState CheckTagRelation(bool exists) =>
+        exists switch
+        {
+            true => new TagRelationExists(),
+            false => new TagRelationDoesNotExist()
+        };
+
     public async Task<string?> AddTagToItemAsync(int itemId, int tagId, string currentUserId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         Tag? tagFromDb = await context.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
-        if (tagFromDb == null)
-        {
-            return "タグが見つかりません。";
-        }
+        Option<Tag> tagOption = Option<Tag>.Create(tagFromDb);
 
-        if (tagFromDb.OwnerId != currentUserId)
+        return await (tagOption switch
         {
-            return "タグの作成者ではないため、追加する権限がありません。";
-        }
+            None _ => Task.FromResult<string?>("タグが見つかりません。"),
+            Some<Tag> someTag => CheckAuth(someTag.Value.OwnerId == currentUserId, "タグの作成者ではないため、追加する権限がありません。") switch
+            {
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ProcessAddTagRelation(context, itemId, tagId, currentUserId, someTag.Value)
+            },
+            null => Task.FromResult<string?>("タグが見つかりません。")
+        });
+    }
 
+    private static async Task<string?> ProcessAddTagRelation(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
+    {
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == tagId);
-        if (alreadyExists)
+        return await (CheckTagRelation(alreadyExists) switch
         {
-            return "このタグは既に追加されています。";
-        }
+            TagRelationExists _ => Task.FromResult<string?>("このタグは既に追加されています。"),
+            TagRelationDoesNotExist _ => ExecuteAddTagRelationAsync(context, itemId, tagId, currentUserId, tagFromDb)
+        });
+    }
 
+    private static async Task<string?> ExecuteAddTagRelationAsync(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
+    {
         var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
         _ = context.TagRelations.Add(newRelation);
 
@@ -76,16 +117,22 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         TagRelation? relation = await context.TagRelations.FindAsync(relationId);
-        if (relation == null)
-        {
-            return "タグの関連付けが見つかりません。";
-        }
+        Option<TagRelation> relationOption = Option<TagRelation>.Create(relation);
 
-        if (relation.OwnerId != currentUserId)
+        return await (relationOption switch
         {
-            return "関連付けた本人ではないため、解除する権限がありません。";
-        }
+            None _ => Task.FromResult<string?>("タグの関連付けが見つかりません。"),
+            Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、解除する権限がありません。") switch
+            {
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ExecuteRemoveTagRelationAsync(context, someRel.Value, currentUserId)
+            },
+            null => Task.FromResult<string?>("タグの関連付けが見つかりません。")
+        });
+    }
 
+    private static async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
+    {
         _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
@@ -97,29 +144,37 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
 
         Tag? tag = await context.Tags.FindAsync(relation.TagId);
-        if (tag != null)
+        Option<Tag> tagOption = Option<Tag>.Create(tag);
+        
+        _ = tagOption switch
         {
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight -= relation.Weight;
-            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-            {
-                TagId = tag.Id,
-                TagNameSnapshot = tag.Name,
-                SourceType = "TagRelationDelete",
-                SourceId = relation.Id,
-                PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
-                Delta = -relation.Weight,
-                IsOwnerAction = true,
-                Reason = "タグの削除",
-                OwnerId = currentUserId
-            });
-        }
+            Some<Tag> someTag => ProcessTagWeightRemoval(context, someTag.Value, relation, currentUserId),
+            _ => true
+        };
 
         _ = context.Remove(relation);
-
         _ = await context.SaveChangesAsync();
         return null;
+    }
+
+    private static bool ProcessTagWeightRemoval(ApplicationDbContext context, Tag tag, TagRelation relation, string currentUserId)
+    {
+        var prevWeight = tag.CachedWeight;
+        tag.CachedWeight -= relation.Weight;
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tag.Id,
+            TagNameSnapshot = tag.Name,
+            SourceType = "TagRelationDelete",
+            SourceId = relation.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tag.CachedWeight,
+            Delta = -relation.Weight,
+            IsOwnerAction = true,
+            Reason = "タグの削除",
+            OwnerId = currentUserId
+        });
+        return true;
     }
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
@@ -127,52 +182,67 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null)
-        {
-            return UpdateWeightResult.NotFound;
-        }
+        Option<TagRelation> entityOption = Option<TagRelation>.Create(entity);
 
-        if (entity.OwnerId != currentUserId)
+        return await (entityOption switch
         {
-            return UpdateWeightResult.NoPermission;
-        }
+            None _ => Task.FromResult(UpdateWeightResult.NotFound),
+            Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "") switch
+            {
+                OperationUnauthorized _ => Task.FromResult(UpdateWeightResult.NoPermission),
+                OperationAuthorized _ => ExecuteUpdateTagWeightAsync(context, someRel.Value, delta, currentUserId)
+            },
+            null => Task.FromResult(UpdateWeightResult.NotFound)
+        });
+    }
 
+    private static async Task<UpdateWeightResult> ExecuteUpdateTagWeightAsync(ApplicationDbContext context, TagRelation entity, int delta, string currentUserId)
+    {
         entity.Weight += delta;
         entity.UpdatedDate = DateTime.UtcNow;
 
         Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        if (tag != null)
-        {
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight += delta;
-            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-            {
-                TagId = tag.Id,
-                TagNameSnapshot = tag.Name,
-                SourceType = "TagRelationUpdate",
-                SourceId = entity.Id,
-                PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
-                Delta = delta,
-                IsOwnerAction = true,
-                Reason = "ユーザーによる直接ウェイト変更",
-                OwnerId = currentUserId
-            });
+        Option<Tag> tagOption = Option<Tag>.Create(tag);
 
-            _ = context.TimelineEvents!.Add(new TimelineEvent
-            {
-                OwnerId = currentUserId,
-                TargetType = "Item",
-                TargetItemId = entity.ItemId,
-                FollowedTagId = entity.TagId,
-                EventType = "Update",
-                PreviousWeight = entity.Weight - delta,
-                NewWeight = entity.Weight
-            });
-        }
+        _ = tagOption switch
+        {
+            Some<Tag> someTag => ProcessTagWeightUpdate(context, someTag.Value, entity, delta, currentUserId),
+            _ => true
+        };
 
         _ = await context.SaveChangesAsync();
         return UpdateWeightResult.Success;
+    }
+
+    private static bool ProcessTagWeightUpdate(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
+    {
+        var prevWeight = tag.CachedWeight;
+        tag.CachedWeight += delta;
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tag.Id,
+            TagNameSnapshot = tag.Name,
+            SourceType = "TagRelationUpdate",
+            SourceId = entity.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tag.CachedWeight,
+            Delta = delta,
+            IsOwnerAction = true,
+            Reason = "ユーザーによる直接ウェイト変更",
+            OwnerId = currentUserId
+        });
+
+        _ = context.TimelineEvents!.Add(new TimelineEvent
+        {
+            OwnerId = currentUserId,
+            TargetType = "Item",
+            TargetItemId = entity.ItemId,
+            FollowedTagId = entity.TagId,
+            EventType = "Update",
+            PreviousWeight = entity.Weight - delta,
+            NewWeight = entity.Weight
+        });
+        return true;
     }
 
     public async Task<string?> SetTagWeightAsync(int relationId, int newWeight, string currentUserId)
@@ -180,47 +250,65 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null)
-        {
-            return "タグの関連付けが見つかりません。";
-        }
+        Option<TagRelation> entityOption = Option<TagRelation>.Create(entity);
 
-        if (entity.OwnerId != currentUserId)
+        return await (entityOption switch
         {
-            return "関連付けた本人ではないため、Weightを変更する権限がありません。";
-        }
+            None _ => Task.FromResult<string?>("タグの関連付けが見つかりません。"),
+            Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、Weightを変更する権限がありません。") switch
+            {
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ((someRel.Value.Weight == newWeight) switch
+                {
+                    true => (WeightComparisonState)new SameWeight(),
+                    false => new DifferentWeight()
+                }) switch
+                {
+                    SameWeight _ => Task.FromResult<string?>(null),
+                    DifferentWeight _ => ExecuteSetTagWeightAsync(context, someRel.Value, newWeight, currentUserId)
+                }
+            },
+            null => Task.FromResult<string?>("タグの関連付けが見つかりません。")
+        });
+    }
 
-        if (newWeight == entity.Weight)
-        {
-            return null;
-        }
-
+    private static async Task<string?> ExecuteSetTagWeightAsync(ApplicationDbContext context, TagRelation entity, int newWeight, string currentUserId)
+    {
         var delta = newWeight - entity.Weight;
         entity.Weight = newWeight;
         entity.UpdatedDate = DateTime.UtcNow;
 
         Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        if (tag != null)
+        Option<Tag> tagOption = Option<Tag>.Create(tag);
+
+        _ = tagOption switch
         {
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight += delta;
-            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-            {
-                TagId = tag.Id,
-                TagNameSnapshot = tag.Name,
-                SourceType = "TagRelationUpdate",
-                SourceId = entity.Id,
-                PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
-                Delta = delta,
-                IsOwnerAction = true,
-                Reason = "ユーザーによる直接ウェイト一括変更",
-                OwnerId = currentUserId
-            });
-        }
+            Some<Tag> someTag => ProcessTagWeightSet(context, someTag.Value, entity, delta, currentUserId),
+            _ => true
+        };
 
         _ = await context.SaveChangesAsync();
         return null;
+    }
+
+    private static bool ProcessTagWeightSet(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
+    {
+        var prevWeight = tag.CachedWeight;
+        tag.CachedWeight += delta;
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tag.Id,
+            TagNameSnapshot = tag.Name,
+            SourceType = "TagRelationUpdate",
+            SourceId = entity.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tag.CachedWeight,
+            Delta = delta,
+            IsOwnerAction = true,
+            Reason = "ユーザーによる直接ウェイト一括変更",
+            OwnerId = currentUserId
+        });
+        return true;
     }
 
     public async Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId)
@@ -228,27 +316,40 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
-        if (entity == null)
-        {
-            return "タグの関連付けが見つかりません。";
-        }
+        Option<TagRelation> entityOption = Option<TagRelation>.Create(entity);
 
-        if (entity.OwnerId != currentUserId)
+        return await (entityOption switch
         {
-            return "関連付けた本人ではないため、変更する権限がありません。";
-        }
+            None _ => Task.FromResult<string?>("タグの関連付けが見つかりません。"),
+            Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、変更する権限がありません。") switch
+            {
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ((someRel.Value.TagId == newTagId) switch
+                {
+                    true => (TagComparisonState)new SameTag(),
+                    false => new DifferentTag()
+                }) switch
+                {
+                    SameTag _ => Task.FromResult<string?>(null),
+                    DifferentTag _ => ProcessChangeItemTagRelation(context, someRel.Value, newTagId, itemId)
+                }
+            },
+            null => Task.FromResult<string?>("タグの関連付けが見つかりません。")
+        });
+    }
 
-        if (entity.TagId == newTagId)
-        {
-            return null;
-        }
-
+    private static async Task<string?> ProcessChangeItemTagRelation(ApplicationDbContext context, TagRelation entity, int newTagId, int itemId)
+    {
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == newTagId);
-        if (alreadyExists)
+        return await (CheckTagRelation(alreadyExists) switch
         {
-            return "変更先のタグは既に追加されています。";
-        }
+            TagRelationExists _ => Task.FromResult<string?>("変更先のタグは既に追加されています。"),
+            TagRelationDoesNotExist _ => ExecuteChangeItemTagAsync(context, entity, newTagId)
+        });
+    }
 
+    private static async Task<string?> ExecuteChangeItemTagAsync(ApplicationDbContext context, TagRelation entity, int newTagId)
+    {
         entity.TagId = newTagId;
         entity.UpdatedDate = DateTime.UtcNow;
 
@@ -260,13 +361,17 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
-        var alreadyExists = await context.TagRelationToTags
-            .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == tagId);
-        if (alreadyExists)
+        var alreadyExists = await context.TagRelationToTags.AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == tagId);
+        
+        return await (CheckTagRelation(alreadyExists) switch
         {
-            return "このタグは既に追加されています。";
-        }
+            TagRelationExists _ => Task.FromResult<string?>("このタグは既に追加されています。"),
+            TagRelationDoesNotExist _ => ExecuteAddTagToTagAsync(context, targetTagId, tagId, currentUserId)
+        });
+    }
 
+    private static async Task<string?> ExecuteAddTagToTagAsync(ApplicationDbContext context, int targetTagId, int tagId, string currentUserId)
+    {
         var newRelation = new TagRelationToTag
         {
             TargetTagId = targetTagId,
@@ -275,33 +380,40 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             OwnerId = currentUserId
         };
         _ = context.Set<TagRelationToTag>().Add(newRelation);
-
         _ = await context.SaveChangesAsync();
 
         Tag? tagFromDb = await context.Tags.FindAsync(tagId);
-        if (tagFromDb != null)
+        Option<Tag> tagOption = Option<Tag>.Create(tagFromDb);
+
+        await (tagOption switch
         {
-            var prevWeight = tagFromDb.CachedWeight;
-            tagFromDb.CachedWeight += 1;
-
-            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-            {
-                TagId = tagFromDb.Id,
-                TagNameSnapshot = tagFromDb.Name,
-                SourceType = "TagRelationToTagInsert",
-                SourceId = newRelation.Id,
-                PreviousWeight = prevWeight,
-                NewWeight = tagFromDb.CachedWeight,
-                Delta = 1,
-                IsOwnerAction = true,
-                Reason = "タグの新規追加",
-                OwnerId = currentUserId
-            });
-
-            _ = await context.SaveChangesAsync();
-        }
+            Some<Tag> someTag => ExecuteAddTagToTagLedgerAsync(context, someTag.Value, newRelation.Id, currentUserId),
+            _ => Task.CompletedTask
+        });
 
         return null;
+    }
+
+    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int relationId, string currentUserId)
+    {
+        var prevWeight = tagFromDb.CachedWeight;
+        tagFromDb.CachedWeight += 1;
+
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tagFromDb.Id,
+            TagNameSnapshot = tagFromDb.Name,
+            SourceType = "TagRelationToTagInsert",
+            SourceId = relationId,
+            PreviousWeight = prevWeight,
+            NewWeight = tagFromDb.CachedWeight,
+            Delta = 1,
+            IsOwnerAction = true,
+            Reason = "タグの新規追加",
+            OwnerId = currentUserId
+        });
+
+        _ = await context.SaveChangesAsync();
     }
 
     public async Task<string?> RemoveTagToTagRelationAsync(int relationId, string currentUserId)
@@ -309,79 +421,118 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
-        if (entity == null)
-        {
-            return "タグの関連付けが見つかりません。";
-        }
+        Option<TagRelationToTag> entityOption = Option<TagRelationToTag>.Create(entity);
 
-        if (entity.OwnerId != currentUserId)
+        return await (entityOption switch
         {
-            return "関連付けた本人ではないため、解除する権限がありません。";
-        }
-
-        Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        if (tag != null)
-        {
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight -= entity.Weight;
-
-            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+            None _ => Task.FromResult<string?>("タグの関連付けが見つかりません。"),
+            Some<TagRelationToTag> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、解除する権限がありません。") switch
             {
-                TagId = tag.Id,
-                TagNameSnapshot = tag.Name,
-                SourceType = "TagRelationToTagDelete",
-                SourceId = entity.Id,
-                PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
-                Delta = -entity.Weight,
-                IsOwnerAction = true,
-                Reason = "タグの関連付け解除",
-                OwnerId = currentUserId
-            });
-        }
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ExecuteRemoveTagToTagRelationAsync(context, someRel.Value, currentUserId)
+            },
+            null => Task.FromResult<string?>("タグの関連付けが見つかりません。")
+        });
+    }
+
+    private static async Task<string?> ExecuteRemoveTagToTagRelationAsync(ApplicationDbContext context, TagRelationToTag entity, string currentUserId)
+    {
+        Tag? tag = await context.Tags.FindAsync(entity.TagId);
+        Option<Tag> tagOption = Option<Tag>.Create(tag);
+
+        _ = tagOption switch
+        {
+            Some<Tag> someTag => ProcessTagToTagWeightRemoval(context, someTag.Value, entity, currentUserId),
+            _ => true
+        };
 
         _ = context.Remove(entity);
         _ = await context.SaveChangesAsync();
         return null;
     }
 
-    public async Task<string?> SetParentTagAsync(
-        int parentTagId,
-        int childTagId,
-        string currentUserId,
-        IReadOnlyList<Tag> allTagsForCycleCheck)
+    private static bool ProcessTagToTagWeightRemoval(ApplicationDbContext context, Tag tag, TagRelationToTag entity, string currentUserId)
     {
-        if (childTagId == parentTagId)
-        {
-            return "自分自身を親にすることはできません。";
-        }
+        var prevWeight = tag.CachedWeight;
+        tag.CachedWeight -= entity.Weight;
 
-        // 循環参照の簡易チェック（in-memory で実施）
+        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        {
+            TagId = tag.Id,
+            TagNameSnapshot = tag.Name,
+            SourceType = "TagRelationToTagDelete",
+            SourceId = entity.Id,
+            PreviousWeight = prevWeight,
+            NewWeight = tag.CachedWeight,
+            Delta = -entity.Weight,
+            IsOwnerAction = true,
+            Reason = "タグの関連付け解除",
+            OwnerId = currentUserId
+        });
+        return true;
+    }
+
+    public async Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Tag> allTagsForCycleCheck)
+    {
+        return await (((childTagId == parentTagId) switch
+        {
+            true => (TagComparisonState)new SameTag(),
+            false => new DifferentTag()
+        }) switch
+        {
+            SameTag _ => Task.FromResult<string?>("自分自身を親にすることはできません。"),
+            DifferentTag _ => ProcessParentTagCycleCheck(parentTagId, childTagId, currentUserId, allTagsForCycleCheck)
+        });
+    }
+
+    private async Task<string?> ProcessParentTagCycleCheck(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Tag> allTagsForCycleCheck)
+    {
+        bool hasCycle = false;
         Tag? parentTag = allTagsForCycleCheck.FirstOrDefault(t => t.Id == parentTagId);
         var current = parentTag?.ParentTagId;
+        
         while (current != null)
         {
-            if (current == childTagId)
+            hasCycle = (current == childTagId) switch
             {
-                return "循環参照になるため親に設定できません。";
-            }
-
-            Tag? p = allTagsForCycleCheck.FirstOrDefault(t => t.Id == current);
-            current = p?.ParentTagId;
+                true => true,
+                false => hasCycle
+            };
+            
+            current = hasCycle switch
+            {
+                true => null, // Break loop
+                false => allTagsForCycleCheck.FirstOrDefault(t => t.Id == current)?.ParentTagId
+            };
         }
 
+        return await (hasCycle switch
+        {
+            true => Task.FromResult<string?>("循環参照になるため親に設定できません。"),
+            false => ExecuteSetParentTagAsync(parentTagId, childTagId, currentUserId)
+        });
+    }
+
+    private async Task<string?> ExecuteSetParentTagAsync(int parentTagId, int childTagId, string currentUserId)
+    {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Tag? entity = await context.Tags.FindAsync(childTagId);
-        if (entity == null)
-        {
-            return "対象タグが見つかりません。";
-        }
+        Option<Tag> entityOption = Option<Tag>.Create(entity);
 
-        if (entity.OwnerId != currentUserId)
+        return await (entityOption switch
         {
-            return "対象タグの作成者ではないため、親タグを変更する権限がありません。";
-        }
+            None _ => Task.FromResult<string?>("対象タグが見つかりません。"),
+            Some<Tag> someEntity => CheckAuth(someEntity.Value.OwnerId == currentUserId, "対象タグの作成者ではないため、親タグを変更する権限がありません。") switch
+            {
+                OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
+                OperationAuthorized _ => ProcessSaveParentTag(context, someEntity.Value, parentTagId)
+            },
+            null => Task.FromResult<string?>("対象タグが見つかりません。")
+        });
+    }
 
+    private static async Task<string?> ProcessSaveParentTag(ApplicationDbContext context, Tag entity, int parentTagId)
+    {
         entity.ParentTagId = parentTagId;
         entity.UpdatedDate = DateTime.UtcNow;
 
@@ -424,7 +575,6 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = context.Items!.Add(reply);
         _ = await context.SaveChangesAsync();
 
-        // UIの即時更新用に、保存したリプライに関連情報を結合して返す
         return await context.Items
             .Include(r => r.Owner)
             .Include(r => r.TagRelations)

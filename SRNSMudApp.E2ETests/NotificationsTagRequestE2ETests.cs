@@ -87,8 +87,9 @@ public partial class NotificationsTagRequestE2ETests : PageTest
             await db.SaveChangesAsync();
 
             // Create two TaggingRequestContracts (one for approve, one for reject)
-            var request1 = new GratisTaggingContract
-            {
+            var request1 = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = requester.Id,
                 RequesterUserId = requester.Id,
                 TagOwnerUserId = owner.Id,
@@ -102,8 +103,9 @@ public partial class NotificationsTagRequestE2ETests : PageTest
                 UpdatedDate = DateTime.UtcNow
             };
 
-            var request2 = new GratisTaggingContract
-            {
+            var request2 = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 OwnerId = requester.Id,
                 RequesterUserId = requester.Id,
                 TagOwnerUserId = owner.Id,

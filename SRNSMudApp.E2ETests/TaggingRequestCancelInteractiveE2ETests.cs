@@ -47,8 +47,9 @@ public class TaggingRequestCancelInteractiveE2ETests : PageTest
             await db.SaveChangesAsync();
 
             // ユーザーが自らリクエストを作成
-            var contract = new GratisTaggingContract
-            {
+            var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
                 TargetItemId = item.Id,
                 RequestedTagId = tag.Id,
                 RequesterUserId = currentUserId,

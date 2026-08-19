@@ -2,6 +2,7 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
 @using SRNSMudApp.Components.UI
+@using SRNSMudApp.Models.Unions
 @rendermode InteractiveServer
 
 @attribute [Authorize]
@@ -148,24 +149,21 @@
 
             // Incoming: User is the Tag Owner, and contract is Proposed
             var incomingContracts = await dbContext.TaggingRequestEntities
-                .Where(c => c.TagOwnerUserId == _currentUserId && c.Status == TradeStatus.Proposed && (c is GratisTaggingContract || c is MutualTaggingContract))
+                .Where(c => c.TagOwnerUserId == _currentUserId && c.Status == TradeStatus.Proposed && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
                 .Include(c => c.TargetItem)
                 .Include(c => c.RequestedTag)
+                .Include(c => c.OfferedTargetItem)
+                .Include(c => c.OfferedTag)
                 .OrderByDescending(c => c.CreatedDate)
                 .ToListAsync();
 
-            // Manual Include for Mutual specific properties because EF Core can be tricky with derived types includes without explicit casting in older versions
-            foreach (var c in incomingContracts.OfType<MutualTaggingContract>())
-            {
-                await dbContext.Entry(c).Reference(m => m.OfferedTargetItem).LoadAsync();
-                await dbContext.Entry(c).Reference(m => m.OfferedTag).LoadAsync();
-            }
-
             // Outgoing: User is the Requester
             var outgoingContracts = await dbContext.TaggingRequestEntities
-                .Where(c => c.RequesterUserId == _currentUserId && (c is GratisTaggingContract || c is MutualTaggingContract))
+                .Where(c => c.RequesterUserId == _currentUserId && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
                 .Include(c => c.TargetItem)
                 .Include(c => c.RequestedTag)
+                .Include(c => c.OfferedTargetItem)
+                .Include(c => c.OfferedTag)
                 .OrderByDescending(c => c.CreatedDate)
                 .ToListAsync();
 
@@ -179,47 +177,45 @@
 
     private async Task AcceptContract(TaggingRequestEntity contract)
     {
-        try
+        var result = await ContractService.AcceptContractAsync(contract.Id, _currentUserId);
+        _ = result switch
         {
-            await ContractService.AcceptContractAsync(contract.Id, _currentUserId);
-            Snackbar.Add("コントラクトを承認しました。", Severity.Success);
-            await LoadDataAsync();
-        }
-        catch (Exception ex)
-        {
-            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
-        }
+            Success<string> => HandleSuccess("コントラクトを承認しました。"),
+            Failure f => HandleFailure(f.ErrorMessage)
+        };
     }
 
     private async Task RejectContract(TaggingRequestEntity contract)
     {
-        try
+        var result = await ContractService.CancelContractAsync(contract.Id, _currentUserId);
+        _ = result switch
         {
-            await ContractService.CancelContractAsync(contract.Id, _currentUserId);
-            Snackbar.Add("コントラクトを拒否しました。", Severity.Success);
-            await LoadDataAsync();
-        }
-        catch (Exception ex)
-        {
-            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
-        }
+            Success<string> => HandleSuccess("コントラクトを拒否しました。"),
+            Failure f => HandleFailure(f.ErrorMessage)
+        };
     }
 
     private async Task CancelContract(TaggingRequestEntity contract)
     {
-        try
+        var result = await ContractService.CancelContractAsync(contract.Id, _currentUserId);
+        _ = result switch
         {
-            await ContractService.CancelContractAsync(contract.Id, _currentUserId);
-            Snackbar.Add("コントラクトを取り下げました。", Severity.Success);
-            await LoadDataAsync();
-        }
-        catch (Exception ex)
-        {
-            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-            Snackbar.Add($"エラーが発生しました: {msg}", Severity.Error);
-        }
+            Success<string> => HandleSuccess("コントラクトを取り下げました。"),
+            Failure f => HandleFailure(f.ErrorMessage)
+        };
+    }
+
+    private bool HandleSuccess(string message)
+    {
+        Snackbar.Add(message, Severity.Success);
+        _ = LoadDataAsync();
+        return true;
+    }
+
+    private bool HandleFailure(string message)
+    {
+        Snackbar.Add($"エラーが発生しました: {message}", Severity.Error);
+        return false;
     }
 
 }

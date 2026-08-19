@@ -1,5 +1,6 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
+@using SRNSMudApp.Models.Unions
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TaggingContractService ContractService
 @inject ISnackbar Snackbar
@@ -73,7 +74,7 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    [Parameter] public BountyTaggingContract Bounty { get; set; } = null!;
+    [Parameter] public TaggingRequestEntity Bounty { get; set; } = null!;
 
     private MudForm? _form;
     private bool _isValid = true;
@@ -132,16 +133,26 @@
             if (!_isValid) return;
         }
 
-        try
+        var result = await ContractService.AcceptContractAsync(Bounty.Id, _currentUserId, _canFulfillAsOwner ? null : _selectedAsset?.Id);
+
+        _ = result switch
         {
-            await ContractService.AcceptContractAsync(Bounty.Id, _currentUserId, _canFulfillAsOwner ? null : _selectedAsset?.Id);
-            Snackbar.Add("依頼を完了しました！", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
-        }
+            Success<string> => HandleSuccess(),
+            Failure f => HandleFailure(f.ErrorMessage)
+        };
+    }
+
+    private bool HandleSuccess()
+    {
+        Snackbar.Add("依頼を完了しました！", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+        return true;
+    }
+
+    private bool HandleFailure(string message)
+    {
+        Snackbar.Add($"エラーが発生しました: {message}", Severity.Error);
+        return false;
     }
 
     private void Cancel()
