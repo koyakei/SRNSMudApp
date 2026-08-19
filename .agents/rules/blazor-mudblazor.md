@@ -4,11 +4,10 @@ description: MudBlazor and Blazor UI implementation rules
 ---
 
 ---
-description: 
-globs:
-  - "**/*.razor"
-  - "**/*.razor.cs"
-alwaysApply: false
+trigger: always_on
+globs: ["/*.cs", "/*.razor"]
+Blazor Architecture Constraints
+Activation: このルールは、C# クラスおよび Blazor コンポーネントを扱う際に常に適用されます。
 ---
 
 # Blazor / MudBlazor Implementation Rules
@@ -104,3 +103,17 @@ After a change:
 - Do not change package versions without evidence.
 - Do not replace a custom implementation solely to remove an IDE warning if it changes behavior.
 - If the requirement is ambiguous, explain the ambiguity and present a minimal patch and an alternative.
+
+
+設計評価プロセス (Chain of Thought Enforcement)
+コードの修正や追加を行う前に、必ず自身の内部推論（CoT）プロセスにおいて、対象となるコンポーネントやクラスの現在のCBOとLCOM4を概算してください。
+
+Blazor固有の制約: @code ブロック内にデータフェッチ（HttpClientの直接利用など）や複雑な状態管理ロジックを記述しないでください。これは「神コンポーネント（God Component）」を生み出し、CBOとRFCを悪化させます。
+
+機能を追加する際は、ビジネスロジックを独立したC#のサービスクラス（またはStateContainer）に抽出し、インターフェースを介してコンポーネントにDI（依存性の注入）を行ってください。
+
+新しいサービスクラスを作成する際は、そのクラスの LCOM4 が 1（すべてのメソッドとフィールドが関連している状態）を維持できる単一責任となっているかを確認してください。
+
+これらの設定により、エージェントはBlazorコンポーネント内に処理を詰め込むことを避け、依存性の注入（DI）やFacadeパターンを利用した疎結合（低CBO・低RFC）かつ高凝集（LCOM4=1）な設計を自律的に模索するようになります。  
+
+さらに確実性を高める場合は、C#環境向けの静的解析ツール（NetArchTest や NDepend など）を実行するスクリプトを .agent/skills/ 配下に定義し、エージェントに定期的に依存関係を検証させる運用が推奨されます。
