@@ -111,8 +111,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         };
 
         request.Status = TradeStatus.Rejected;
-        request.RejectedAt = DateTimeOffset.UtcNow;
-        request.RejectComment = comment;
+        request.Rejection = new SRNSMudApp.Models.Unions.RejectionReason(comment ?? "");
 
         _ = await context.SaveChangesAsync();
     }

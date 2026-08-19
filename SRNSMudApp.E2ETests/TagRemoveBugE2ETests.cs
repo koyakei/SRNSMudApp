@@ -1,3 +1,4 @@
+using SRNSMudApp.Models.Unions;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
@@ -85,7 +86,7 @@ public class TagRemoveBugE2ETests : PageTest
                 TargetItemId = item.Id,
                 RequestedTagId = tag.Id,
                 Status = TradeStatus.Proposed,
-                RequesterMessage = "Please remove this tag",
+                Payload = new GratisPayload("Please remove this tag"),
                 RequestType = TaggingRequestType.Remove
             };
             db.TaggingRequestEntities.Add(contract);

@@ -141,7 +141,7 @@ public static class ItemCardViewModel
             true => $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}",
             false => isDeleted switch
             {
-                true => highlightEvent?.PreviousWeight?.ToString(CultureInfo.InvariantCulture) ?? "",
+                true => highlightEvent?.PreviousWeight.ToString(CultureInfo.InvariantCulture) ?? "",
                 false => relation.Weight.ToString(CultureInfo.InvariantCulture)
             }
         };

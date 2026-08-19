@@ -19,14 +19,14 @@
                 <MudText Typo="Typo.subtitle2">付与するタグ</MudText>
                 <MudText Typo="Typo.body2">@Bounty.RequestedTag.Name</MudText>
             </MudListItem>
-            @switch (Bounty.OfferedRewardAsset)
+            @switch (_offeredRewardAsset)
             {
                 case not null:
                     <MudListItem>
                         <MudText Typo="Typo.subtitle2">獲得できる報酬</MudText>
                         <MudText Typo="Typo.body2"
                                  Color="Color.Success">
-                            @($"[ID: {Bounty.OfferedRewardAsset.Id}] {Bounty.OfferedRewardAsset.TargetTag?.Name} の権利")
+                            @($"[ID: {_offeredRewardAsset.Id}] {_offeredRewardAsset.TargetTag?.Name} の権利")
                         </MudText>
                     </MudListItem>
                     break;
@@ -95,6 +95,7 @@
     private bool _canFulfillAsOwner;
     private List<RightAsset> _myValidAssets = [];
     private RightAsset? _selectedAsset;
+    private RightAsset? _offeredRewardAsset;
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,6 +109,11 @@
     {
         _isLoading = true;
         await using var dbContext = await DbFactory.CreateDbContextAsync();
+
+        if (Bounty.Payload is SRNSMudApp.Models.Unions.BountyPayload bp && bp.OfferedRewardAssetId != 0)
+        {
+            _offeredRewardAsset = await dbContext.RightAssets.Include(a => a.TargetTag).FirstOrDefaultAsync(a => a.Id == bp.OfferedRewardAssetId);
+        }
 
         _canFulfillAsOwner = Bounty.RequestedTag.OwnerId == _currentUserId;
 

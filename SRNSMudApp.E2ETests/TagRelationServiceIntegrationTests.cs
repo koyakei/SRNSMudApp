@@ -67,7 +67,7 @@ public class TagRelationServiceIntegrationTests
             // ここで例外が発生しないことを確認する
             var result = await service.LinkTagToItemAsync(untrackedItem.Id, untrackedTag.Id, testUserId);
 
-            Assert.That(result, Is.InstanceOf<Success<bool>>());
+            Assert.That(result is Success<bool>, Is.True, result is Failure f ? f.ErrorMessage : "Unknown Error");
         }
 
         // 3. Assert: 正しくTagRelationが作成されているか確認する

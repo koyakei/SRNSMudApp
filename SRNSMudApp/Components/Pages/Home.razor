@@ -25,9 +25,9 @@
                         <Virtualize ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
                             <ItemContent>
                                 <div class="mb-4">
-                                    @switch (group.TargetType)
+                                    @switch (System.Text.Json.JsonSerializer.Deserialize<SRNSMudApp.Models.Unions.TimelineTarget>(group.TimelineTargetJson))
                                     {
-                                        case "Item" when group.Item != null:
+                                        case SRNSMudApp.Models.Unions.ItemTarget when group.Item != null:
                                             <SRNSMudApp.Components.UI.ItemCard Item="@group.Item"
                                                                                    AllTags="@_allTags"
                                                                                    AllTagRelationsToTags="@_allTagRelationsToTags"
@@ -38,7 +38,7 @@
                                                                                    HighlightEvents="@group.Events"
                                                                                    IsFocused="false"/>
                                             break;
-                                        case "Tag" when group.Tag != null:
+                                        case SRNSMudApp.Models.Unions.TagTarget when group.Tag != null:
                                             <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag"
                                                                                   AllTags="@_allTags"
                                                                                   CurrentUserId="@_currentUserId"
@@ -208,8 +208,7 @@
 
     public class TimelineFeedGroup
     {
-        public string TargetType { get; set; } = "";
-        public int TargetId { get; set; }
+        public string TimelineTargetJson { get; set; } = "";
         public DateTime LatestEventDate { get; set; }
 
         public Item? Item { get; set; }
@@ -235,14 +234,12 @@
             .Where(e => _followedTagIds!.Contains(e.FollowedTagId));
 
         var groupedQuery = query
-            .GroupBy(e => new { e.TargetType, TargetId = e.TargetType == "Item" ? e.TargetItemId : e.TargetTagId })
+            .GroupBy(e => e.TimelineTargetJson)
             .Select(g => new
             {
-                g.Key.TargetType,
-                g.Key.TargetId,
+                TimelineTargetJson = g.Key,
                 LatestEventDate = g.Max(e => e.CreatedDate)
             })
-            .Where(g => g.TargetId != null)
             .OrderByDescending(g => g.LatestEventDate);
 
         var totalGroups = await groupedQuery.CountAsync();
@@ -257,20 +254,20 @@
         {
             var feedGroup = new TimelineFeedGroup
             {
-                TargetType = pg.TargetType,
-                TargetId = pg.TargetId!.Value,
+                TimelineTargetJson = pg.TimelineTargetJson,
                 LatestEventDate = pg.LatestEventDate,
                 Events = await db.TimelineEvents!
-                    .Where(e => _followedTagIds!.Contains(e.FollowedTagId) && e.TargetType == pg.TargetType && (pg.TargetType == "Item" ? e.TargetItemId == pg.TargetId : e.TargetTagId == pg.TargetId))
+                    .Where(e => _followedTagIds!.Contains(e.FollowedTagId) && e.TimelineTargetJson == pg.TimelineTargetJson)
                     .Include(e => e.FollowedTag)
                     .AsNoTracking()
                     .ToListAsync()
             };
 
-            await (pg.TargetType switch
+            var target = feedGroup.Events.FirstOrDefault()?.Target;
+            await (target switch
             {
-                "Item" => LoadItemForFeedGroupAsync(db, feedGroup, pg.TargetId.Value),
-                "Tag" => LoadTagForFeedGroupAsync(db, feedGroup, pg.TargetId.Value),
+                SRNSMudApp.Models.Unions.ItemTarget it => LoadItemForFeedGroupAsync(db, feedGroup, it.TargetItemId),
+                SRNSMudApp.Models.Unions.TagTarget tt => LoadTagForFeedGroupAsync(db, feedGroup, tt.TargetTagId),
                 _ => Task.CompletedTask
             });
 
@@ -313,12 +310,12 @@
     {
         public bool Equals(TimelineFeedGroup? x, TimelineFeedGroup? y)
         {
-            return x?.TargetType == y?.TargetType && x?.TargetId == y?.TargetId;
+            return x?.TimelineTargetJson == y?.TimelineTargetJson;
         }
 
         public int GetHashCode(TimelineFeedGroup obj)
         {
-            return HashCode.Combine(obj.TargetType, obj.TargetId);
+            return HashCode.Combine(obj.TimelineTargetJson);
         }
     }
 

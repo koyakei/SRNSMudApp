@@ -4,6 +4,8 @@
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @using SRNSMudApp.Components.Tag
+@using Microsoft.AspNetCore.Components.Web
+@using SRNSMudApp.Models.Unions
 @implements IAsyncDisposable
 
 <MudCard id="@($"tag-card-{Tag.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Tag.Id))" Outlined="true"
@@ -74,7 +76,7 @@
                                         {
                                             TagId = ev.FollowedTagId,
                                             Tag = ev.FollowedTag,
-                                            Weight = ev.PreviousWeight ?? 0,
+                                            Weight = ev.PreviousWeight,
                                             OwnerId = ev.OwnerId // fake owner
                                         });
                                         break;
@@ -100,7 +102,7 @@
                         var isDeleted = highlightEvent?.EventType == "Delete";
                         var isInserted = highlightEvent?.EventType == "Insert";
                         var isUpdated = highlightEvent?.EventType == "Update";
-                        var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > (highlightEvent.PreviousWeight ?? 0);
+                        var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > highlightEvent.PreviousWeight;
 
                         var isMyTag = tr.OwnerId == CurrentUserId;
                         var bgColor = isDeleted ? "#E0E0E0" : highlightEvent != null ? "#FFEB3B" : isMyTag ? i < _chipBackgrounds.Length ? _chipBackgrounds[i] : _chipBackgrounds[0] : "#FFF9C4";
@@ -108,7 +110,7 @@
 
                         var chipId = $"tag-tagchip-{Tag.Id}-{tagId}";
                         var isActive = _activePopoverTagId == tagId && _activePopoverChipKey == chipId;
-                        var displayWeight = isUpdated || isInserted ? $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}" : isDeleted ? $"{highlightEvent?.PreviousWeight}" : tr.Weight.ToString();
+                        var displayWeight = isUpdated || isInserted ? $"{highlightEvent?.PreviousWeight} → {highlightEvent?.NewWeight}" : isDeleted ? $"{highlightEvent?.PreviousWeight}" : tr.Weight.ToString();
                         var addBtnColor = weightIncreased ? Color.Success : Color.Inherit;
 
                         <span id="@chipId"
@@ -486,8 +488,7 @@
         context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = CurrentUserId,
-            TargetType = "Tag",
-            TargetTagId = targetTag.Id,
+            Target = new TagTarget(targetTag.Id),
             FollowedTagId = selectedTag.Id,
             EventType = "Insert",
             NewWeight = 1
@@ -566,8 +567,7 @@
                 context.TimelineEvents!.Add(new TimelineEvent
                 {
                     OwnerId = CurrentUserId,
-                    TargetType = "Tag",
-                    TargetTagId = entity.TargetTagId,
+                    Target = new TagTarget(entity.TargetTagId),
                     FollowedTagId = entity.TagId,
                     EventType = "Delete",
                     PreviousWeight = entity.Weight
@@ -624,8 +624,7 @@
                         context.TimelineEvents!.Add(new TimelineEvent
                         {
                             OwnerId = CurrentUserId,
-                            TargetType = "Tag",
-                            TargetTagId = entity.TargetTagId,
+                            Target = new TagTarget(entity.TargetTagId),
                             FollowedTagId = entity.TagId,
                             EventType = "Update",
                             PreviousWeight = entity.Weight - delta,
@@ -700,8 +699,7 @@
                                 context.TimelineEvents!.Add(new TimelineEvent
                                 {
                                     OwnerId = CurrentUserId,
-                                    TargetType = "Tag",
-                                    TargetTagId = entity.TargetTagId,
+                                    Target = new TagTarget(entity.TargetTagId),
                                     FollowedTagId = entity.TagId,
                                     EventType = "Update",
                                     PreviousWeight = entity.Weight - delta,
@@ -799,7 +797,7 @@
         }
 
         // 循環参照の簡易チェック
-        var currentParent = parentTag.ParentTagId;
+        int? currentParent = parentTag.ParentTagId;
         var hasCycle = false;
         while (currentParent != null && !hasCycle)
         {

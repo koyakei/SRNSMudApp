@@ -1,4 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Data;
 
@@ -10,11 +13,18 @@ public class TagWeightLedger : BaseEntity
     // どのような操作によって発生したか（"TagRelation" など）
     public string SourceType { get; set; } = string.Empty;
 
-    // ソースとなるエンティティのID
+    // ソースとなるエンティティのID (LedgerSource Union is used to handle 0/null)
     public int? SourceId { get; set; }
     public TagRelation? TagRelation { get; set; }
 
-    // 証明: 対価として消費された（Burnされた）アセットのID (任意)
+    [NotMapped]
+    public LedgerSource Source
+    {
+        get => (SourceId ?? 0) == 0 ? new ManualSource() : new TagRelationSource(SourceId!.Value);
+        set => SourceId = value switch { TagRelationSource(var id) => id, _ => null };
+    }
+
+    // 証明: 対価として消費された（Burnされた）アセットのID (null if owner action with no contract)
     public int? ConsumedRightAssetId { get; set; }
     public RightAsset? ConsumedRightAsset { get; set; }
 

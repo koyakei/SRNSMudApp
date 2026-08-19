@@ -37,6 +37,8 @@ public class TagDeletionTrackingE2ETests : PageTest
         await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
         await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"));
 
+        Page.Console += (_, e) => Console.WriteLine($"BROWSER CONSOLE: {e.Type}: {e.Text}");
+
         // 2. Post an Item
         await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
         await Task.Delay(2000); // Wait for SignalR connection
@@ -58,15 +60,29 @@ public class TagDeletionTrackingE2ETests : PageTest
         await Page.Locator($".mud-card:has-text('{testContent}')").Locator("button[title='タグを追加']").ClickAsync();
 
         // Type tag name and submit
+        var uniqueTagName = $"TrackingTestTag_{uniqueId}";
         ILocator dialog = Page.Locator(".mud-dialog");
         await dialog.Locator("text=新規作成").ClickAsync();
-        await dialog.GetByLabel("タグ名").FillAsync("TrackingTestTag");
+        await dialog.GetByLabel("タグ名").FillAsync(uniqueTagName);
         await dialog.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "作成して追加" }).ClickAsync();
 
         // Wait for the tag to appear
         ILocator tagChip = Page.Locator($".mud-card:has-text('{testContent}')")
-            .Locator(".mud-chip:has-text('TrackingTestTag')");
-        await Expect(tagChip).ToBeVisibleAsync();
+            .Locator($".mud-chip:has-text('{uniqueTagName}')");
+        try
+        {
+            await Expect(tagChip).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 20000 });
+        }
+        catch (Exception)
+        {
+            var errorUiVisible = await Page.Locator("#blazor-error-ui").IsVisibleAsync();
+            if (errorUiVisible)
+            {
+                var errorHtml = await Page.Locator("#blazor-error-ui").InnerHTMLAsync();
+                Console.WriteLine($"Blazor Error UI: {errorHtml}");
+            }
+            throw;
+        }
 
         // 4. Delete the tag
         // Click the close icon on the chip

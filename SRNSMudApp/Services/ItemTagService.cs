@@ -82,8 +82,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
-            TargetType = "Item",
-            TargetItemId = itemId,
+            Target = new ItemTarget(itemId),
             FollowedTagId = tagId,
             EventType = "Insert",
             NewWeight = 1
@@ -136,8 +135,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
-            TargetType = "Item",
-            TargetItemId = relation.ItemId,
+            Target = new ItemTarget(relation.ItemId),
             FollowedTagId = relation.TagId,
             EventType = "Delete",
             PreviousWeight = relation.Weight
@@ -235,8 +233,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
-            TargetType = "Item",
-            TargetItemId = entity.ItemId,
+            Target = new ItemTarget(entity.ItemId),
             FollowedTagId = entity.TagId,
             EventType = "Update",
             PreviousWeight = entity.Weight - delta,

@@ -156,8 +156,6 @@
                 .Where(c => c.TagOwnerUserId == _currentUserId && c.Status == TradeStatus.Proposed && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
                 .Include(c => c.TargetItem)
                 .Include(c => c.RequestedTag)
-                .Include(c => c.OfferedTargetItem)
-                .Include(c => c.OfferedTag)
                 .OrderByDescending(c => c.CreatedDate)
                 .ToListAsync();
 
@@ -166,8 +164,6 @@
                 .Where(c => c.RequesterUserId == _currentUserId && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
                 .Include(c => c.TargetItem)
                 .Include(c => c.RequestedTag)
-                .Include(c => c.OfferedTargetItem)
-                .Include(c => c.OfferedTag)
                 .OrderByDescending(c => c.CreatedDate)
                 .ToListAsync();
 

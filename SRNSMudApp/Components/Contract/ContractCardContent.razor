@@ -16,21 +16,21 @@
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
-                    <MudText Typo="Typo.body2">@Contract.OfferedTargetItem?.Content</MudText>
-                    <MudText Typo="Typo.body2">@Contract.OfferedTag?.Name</MudText>
+                    <MudText Typo="Typo.body2">Item ID: @(Contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m ? m.OfferedTargetItemId : 0)</MudText>
+                    <MudText Typo="Typo.body2">Tag ID: @(Contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m2 ? m2.OfferedTagId : 0)</MudText>
                 </text>),
-            "Gratis" when !string.IsNullOrEmpty(Contract.RequesterMessage) => 
+            "Gratis" when !string.IsNullOrEmpty((Contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g ? g.RequesterMessage : "")) => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">メッセージ</MudText>
-                    <MudText Typo="Typo.body2">@Contract.RequesterMessage</MudText>
+                    <MudText Typo="Typo.body2">@(Contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g2 ? g2.RequesterMessage : "")</MudText>
                 </text>),
             "Gratis" => (RenderFragment)(@<text></text>),
             "Bounty" => 
                 (RenderFragment)(@<text>
                     <MudDivider Class="my-2"/>
                     <MudText Typo="Typo.subtitle2">報酬</MudText>
-                    <MudText Typo="Typo.body2">Bounty (AssetId: @Contract.OfferedRewardAssetId)</MudText>
+                    <MudText Typo="Typo.body2">Bounty (AssetId: @(Contract.Payload is SRNSMudApp.Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0))</MudText>
                 </text>),
             "Trigger" => 
                 (RenderFragment)(@<text>

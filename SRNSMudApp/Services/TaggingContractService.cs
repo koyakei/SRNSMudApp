@@ -42,7 +42,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Status = TradeStatus.Proposed,
             RequestType = requestType,
             ProposedWeight = proposedWeight,
-            RequesterMessage = message,
+            Payload = new GratisPayload(message ?? ""),
             RequestItem = requestItem
         };
 
@@ -82,12 +82,11 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             TagOwnerUserId = tagOwnerUserId,
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
-            OfferedTargetItemId = offeredTargetItemId,
-            OfferedTagId = offeredTagId,
             ConsumedRightAssetId = consumedRightAssetId,
             Status = TradeStatus.Proposed,
             RequestType = requestType,
             ProposedWeight = proposedWeight,
+            Payload = new MutualPayload(offeredTargetItemId, offeredTagId),
             RequestItem = requestItem
         };
         _ = dbContext.TaggingRequestEntities!.Add(contract);
@@ -226,7 +225,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     private Task<Result<int>> UpdateConsumedAsset(RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
-        asset.BurnedAt = DateTime.UtcNow;
+        asset.Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow);
         _ = dbContext.RightAssets!.Update(asset);
         return Task.FromResult<Result<int>>(new Success<int>(assetId));
     }
@@ -238,7 +237,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             OwnerId = ownerId,
             TargetTagId = targetTagId,
             IsBurned = true,
-            BurnedAt = DateTime.UtcNow
+            Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow)
         };
         _ = dbContext.RightAssets!.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -291,8 +290,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = executorUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
@@ -345,8 +343,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = executorUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Update",
             NewWeight = contract.ProposedWeight
@@ -376,20 +373,20 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
         consumedAsset.IsBurned = true;
-        consumedAsset.BurnedAt = DateTime.UtcNow;
+        consumedAsset.Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow);
         _ = dbContext.RightAssets!.Update(consumedAsset);
 
         var offeredTagAsset = new RightAsset
         {
             OwnerId = contract.RequesterUserId,
-            TargetTagId = contract.OfferedTagId!.Value,
+            TargetTagId = (contract.Payload is MutualPayload m2 ? m2.OfferedTagId : 0),
             IsBurned = true,
-            BurnedAt = DateTime.UtcNow
+            Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow)
         };
         _ = dbContext.RightAssets!.Add(offeredTagAsset);
 
         Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId);
-        Tag? offeredTag = await dbContext.Tags!.FindAsync(contract.OfferedTagId);
+        Tag? offeredTag = await dbContext.Tags!.FindAsync((contract.Payload is MutualPayload m3 ? m3.OfferedTagId : 0));
 
         Result<(Tag Req, Tag Off)> fetchResult = (requestedTag, offeredTag) switch
         {
@@ -456,8 +453,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = executorUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
@@ -512,8 +508,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = executorUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Delete",
             PreviousWeight = prevWeight
@@ -524,10 +519,12 @@ public class TaggingContractService(ApplicationDbContext dbContext)
 
     private async Task<Result<string>> ProcessMutualOfferedAsync(TaggingRequestEntity contract, Tag offeredTag, RightAsset offeredTagAsset, string executorUserId)
     {
+        if (contract.Payload is not MutualPayload mutualPayload) return new Failure("Mutual payload is missing");
+
         var relation2 = new TagRelation
         {
-            ItemId = contract.OfferedTargetItemId!.Value,
-            TagId = contract.OfferedTagId!.Value,
+            ItemId = mutualPayload.OfferedTargetItemId,
+            TagId = mutualPayload.OfferedTagId,
             Weight = contract.ProposedWeight,
             OwnerId = contract.TagOwnerUserId
         };
@@ -540,7 +537,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
 
         var ledger2 = new TagWeightLedger
         {
-            TagId = contract.OfferedTagId!.Value,
+            TagId = mutualPayload.OfferedTagId,
             TagNameSnapshot = offeredTag.Name,
             SourceType = "TagRelation",
             SourceId = relation2.Id,
@@ -557,9 +554,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = executorUserId,
-            TargetType = "Item",
-            TargetItemId = contract.OfferedTargetItemId!.Value,
-            FollowedTagId = contract.OfferedTagId!.Value,
+            Target = new ItemTarget(mutualPayload.OfferedTargetItemId),
+            FollowedTagId = mutualPayload.OfferedTagId,
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
@@ -571,8 +567,9 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     {
         var contract = contractData.Entity;
         
+        int targetOfferId = contract.Payload is SRNSMudApp.Models.Unions.PublicOfferPayload p ? p.TargetPublicTradeOfferId : 0;
         PublicTradeOffer? offer = await dbContext.PublicTradeOffers!
-                                     .FirstOrDefaultAsync(o => o.Id == contract.TargetPublicTradeOfferId);
+                                     .FirstOrDefaultAsync(o => o.Id == targetOfferId);
 
         Result<PublicTradeOffer> offerResult = offer switch
         {
@@ -633,7 +630,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     private Task<int> UpdateTriggerConsumedAssetAsync(RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
-        asset.BurnedAt = DateTime.UtcNow;
+        asset.Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow);
         _ = dbContext.RightAssets!.Update(asset);
         return Task.FromResult(assetId);
     }
@@ -645,7 +642,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             OwnerId = offer.OwnerId,
             TargetTagId = offer.OfferedTagId,
             IsBurned = true,
-            BurnedAt = DateTime.UtcNow
+            Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow)
         };
         _ = dbContext.RightAssets!.Add(ownerAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -703,8 +700,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = contract.RequesterUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = offer.OfferedTagId,
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
@@ -769,8 +765,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = contract.RequesterUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = offer.OfferedTagId,
             EventType = "Delete",
             PreviousWeight = prevWeight
@@ -824,7 +819,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     private Result<int> ConsumeFulfillerAsset(RightAsset asset)
     {
         asset.IsBurned = true;
-        asset.BurnedAt = DateTime.UtcNow;
+        asset.Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow);
         _ = dbContext.RightAssets!.Update(asset);
         return new Success<int>(asset.Id);
     }
@@ -836,7 +831,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             OwnerId = fulfillerUserId,
             TargetTagId = requestedTagId,
             IsBurned = true,
-            BurnedAt = DateTime.UtcNow
+            Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow)
         };
         _ = dbContext.RightAssets!.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -908,7 +903,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             PreviousWeight = previousWeight,
             NewWeight = newWeight,
             IsOwnerAction = contract.RequestedTag!.OwnerId == fulfillerUserId,
-            Reason = contract.OfferedRewardAssetId.HasValue ? "Reward Bounty Fulfilled" : "Goodwill Bounty Fulfilled",
+            Reason = (contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b && b.OfferedRewardAssetId != 0) ? "Reward Bounty Fulfilled" : "Goodwill Bounty Fulfilled",
             OwnerId = fulfillerUserId
         };
         _ = dbContext.TagWeightLedgers!.Add(ledger);
@@ -916,8 +911,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = fulfillerUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
@@ -928,7 +922,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
 
     private async Task<Result<bool>> TransferBountyRewardAsync(TaggingRequestEntity contract, string fulfillerUserId)
     {
-        var actionState = contract.OfferedRewardAssetId.HasValue switch
+        var actionState = (contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b2 && b2.OfferedRewardAssetId != 0) switch
         {
             false => new Success<bool>(true),
             true => await ProcessRewardTransferAsync(contract, fulfillerUserId)
@@ -938,8 +932,9 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     
     private async Task<Result<bool>> ProcessRewardTransferAsync(TaggingRequestEntity contract, string fulfillerUserId)
     {
+        int rewardAssetId = contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b3 ? b3.OfferedRewardAssetId : 0;
         RightAsset? rewardAsset = await dbContext.RightAssets!
-            .FirstOrDefaultAsync(a => a.Id == contract.OfferedRewardAssetId!.Value && a.OwnerId == contract.RequesterUserId);
+            .FirstOrDefaultAsync(a => a.Id == rewardAssetId && a.OwnerId == contract.RequesterUserId);
 
         Result<bool> authResult = (rewardAsset?.IsBurned == false) switch
         {
@@ -1016,7 +1011,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             PreviousWeight = previousWeight,
             NewWeight = newWeight,
             IsOwnerAction = contract.RequestedTag!.OwnerId == fulfillerUserId,
-            Reason = contract.OfferedRewardAssetId.HasValue ? "Reward Bounty Fulfilled (Remove)" : "Goodwill Bounty Fulfilled (Remove)",
+            Reason = (contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b4 && b4.OfferedRewardAssetId != 0) ? "Reward Bounty Fulfilled (Remove)" : "Goodwill Bounty Fulfilled (Remove)",
             OwnerId = fulfillerUserId
         };
         _ = dbContext.TagWeightLedgers!.Add(ledger);
@@ -1024,8 +1019,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = fulfillerUserId,
-            TargetType = "Item",
-            TargetItemId = contract.TargetItemId,
+            Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
             EventType = "Delete",
             PreviousWeight = prevWeight

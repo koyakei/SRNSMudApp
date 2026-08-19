@@ -115,7 +115,7 @@ using (IServiceScope scope = app.Services.CreateScope())
 #pragma warning disable CA1031, RCS1075
         try
         {
-            _ = await db.Database.EnsureCreatedAsync();
+            await db.Database.MigrateAsync();
         }
         catch (Exception)
         {

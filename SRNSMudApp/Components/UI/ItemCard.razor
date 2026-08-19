@@ -548,8 +548,7 @@
                 context.TimelineEvents!.Add(new TimelineEvent
                 {
                     OwnerId = CurrentUserId,
-                    TargetType = "Item",
-                    TargetItemId = Item.Id,
+                    Target = new SRNSMudApp.Models.Unions.ItemTarget(Item.Id),
                     FollowedTagId = goodTagId,
                     EventType = "Delete",
                     PreviousWeight = existingRelation.Weight
@@ -593,8 +592,7 @@
                 context.TimelineEvents!.Add(new TimelineEvent
                 {
                     OwnerId = CurrentUserId,
-                    TargetType = "Item",
-                    TargetItemId = Item.Id,
+                    Target = new SRNSMudApp.Models.Unions.ItemTarget(Item.Id),
                     FollowedTagId = goodTagId,
                     EventType = "Update",
                     PreviousWeight = existingRelation.Weight - deltaUpdate,
@@ -748,49 +746,27 @@
 
     private async Task ExecuteAddTagToItemAsync(ApplicationDbContext context, Tag selectedTag, Tag tagFromDb)
     {
-        var newRelation = new TagRelation
+        // DbContext の CreateFreeTagRelationAsync を使用:
+        // - RightAsset の自動発行・消費
+        // - TagRelation の作成
+        // - TagWeightLedger への記帳 (ConsumedRightAssetId を含む)
+        // - TimelineEvent の追加
+        // をトランザクション内で一括処理する
+        await context.CreateFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);
+
+        // ローカルのItem.TagRelationsを更新してUIに即時反映
+        var newRelation = await context.Set<TagRelation>()
+            .Include(tr => tr.Tag)
+            .OrderByDescending(tr => tr.Id)
+            .FirstOrDefaultAsync(tr => tr.ItemId == Item.Id && tr.TagId == selectedTag.Id && tr.OwnerId == CurrentUserId);
+        switch (newRelation)
         {
-            ItemId = Item.Id,
-            TagId = selectedTag.Id,
-            Weight = 1,
-            OwnerId = CurrentUserId
-        };
-
-        context.Set<TagRelation>().Add(newRelation);
-        context.TimelineEvents!.Add(new TimelineEvent
-        {
-            OwnerId = CurrentUserId,
-            TargetType = "Item",
-            TargetItemId = Item.Id,
-            FollowedTagId = selectedTag.Id,
-            EventType = "Insert",
-            NewWeight = 1
-        });
-
-        await context.SaveChangesAsync();
-
-        var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight += 1;
-
-        context.TagWeightLedgers!.Add(new TagWeightLedger
-        {
-            TagId = tagFromDb.Id,
-            TagNameSnapshot = tagFromDb.Name,
-            SourceType = "TagRelationInsert",
-            SourceId = newRelation.Id,
-            PreviousWeight = prevWeight,
-            NewWeight = tagFromDb.CachedWeight,
-            Delta = 1,
-            IsOwnerAction = true,
-            Reason = "タグの新規追加",
-            OwnerId = CurrentUserId
-        });
-
-        await context.SaveChangesAsync();
-
-        Item.TagRelations ??= new List<TagRelation>();
-        newRelation.Tag = tagFromDb;
-        Item.TagRelations.Add(newRelation);
+            case not null:
+                Item.TagRelations ??= new List<TagRelation>();
+                newRelation.Tag = tagFromDb;
+                Item.TagRelations.Add(newRelation);
+                break;
+        }
 
         Snackbar.Add("タグを追加しました。", Severity.Success);
         await (OnDataChanged.HasDelegate switch

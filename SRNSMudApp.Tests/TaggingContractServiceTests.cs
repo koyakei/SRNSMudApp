@@ -55,7 +55,7 @@ public class TaggingContractServiceTests : IDisposable
         Assert.Equal(1, contract.TargetItemId);
         Assert.Equal(2, contract.RequestedTagId);
         Assert.Equal(TradeStatus.Proposed, contract.Status);
-        Assert.Equal(message, contract.RequesterMessage);
+        Assert.True(contract.Payload is GratisPayload p && p.RequesterMessage == message);
 
         TaggingRequestEntity? saved = await _dbContext.TaggingRequestEntities
             .FirstOrDefaultAsync(c => c.Id == contract.Id);
@@ -81,8 +81,8 @@ public class TaggingContractServiceTests : IDisposable
         Assert.Equal(tagOwnerId, contract.TagOwnerUserId);
         Assert.Equal(1, contract.TargetItemId);
         Assert.Equal(2, contract.RequestedTagId);
-        Assert.Equal(3, contract.OfferedTargetItemId);
-        Assert.Equal(4, contract.OfferedTagId);
+        Assert.True(contract.Payload is MutualPayload pm && pm.OfferedTargetItemId == 3);
+        Assert.True(contract.Payload is MutualPayload pm2 && pm2.OfferedTagId == 4);
         Assert.Equal(5, contract.ConsumedRightAssetId);
         Assert.Equal(TradeStatus.Proposed, contract.Status);
 
@@ -120,7 +120,7 @@ public class TaggingContractServiceTests : IDisposable
             ConsumedRightAssetId = rightAsset.Id, // チップを添付
             Status = TradeStatus.Proposed,
             OwnerId = userA,
-            RequesterMessage = "Please tag my item. Here is a tip!"
+            Payload = new GratisPayload("Please tag my item. Here is a tip!")
         };
         _dbContext.TaggingRequestEntities!.Add(contract);
         await _dbContext.SaveChangesAsync();
@@ -174,7 +174,7 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItem.Id,
             RequestedTagId = tag.Id,
-            ConsumedRightAssetId = null, // アセットなし
+            ConsumedRightAssetId = 0, // アセットなし
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -184,6 +184,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // When: ユーザーBが承認を実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userB);
+        Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
         
         // Assert
         // Then: タグリレーションが作成される
@@ -233,8 +234,7 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            OfferedTargetItemId = targetItemB.Id,
-            OfferedTagId = tagA.Id,
+            Payload = new MutualPayload(targetItemB.Id, tagA.Id),
             ConsumedRightAssetId = rightAssetA.Id, // User A が提供
             Status = TradeStatus.Proposed,
             OwnerId = userA
@@ -302,9 +302,8 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            OfferedTargetItemId = targetItemB.Id,
-            OfferedTagId = tagA.Id,
-            ConsumedRightAssetId = null, // アセットなし
+            Payload = new MutualPayload(targetItemB.Id, tagA.Id),
+            ConsumedRightAssetId = 0, // アセットなし
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -359,7 +358,7 @@ public class TaggingContractServiceTests : IDisposable
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
-            TargetPublicTradeOfferId = publicOffer.Id,
+            Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -412,8 +411,8 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            ConsumedRightAssetId = null, // アセット提供なし
-            TargetPublicTradeOfferId = publicOffer.Id,
+            ConsumedRightAssetId = 0, // アセット提供なし
+            Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -468,7 +467,7 @@ public class TaggingContractServiceTests : IDisposable
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
-            TargetPublicTradeOfferId = publicOffer.Id,
+            Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -516,7 +515,7 @@ public class TaggingContractServiceTests : IDisposable
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
-            TargetPublicTradeOfferId = publicOffer.Id,
+            Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -563,7 +562,7 @@ public class TaggingContractServiceTests : IDisposable
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
-            TargetPublicTradeOfferId = publicOffer.Id,
+            Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -748,8 +747,7 @@ public class TaggingContractServiceTests : IDisposable
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
-            RequestedTagId = tagB.Id,
-            OfferedRewardAssetId = null, // No reward
+            RequestedTagId = tagB.Id, // No reward
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -813,7 +811,7 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            OfferedRewardAssetId = rewardAsset.Id, // Reward!
+            Payload = new BountyPayload(rewardAsset.Id), // Reward!
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };

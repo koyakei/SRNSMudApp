@@ -71,7 +71,7 @@
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-
+    public int Weight { get; set; } = 0;
     private IBrowserFile? _file;
     private bool _isImporting;
     private string? _currentUserId;
@@ -217,6 +217,7 @@
                             throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
                     }
 
+                    Weight = Weight;
                     switch (existingTags.TryGetValue(tagName, out var tag))
                     {
                         case false:
@@ -256,7 +257,6 @@
                             {
                                 case true:
                                     tag.ParentTag = currentParentTag;
-                                    tag.ParentTagId = null; // Let EF Core manage the FK via navigation property
                                     break;
                             }
                             break;

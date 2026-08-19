@@ -27,7 +27,7 @@ public class Tag : BaseEntity
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TagRelation> TagRelations { get; set; } = [];
 
-    // 親タグのID
+    // 親タグのID (null if root tag)
     public int? ParentTagId { get; set; }
 
     // 親タグへのナビゲーションプロパティ
@@ -44,7 +44,7 @@ public class Tag : BaseEntity
     public ICollection<TagRelationToTag> SourceTagRelations { get; set; } = [];
 
     [SuppressMessage("Performance", "CA1819:Properties should not return arrays")]
-    public float[]? Embedding { get; set; }
+    public float[] Embedding { get; set; } = [];
 
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TagWeightLedger> TagWeightLedgers { get; set; } = [];

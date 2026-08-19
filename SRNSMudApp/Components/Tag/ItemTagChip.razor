@@ -11,7 +11,7 @@
     var isDeleted = HighlightEvent?.EventType == "Delete";
     var isInserted = HighlightEvent?.EventType == "Insert";
     var isUpdated = HighlightEvent?.EventType == "Update";
-    var weightIncreased = HighlightEvent != null && HighlightEvent.NewWeight > (HighlightEvent.PreviousWeight ?? 0);
+    var weightIncreased = HighlightEvent != null && HighlightEvent.NewWeight > HighlightEvent.PreviousWeight;
 
     var isMyTag = TagRelation.OwnerId == CurrentUserId;
     
@@ -67,7 +67,7 @@
         true => $"{HighlightEvent?.PreviousWeight}",
         false => (isUpdated || isInserted) switch
         {
-            true => $"{HighlightEvent?.PreviousWeight ?? 0} → {HighlightEvent?.NewWeight}",
+            true => $"{HighlightEvent?.PreviousWeight} → {HighlightEvent?.NewWeight}",
             false => TagRelation.Weight.ToString()
         }
     };

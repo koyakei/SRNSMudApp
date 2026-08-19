@@ -614,7 +614,7 @@
                 };
 
                 var currentTag = tag;
-                while (currentTag.ParentTagId.HasValue && allTags.TryGetValue(currentTag.ParentTagId.Value, out var parentTag))
+                while (currentTag.ParentTagId != null && allTags.TryGetValue(currentTag.ParentTagId.Value, out var parentTag))
                 {
                     exportTag.ParentTags.Add(new ExportTagSimpleDto
                     {

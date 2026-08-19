@@ -132,7 +132,7 @@
             TargetItemId = _selectedItem.Id,
             RequestedTagId = _selectedTag.Id,
             Status = TradeStatus.Proposed,
-            OfferedRewardAssetId = _selectedRewardAsset?.Id
+            Payload = new SRNSMudApp.Models.Unions.BountyPayload(_selectedRewardAsset?.Id ?? 0)
         };
 
         dbContext.TaggingRequestEntities.Add(bounty);

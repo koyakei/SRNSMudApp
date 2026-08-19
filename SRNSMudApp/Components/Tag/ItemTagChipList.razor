@@ -21,7 +21,7 @@
                         {
                             TagId = ev.FollowedTagId,
                             Tag = ev.FollowedTag,
-                            Weight = ev.PreviousWeight ?? 0,
+                            Weight = ev.PreviousWeight,
                             OwnerId = ev.OwnerId // fake owner
                         });
                         break;

@@ -1,6 +1,9 @@
 #region
 
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+using SRNSMudApp.Models.Unions;
 using System.Diagnostics.CodeAnalysis;
 
 #endregion
@@ -16,6 +19,11 @@ public class Item : BaseEntity
     // TagRelationを中間テーブルとして利用する場合
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TagRelation> TagRelations { get; set; } = [];
+
+    // JSON serialized ItemKind union (e.g. ReplyItem, RequestBodyItem, etc)
+    public string ItemKindJson { get; set; } = string.Empty;
+
+
 
     // リプライ先のアイテム（親）
     public int? ParentItemId { get; set; }

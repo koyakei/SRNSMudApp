@@ -88,7 +88,7 @@
                 {
                     recursionStack.Add(current.Id);
                     path.Add(current);
-                    current = current.ParentTagId.HasValue ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value) : null;
+                    current = current.ParentTagId != null ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId) : null;
                 }
 
                 switch (current)
@@ -170,9 +170,9 @@
 
             var current = tag;
             bool stopAncestors = false;
-            while (current.ParentTagId.HasValue && !stopAncestors)
+            while (current.ParentTagId != null && !stopAncestors)
             {
-                var parent = _tags.FirstOrDefault(t => t.Id == current.ParentTagId.Value);
+                var parent = _tags.FirstOrDefault(t => t.Id == current.ParentTagId);
                 stopAncestors = parent == null || !resultIds.Add(parent.Id);
                 switch (stopAncestors)
                 {
@@ -338,7 +338,7 @@
 
                             // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
                             var orphanedChildren = await context.Tags
-                                .Where(t => t.ParentTagId.HasValue && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
+                                .Where(t => t.ParentTagId != null && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
                                 .ToListAsync();
 
                             foreach (var child in orphanedChildren)
@@ -346,7 +346,7 @@
                                 child.ParentTagId = null;
                             }
 
-                            // SQLiteの自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
+                            // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
                             foreach (var tag in tagsToDelete)
                             {
                                 tag.ParentTagId = null;

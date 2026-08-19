@@ -134,7 +134,7 @@
                 while (current != null)
                 {
                     _expandedTreeTagIds.Add(current.Id);
-                    current = AllTags.FirstOrDefault(t => t.Id == current.ParentTagId.GetValueOrDefault(-1));
+                    current = AllTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
                 }
                 break;
         }
@@ -151,13 +151,13 @@
         }
 
         var ancestors = new HashSet<int>();
-        var curr = AllTags.FirstOrDefault(t => t.Id == TargetTag.ParentTagId.GetValueOrDefault(-1));
+        var curr = AllTags.FirstOrDefault(t => t.Id == (TargetTag.ParentTagId != 0 ? TargetTag.ParentTagId : -1));
         var rootTag = TargetTag;
         while (curr != null)
         {
             ancestors.Add(curr.Id);
             rootTag = curr;
-            curr = AllTags.FirstOrDefault(t => t.Id == curr.ParentTagId.GetValueOrDefault(-1));
+            curr = AllTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
         }
 
         var siblings = AllTags

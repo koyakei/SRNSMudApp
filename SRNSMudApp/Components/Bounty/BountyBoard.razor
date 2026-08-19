@@ -48,15 +48,18 @@
                                         <MudText Typo="Typo.subtitle2">対象アイテム</MudText>
                                         <MudText Typo="Typo.body2" Class="mb-2">@bounty.TargetItem.Content</MudText>
 
-                                        @switch (bounty.OfferedRewardAsset)
+                                        @{
+                                            RightAsset? rewardAsset = (bounty.Payload is SRNSMudApp.Models.Unions.BountyPayload bp && bp.OfferedRewardAssetId != 0 && _rewardAssets.TryGetValue(bp.OfferedRewardAssetId, out var a)) ? a : null;
+                                        }
+                                        @switch (rewardAsset != null)
                                         {
-                                            case not null:
+                                            case true:
                                                 <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 py-1 px-2"
                                                           Style="font-size: 0.8rem;">
-                                                    報酬: @bounty.OfferedRewardAsset.TargetTag?.Name の権利
+                                                    報酬: @rewardAsset!.TargetTag?.Name の権利
                                                 </MudAlert>
                                                 break;
-                                            case null:
+                                            case false:
                                                 <MudText Typo="Typo.caption" Color="Color.Secondary">（無償のウィッシュリスト）</MudText>
                                                 break;
                                         }
@@ -91,6 +94,7 @@
     private bool _isLoading = true;
     private string _currentUserId = string.Empty;
     private List<TaggingRequestEntity> _bounties = [];
+    private Dictionary<int, RightAsset> _rewardAssets = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -109,11 +113,24 @@
             .Where(b => b.ContractType == "Bounty")
             .Include(b => b.TargetItem)
             .Include(b => b.RequestedTag)
-            .Include(b => b.OfferedRewardAsset).ThenInclude(a => a.TargetTag)
             .Where(b => b.Status == TradeStatus.Proposed)
             .OrderByDescending(b => b.CreatedDate)
             .AsNoTracking()
             .ToListAsync();
+
+        var assetIds = _bounties
+            .Select(b => b.Payload is SRNSMudApp.Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0)
+            .Where(id => id != 0)
+            .Distinct()
+            .ToList();
+
+        var assets = await dbContext.RightAssets!
+            .Include(a => a.TargetTag)
+            .Where(a => assetIds.Contains(a.Id))
+            .AsNoTracking()
+            .ToListAsync();
+
+        _rewardAssets = assets.ToDictionary(a => a.Id);
 
         _isLoading = false;
     }

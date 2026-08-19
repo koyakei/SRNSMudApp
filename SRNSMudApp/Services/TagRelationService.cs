@@ -35,7 +35,7 @@ public class TagRelationService(ApplicationDbContext context)
                 OwnerId = currentUserId,
                 TargetTagId = tag.Id,
                 IsBurned = true,
-                BurnedAt = DateTime.UtcNow
+                Status = new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow)
             };
             _ = context.RightAssets.Add(rightAsset);
             _ = await context.SaveChangesAsync();
@@ -132,10 +132,10 @@ public class TagRelationService(ApplicationDbContext context)
                 0 => true,
                 _ => rightAsset.IsBurned
             };
-            rightAsset.BurnedAt = rightAsset.Amount switch
+            rightAsset.Status = rightAsset.Amount switch
             {
-                0 => DateTime.UtcNow,
-                _ => rightAsset.BurnedAt
+                0 => new SRNSMudApp.Models.Unions.Burned(DateTime.UtcNow),
+                _ => rightAsset.Status
             };
 
             _ = context.RightAssets.Update(rightAsset);

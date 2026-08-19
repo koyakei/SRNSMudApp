@@ -24,7 +24,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         List<Item> itemReplies = await context.Items!
             .Include(i => i.ParentItem)
             .Include(i => i.Owner)
-            .Where(i => i.ParentItemId != null && i.ParentItem!.OwnerId == userId && i.OwnerId != userId)
+            .Where(i => i.ParentItemId != 0 && i.ParentItem!.OwnerId == userId && i.OwnerId != userId)
             .ToListAsync();
 
         // 3. Rejected requests for the user
@@ -45,7 +45,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         List<Item> requestReplies = await context.Items!
             .Include(i => i.TaggingRequest)
             .Include(i => i.Owner)
-            .Where(i => i.TaggingRequestEntityId != null &&
+            .Where(i => i.TaggingRequestEntityId != 0 &&
                         i.TaggingRequest!.RequesterUserId == userId &&
                         i.OwnerId != userId)
             .ToListAsync();
@@ -93,10 +93,10 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         foreach (TaggingRequestEntity req in rejectedRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
-            var commentMsg = string.IsNullOrWhiteSpace(req.RejectComment) switch
+            var commentMsg = string.IsNullOrWhiteSpace((req.Rejection is SRNSMudApp.Models.Unions.RejectionReason r ? r.Reason : "")) switch
             {
                 true => "",
-                false => $"\n理由: {req.RejectComment}"
+                false => $"\n理由: {(req.Rejection is SRNSMudApp.Models.Unions.RejectionReason rr ? rr.Reason : "")}"
             };
             var typeStr = req.RequestType switch
             {
@@ -114,12 +114,12 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                     RequestId: req.Id,
                     TagName: req.RequestedTag?.Name,
                     RequestType: req.RequestType,
-                    RejectComment: req.RejectComment,
+                    RejectComment: (req.Rejection is SRNSMudApp.Models.Unions.RejectionReason rr2 ? rr2.Reason : ""),
                     TargetItemId: req.TargetItemId,
                     TargetTagId: req.RequestedTagId
                 ),
                 Message = msg,
-                CreatedAt = req.RejectedAt ?? new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
+                CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = isRead,
                 ActorName = "システム",
@@ -171,12 +171,12 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceId = reply.Id,
                 Kind = new ItemReplyNotification(
                     ReplyItemId: reply.Id,
-                    ParentItemId: reply.ParentItemId ?? 0,
+                    ParentItemId: reply.ParentItemId.Value,
                     ActorName: ownerName
                 ),
                 Message = $"{ownerName}さんがあなたのアイテムにリプライしました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.ParentItemId}"),
+                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.ParentItemId.Value}"),
                 IsRead = isRead,
                 ActorName = ownerName,
                 AssociatedItemId = reply.Id
@@ -193,12 +193,12 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceId = reply.Id,
                 Kind = new RequestReplyNotification(
                     ReplyItemId: reply.Id,
-                    RequestId: reply.TaggingRequestEntityId ?? 0,
+                    RequestId: reply.TaggingRequestEntityId.Value,
                     ActorName: ownerName
                 ),
                 Message = $"{ownerName}さんがあなたのリクエストに返信しました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.TaggingRequestEntityId}"), // Adjust according to your routing for request detail
+                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.TaggingRequestEntityId.Value}"), // Adjust according to your routing for request detail
                 IsRead = isRead,
                 ActorName = ownerName,
                 AssociatedItemId = reply.Id

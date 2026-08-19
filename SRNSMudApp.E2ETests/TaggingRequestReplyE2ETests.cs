@@ -1,3 +1,4 @@
+using SRNSMudApp.Models.Unions;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
@@ -89,7 +90,7 @@ public class TaggingRequestReplyE2ETests : PageTest
                 TargetItemId = item.Id,
                 RequestedTagId = tag.Id,
                 Status = TradeStatus.Proposed,
-                RequesterMessage = "Please add this tag",
+                Payload = new GratisPayload("Please add this tag"),
                 RequestType = TaggingRequestType.Add
             };
 

@@ -1,3 +1,4 @@
+using SRNSMudApp.Models.Unions;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
@@ -113,7 +114,7 @@ public class DuplicateTaggingRequestCancelE2ETests : PageTest
                 TargetItemId = itemId,
                 RequestedTagId = tagId,
                 Status = TradeStatus.Proposed,
-                RequesterMessage = $"UserA request {uniqueId}",
+                Payload = new GratisPayload($"UserA request {uniqueId}"),
                 RequestType = TaggingRequestType.Add
             };
 
@@ -127,7 +128,7 @@ public class DuplicateTaggingRequestCancelE2ETests : PageTest
                 TargetItemId = itemId,
                 RequestedTagId = tagId,
                 Status = TradeStatus.Proposed,
-                RequesterMessage = $"UserB request {uniqueId}",
+                Payload = new GratisPayload($"UserB request {uniqueId}"),
                 RequestType = TaggingRequestType.Add
             };
 

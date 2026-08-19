@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SRNSMudApp.Models.Unions;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -15,18 +16,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     : IdentityDbContext<ApplicationUser>(options)
 {
     // DbSet properties for all custom entities
-    public DbSet<Item>? Items { get; set; }
-    public DbSet<Tag>? Tags { get; set; }
-    public DbSet<TagRelation>? TagRelations { get; set; }
-    public DbSet<UserTagFollow>? UserTagFollows { get; set; }
-    public DbSet<TagRelationToTag>? TagRelationToTags { get; set; }
-    public DbSet<RightAsset>? RightAssets { get; set; }
-    public DbSet<TagWeightLedger>? TagWeightLedgers { get; set; }
-    public DbSet<TaggingRequestEntity>? TaggingRequestEntities { get; set; }
-    public DbSet<PublicTradeOffer>? PublicTradeOffers { get; set; }
-    public DbSet<TimelineEvent>? TimelineEvents { get; set; }
-    public DbSet<Invitation>? Invitations { get; set; }
-    public DbSet<NotificationReadState>? NotificationReadStates { get; set; }
+    public DbSet<Item> Items { get; set; } = null!;
+    public DbSet<Tag> Tags { get; set; } = null!;
+    public DbSet<TagRelation> TagRelations { get; set; } = null!;
+    public DbSet<UserTagFollow> UserTagFollows { get; set; } = null!;
+    public DbSet<TagRelationToTag> TagRelationToTags { get; set; } = null!;
+    public DbSet<RightAsset> RightAssets { get; set; } = null!;
+    public DbSet<TagWeightLedger> TagWeightLedgers { get; set; } = null!;
+    public DbSet<TaggingRequestEntity> TaggingRequestEntities { get; set; } = null!;
+    public DbSet<PublicTradeOffer> PublicTradeOffers { get; set; } = null!;
+    public DbSet<TimelineEvent> TimelineEvents { get; set; } = null!;
+    public DbSet<Invitation> Invitations { get; set; } = null!;
+    public DbSet<NotificationReadState> NotificationReadStates { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -54,6 +55,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasOne(t => t.Owner)
             .WithMany()
             .HasForeignKey(t => t.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<Tag>()
+            .HasOne(t => t.ParentTag)
+            .WithMany()
+            .HasForeignKey(t => t.ParentTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<Tag>()
@@ -148,6 +155,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasOne(l => l.ConsumedRightAsset)
             .WithMany() // ConsumedRightAssetId is optional now, and could potentially be null. Using WithMany() instead of WithOne() if an asset could theoretically be consumed multiple times? No, the rule is 1 asset -> 1 ledger, but EF might complain about optional 1:1 without a collection if not configured properly. Let's keep it simple: WithMany() on the principal side is easier since RightAsset doesn't have a navigation property back.
             .HasForeignKey(l => l.ConsumedRightAssetId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<TagWeightLedger>()
@@ -167,18 +175,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasOne(e => e.FollowedTag)
             .WithMany()
             .HasForeignKey(e => e.FollowedTagId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        _ = builder.Entity<TimelineEvent>()
-            .HasOne(e => e.TargetItem)
-            .WithMany()
-            .HasForeignKey(e => e.TargetItemId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        _ = builder.Entity<TimelineEvent>()
-            .HasOne(e => e.TargetTag)
-            .WithMany()
-            .HasForeignKey(e => e.TargetTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // --- TaggingRequestEntity Configuration ---
@@ -222,24 +218,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasMany(e => e.Tags)
             .WithMany();
 
-        // Merged subclass navigation properties
-        _ = builder.Entity<TaggingRequestEntity>()
-            .HasOne(e => e.OfferedRewardAsset)
-            .WithMany()
-            .HasForeignKey(e => e.OfferedRewardAssetId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        _ = builder.Entity<TaggingRequestEntity>()
-            .HasOne(e => e.OfferedTargetItem)
-            .WithMany()
-            .HasForeignKey(e => e.OfferedTargetItemId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        _ = builder.Entity<TaggingRequestEntity>()
-            .HasOne(e => e.OfferedTag)
-            .WithMany()
-            .HasForeignKey(e => e.OfferedTagId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Removed merged subclass navigation properties as they are now in ContractPayloadJson
 
         _ = builder.Entity<RightAsset>()
             .HasOne(e => e.TargetTag)
@@ -259,18 +238,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.OfferedTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        _ = builder.Entity<TaggingRequestEntity>()
-            .HasOne(e => e.TargetPublicTradeOffer)
-            .WithMany()
-            .HasForeignKey(e => e.TargetPublicTradeOfferId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // リクエストへのリプライとリクエストのリレーション（カスケード削除）
         _ = builder.Entity<Item>()
             .HasOne(i => i.TaggingRequest)
             .WithMany(tr => tr.Replies)
             .HasForeignKey(i => i.TaggingRequestEntityId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<Invitation>()
+            .HasOne(i => i.InvitedByAdmin)
+            .WithMany()
+            .HasForeignKey(i => i.InvitedByAdminId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     public override int SaveChanges()
@@ -414,7 +393,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // RightAsset を Burn (論理削除)
             asset.IsBurned = true;
-            asset.BurnedAt = DateTime.UtcNow;
+            asset.BurnStatusJson = JsonSerializer.Serialize<BurnStatus>(new Burned(DateTime.UtcNow));
 
             // 2. TagRelation の作成
             var relation = new TagRelation
@@ -454,8 +433,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             _ = TimelineEvents.Add(new TimelineEvent
             {
                 OwnerId = currentUserId,
-                TargetType = "Item",
-                TargetItemId = itemId,
+                TimelineTargetJson = JsonSerializer.Serialize<TimelineTarget>(new ItemTarget(itemId)),
                 FollowedTagId = tagId,
                 EventType = "Insert",
                 NewWeight = weightDelta
@@ -494,7 +472,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 OwnerId = currentUserId,
                 TargetTagId = tagId,
                 IsBurned = true,
-                BurnedAt = DateTime.UtcNow
+                BurnStatusJson = JsonSerializer.Serialize<BurnStatus>(new Burned(DateTime.UtcNow))
             };
             _ = RightAssets.Add(rightAsset);
             _ = await SaveChangesAsync(); // IDを発行するためにSave
@@ -536,8 +514,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             _ = TimelineEvents.Add(new TimelineEvent
             {
                 OwnerId = currentUserId,
-                TargetType = "Item",
-                TargetItemId = itemId,
+                TimelineTargetJson = JsonSerializer.Serialize<TimelineTarget>(new ItemTarget(itemId)),
                 FollowedTagId = tagId,
                 EventType = "Insert",
                 NewWeight = 1

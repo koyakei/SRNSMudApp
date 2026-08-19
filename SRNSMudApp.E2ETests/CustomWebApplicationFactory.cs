@@ -66,8 +66,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // It will throw because we don't configure a TestServer, so we catch it.
             using HttpClient _ = CreateDefaultClient();
         }
-        catch (InvalidOperationException)
+        catch (Exception ex)
         {
+            File.AppendAllText("/tmp/ensure_server_error.txt", "EnsureServer caught exception: " + ex + "\n");
         }
     }
 
@@ -122,6 +123,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         _host = builder.Build();
         _host.Start();
 
+        // DBスキーマをマイグレーションで初期化はProgram.cs側で行われるため、ここでは削除する
+        // (EnsureCreatedAsync を MigrateAsync に変更したため、重複を避ける)
+        
         EndpointDataSource endpoints = _host.Services.GetRequiredService<EndpointDataSource>();
         File.WriteAllLines("/tmp/endpoints.txt",
             endpoints.Endpoints.Select(e => e.GetType().Name + ": " + (e.DisplayName ?? "unknown")));
@@ -130,11 +134,17 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         IServer server = _host.Services.GetRequiredService<IServer>();
         IServerAddressesFeature? addresses = server.Features.Get<IServerAddressesFeature>();
 
+        File.AppendAllText("/tmp/debug.txt", $"[DEBUG] Addresses.Count: {addresses?.Addresses.Count}\n");
+        foreach(var addr in addresses?.Addresses ?? []) {
+            File.AppendAllText("/tmp/debug.txt", $"[DEBUG] Address: {addr}\n");
+        }
+
         ClientOptions.BaseAddress = new Uri(addresses.Addresses
             .Select(x => x.Replace("127.0.0.1", "localhost").Replace("[::1]", "localhost"))
             .Last());
 
         ServerAddress = ClientOptions.BaseAddress.ToString().TrimEnd('/');
+        File.AppendAllText("/tmp/debug.txt", $"[DEBUG] ServerAddress: {ServerAddress}\n");
 
         return dummyHost;
     }
