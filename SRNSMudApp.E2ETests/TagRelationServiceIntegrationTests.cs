@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Models.Unions;
 
 #endregion
 
@@ -64,9 +65,9 @@ public class TagRelationServiceIntegrationTests
             var service = new TagRelationService(db);
 
             // ここで例外が発生しないことを確認する
-            TaggingResult result = await service.LinkTagToItemAsync(untrackedItem.Id, untrackedTag.Id, testUserId);
+            var result = await service.LinkTagToItemAsync(untrackedItem.Id, untrackedTag.Id, testUserId);
 
-            Assert.That(result, Is.EqualTo(TaggingResult.Success));
+            Assert.That(result, Is.InstanceOf<Success<bool>>());
         }
 
         // 3. Assert: 正しくTagRelationが作成されているか確認する

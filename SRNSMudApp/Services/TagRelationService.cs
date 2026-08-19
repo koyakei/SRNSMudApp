@@ -2,74 +2,61 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
-
-// 処理の結果をUIに伝えるための列挙型
-public enum TaggingResult
-{
-    Success,
-    ErrorNotFound
-}
 
 public class TagRelationService(ApplicationDbContext context)
 {
     /// <summary>
     ///     アイテムにタグを紐付けるメインロジック
     /// </summary>
-    /// <param name="itemId">紐付け先のアイテムID</param>
-    /// <param name="tagId">紐付けるタグID</param>
-    /// <param name="currentUserId">操作しているユーザーのID</param>
-    /// <param name="requiredWeight">紐付けに必要な重み（デフォルト1など）</param>
-    public async Task<TaggingResult> LinkTagToItemAsync(int itemId, int tagId, string currentUserId,
+    public async Task<Result<bool>> LinkTagToItemAsync(int itemId, int tagId, string currentUserId,
         int requiredWeight = 1)
     {
-        // 1. 必要なデータの取得
         Item? item = await context.Items.FindAsync(itemId);
         Tag? tag = await context.Tags.FindAsync(tagId);
 
-        if (item == null || tag == null)
+        return await ((item, tag) switch
         {
-            return TaggingResult.ErrorNotFound;
-        }
+            (not null, not null) => ExecuteLinkTagTransactionAsync(item, tag, currentUserId, requiredWeight),
+            _ => Task.FromResult<Result<bool>>(new Failure("Item or Tag not found"))
+        });
+    }
 
-        await using IDbContextTransaction transaction =
-            await context.Database.BeginTransactionAsync();
+    private async Task<Result<bool>> ExecuteLinkTagTransactionAsync(Item item, Tag tag, string currentUserId, int requiredWeight)
+    {
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync();
 
         try
         {
-            // 2. RightAsset の発行と即時消費 (Burn)
-            // このメソッドはテストやレガシーAPI向けのため、現在のユーザー宛てにAssetを発行して使用する
             var rightAsset = new RightAsset
             {
                 OwnerId = currentUserId,
-                TargetTagId = tagId,
+                TargetTagId = tag.Id,
                 IsBurned = true,
                 BurnedAt = DateTime.UtcNow
             };
             _ = context.RightAssets.Add(rightAsset);
             _ = await context.SaveChangesAsync();
 
-            // 3. TagRelation を作成
             var relation = new TagRelation
             {
-                ItemId = itemId,
-                TagId = tagId,
+                ItemId = item.Id,
+                TagId = tag.Id,
                 OwnerId = currentUserId,
                 Weight = requiredWeight
             };
             _ = context.TagRelations.Add(relation);
             _ = await context.SaveChangesAsync();
 
-            // 4. Cache Update
             var previousWeight = tag.CachedWeight;
             tag.CachedWeight += requiredWeight;
             var newWeight = tag.CachedWeight;
 
-            // 5. Ledger 作成
             var ledger = new TagWeightLedger
             {
-                TagId = tagId,
+                TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
@@ -85,7 +72,7 @@ public class TagRelationService(ApplicationDbContext context)
 
             _ = await context.SaveChangesAsync();
             await transaction.CommitAsync();
-            return TaggingResult.Success;
+            return new Success<bool>(true);
         }
         catch
         {
@@ -97,56 +84,74 @@ public class TagRelationService(ApplicationDbContext context)
     /// <summary>
     ///     既存のRightAssetを消費して、TagRelationにWeightを割り当てる
     /// </summary>
-    public async Task<TaggingResult> AllocateWeightAsync(int rightAssetId, int itemId, int tagId, string currentUserId,
+    public async Task<Result<bool>> AllocateWeightAsync(int rightAssetId, int itemId, int tagId, string currentUserId,
         int manipulationDelta)
     {
-        if (manipulationDelta == 0)
+        return await (manipulationDelta switch
         {
-            throw new ArgumentException("Manipulation delta cannot be 0");
-        }
+            0 => Task.FromException<Result<bool>>(new ArgumentException("Manipulation delta cannot be 0")),
+            _ => ProcessAllocateWeightAsync(rightAssetId, itemId, tagId, currentUserId, manipulationDelta)
+        });
+    }
 
+    private async Task<Result<bool>> ProcessAllocateWeightAsync(int rightAssetId, int itemId, int tagId, string currentUserId, int manipulationDelta)
+    {
         var consumeAmount = Math.Abs(manipulationDelta);
-
         RightAsset? rightAsset = await context.RightAssets.FindAsync(rightAssetId);
-        if (rightAsset == null || rightAsset.OwnerId != currentUserId || rightAsset.IsBurned)
-        {
-            return TaggingResult.ErrorNotFound;
-        }
 
-        if (rightAsset.Amount < consumeAmount)
+        return await (rightAsset switch
         {
-            throw new InvalidOperationException("RightAsset amount is insufficient.");
-        }
+            null => Task.FromResult<Result<bool>>(new Failure("RightAsset not found or unauthorized")),
+            _ when rightAsset.OwnerId != currentUserId || rightAsset.IsBurned => Task.FromResult<Result<bool>>(new Failure("RightAsset not found or unauthorized")),
+            _ when rightAsset.Amount < consumeAmount => Task.FromException<Result<bool>>(new InvalidOperationException("RightAsset amount is insufficient.")),
+            _ => FetchEntitiesAndExecuteAllocationAsync(rightAsset, itemId, tagId, currentUserId, manipulationDelta, consumeAmount)
+        });
+    }
 
+    private async Task<Result<bool>> FetchEntitiesAndExecuteAllocationAsync(RightAsset rightAsset, int itemId, int tagId, string currentUserId, int manipulationDelta, int consumeAmount)
+    {
         Item? item = await context.Items.FindAsync(itemId);
         Tag? tag = await context.Tags.FindAsync(tagId);
 
-        if (item == null || tag == null)
+        return await ((item, tag) switch
         {
-            return TaggingResult.ErrorNotFound;
-        }
+            (not null, not null) => ExecuteAllocationTransactionAsync(rightAsset, item, tag, currentUserId, manipulationDelta, consumeAmount),
+            _ => Task.FromResult<Result<bool>>(new Failure("Item or Tag not found"))
+        });
+    }
 
-        await using IDbContextTransaction transaction =
-            await context.Database.BeginTransactionAsync();
+    private async Task<Result<bool>> ExecuteAllocationTransactionAsync(RightAsset rightAsset, Item item, Tag tag, string currentUserId, int manipulationDelta, int consumeAmount)
+    {
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync();
 
         try
         {
             rightAsset.Amount -= consumeAmount;
-            if (rightAsset.Amount == 0)
+            rightAsset.IsBurned = rightAsset.Amount switch
             {
-                rightAsset.IsBurned = true;
-                rightAsset.BurnedAt = DateTime.UtcNow;
-            }
+                0 => true,
+                _ => rightAsset.IsBurned
+            };
+            rightAsset.BurnedAt = rightAsset.Amount switch
+            {
+                0 => DateTime.UtcNow,
+                _ => rightAsset.BurnedAt
+            };
 
             _ = context.RightAssets.Update(rightAsset);
 
-            TagRelation? relation =
-                await context.TagRelations.FirstOrDefaultAsync(r => r.ItemId == itemId && r.TagId == tagId);
-            if (relation == null)
+            TagRelation? relation = await context.TagRelations.FirstOrDefaultAsync(r => r.ItemId == item.Id && r.TagId == tag.Id);
+            relation = relation switch
             {
-                relation = new TagRelation { ItemId = itemId, TagId = tagId, OwnerId = currentUserId, Weight = 0 };
-                _ = context.TagRelations.Add(relation);
-            }
+                null => new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = currentUserId, Weight = 0 },
+                _ => relation
+            };
+            
+            _ = relation.Id switch
+            {
+                0 => context.TagRelations.Add(relation),
+                _ => null!
+            };
 
             relation.Weight += manipulationDelta;
             _ = await context.SaveChangesAsync();
@@ -157,7 +162,7 @@ public class TagRelationService(ApplicationDbContext context)
 
             var ledger = new TagWeightLedger
             {
-                TagId = tagId,
+                TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
@@ -174,7 +179,7 @@ public class TagRelationService(ApplicationDbContext context)
             _ = await context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return TaggingResult.Success;
+            return new Success<bool>(true);
         }
         catch
         {

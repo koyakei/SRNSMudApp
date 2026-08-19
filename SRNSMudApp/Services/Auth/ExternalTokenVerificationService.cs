@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Google.Apis.Auth;
+using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Auth;
 
@@ -14,63 +15,63 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
     private readonly HttpClient _httpClient = httpClient;
     private readonly ILogger<ExternalTokenVerificationService> _logger = logger;
 
-    public async Task<(string? Email, string? ProviderKey)> VerifyTokenAsync(string provider, string token)
+    public async Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token)
     {
-        return provider.ToUpperInvariant() switch
+        return await (provider.ToUpperInvariant() switch
         {
-            "GOOGLE" => await VerifyGoogleTokenAsync(token),
-            "LINE" => await VerifyLineTokenAsync(token),
-            "GITHUB" => await VerifyGithubTokenAsync(token),
-            _ => (null, null)
-        };
+            "GOOGLE" => VerifyGoogleTokenAsync(token),
+            "LINE" => VerifyLineTokenAsync(token),
+            "GITHUB" => VerifyGithubTokenAsync(token),
+            _ => Task.FromResult<Result<ExternalTokenPayload>>(new Failure("Unsupported provider"))
+        });
     }
 
-    private async Task<(string? Email, string? ProviderKey)> VerifyGoogleTokenAsync(string idToken)
+    private async Task<Result<ExternalTokenPayload>> VerifyGoogleTokenAsync(string idToken)
     {
         try
         {
             GoogleJsonWebSignature.Payload payload = await GoogleJsonWebSignature.ValidateAsync(idToken);
-            return (payload.Email, payload.Subject);
+            return new Success<ExternalTokenPayload>(new ExternalTokenPayload(payload.Email, payload.Subject));
         }
         catch (InvalidJwtException ex)
         {
             _logger.LogWarning(ex, "Invalid Google ID token");
-            return (null, null);
+            return new Failure("Invalid Google token");
         }
     }
 
-    private async Task<(string? Email, string? ProviderKey)> VerifyLineTokenAsync(string idToken)
+    private async Task<Result<ExternalTokenPayload>> VerifyLineTokenAsync(string idToken)
     {
         try
         {
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
             HttpResponseMessage response = await _httpClient.GetAsync(new Uri("https://api.line.me/v2/profile"));
 
-            if (!response.IsSuccessStatusCode)
+            return await (response.IsSuccessStatusCode switch
             {
-                _logger.LogWarning("Invalid LINE token");
-                return (null, null);
-            }
-
-            var content = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(content);
-
-            var userId = doc.RootElement.GetProperty("userId").GetString();
-            return (null, userId);
+                false => Task.FromResult<Result<ExternalTokenPayload>>(LogAndReturnFailure("Invalid LINE token", null)),
+                true => ProcessLineResponseAsync(response)
+            });
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "HTTP Error verifying LINE token");
-            return (null, null);
+            return LogAndReturnFailure("HTTP Error verifying LINE token", ex);
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "JSON Error verifying LINE token");
-            return (null, null);
+            return LogAndReturnFailure("JSON Error verifying LINE token", ex);
         }
     }
 
-    private async Task<(string? Email, string? ProviderKey)> VerifyGithubTokenAsync(string codeOrToken)
+    private async Task<Result<ExternalTokenPayload>> ProcessLineResponseAsync(HttpResponseMessage response)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(content);
+        var userId = doc.RootElement.GetProperty("userId").GetString();
+        return new Success<ExternalTokenPayload>(new ExternalTokenPayload(null, userId));
+    }
+
+    private async Task<Result<ExternalTokenPayload>> VerifyGithubTokenAsync(string codeOrToken)
     {
         try
         {
@@ -79,33 +80,46 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
             request.Headers.UserAgent.ParseAdd("SRNSMudApp");
 
             HttpResponseMessage response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
+            
+            return await (response.IsSuccessStatusCode switch
             {
-                _logger.LogWarning("Invalid GitHub token");
-                return (null, null);
-            }
-
-            var content = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(content);
-
-            var id = doc.RootElement.GetProperty("id").GetInt64().ToString(CultureInfo.InvariantCulture);
-            var email = doc.RootElement.TryGetProperty("email", out JsonElement emailProp) &&
-                        emailProp.ValueKind != JsonValueKind.Null
-                ? emailProp.GetString()
-                : null;
-
-            return (email, id);
+                false => Task.FromResult<Result<ExternalTokenPayload>>(LogAndReturnFailure("Invalid GitHub token", null)),
+                true => ProcessGithubResponseAsync(response)
+            });
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "HTTP Error verifying GitHub token");
-            return (null, null);
+            return LogAndReturnFailure("HTTP Error verifying GitHub token", ex);
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "JSON Error verifying GitHub token");
-            return (null, null);
+            return LogAndReturnFailure("JSON Error verifying GitHub token", ex);
         }
+    }
+
+    private async Task<Result<ExternalTokenPayload>> ProcessGithubResponseAsync(HttpResponseMessage response)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(content);
+
+        var id = doc.RootElement.GetProperty("id").GetInt64().ToString(CultureInfo.InvariantCulture);
+        var email = doc.RootElement.TryGetProperty("email", out JsonElement emailProp) switch
+        {
+            true when emailProp.ValueKind != JsonValueKind.Null => emailProp.GetString(),
+            _ => null
+        };
+
+        return new Success<ExternalTokenPayload>(new ExternalTokenPayload(email, id));
+    }
+
+    private Failure LogAndReturnFailure(string message, Exception? ex)
+    {
+        _ = ex switch
+        {
+            null => (object)Task.Run(() => _logger.LogWarning(message)),
+            _ => (object)Task.Run(() => _logger.LogError(ex, message))
+        };
+        return new Failure(message);
     }
 }
 #pragma warning restore CA1848

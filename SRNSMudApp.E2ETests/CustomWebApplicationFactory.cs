@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services.Auth;
+using SRNSMudApp.Models.Unions;
 
 using Testcontainers.MsSql;
 
@@ -24,16 +25,17 @@ namespace SRNSMudApp.E2ETests;
 
 public class MockExternalTokenVerificationService : IExternalTokenVerificationService
 {
-    public Task<(string? Email, string? ProviderKey)> VerifyTokenAsync(string provider, string token)
+    public Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token)
     {
         if (token.StartsWith("mock-"))
         {
             var providerKey = token.Replace("mock-", "") + "-id";
             var email = $"{token.Replace("mock-", "")}@example.com";
-            return Task.FromResult<(string?, string?)>((email, providerKey));
+            var payload = new ExternalTokenPayload(email, providerKey);
+            return Task.FromResult<Result<ExternalTokenPayload>>(new Success<ExternalTokenPayload>(payload));
         }
 
-        return Task.FromResult<(string?, string?)>((null, null));
+        return Task.FromResult<Result<ExternalTokenPayload>>(new Failure("Invalid mock token"));
     }
 }
 

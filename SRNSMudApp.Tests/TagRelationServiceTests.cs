@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Services;
@@ -43,10 +44,10 @@ public class TagRelationServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Act
-        TaggingResult result = await _service.LinkTagToItemAsync(1, 1, "user1", 5);
+        Result<bool> result = await _service.LinkTagToItemAsync(1, 1, "user1", 5);
 
         // Assert
-        Assert.Equal(TaggingResult.Success, result);
+        Assert.True(result is Success<bool>);
 
         TagRelation? relation = await _context.TagRelations!.FirstOrDefaultAsync(r => r.ItemId == 1 && r.TagId == 1);
         Assert.NotNull(relation);
@@ -99,10 +100,10 @@ public class TagRelationServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Act 1: ItemA.TagRelation.weight を 3 操作する (RightAsset -3)
-        TaggingResult result1 = await _service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tag.Id, "user1", 3);
+        Result<bool> result1 = await _service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tag.Id, "user1", 3);
 
         // Assert 1
-        Assert.Equal(TaggingResult.Success, result1);
+        Assert.True(result1 is Success<bool>);
 
         RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(1);
         Assert.NotNull(updatedAsset1);
@@ -115,10 +116,10 @@ public class TagRelationServiceTests : IDisposable
         Assert.Equal(3, relationA.Weight);
 
         // Act 2: ItemB.TagRelation.weight を 2 操作する (RightAsset -2)
-        TaggingResult result2 = await _service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tag.Id, "user1", 2);
+        Result<bool> result2 = await _service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tag.Id, "user1", 2);
 
         // Assert 2
-        Assert.Equal(TaggingResult.Success, result2);
+        Assert.True(result2 is Success<bool>);
 
         RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(1);
         Assert.NotNull(updatedAsset2);
@@ -165,10 +166,10 @@ public class TagRelationServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Act 1: ItemA の TagX を -3 操作する
-        TaggingResult result1 = await _service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tagX.Id, "user2", -3);
+        Result<bool> result1 = await _service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tagX.Id, "user2", -3);
 
         // Assert 1
-        Assert.Equal(TaggingResult.Success, result1);
+        Assert.True(result1 is Success<bool>);
 
         RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(2);
         Assert.NotNull(updatedAsset1);
@@ -181,10 +182,10 @@ public class TagRelationServiceTests : IDisposable
         Assert.Equal(-2, relationA.Weight); // 1 + (-3) = -2
 
         // Act 2: ItemB に 2 操作する
-        TaggingResult result2 = await _service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tagX.Id, "user2", 2);
+        Result<bool> result2 = await _service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tagX.Id, "user2", 2);
 
         // Assert 2
-        Assert.Equal(TaggingResult.Success, result2);
+        Assert.True(result2 is Success<bool>);
 
         RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(2);
         Assert.NotNull(updatedAsset2);
