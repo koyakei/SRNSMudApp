@@ -22,7 +22,7 @@ trigger: always_on
 そのために unionを積極的に利用する
 
 ## 再代入撲滅
-イミュータブルなデータ構造や純粋関数を優先する
+イミュータブルなデータ構造や純粋関数　宣言的および関数型パラダイム　を優先する
 
 ## 3. Blazor Server (InteractiveServer) のル－ル
 - **SignalRの意識**: Blazor ServerはSignalR接続上で動作するため、メモリリークに注意する。イベントハンドラの購読解除 (`IDisposable` の実装) を徹底すること。
