@@ -63,7 +63,7 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
         }
     }
 
-    private async Task<Result<ExternalTokenPayload>> ProcessLineResponseAsync(HttpResponseMessage response)
+    private static async Task<Result<ExternalTokenPayload>> ProcessLineResponseAsync(HttpResponseMessage response)
     {
         var content = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(content);
@@ -97,7 +97,7 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
         }
     }
 
-    private async Task<Result<ExternalTokenPayload>> ProcessGithubResponseAsync(HttpResponseMessage response)
+    private static async Task<Result<ExternalTokenPayload>> ProcessGithubResponseAsync(HttpResponseMessage response)
     {
         var content = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(content);
@@ -116,8 +116,8 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
     {
         _ = ex switch
         {
-            null => (object)Task.Run(() => _logger.LogWarning(message)),
-            _ => (object)Task.Run(() => _logger.LogError(ex, message))
+            null => Task.Run(() => _logger.LogWarning("{Message}", message)),
+            _ => Task.Run(() => _logger.LogError(ex, "{Message}", message))
         };
         return new Failure(message);
     }

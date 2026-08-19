@@ -8,71 +8,77 @@
 <PageTitle>Home</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-    @if (_isLoggedIn)
+    @switch (_isLoggedIn)
     {
-        <MudText Typo="Typo.h5" GutterBottom="true" Class="mb-4">タイムライン</MudText>
+        case true:
+            <MudText Typo="Typo.h5" GutterBottom="true" Class="mb-4">タイムライン</MudText>
 
-        @if (_followedTagIds != null && !_followedTagIds.Any())
-        {
-            <MudAlert Severity="Severity.Info" Class="mb-4">
-                まだタグをフォローしていません。タグをフォローすると、ここにタイムラインが表示されます。
-            </MudAlert>
-        }
-        else if (_followedTagIds != null)
-        {
-            <div style="height: 80vh; overflow-y: auto;">
-                <Virtualize ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
-                    <ItemContent>
-                        <div class="mb-4">
-                            @if (group.TargetType == "Item" && group.Item != null)
-                            {
-                                <SRNSMudApp.Components.UI.ItemCard Item="@group.Item"
-                                                                       AllTags="@_allTags"
-                                                                       AllTagRelationsToTags="@_allTagRelationsToTags"
-                                                                       CurrentUserId="@_currentUserId"
-                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                                       CurrentUserBadTagId="@_currentUserBadTagId"
-                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                                       HighlightEvents="@group.Events"
-                                                                       IsFocused="false"/>
-                            }
-                            else if (group.TargetType == "Tag" && group.Tag != null)
-                            {
-                                <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag"
-                                                                      AllTags="@_allTags"
-                                                                      CurrentUserId="@_currentUserId"
-                                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                                      CurrentUserBadTagId="@_currentUserBadTagId"
-                                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                                      HighlightEvents="@group.Events"
-                                                                      IsFocused="false"/>
-                            }
-                        </div>
-                    </ItemContent>
-                    <Placeholder>
-                        <MudCard Class="mb-4" Elevation="0" Outlined="true">
-                            <MudCardContent>
-                                <div class="d-flex justify-center align-center py-4">
-                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            @switch (_followedTagIds)
+            {
+                case { Count: 0 }:
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        まだタグをフォローしていません。タグをフォローすると、ここにタイムラインが表示されます。
+                    </MudAlert>
+                    break;
+                case not null:
+                    <div style="height: 80vh; overflow-y: auto;">
+                        <Virtualize ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
+                            <ItemContent>
+                                <div class="mb-4">
+                                    @switch (group.TargetType)
+                                    {
+                                        case "Item" when group.Item != null:
+                                            <SRNSMudApp.Components.UI.ItemCard Item="@group.Item"
+                                                                                   AllTags="@_allTags"
+                                                                                   AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                                                   CurrentUserId="@_currentUserId"
+                                                                                   CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                   CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                   OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                                   HighlightEvents="@group.Events"
+                                                                                   IsFocused="false"/>
+                                            break;
+                                        case "Tag" when group.Tag != null:
+                                            <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag"
+                                                                                  AllTags="@_allTags"
+                                                                                  CurrentUserId="@_currentUserId"
+                                                                                  CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                  CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                  OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                                  HighlightEvents="@group.Events"
+                                                                                  IsFocused="false"/>
+                                            break;
+                                    }
                                 </div>
-                            </MudCardContent>
-                        </MudCard>
-                    </Placeholder>
-                </Virtualize>
+                            </ItemContent>
+                            <Placeholder>
+                                <MudCard Class="mb-4" Elevation="0" Outlined="true">
+                                    <MudCardContent>
+                                        <div class="d-flex justify-center align-center py-4">
+                                            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                                        </div>
+                                    </MudCardContent>
+                                </MudCard>
+                            </Placeholder>
+                        </Virtualize>
+                    </div>
+                    break;
+                case null:
+                    break;
+            }
+            break;
+
+        case false:
+            <MudText Typo="Typo.h3" GutterBottom="true" Align="Align.Center" Class="mt-10">Welcome to SRNSMudApp</MudText>
+            <MudText Align="Align.Center" Class="mb-8">
+                ログインして、フォローしたタグのタイムラインを表示しましょう。
+            </MudText>
+            <div class="d-flex justify-center">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" Href="/Account/Login" Size="Size.Large">
+                    ログイン
+                </MudButton>
             </div>
-        }
-    }
-    else
-    {
-        <MudText Typo="Typo.h3" GutterBottom="true" Align="Align.Center" Class="mt-10">Welcome to SRNSMudApp</MudText>
-        <MudText Align="Align.Center" Class="mb-8">
-            ログインして、フォローしたタグのタイムラインを表示しましょう。
-        </MudText>
-        <div class="d-flex justify-center">
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" Href="/Account/Login" Size="Size.Large">
-                ログイン
-            </MudButton>
-        </div>
+            break;
     }
 </MudContainer>
 
@@ -94,21 +100,33 @@
         var user = authState.User;
         _isLoggedIn = user.Identity?.IsAuthenticated ?? false;
 
-        if (_isLoggedIn)
+        await (_isLoggedIn switch
         {
-            _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            true => HandleLoggedInUserAsync(user),
+            false => Task.CompletedTask
+        });
+    }
 
-            if (!string.IsNullOrEmpty(_currentUserId))
-            {
-                await using var db = await DbFactory.CreateDbContextAsync();
-                _followedTagIds = await db.UserTagFollows!
-                    .Where(f => f.OwnerId == _currentUserId)
-                    .Select(f => f.TagId)
-                    .ToListAsync();
+    private async Task HandleLoggedInUserAsync(ClaimsPrincipal user)
+    {
+        _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
-                await FetchTagsAsync();
-            }
-        }
+        await (string.IsNullOrEmpty(_currentUserId) switch
+        {
+            false => LoadUserDataAsync(),
+            true => Task.CompletedTask
+        });
+    }
+
+    private async Task LoadUserDataAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _followedTagIds = await db.UserTagFollows!
+            .Where(f => f.OwnerId == _currentUserId)
+            .Select(f => f.TagId)
+            .ToListAsync();
+
+        await FetchTagsAsync();
     }
 
     private async Task FetchTagsAsync()
@@ -124,49 +142,68 @@
             .AsNoTracking()
             .ToListAsync();
 
-        if (!string.IsNullOrEmpty(_currentUserId))
+        _ = string.IsNullOrEmpty(_currentUserId) switch
         {
-            var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
-            var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
-            _currentUserGoodTagId = goodTag?.Id;
-            _currentUserBadTagId = badTag?.Id;
-        }
+            false => AssignSystemTags(),
+            true => false
+        };
+    }
+
+    private bool AssignSystemTags()
+    {
+        var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
+        var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+        _currentUserGoodTagId = goodTag?.Id;
+        _currentUserBadTagId = badTag?.Id;
+        return true;
     }
 
     public async Task EnsureSystemTagsExistAsync()
     {
-        if (string.IsNullOrEmpty(_currentUserId)) return;
-        if (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) return;
+        await ((string.IsNullOrEmpty(_currentUserId), _currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) switch
+        {
+            (false, false) => ExecuteEnsureSystemTagsAsync(),
+            _ => Task.CompletedTask
+        });
+    }
 
+    private async Task ExecuteEnsureSystemTagsAsync()
+    {
         await using var context = await DbFactory.CreateDbContextAsync();
         var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
         var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
 
         var created = false;
-        if (goodTag == null)
+        _ = goodTag switch
         {
-            goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-            context.Tags.Add(goodTag);
-            created = true;
-        }
+            null => (goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow }, context.Tags.Add(goodTag), created = true),
+            _ => (null, null, false)
+        };
 
-        if (badTag == null)
+        _ = badTag switch
         {
-            badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-            context.Tags.Add(badTag);
-            created = true;
-        }
+            null => (badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow }, context.Tags.Add(badTag), created = true),
+            _ => (null, null, false)
+        };
 
-        if (created)
+        await (created switch
         {
-            await context.SaveChangesAsync();
-            await FetchTagsAsync(); // Reload all tags list
-        }
-        else
-        {
-            _currentUserGoodTagId = goodTag.Id;
-            _currentUserBadTagId = badTag.Id;
-        }
+            true => SaveAndReloadTagsAsync(context),
+            false => AssignExistingSystemTags(goodTag!, badTag!)
+        });
+    }
+
+    private async Task SaveAndReloadTagsAsync(ApplicationDbContext context)
+    {
+        await context.SaveChangesAsync();
+        await FetchTagsAsync(); // Reload all tags list
+    }
+
+    private Task AssignExistingSystemTags(Tag goodTag, Tag badTag)
+    {
+        _currentUserGoodTagId = goodTag.Id;
+        _currentUserBadTagId = badTag.Id;
+        return Task.CompletedTask;
     }
 
     public class TimelineFeedGroup
@@ -183,15 +220,19 @@
 
     private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimeline(ItemsProviderRequest request)
     {
-        if (_followedTagIds == null || !_followedTagIds.Any())
+        return await (_followedTagIds switch
         {
-            return new ItemsProviderResult<TimelineFeedGroup>(new List<TimelineFeedGroup>(), 0);
-        }
+            null or { Count: 0 } => ValueTask.FromResult(new ItemsProviderResult<TimelineFeedGroup>(new List<TimelineFeedGroup>(), 0)),
+            _ => LoadTimelineDataAsync(request)
+        });
+    }
 
+    private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimelineDataAsync(ItemsProviderRequest request)
+    {
         await using var db = await DbFactory.CreateDbContextAsync();
 
         var query = db.TimelineEvents!
-            .Where(e => _followedTagIds.Contains(e.FollowedTagId));
+            .Where(e => _followedTagIds!.Contains(e.FollowedTagId));
 
         var groupedQuery = query
             .GroupBy(e => new { e.TargetType, TargetId = e.TargetType == "Item" ? e.TargetItemId : e.TargetTagId })
@@ -220,40 +261,52 @@
                 TargetId = pg.TargetId!.Value,
                 LatestEventDate = pg.LatestEventDate,
                 Events = await db.TimelineEvents!
-                    .Where(e => _followedTagIds.Contains(e.FollowedTagId) && e.TargetType == pg.TargetType && (pg.TargetType == "Item" ? e.TargetItemId == pg.TargetId : e.TargetTagId == pg.TargetId))
+                    .Where(e => _followedTagIds!.Contains(e.FollowedTagId) && e.TargetType == pg.TargetType && (pg.TargetType == "Item" ? e.TargetItemId == pg.TargetId : e.TargetTagId == pg.TargetId))
                     .Include(e => e.FollowedTag)
                     .AsNoTracking()
                     .ToListAsync()
             };
 
-            if (pg.TargetType == "Item")
+            await (pg.TargetType switch
             {
-                feedGroup.Item = await db.Items!
-                    .Include(i => i.Owner)
-                    .Include(i => i.TagRelations)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(i => i.Id == pg.TargetId);
-            }
-            else if (pg.TargetType == "Tag")
-            {
-                feedGroup.Tag = await db.Tags!
-                    .Include(t => t.Owner)
-                    .Include(t => t.TargetTagRelations!)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.Id == pg.TargetId);
-            }
+                "Item" => LoadItemForFeedGroupAsync(db, feedGroup, pg.TargetId.Value),
+                "Tag" => LoadTagForFeedGroupAsync(db, feedGroup, pg.TargetId.Value),
+                _ => Task.CompletedTask
+            });
 
-            if (feedGroup.Item != null || feedGroup.Tag != null)
+            switch (feedGroup.Item != null || feedGroup.Tag != null)
             {
-                feedGroups.Add(feedGroup);
+                case true:
+                    feedGroups.Add(feedGroup);
+                    break;
+                case false:
+                    break;
             }
         }
 
         return new ItemsProviderResult<TimelineFeedGroup>(feedGroups, totalGroups);
+    }
+
+    private async Task LoadItemForFeedGroupAsync(ApplicationDbContext db, TimelineFeedGroup feedGroup, int targetId)
+    {
+        feedGroup.Item = await db.Items!
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == targetId);
+    }
+
+    private async Task LoadTagForFeedGroupAsync(ApplicationDbContext db, TimelineFeedGroup feedGroup, int targetId)
+    {
+        feedGroup.Tag = await db.Tags!
+            .Include(t => t.Owner)
+            .Include(t => t.TargetTagRelations!)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == targetId);
     }
 
     private class TimelineFeedGroupComparer : IEqualityComparer<TimelineFeedGroup>
