@@ -37,7 +37,7 @@ public class AccountPagesTests : TestContext
 
         // Act & Assert
         // 例外（NullReferenceException など）が発生しないことを確認する
-        Exception? exception = Record.Exception(() => RenderComponent<StatusMessage>());
+        Exception? exception = Record.Exception(() => Render<StatusMessage>());
         Assert.Null(exception);
     }
 
@@ -59,7 +59,7 @@ public class AccountPagesTests : TestContext
         _ = testContext.Services.AddSingleton(antiforgeryStateProviderMock.Object);
 
         // Act & Assert
-        Exception? exception = Record.Exception(() => testContext.RenderComponent<PasskeySubmit>(parameters =>
+        Exception? exception = Record.Exception(() => testContext.Render<PasskeySubmit>(parameters =>
             parameters
                 .Add(p => p.Operation, PasskeyOperation.Request)
                 .Add(p => p.Name, "test-name")

@@ -1,7 +1,10 @@
 #region
 
+using System;
+using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 using Bunit;
 using Moq;
@@ -15,17 +18,24 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using Xunit;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class TagListConcurrencyTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class TagListConcurrencyTests : IAsyncDisposable
 {
+    private readonly TestContext _ctx;
+
     public TagListConcurrencyTests()
     {
+        _ctx = new TestContext();
+
         // Add MudBlazor services
-        _ = Services.AddMudServices();
+        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+        _ = _ctx.Services.AddMudServices();
 
         // Setup mock authentication
         var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };
@@ -35,18 +45,24 @@ public class TagListConcurrencyTests : TestContext
 
         var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
         authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
-        Services.AddAuthorizationCore();
+        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
+        _ctx.Services.AddAuthorizationCore();
 
         // Setup In-Memory database
         var dbName = Guid.NewGuid().ToString();
-        _ = Services.AddDbContext<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
 
-        _ = Services.AddDbContextFactory<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName));
 
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
@@ -58,7 +74,8 @@ public class TagListConcurrencyTests : TestContext
         // By using IDbContextFactory internally, this error is avoided.
         Exception? exception = Record.Exception(() =>
         {
-            _ = RenderComponent<TagList>();
+            // Render ではなく、_ctx.Render<T>() を使用します
+            _ = _ctx.Render<TagList>();
         });
 
         // Verify that no exception was thrown

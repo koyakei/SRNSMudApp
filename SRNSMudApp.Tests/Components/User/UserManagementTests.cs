@@ -1,6 +1,8 @@
 #region
 
+using System;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 using AngleSharp.Dom;
 
@@ -17,16 +19,23 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
+using Xunit;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Components.User;
 
-public class UserManagementTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class UserManagementTests : IAsyncDisposable
 {
+    private readonly TestContext _ctx;
+
     public UserManagementTests()
     {
-        _ = Services.AddMudServices();
+        _ctx = new TestContext();
+
+        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+        _ = _ctx.Services.AddMudServices();
 
         var authStateProviderMock = new Mock<AuthenticationStateProvider>();
         Claim[] claims =
@@ -38,17 +47,23 @@ public class UserManagementTests : TestContext
         _ = authStateProviderMock.Setup(x => x.GetAuthenticationStateAsync())
             .ReturnsAsync(new AuthenticationState(user));
 
-        _ = Services.AddScoped(sp => authStateProviderMock.Object);
+        _ = _ctx.Services.AddScoped(sp => authStateProviderMock.Object);
         // AuthorizeView needs AuthorizationService
-        _ = Services.AddAuthorizationCore();
+        _ = _ctx.Services.AddAuthorizationCore();
 
         var dbName = Guid.NewGuid().ToString();
-        _ = Services.AddDbContext<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = Services.AddDbContextFactory<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName));
 
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
@@ -69,11 +84,11 @@ public class UserManagementTests : TestContext
         _ = userManagerMock.Setup(u => u.AddToRoleAsync(It.IsAny<ApplicationUser>(), "Admin"))
             .ReturnsAsync(IdentityResult.Success);
 
-        _ = Services.AddScoped(sp => userManagerMock.Object);
+        _ = _ctx.Services.AddScoped(sp => userManagerMock.Object);
 
         // Add a user to the in-memory db
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             _ = dbContext.Users.Add(new ApplicationUser
@@ -84,7 +99,8 @@ public class UserManagementTests : TestContext
         }
 
         // Act
-        IRenderedComponent<UserManagement> component = RenderComponent<UserManagement>();
+        // Render ではなく、_ctx.Render<T>() を使用します
+        IRenderedComponent<UserManagement> component = _ctx.Render<UserManagement>();
 
         // Wait for users to load
         component.WaitForState(() => component.Markup.Contains("testuser@example.com"));

@@ -1,5 +1,9 @@
 #region
 
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
 using AngleSharp.Dom;
 
 using Bunit;
@@ -14,18 +18,25 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
+using Xunit;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Components.User;
 
-public class UserSearchTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class UserSearchTests : IAsyncDisposable
 {
+    private readonly TestContext _ctx;
+
     public UserSearchTests()
     {
-        _ = Services.AddMudServices();
+        _ctx = new TestContext();
+
+        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+        _ = _ctx.Services.AddMudServices();
         // Since MudBlazor Popover requires JS, we need to mock it in bUnit or use Bunit.Web.JSInterop
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase("UserSearchTestDb")
@@ -46,13 +57,20 @@ public class UserSearchTests : TestContext
         _ = mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new ApplicationDbContext(options));
 
-        _ = Services.AddSingleton(mockDbFactory.Object);
+        _ = _ctx.Services.AddSingleton(mockDbFactory.Object);
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
     public void UserSearch_Renders_Initially()
     {
-        IRenderedComponent<UserSearch> component = RenderComponent<UserSearch>();
+        // Render ではなく、_ctx.Render<T>() を使用します
+        IRenderedComponent<UserSearch> component = _ctx.Render<UserSearch>();
         Assert.NotNull(component);
         Assert.Contains("ユーザーを検索", component.Markup);
     }
@@ -60,8 +78,9 @@ public class UserSearchTests : TestContext
     [Fact]
     public void UserSearch_CanSearchUsers_CaseInsensitive()
     {
-        IRenderedComponent<MudPopoverProvider> provider = RenderComponent<MudPopoverProvider>();
-        IRenderedComponent<UserSearch> searchComponent = RenderComponent<UserSearch>();
+        // Render ではなく、_ctx.Render<T>() を使用します
+        IRenderedComponent<MudPopoverProvider> provider = _ctx.Render<MudPopoverProvider>();
+        IRenderedComponent<UserSearch> searchComponent = _ctx.Render<UserSearch>();
 
         IElement input = searchComponent.Find("input");
 

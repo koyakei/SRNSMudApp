@@ -75,7 +75,7 @@ public class RequireConfirmedAccountTests : TestContext
 
         // Act
         IRenderedComponent<RequireConfirmedAccount> component =
-            RenderComponent<RequireConfirmedAccount>(parameters => parameters.AddCascadingValue(httpContext));
+            Render<RequireConfirmedAccount>(parameters => parameters.AddCascadingValue(httpContext));
 
         component.WaitForState(() => component.Markup.Contains("testuser@example.com"));
 

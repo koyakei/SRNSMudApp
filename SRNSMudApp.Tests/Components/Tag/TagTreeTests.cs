@@ -1,6 +1,10 @@
 #region
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 using Bunit;
 using Moq;
@@ -13,21 +17,26 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
-
+using Xunit;
 using Xunit.Abstractions;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class TagTreeTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class TagTreeTests : IAsyncDisposable
 {
     private readonly ITestOutputHelper _output;
+    private readonly TestContext _ctx;
 
     public TagTreeTests(ITestOutputHelper output)
     {
         _output = output;
-        _ = Services.AddMudServices();
+        _ctx = new TestContext();
+        
+        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+        _ = _ctx.Services.AddMudServices();
         var claims = new[] { new Claim(ClaimTypes.Name, "test-user-id"), new Claim(ClaimTypes.NameIdentifier, "test-user-id") };
         var identity = new ClaimsIdentity(claims, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -35,16 +44,22 @@ public class TagTreeTests : TestContext
 
         var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
         authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
-        Services.AddAuthorizationCore();
+        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
+        _ctx.Services.AddAuthorizationCore();
 
         var dbName = Guid.NewGuid().ToString();
-        _ = Services.AddDbContext<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = Services.AddDbContextFactory<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName));
 
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
@@ -52,7 +67,7 @@ public class TagTreeTests : TestContext
     {
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
@@ -78,14 +93,14 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
         // Act
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
@@ -107,7 +122,7 @@ public class TagTreeTests : TestContext
     {
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // System tag should be filtered out
@@ -135,14 +150,14 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
         // Act
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
@@ -161,7 +176,7 @@ public class TagTreeTests : TestContext
     {
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // Seed a tree structure for the current user
@@ -187,14 +202,14 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
         // Act - Rendering the component will trigger LoadDataAsync with an empty search text
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
@@ -219,7 +234,7 @@ public class TagTreeTests : TestContext
     {
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // Seed a circular reference tree structure
@@ -254,7 +269,7 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
@@ -262,7 +277,7 @@ public class TagTreeTests : TestContext
 
         // Act - Rendering the component will trigger LoadDataAsync and attempt to build the tree
         // If there's a stack overflow, this test will crash the runner.
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
@@ -278,7 +293,7 @@ public class TagTreeTests : TestContext
     {
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // Seed 2500 tags
@@ -296,14 +311,14 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
         // Act
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
@@ -322,7 +337,7 @@ public class TagTreeTests : TestContext
     public async Task JqTree_DisplaysTag_WhenParentIsNonExistent()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             var tag = new SRNSMudApp.Data.Tag
@@ -338,12 +353,12 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
@@ -355,7 +370,7 @@ public class TagTreeTests : TestContext
     public async Task JqTree_DisplaysTag_WhenSelfReferencing()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             var tag = new SRNSMudApp.Data.Tag
@@ -371,12 +386,12 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
@@ -388,7 +403,7 @@ public class TagTreeTests : TestContext
     public async Task JqTree_DisplaysTags_WhenDeeplyNested()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             var tags = new List<SRNSMudApp.Data.Tag>();
@@ -410,14 +425,14 @@ public class TagTreeTests : TestContext
         }
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
         // This will FAIL if JsonException is thrown due to MaxDepth limit
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
@@ -435,7 +450,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysSingleFlatTag()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
@@ -460,7 +475,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysMultipleFlatTags()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -487,7 +502,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysMixedFlatAndTreeTags()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -521,7 +536,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysOtherUserTagsWhenNoOwnTags()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -546,7 +561,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysBothOwnAndOtherUserTags()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -571,7 +586,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysSingleRootNoChildren()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
@@ -595,7 +610,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysMultipleRootsWithChildren()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -648,7 +663,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_JsonIsNotEmptyArray()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             for (var i = 0; i < 10; i++)
@@ -679,7 +694,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_DisplaysThreeLevelTree()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -722,7 +737,7 @@ public class TagTreeTests : TestContext
     public async Task EmptySearch_ExcludesSystemTagsButDisplaysUserTags()
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
-            Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             dbContext.Tags.AddRange(
@@ -750,13 +765,14 @@ public class TagTreeTests : TestContext
     private Task<string?> RenderAndGetTreeJson()
     {
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
-        _ = JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);
             return true;
         });
 
-        IRenderedComponent<TagTree> component = RenderComponent<TagTree>();
+        // Render ではなく _ctx.Render<T>() に変更
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
 

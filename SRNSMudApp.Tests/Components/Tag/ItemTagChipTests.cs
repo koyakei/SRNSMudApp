@@ -1,6 +1,8 @@
 #region
 
+using System;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 using Bunit;
 using Bunit.TestDoubles;
@@ -15,16 +17,23 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using Xunit;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class ItemTagChipTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class ItemTagChipTests : IAsyncDisposable
 {
+    private readonly TestContext _ctx;
+
     public ItemTagChipTests()
     {
-        _ = Services.AddMudServices();
+        _ctx = new TestContext();
+
+        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+        _ = _ctx.Services.AddMudServices();
         var claims = new[] { new Claim(ClaimTypes.Name, "test-user-id"), new Claim(ClaimTypes.NameIdentifier, "test-user-id") };
         var identity = new ClaimsIdentity(claims, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -32,19 +41,25 @@ public class ItemTagChipTests : TestContext
 
         var authMock = new Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
         authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
-        Services.AddAuthorizationCore();
+        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
+        _ctx.Services.AddAuthorizationCore();
 
         var dbName = Guid.NewGuid().ToString();
-        _ = Services.AddDbContext<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = Services.AddDbContextFactory<ApplicationDbContext>(options =>
+        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName));
 
         var itemTagServiceMock = new Mock<IItemTagService>();
-        _ = Services.AddScoped(sp => itemTagServiceMock.Object);
+        _ = _ctx.Services.AddScoped(sp => itemTagServiceMock.Object);
 
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
@@ -64,7 +79,8 @@ public class ItemTagChipTests : TestContext
         var item = new SRNSMudApp.Data.Item { Id = 1, Content = "Test Item", OwnerId = "test-user-id" };
 
         // Act
-        IRenderedComponent<ItemTagChip> component = RenderComponent<ItemTagChip>(parameters => parameters
+        // Render ではなく、最新の _ctx.Render<T>() を使用します
+        IRenderedComponent<ItemTagChip> component = _ctx.Render<ItemTagChip>(parameters => parameters
             .Add(p => p.TagRelation, tagRelation)
             .Add(p => p.Item, item)
             .Add(p => p.CurrentUserId, "test-user-id")

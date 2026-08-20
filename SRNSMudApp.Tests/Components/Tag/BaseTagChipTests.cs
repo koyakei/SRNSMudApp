@@ -1,21 +1,31 @@
 #region
-
+using System;
+using System.Threading.Tasks;
 using Bunit;
-
 using MudBlazor.Services;
-
 using SRNSMudApp.Components.Tag;
-
+using Xunit;
 #endregion
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class BaseTagChipTests : TestContext
+// TestContextの継承をやめ、IAsyncDisposableを実装します
+public class BaseTagChipTests : IAsyncDisposable
 {
+    // TestContextのインスタンスをプライベートフィールドとして保持（コンポジション・パターン）
+    private readonly TestContext _ctx;
+
     public BaseTagChipTests()
     {
-        _ = Services.AddMudServices();
-        JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx = new TestContext();
+        _ctx.Services.AddMudServices();
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    // 非同期でTestContextを破棄し、MudBlazorのKeyInterceptorServiceのエラーを防ぐ
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 
     [Fact]
@@ -26,7 +36,8 @@ public class BaseTagChipTests : TestContext
         var weight = 5;
 
         // Act
-        IRenderedComponent<BaseTagChip> component = RenderComponent<BaseTagChip>(parameters => parameters
+        // Render ではなく _ctx.RenderComponent を使用します
+        IRenderedComponent<BaseTagChip> component = _ctx.Render<BaseTagChip>(parameters => parameters
             .Add(p => p.TagName, tagName)
             .Add(p => p.Weight, weight)
         );
@@ -60,7 +71,8 @@ public class BaseTagChipTests : TestContext
         var ownerName = "user123";
 
         // Act
-        IRenderedComponent<BaseTagChip> component = RenderComponent<BaseTagChip>(parameters => parameters
+        // Render ではなく _ctx.RenderComponent を使用します
+        IRenderedComponent<BaseTagChip> component = _ctx.Render<BaseTagChip>(parameters => parameters
             .Add(p => p.TagName, tagName)
             .Add(p => p.OwnerName, ownerName)
             .Add(p => p.ActionContent,
