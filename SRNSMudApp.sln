@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.Tests", "SRNSMud
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.E2ETests", "SRNSMudApp.E2ETests\SRNSMudApp.E2ETests.csproj", "{39528A6A-B63F-4473-BD02-EBDEEB474A6A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.ComponentTests", "SRNSMudApp.ComponentTests\SRNSMudApp.ComponentTests.csproj", "{6A907412-B5F7-40F2-9C6C-D75944C4B78E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x64.Build.0 = Release|Any CPU
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x86.ActiveCfg = Release|Any CPU
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x86.Build.0 = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|x64.Build.0 = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Debug|x86.Build.0 = Debug|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|x64.ActiveCfg = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|x64.Build.0 = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|x86.ActiveCfg = Release|Any CPU
+		{6A907412-B5F7-40F2-9C6C-D75944C4B78E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -17,6 +17,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="bunit" Version="2.9.0" />
+    <PackageReference Include="bunit.generators" Version="2.9.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.9.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Features" Version="5.9.0" />
