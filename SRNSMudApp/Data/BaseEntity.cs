@@ -1,6 +1,8 @@
+using SRNSMudApp.Models;
+
 namespace SRNSMudApp.Data;
 
-public abstract class BaseEntity
+public abstract class BaseEntity:IOwnable
 {
     public int Id { get; set; }
 

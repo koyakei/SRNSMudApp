@@ -6,6 +6,7 @@
 @using SRNSMudApp.Components.Contract
 @using SRNSMudApp.Components.Item
 @using SRNSMudApp.Components.Tag
+@using SRNSMudApp.Models
 @using SRNSMudApp.Services
 @inject TaggingContractService TaggingContractService
 @implements IAsyncDisposable
@@ -111,7 +112,7 @@
                 </MudText>
             </div>
 
-            @switch (!string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId)
+            @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
             {
                 case true:
                     <div class="d-flex">
