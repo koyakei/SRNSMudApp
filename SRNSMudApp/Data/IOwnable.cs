@@ -1,6 +1,4 @@
-using SRNSMudApp.Data;
-
-namespace SRNSMudApp.Models;
+namespace SRNSMudApp.Data;
 
 public interface IOwnable
 {
