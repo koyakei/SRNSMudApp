@@ -30,7 +30,7 @@
                     break;
             }
 
-            <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
+            <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
                 <MudTabPanel Text="無償のお願い (Gratis)">
                     <div class="pa-4">
                         <MudTextField T="string" Label="メッセージ（任意）" @bind-Value="_gratisMessage" Lines="3"
@@ -45,16 +45,16 @@
 
                         <MudAutocomplete T="Item" Label="提供するアイテム" @bind-Value="_offeredItem"
                                          SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
-                                         Required="true" RequiredError="アイテムを選択してください"
+                                         Required="@(_activeTabIndex == 1)" RequiredError="アイテムを選択してください"
                                          ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
 
                         <MudAutocomplete T="Tag" Label="提供するタグ" @bind-Value="_offeredTag"
                                          SearchFunc="@SearchTags" ToStringFunc="@(t => t?.Name ?? "")"
-                                         Required="true" RequiredError="タグを選択してください"
+                                         Required="@(_activeTabIndex == 1)" RequiredError="タグを選択してください"
                                          ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
 
                         <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedRightAsset"
-                                   Clearable="true" Required="true" RequiredError="相互タグ付けにはアセットが必要です"
+                                   Clearable="true" Required="@(_activeTabIndex == 1)" RequiredError="相互タグ付けにはアセットが必要です"
                                    ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")">
                             @foreach (var asset in _myAssets)
                             {
@@ -68,7 +68,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">キャンセル</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">
             提案する
         </MudButton>
     </DialogActions>
@@ -84,7 +84,8 @@
     [Parameter] public bool IsRemovalRequest { get; set; }
 
     private MudForm? _form;
-    private bool _isValid;
+    private bool _isValid = true;
+    private int _activeTabIndex;
     private string _currentUserId = string.Empty;
     private int ProposedWeightInput { get; set; } = 1;
 
@@ -148,12 +149,6 @@
 
     private async Task Submit()
     {
-        await _form!.ValidateAsync();
-        switch (!_isValid)
-        {
-            case true: return;
-        }
-
         switch (ProposedWeightInput == 0 && !IsRemovalRequest)
         {
             case true:
@@ -161,7 +156,14 @@
                 return;
         }
 
-        var isMutual = _offeredItem != null && _offeredTag != null && _selectedRightAsset != null;
+        var isMutual = _activeTabIndex == 1;
+        switch (isMutual && (_offeredItem == null || _offeredTag == null || _selectedRightAsset == null))
+        {
+            case true:
+                Snackbar.Add("相互タグ付けに必要な項目を入力してください。", Severity.Error);
+                return;
+        }
+
         var requestType = IsRemovalRequest 
             ? TaggingRequestType.Remove 
             : ProposedWeightInput > 0 
