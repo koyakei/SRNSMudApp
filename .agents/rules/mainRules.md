@@ -18,7 +18,7 @@ trigger: always_on
 - **非同期プログラミング**: I/Oバウンドな操作（DBアクセス、Gemini API呼び出し）はすべて `async/await` を使用し、同期的なブロック (`.Result` や `.Wait()`) は絶対に避けること。
 
 ## if文撲滅
-システムの取り得る状態をunion, interfaceとして厳密に定義し、UIの振る舞いをDynamicComponentで決定する。
+システムの取り得る状態をunion, interfaceとして厳密に定義し、UIの振る舞いをDynamicComponent, Microsoft.AspNetCore.Components.RenderFragmentで決定する。
 コンパイラによって保証された「網羅的パターンマッチング（Exhaustive Pattern Matching）」による安全な型ダウンキャストに委譲する
 
 ## 再代入撲滅
