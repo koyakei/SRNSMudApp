@@ -2,17 +2,13 @@ namespace SRNSMudApp.Data;
 
 public interface IOwnable
 {
-    
     // 外部キー
-    public string OwnerId { get; set; }
+    string OwnerId { get; set; }
 
     // ナビゲーションプロパティ
-    public ApplicationUser Owner { get; set; }
+    ApplicationUser Owner { get; set; }
 
-    public bool IsOwnedBy(string userId)
-    {
-        return OwnerId == userId;
-    }
+    bool IsOwnedBy(string userId) => OwnerId == userId;
 }
 
 
