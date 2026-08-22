@@ -1,14 +1,17 @@
 using System.Text.RegularExpressions;
 
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
 
-using SRNSMudApp.Data;
-
 namespace SRNSMudApp.E2ETests;
 
+/// <summary>
+///     認証プロバイダ（Google/LINE/GitHub）ごとのCookie認証パイプラインの健全性チェック。
+///     /auth/callback?provider=X&amp;code=... から実際にログインCookieが発行され、
+///     認証済みページへ到達できることのみを検証する。
+///     アイテム投稿ロジックは SRNSMudApp.Tests/Components/Item/AddItemTests で
+///     コンポーネントテストとしてカバー済みのため、ここでは重複検証しない。
+/// </summary>
 [Parallelizable(ParallelScope.Self)]
 [TestFixture]
 public class LoginAndPostItemE2ETests : PageTest
@@ -16,133 +19,54 @@ public class LoginAndPostItemE2ETests : PageTest
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer();
-        _serverAddress = _factory.ServerAddress;
+        _factory = SharedTestServerFixture.Factory;
+        _serverAddress = SharedTestServerFixture.ServerAddress;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory.Dispose();
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
 
     [SetUp]
     public void Setup()
     {
         Page.Console += (_, msg) => TestContext.Progress.WriteLine($"[CONSOLE] {msg.Type}: {msg.Text}");
         Page.PageError += (_, error) => TestContext.Progress.WriteLine($"[PAGE ERROR]: {error}");
-        // Remove the global Dialog handler because we will handle it in the specific test
     }
 
     private CustomWebApplicationFactory _factory = null!;
     private string _serverAddress = "";
 
-    private async Task<string> CreateTestInvitationAsync()
+    [Test]
+    public async Task GivenNewUser_WhenLoginWithGoogle_ThenAuthenticated()
     {
-        using IServiceScope scope = _factory.AppServices.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        // Ensure dummy admin user exists
-        var adminId = "dummy-admin-id";
-        if (!await db.Users.AnyAsync(u => u.Id == adminId))
-        {
-            db.Users.Add(new ApplicationUser
-            {
-                Id = adminId, UserName = "admin@example.com", Email = "admin@example.com", EmailConfirmed = true
-            });
-            await db.SaveChangesAsync();
-        }
-
-        var invite = new Invitation
-        {
-            InvitationCode = Guid.NewGuid().ToString("N")[..10],
-            Email = "test@example.com",
-            CreatedDate = DateTime.UtcNow,
-            ExpirationDate = DateTime.UtcNow.AddDays(1),
-            OwnerId = adminId,
-            InvitedByAdminId = adminId
-        };
-        db.Invitations.Add(invite);
-        await db.SaveChangesAsync();
-        return invite.InvitationCode;
+        await LoginWithMockProviderAsync("Google", "mock-google-test");
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
     }
 
     [Test]
-    public async Task GivenNewUser_WhenLoginWithGoogle_ThenCanPostItem()
+    public async Task GivenNewUser_WhenLoginWithLINE_ThenAuthenticated()
     {
-        // Navigate to the Google callback directly since Google UI isn't testable
-        await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-google-test");
-
-        // Wait for redirect to happen (either to Home or some other page)
-        // Usually, successful login redirects to Home "/"
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
-            new PageWaitForURLOptions { Timeout = 10000 });
-        await Expect(Page.Locator("body")).ToContainTextAsync("Home");
-
-        // Go to Item List page
-        await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-
-        // Wait for Blazor Server circuit to connect before interacting
-        await Task.Delay(1500);
-
-        // Ensure the input field is visible
-        await Task.Delay(1500);
-        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
-        await input.WaitForAsync();
-
-        var contentText = "Test item from Google user " + Guid.NewGuid();
-        await input.FillAsync(contentText);
-
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-
-        // Wait for the item to appear in the list below or a snackbar
-        await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
-        await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
+        await LoginWithMockProviderAsync("Line", "mock-line-test");
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
     }
 
     [Test]
-    public async Task GivenNewUser_WhenLoginWithLINE_ThenCanPostItem()
+    public async Task GivenNewUser_WhenLoginWithGitHub_ThenAuthenticated()
     {
-        await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Line&code=mock-line-test");
-
-        await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
-            new PageWaitForURLOptions { Timeout = 10000 });
-        await Expect(Page.Locator("body")).ToContainTextAsync("Home");
-
-        await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-
-        await Task.Delay(1500);
-        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
-        await input.WaitForAsync();
-
-        var contentText = "Test item from LINE user " + Guid.NewGuid();
-        await input.FillAsync(contentText);
-
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-
-        await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
-        await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
+        await LoginWithMockProviderAsync("Github", "mock-github-test");
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
     }
 
-    [Test]
-    public async Task GivenNewUser_WhenLoginWithGitHub_ThenCanPostItem()
+    /// <summary>
+    ///     モックコールバックへ遷移し、Home へリダイレクトされるまで待機する。
+    /// </summary>
+    private async Task LoginWithMockProviderAsync(string provider, string code)
     {
-        await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Github&code=mock-github-test");
-
+        await Page.GotoAsync($"{_serverAddress}/auth/callback?provider={provider}&code={code}");
         await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
             new PageWaitForURLOptions { Timeout = 10000 });
         await Expect(Page.Locator("body")).ToContainTextAsync("Home");
-
-        await Page.GotoAsync($"{_serverAddress}/Item/ItemList");
-
-        await Task.Delay(1500);
-        ILocator input = Page.GetByPlaceholder("新しいアイテムのコンテンツを入力...");
-        await input.WaitForAsync();
-
-        var contentText = "Test item from GitHub user " + Guid.NewGuid();
-        await input.FillAsync(contentText);
-
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "保存" }).ClickAsync();
-
-        await Expect(Page.Locator("body")).ToContainTextAsync("アイテムが正常に保存されました。");
-        await Expect(Page.Locator("body")).ToContainTextAsync(contentText);
     }
 }

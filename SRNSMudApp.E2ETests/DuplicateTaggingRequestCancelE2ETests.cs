@@ -24,16 +24,13 @@ public class DuplicateTaggingRequestCancelE2ETests : PageTest
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer();
-        _serverAddress = _factory.ServerAddress;
+        _factory = SharedTestServerFixture.Factory;
+        _serverAddress = SharedTestServerFixture.ServerAddress;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory?.Dispose();
-
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
+    private CustomWebApplicationFactory _factory = null!;
+    private string _serverAddress = "";
 
     [Test]
     public async Task WhenUserARequestIsApproved_UserBCanCancelTheirOwnRequest()

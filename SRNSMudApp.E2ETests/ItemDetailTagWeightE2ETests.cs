@@ -15,12 +15,10 @@ public class ItemDetailTagWeightE2ETests
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer();
+        _factory = SharedTestServerFixture.Factory;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory?.Dispose();
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
 
     [Test]
     public async Task ItemDetail_ShouldDisplayItemSpecificTagWeight_WhenVoteButtonClicked()

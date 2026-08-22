@@ -94,4 +94,23 @@ public class UserSearchTests : IAsyncDisposable
 
         Assert.Contains("TestUser1", provider.Markup);
     }
+
+    /// <summary>
+    ///     完全一致するユーザー名を入力すると、候補一覧にそのユーザーが表示されること。
+    ///     （MudPopoverE2ETests.UserSearch_PopoverShouldAppear_WhenTyping の移行テスト。
+    ///     ポップオーバーのCSS位置合わせではなく「入力→候補データのレンダリング」を検証する）
+    /// </summary>
+    [Fact]
+    public void UserSearch_TypingFullName_ShowsCandidateInPopover()
+    {
+        IRenderedComponent<MudPopoverProvider> provider = _ctx.Render<MudPopoverProvider>();
+        IRenderedComponent<UserSearch> searchComponent = _ctx.Render<UserSearch>();
+
+        IElement input = searchComponent.Find("input");
+        input.Input("testuser");
+
+        provider.WaitForState(() => provider.Markup.Contains("TestUser1"), TimeSpan.FromSeconds(3));
+
+        Assert.Contains("TestUser1", provider.Markup);
+    }
 }

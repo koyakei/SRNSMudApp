@@ -3,28 +3,29 @@ using Microsoft.Playwright.NUnit;
 
 namespace SRNSMudApp.E2ETests;
 
+/// <summary>
+///     ログインページの外部認証ボタン描画と、実JS（window.customAuth.renderGoogleButton 等）
+///     のグローバル関数が実際に定義されていることを検証する。実ブラウザAPI依存のため
+///     コンポーネントテスト化は不可（維持・変更なし）。
+///     注意: 環境変数 Authentication__Google__ClientId をプロセス全体に設定する。
+///     本クラスには [Parallelizable] が付いておらず、アセンブリレベルの並列化も無効なため
+///     現状は副作用がないが、将来並列化する場合は環境変数依存をやめて
+///     WebApplicationFactory の設定注入へリファクタリングすること。
+/// </summary>
 [TestFixture]
 public class ExternalLoginButtonsE2ETests : PageTest
 {
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        Environment.SetEnvironmentVariable("Authentication__Google__ClientId",
-            "1234567890-dummy.apps.googleusercontent.com");
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer();
-        _serverAddress = _factory.ServerAddress;
+        // ダミーClientIdの設定はホスト構築前に必要なため SharedTestServerFixture で行う
+        _factory = SharedTestServerFixture.Factory;
+        _serverAddress = SharedTestServerFixture.ServerAddress;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown()
-    {
-        Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
-        _factory?.Dispose();
-    }
-
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
+    private CustomWebApplicationFactory _factory = null!;
+    private string _serverAddress = "";
 
     [Test]
     public async Task LoginButtons_ShouldBeRendered()

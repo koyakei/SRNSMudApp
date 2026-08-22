@@ -10,22 +10,26 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
 
+/// <summary>
+///     実SignalR接続・実JS環境でのポップオーバー描画を含めた、全ルート横断的なスモークテスト。
+///     各ページのロジック・レンダリングは SRNSMudApp.Tests/Components 配下の
+///     コンポーネントテスト（PageRenderSmokeTests 等）でカバー済みのため、
+///     本テストは「実ブラウザでページ遷移しても Blazor の未処理例外UIが出ない」ことの
+///     最終防衛線としてのみ維持する。
+/// </summary>
 [TestFixture]
 public class GlobalPopoverE2ETests : PageTest
 {
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer(); // Initialize the host
-        _serverAddress = _factory.ServerAddress;
+        _factory = SharedTestServerFixture.Factory;
+        _serverAddress = SharedTestServerFixture.ServerAddress;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory?.Dispose();
-
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
+    private CustomWebApplicationFactory _factory = null!;
+    private string _serverAddress = "";
 
     [Test]
     [TestCase("/")]

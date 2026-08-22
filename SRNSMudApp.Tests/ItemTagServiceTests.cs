@@ -201,4 +201,41 @@ public class ItemTagServiceTests : IDisposable
 
         Assert.Equal("タグの作成者ではないため、追加する権限がありません。", result);
     }
+
+    /// <summary>
+    ///     既存の Item に対してタグを追加しても、Item が新規エンティティとして
+    ///     再追加され主キー重複例外が起きないことを検証する。
+    ///     （ItemTaggingE2ETests/AddTagToItem_FailsIfItemIsAddedAsNewEntity の移行テスト。
+    ///     ダイアログUI経由ではなくサービス層で直接検証する）
+    /// </summary>
+    [Fact]
+    public async Task AddTagToItemAsync_WithExistingItem_DoesNotDuplicateItemEntity()
+    {
+        // Arrange: 既存ユーザー・既存アイテム・既存タグを事前投入
+        var userId = "TestUser";
+        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
+        var item = new Item { Content = "Existing Item", OwnerId = userId };
+        _dbContext.Items.Add(item);
+        await _dbContext.SaveChangesAsync();
+        var savedItemId = item.Id;
+
+        var tag = new Tag { Name = "TestTag", Content = "Test content", OwnerId = userId, CachedWeight = 0 };
+        _dbContext.Tags.Add(tag);
+        await _dbContext.SaveChangesAsync();
+
+        // Act: 既存アイテムへタグ追加（Item を Attach/Add し直すとここで主キー重複例外が発生する）
+        var result = await _service.AddTagToItemAsync(savedItemId, tag.Id, userId);
+
+        // Assert: 成功（エラーメッセージなし）
+        Assert.Null(result);
+
+        // アイテムは重複していない（1件のまま）
+        Assert.Equal(1, await _dbContext.Items.CountAsync(i => i.Id == savedItemId));
+
+        // タグリレーションが作成されている
+        TagRelation? relation =
+            await _dbContext.TagRelations.SingleOrDefaultAsync(tr => tr.ItemId == savedItemId && tr.TagId == tag.Id);
+        Assert.NotNull(relation);
+        Assert.Equal(userId, relation!.OwnerId);
+    }
 }

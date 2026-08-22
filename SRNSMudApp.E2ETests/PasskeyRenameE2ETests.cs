@@ -1,7 +1,6 @@
 #region
 
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
@@ -16,51 +15,27 @@ public partial class PasskeyRenameE2ETests : PageTest
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new CustomWebApplicationFactory();
-        _factory.EnsureServer(); // Initialize the host
-        _serverAddress = _factory.ServerAddress;
+        _factory = SharedTestServerFixture.Factory;
+        _serverAddress = SharedTestServerFixture.ServerAddress;
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory?.Dispose();
-
-    private CustomWebApplicationFactory? _factory;
-    private string? _serverAddress;
+    // ファクトリとMSSQLコンテナは SharedTestServerFixture で共有・破棄される
+    private CustomWebApplicationFactory _factory = null!;
+    private string _serverAddress = "";
 
     [Test]
     public async Task RenamePasskey_FailsIfModelBindingIsBroken()
     {
         Console.WriteLine($"ServerAddress: {_serverAddress}");
-        ICDPSession cdp = await Context.NewCDPSessionAsync(Page);
-        _ = await cdp.SendAsync("WebAuthn.enable");
-
-        var authenticatorOptions = new Dictionary<string, object>
-        {
-            { "protocol", "ctap2" },
-            { "transport", "usb" },
-            { "hasResidentKey", true },
-            { "hasUserVerification", true },
-            { "isUserVerified", true }
-        };
-
-        JsonElement? authenticatorId = await cdp.SendAsync("WebAuthn.addVirtualAuthenticator",
-            new Dictionary<string, object> { { "options", authenticatorOptions } });
+        (ICDPSession cdp, JsonElement? authenticatorId) =
+            await WebAuthnTestHelpers.EnableVirtualAuthenticatorAsync(Page);
 
         // ユーザー情報
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
         var email = $"testuser_rename_{uniqueId}@example.com";
-        const string password = "Password123!";
 
         // ユーザー登録
-        {
-            await Page.Context.ClearCookiesAsync();
-            var userName = email.Contains('@') ? email.Split('@')[0] : email;
-            await Page.GotoAsync($"{_serverAddress}/auth/callback?provider=Google&code=mock-{userName}");
-            await Page.WaitForURLAsync(new Regex(@"^" + Regex.Escape(_serverAddress) + @"/?$"),
-                new PageWaitForURLOptions { Timeout = 10000 });
-            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Logout" }))
-                .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
-        }
+        await WebAuthnTestHelpers.LoginWithMockGoogleAsync(Page, _serverAddress!, email);
 
         // Passkey作成
         _ = await Page.GotoAsync($"{_serverAddress}/Account/Manage/Passkeys");
@@ -80,16 +55,6 @@ public partial class PasskeyRenameE2ETests : PageTest
         await Page.WaitForURLAsync("**/Account/Manage/Passkeys", new PageWaitForURLOptions { Timeout = 5000 });
         await Expect(Page.GetByText("Passkey updated successfully.")).ToBeVisibleAsync();
 
-        if (authenticatorId != null)
-        {
-            _ = await cdp.SendAsync("WebAuthn.removeVirtualAuthenticator",
-                new Dictionary<string, object>
-                {
-                    { "authenticatorId", authenticatorId.Value.GetProperty("authenticatorId").GetString() }
-                });
-        }
+        await WebAuthnTestHelpers.RemoveVirtualAuthenticatorAsync(cdp, authenticatorId);
     }
-
-    [GeneratedRegex("Click here to confirm your account", RegexOptions.IgnoreCase)]
-    private static partial Regex ConfirmAccountRegex();
 }
