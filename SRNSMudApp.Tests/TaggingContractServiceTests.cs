@@ -844,4 +844,56 @@ public class TaggingContractServiceTests : IDisposable
         Assert.NotNull(ledger);
         Assert.Equal("Reward Bounty Fulfilled", ledger.Reason);
     }
+
+    [Fact]
+    public async Task ScenarioI_GratisRemove_ShouldRemoveRelationAndDecreaseCachedWeight()
+    {
+        // Arrange
+        // Motivation: ユーザーBが付けたタグを、アイテムオーナーのユーザーAが削除リクエストを出す。
+        // ユーザーB（タグオーナー）が承認すると、タグリレーションが削除され、CachedWeightが減少する。
+        var userA = "UserA";
+        var userB = "UserB";
+
+        var targetItem = new Item { Content = "TargetItem", OwnerId = userA };
+        var tag = new Tag { Name = "RemovableTag", OwnerId = userB, CachedWeight = 10 };
+
+        _dbContext.Items!.Add(targetItem);
+        _dbContext.Tags!.Add(tag);
+        await _dbContext.SaveChangesAsync();
+
+        var relation = new TagRelation { ItemId = targetItem.Id, TagId = tag.Id, OwnerId = userB, Weight = 3 };
+        _dbContext.TagRelations!.Add(relation);
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
+            OwnerId = userA,
+            RequesterUserId = userA,
+            TagOwnerUserId = userB,
+            TargetItemId = targetItem.Id,
+            RequestedTagId = tag.Id,
+            Status = TradeStatus.Proposed,
+            Payload = new GratisPayload("Please remove this tag"),
+            RequestType = TaggingRequestType.Remove
+        };
+        _dbContext.TaggingRequestEntities!.Add(contract);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var acceptResult = await _service.AcceptContractAsync(contract.Id, userB);
+        Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
+
+        // Assert
+        // タグリレーションがDBから削除される
+        var relationExists = await _dbContext.TagRelations.AnyAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id);
+        Assert.False(relationExists);
+
+        // 契約ステータスが Executed になる
+        TaggingRequestEntity? updatedContract = await _dbContext.TaggingRequestEntities.FindAsync(contract.Id);
+        Assert.Equal(TradeStatus.Executed, updatedContract!.Status);
+
+        // CachedWeight がリレーションの重さの分だけ減少する
+        Tag? updatedTag = await _dbContext.Tags.FindAsync(tag.Id);
+        Assert.Equal(7, updatedTag!.CachedWeight);
+    }
 }

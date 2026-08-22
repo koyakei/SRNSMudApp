@@ -46,6 +46,7 @@
             {
                 case true:
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               data-testid="tagging-request-approve"
                                OnClick="@(() => ApproveRequestAsync(context))" Class="mr-2">
                         承認
                     </MudButton>
@@ -58,6 +59,7 @@
                     break;
                 case null when CanApprove(context):
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                               data-testid="tagging-request-reject"
                                StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="@(() => RejectRequestAsync(context))">
                         却下
                     </MudButton>

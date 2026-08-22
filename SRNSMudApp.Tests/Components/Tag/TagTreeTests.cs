@@ -756,6 +756,96 @@ public class TagTreeTests : IAsyncDisposable
     }
 
     // ============================================================
+    // E2Eテスト(TagTreeBugE2ETests)から移行した回帰テスト
+    // ============================================================
+
+    /// <summary>
+    ///     単一ルートに複数の子がぶら下がるツリーが正しく描画される
+    /// </summary>
+    [Fact]
+    public async Task JqTree_DisplaysCorrectly_WhenSingleRootNodeHasMultipleChildren()
+    {
+        IDbContextFactory<ApplicationDbContext> dbFactory =
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
+        {
+            dbContext.Tags.AddRange(
+                new SRNSMudApp.Data.Tag { Id = 2100, Name = "BugRoot", IsSystem = false, OwnerId = "test-user-id" },
+                new SRNSMudApp.Data.Tag
+                {
+                    Id = 2101,
+                    Name = "Child1",
+                    ParentTagId = 2100,
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
+                },
+                new SRNSMudApp.Data.Tag
+                {
+                    Id = 2102,
+                    Name = "Child2",
+                    ParentTagId = 2100,
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
+                },
+                new SRNSMudApp.Data.Tag
+                {
+                    Id = 2103,
+                    Name = "Child3",
+                    ParentTagId = 2100,
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
+                }
+            );
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        var json = await RenderAndGetTreeJson();
+
+        Assert.NotNull(json);
+        Assert.Contains("\"name\":\"BugRoot\"", json);
+        Assert.Contains("\"id\":2100", json);
+        Assert.Contains("\"id\":2101", json);
+        Assert.Contains("\"id\":2102", json);
+        Assert.Contains("\"id\":2103", json);
+        // 親子構造（ネスト）が保持されている
+        Assert.Contains("\"children\":", json);
+    }
+
+    /// <summary>
+    ///     検索フィールドが空のとき全タグ(15件)が表示される
+    /// </summary>
+    [Fact]
+    public async Task JqTree_DisplaysTags_WhenSearchFieldIsEmpty()
+    {
+        IDbContextFactory<ApplicationDbContext> dbFactory =
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
+        {
+            var tags = new List<SRNSMudApp.Data.Tag>();
+            for (var i = 0; i < 15; i++)
+            {
+                tags.Add(new SRNSMudApp.Data.Tag
+                {
+                    Id = 2200 + i, Name = $"EmptySearchTag_{i}", IsSystem = false, OwnerId = "test-user-id"
+                });
+            }
+
+            dbContext.Tags.AddRange(tags);
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        var json = await RenderAndGetTreeJson();
+
+        Assert.NotNull(json);
+        Assert.NotEqual("[]", json);
+
+        var idCount = json.Split("\"id\":").Length - 1;
+        Assert.Equal(15, idCount);
+        Assert.Contains("\"name\":\"EmptySearchTag_0\"", json);
+        Assert.Contains("\"name\":\"EmptySearchTag_14\"", json);
+    }
+
+    // ============================================================
     // ヘルパーメソッド
     // ============================================================
 

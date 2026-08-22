@@ -197,4 +197,63 @@ public class TagRelationServiceTests : IDisposable
         Assert.NotNull(relationB);
         Assert.Equal(2, relationB.Weight); // 0 + 2 = 2
     }
+
+    [Fact]
+    public async Task AddTagToItemAsync_WithUntrackedItem_ShouldNotThrowPrimaryKeyException()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+        var testUserId = Guid.NewGuid().ToString();
+        var itemContent = "Test Item " + Guid.NewGuid();
+        var tagName = "Test Tag " + Guid.NewGuid();
+
+        int itemId;
+        int tagId;
+
+        // 1. Arrange: 別のDbContextでデータを作成して保存する
+        using (var db = new ApplicationDbContext(options))
+        {
+            var user = new ApplicationUser
+            {
+                Id = testUserId,
+                UserName = "testuser_" + testUserId,
+                Email = $"testuser_{testUserId}@example.com"
+            };
+            db.Users.Add(user);
+
+            var item = new Item { Content = itemContent, OwnerId = user.Id };
+            db.Items.Add(item);
+
+            var tag = new Tag { Name = tagName, OwnerId = user.Id };
+            db.Tags.Add(tag);
+
+            await db.SaveChangesAsync();
+
+            itemId = item.Id;
+            tagId = tag.Id;
+        } // ここでDbContextがDisposeされ、itemとtagは追跡されなくなる
+
+        // 2. Act: 新しいDbContextを持つTagRelationServiceで操作する
+        using (var db = new ApplicationDbContext(options))
+        {
+            var service = new TagRelationService(db);
+            var result = await service.LinkTagToItemAsync(itemId, tagId, testUserId);
+            Assert.True(result is Success<bool>);
+        }
+
+        // 3. Assert: 正しくTagRelationが作成されているか確認する
+        using (var db = new ApplicationDbContext(options))
+        {
+            var relations = await db.TagRelations
+                .Where(tr => tr.ItemId == itemId && tr.TagId == tagId)
+                .ToListAsync();
+
+            Assert.Single(relations);
+            Assert.Equal(testUserId, relations[0].OwnerId);
+        }
+    }
 }
