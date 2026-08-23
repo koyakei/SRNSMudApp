@@ -1,14 +1,11 @@
 @page "/import-tag"
-@using System.Numerics.Tensors
 @using System.Security.Claims
 @using System.Text
-@using System.Text.RegularExpressions
 @using SRNSMudApp.Services
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IImportTagDataProvider ImportTagData
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
-@inject ITagEmbeddingService TagEmbeddingService
 
 <MudText Typo="Typo.h4" GutterBottom="true">タグインポート (CSV)</MudText>
 <MudText Typo="Typo.body1" Class="mb-4">
@@ -75,7 +72,6 @@
     private IBrowserFile? _file;
     private bool _isImporting;
     private string? _currentUserId;
-    private readonly Regex _tagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F]+$");
     private Tag? _selectedParentTag;
 
     private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
@@ -85,46 +81,7 @@
             case true: return [];
         }
 
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync(token);
-        var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId).AsQueryable();
-
-        switch (string.IsNullOrEmpty(value))
-        {
-            case true:
-                return await query.AsNoTracking().Take(50).ToListAsync(token);
-        }
-
-        try
-        {
-            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value!);
-            var queryArray = queryVector.ToArray();
-
-            var textMatches = await query
-                .Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)))
-                .AsNoTracking()
-                .ToListAsync(token);
-
-            var vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
-
-            var vectorMatches = vectorTags
-                .Where(x => x.Embedding.Length == queryArray.Length)
-                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
-                .Take(50)
-                .ToList();
-
-            return
-            [
-                .. textMatches.Concat(vectorMatches)
-                    .DistinctBy(x => x.Id)
-                    .Take(50)
-            ];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Vector search failed: {ex.Message}");
-            query = query.Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)));
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
-        }
+        return await ImportTagData.SearchUserTagsAsync(_currentUserId!, value, token);
     }
 
     protected override async Task OnInitializedAsync()
@@ -171,104 +128,13 @@
 
         try
         {
-            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-
             // Read file content
             using var stream = _file.OpenReadStream(104857600); // Max 10MB
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var content = await reader.ReadToEndAsync();
 
-            var lines = content.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
-
-            // Load existing tags for this user
-            var existingTags = await dbContext.Tags
-                .Where(t => t.OwnerId == _currentUserId)
-                .ToDictionaryAsync(t => t.Name, t => t);
-
-            var createdCount = 0;
-
-            // Begin transaction for safety
-            await using var transaction = await dbContext.Database.BeginTransactionAsync();
-
-            Tag? baseParentTag = null;
-            Tag? trackedBaseTag = null;
-            switch (_selectedParentTag != null && existingTags.TryGetValue(_selectedParentTag.Name, out trackedBaseTag))
-            {
-                case true:
-                    baseParentTag = trackedBaseTag;
-                    break;
-            }
-
-            foreach (var line in lines)
-            {
-                var tagNames = line.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
-                switch (tagNames.Count)
-                {
-                    case 0: continue;
-                }
-
-                var currentParentTag = baseParentTag;
-
-                foreach (var tagName in tagNames)
-                {
-                    // Validate tag name
-                    switch (_tagNameRegex.IsMatch(tagName))
-                    {
-                        case false:
-                            throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
-                    }
-
-                    Weight = Weight;
-                    switch (existingTags.TryGetValue(tagName, out var tag))
-                    {
-                        case false:
-                            // Tag doesn't exist, create it
-                            var newTag = new Tag
-                            {
-                                Name = tagName,
-                                OwnerId = _currentUserId,
-                                ParentTag = currentParentTag,
-                                CreatedDate = DateTime.UtcNow,
-                                UpdatedDate = DateTime.UtcNow
-                            };
-
-                            try
-                            {
-                                var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(tagName);
-                                newTag.Embedding = embedding.ToArray();
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Embedding generation failed: {ex.Message}");
-                            }
-
-                            dbContext.Tags.Add(newTag);
-
-                            existingTags[tagName] = newTag;
-                            currentParentTag = newTag;
-                            createdCount++;
-                            continue;
-                    }
-
-                    switch (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
-                    {
-                        case true:
-                            // Avoid circular reference
-                            switch (!IsDescendantOrSelf(tag, currentParentTag!))
-                            {
-                                case true:
-                                    tag.ParentTag = currentParentTag;
-                                    break;
-                            }
-                            break;
-                    }
-
-                    currentParentTag = tag;
-                }
-            }
-
-            await dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
+            int createdCount =
+                await ImportTagData.ImportCsvTagsAsync(_currentUserId!, _selectedParentTag.Name, content);
 
             Snackbar.Add($"インポートが完了しました。{createdCount}個のタグを新規作成しました。", Severity.Success);
             _file = null;
@@ -285,26 +151,6 @@
             _isImporting = false;
             // StateHasChanged();
         }
-    }
-
-    private static bool IsDescendantOrSelf(Tag parent, Tag target)
-    {
-        switch (ReferenceEquals(parent, target))
-        {
-            case true: return true;
-        }
-
-        var current = target;
-        while (current?.ParentTag != null)
-        {
-            switch (ReferenceEquals(current.ParentTag, parent))
-            {
-                case true: return true;
-            }
-            current = current.ParentTag;
-        }
-
-        return false;
     }
 
 }
