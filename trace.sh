@@ -1,4 +1,0 @@
-sed -i '' 's/Console.WriteLine($"SubmitCreateAsync called with name: {_newTagName}");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "SubmitCreateAsync called with name: " + _newTagName + "\\n");/g' SRNSMudApp/Components/Tag/TagAddDialog.razor
-sed -i '' 's/Console.WriteLine("Tag name is empty");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "Tag name is empty\\n");/g' SRNSMudApp/Components/Tag/TagAddDialog.razor
-sed -i '' 's/Console.WriteLine("Saving new tag to DB");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "Saving new tag to DB\\n");/g' SRNSMudApp/Components/Tag/TagAddDialog.razor
-sed -i '' 's/Console.WriteLine("Closing dialog with Ok");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "Closing dialog with Ok\\n");/g' SRNSMudApp/Components/Tag/TagAddDialog.razor

@@ -1,3 +1,0 @@
-sed -i '' 's/Console.WriteLine($"AddTagToItemAsync started for tag: {selectedTag.Name}");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "AddTagToItemAsync started for tag: " + selectedTag.Name + "\\n");/g' SRNSMudApp/Components/UI/ItemCard.razor
-sed -i '' 's/Console.WriteLine("Tag not found in DB");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "Tag not found in DB\\n");/g' SRNSMudApp/Components/UI/ItemCard.razor
-sed -i '' 's/Console.WriteLine("Calling ExecuteAddTagToItemAsync");/System.IO.File.AppendAllText("\/tmp\/srns_trace.log", "Calling ExecuteAddTagToItemAsync\\n");/g' SRNSMudApp/Components/UI/ItemCard.razor

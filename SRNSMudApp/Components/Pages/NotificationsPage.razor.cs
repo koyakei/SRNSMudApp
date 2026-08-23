@@ -21,8 +21,9 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.Pages;
 
-using Tag = SRNSMudApp.Data.Tag;
 using Item = SRNSMudApp.Data.Item;
+using Tag = SRNSMudApp.Data.Tag;
+
 /// <summary>
 ///     NotificationsPage のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、通知取得・既読処理・リクエスト承認/却下などの

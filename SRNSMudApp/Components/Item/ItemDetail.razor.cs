@@ -20,8 +20,9 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.Item;
 
-using Tag = SRNSMudApp.Data.Tag;
 using Item = SRNSMudApp.Data.Item;
+using Tag = SRNSMudApp.Data.Tag;
+
 /// <summary>
 ///     ItemDetail ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、データ取得・URL クエリ同期・ダイアログ起動などの

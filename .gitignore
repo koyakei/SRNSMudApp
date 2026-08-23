@@ -504,3 +504,4 @@ arning*
 Library/
 patch_*.sh
 print_test.cs
+trace*.sh

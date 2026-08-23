@@ -115,7 +115,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             .ToListAsync();
     }
 
-    public async Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
+    public virtual async Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
     {
         TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities!
                                           .Include(c => c.RequestedTag)

@@ -19,10 +19,10 @@ using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Components.UI;
 
-// 兄弟名前空間 ...Tag / .Item が同名型と解決されるため、エイリアスは名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
 using Item = SRNSMudApp.Data.Item;
-
+using Tag = SRNSMudApp.Data.Tag;
+// 兄弟名前空間 ...Tag / .Item が同名型と解決されるため、エイリアスは名前空間の内側に置く
+// 兄弟名前空間 ...Tag / .Item が同名型と解決されるため、エイリアスは名前空間の内側に置く
 /// <summary>
 ///     ResourceList のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、システムタグ解決・フォーカス管理・

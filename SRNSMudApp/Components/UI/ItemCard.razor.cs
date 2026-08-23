@@ -20,8 +20,9 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.UI;
 
-using Tag = SRNSMudApp.Data.Tag;
 using Item = SRNSMudApp.Data.Item;
+using Tag = SRNSMudApp.Data.Tag;
+
 /// <summary>
 ///     ItemCard のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、JS 連携・返信・投票・ダイアログ起動などの

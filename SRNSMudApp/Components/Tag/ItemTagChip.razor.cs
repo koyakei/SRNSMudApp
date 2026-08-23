@@ -4,16 +4,16 @@ using MudBlazor;
 
 using SRNSMudApp.Components.Contract;
 using SRNSMudApp.Components.UI;
+using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
-using SRNSMudApp.Data;
-
 namespace SRNSMudApp.Components.Tag;
 
+// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 using Item = SRNSMudApp.Data.Item;
 using Tag = SRNSMudApp.Data.Tag;
+
 /// <summary>
 ///     ItemTagChip のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、タグ操作・ダイアログ起動などの

@@ -63,5 +63,5 @@
 
 ## 同期メモ
 
-- 対応する qodana.yaml のパス: `/Users/keisukekoyanagi/IdeaProjects/SRNSMudApp/qodana.yaml`
-- 最終同期日: 2026-08-12
+- 対応する qodana.yaml のパス: リポジトリルートの `/qodana.yaml`（旧パスはリポジトリ移行前のもの）
+- 最終同期日: 2026-08-23
