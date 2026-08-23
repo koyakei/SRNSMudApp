@@ -3,7 +3,7 @@
 @using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IItemDetailDataProvider DetailData
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject TaggingContractService TaggingContractService
@@ -159,26 +159,10 @@
         {
             _pageState = new Loading();
             StateHasChanged();
-            
-            await using var context = await DbFactory.CreateDbContextAsync();
-            var item = await context.Items
-                .Include(i => i.Owner)
-                .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
-                .ThenInclude(t => t.Owner)
-                .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
-                .ThenInclude(t => t.TargetTagRelations)
-                .ThenInclude(ttr => ttr.Tag)
-                .ThenInclude(t => t.Owner)
-                .Include(i => i.AsRequestOf)
-                .ThenInclude(r => r.TargetItem)
-                .Include(i => i.AsRequestOf)
-                .ThenInclude(r => r.RequestedTag)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(i => i.Id == ItemId);
 
-            switch (item)
+            ItemDetailPageData? data = await DetailData.GetItemDetailAsync(ItemId);
+
+            switch (data)
             {
                 case null:
                     _pageState = new Empty("アイテムが見つかりません。");
@@ -186,15 +170,6 @@
             }
 
             var requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
-
-            var ledgers = await context.TagWeightLedgers
-                .Include(l => l.Owner)
-                .Include(l => l.TagRelation)
-                .ThenInclude(tr => tr.Tag)
-                .Where(l => l.TagRelation != null && l.TagRelation.ItemId == ItemId)
-                .OrderByDescending(l => l.CreatedDate)
-                .AsNoTracking()
-                .ToListAsync();
 
             switch (SelectedRequestIdQuery.HasValue && requests != null)
             {
@@ -211,10 +186,10 @@
                     break;
             }
 
-            _allTags = await context.Tags.AsNoTracking().ToListAsync();
-            _allTagRelationsToTags = await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
+            _allTags = data.AllTags;
+            _allTagRelationsToTags = data.AllTagRelationsToTags;
 
-            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(item, requests ?? [], ledgers));
+            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(data.Item, requests ?? [], data.Ledgers));
         }
         catch (Exception ex)
         {

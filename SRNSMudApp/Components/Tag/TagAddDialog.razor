@@ -1,9 +1,7 @@
-@using System.Numerics.Tensors
 @using System.Security.Claims
 @using SRNSMudApp.Services
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ITagDialogDataProvider TagDialogData
 @inject ISnackbar Snackbar
-@inject ITagEmbeddingService TagEmbeddingService
 
 <MudDialog>
     <DialogContent>
@@ -148,8 +146,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        _allTags = await dbContext.Tags.AsNoTracking().ToListAsync();
+        _allTags = await TagDialogData.GetAllTagsAsync();
     }
 
     private async Task SearchAsync()
@@ -168,30 +165,7 @@
 
         try
         {
-            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(_searchText);
-            var queryArray = queryVector.ToArray();
-
-            await using var dbContext = await DbFactory.CreateDbContextAsync();
-
-            var textMatches = await dbContext.Tags
-                .Where(x => x.Name.Contains(_searchText) || x.Content.Contains(_searchText))
-                .AsNoTracking()
-                .ToListAsync();
-
-            var vectorTags = await dbContext.Tags.Where(x => x.Embedding != null).AsNoTracking().ToListAsync();
-
-            var vectorMatches = vectorTags
-                .Where(x => x.Embedding.Length == queryArray.Length)
-                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
-                .Take(50)
-                .ToList();
-
-            _searchResults =
-            [
-                .. textMatches.Concat(vectorMatches)
-                    .DistinctBy(x => x.Id)
-                    .Take(50)
-            ];
+            _searchResults = await TagDialogData.SearchTagsAsync(_searchText);
 
             // ▼ UX向上：ヒットした結果が1件だけなら自動的に選択状態にする
             switch (_searchResults.Count)
@@ -240,9 +214,7 @@
                 return;
         }
 
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
-        var existingTag = await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == _newTagName);
+        Tag? existingTag = await TagDialogData.FindTagByNameAsync(_newTagName);
         switch (existingTag)
         {
             case not null:
@@ -258,18 +230,7 @@
             CachedWeight = 0
         };
 
-        try
-        {
-            var embedding = await TagEmbeddingService.GenerateEmbeddingAsync($"{newTag.Name} {newTag.Content}");
-            newTag.Embedding = embedding.ToArray();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Embedding generation failed: {ex.Message}");
-        }
-
-        dbContext.Tags.Add(newTag);
-        await dbContext.SaveChangesAsync();
+        await TagDialogData.CreateTagAsync(newTag);
 
         MudDialog.Close(DialogResult.Ok(newTag));
     }

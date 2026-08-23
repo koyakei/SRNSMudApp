@@ -70,6 +70,12 @@ builder.Services.AddScoped<INotificationsDataProvider, NotificationsDataProvider
 // ImportTag のデータアクセス分離
 builder.Services.AddScoped<IImportTagDataProvider, ImportTagDataProvider>();
 
+// ItemDetail のデータアクセス分離
+builder.Services.AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>();
+
+// TagAddDialog のデータアクセス分離
+builder.Services.AddScoped<ITagDialogDataProvider, TagDialogDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
