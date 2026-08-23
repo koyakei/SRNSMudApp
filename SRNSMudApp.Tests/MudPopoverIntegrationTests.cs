@@ -22,7 +22,8 @@ public class MudPopoverIntegrationTests(WebApplicationFactory<Program> factory)
             .CreateClient();
 
         // Act - Navigate to the page that uses MudAutocomplete
-        HttpResponseMessage response = await client.GetAsync("/User/UserSearch");
+        // /User/UserSearch は [Authorize] 保護されたため、MudAutocomplete を含む公開ページへ変更
+        HttpResponseMessage response = await client.GetAsync("/Tag/TagSearch");
         _ = response.EnsureSuccessStatusCode();
 
         // The error might be logged asynchronously, but typically it happens during render.
