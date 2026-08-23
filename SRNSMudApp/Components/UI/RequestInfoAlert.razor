@@ -57,19 +57,10 @@
             }
 
             <MudText Typo="Typo.body2" Class="font-weight-bold" Style="user-select: text; -webkit-user-select: text;">
-                @{
-                    var text = RequestInfo.RequestType switch { TaggingRequestType.Remove => "タグ削除リクエスト", _ => "タグ追加リクエスト" };
-                    text = RequestInfo.RequestType switch
-                    {
-                        TaggingRequestType.Add => text + $" +{RequestInfo.ProposedWeight}",
-                        TaggingRequestType.DecreaseWeight => text + $" -{RequestInfo.ProposedWeight}",
-                        _ => text
-                    };
-                }
-                @text
+                @(RequestInfoAlertViewModel.RequestTypeLabel(RequestInfo.RequestType, RequestInfo.ProposedWeight))
             </MudText>
-            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor()" Variant="Variant.Text" Class="ml-2 mt-n1 mb-n1">
-                @GetStatusText()
+            <MudChip T="string" Size="Size.Small" Color="@RequestInfoAlertViewModel.StatusColor(RequestInfo.Status)" Variant="Variant.Text" Class="ml-2 mt-n1 mb-n1">
+                @RequestInfoAlertViewModel.StatusText(RequestInfo.Status)
             </MudChip>
         </div>
         <span class="mt-1" style="color: var(--mud-palette-lines-default);">|</span>
@@ -175,21 +166,4 @@
         }
     }
 
-    private string GetStatusText() => RequestInfo.Status switch
-    {
-        TradeStatus.Executed => "処理済み",
-        TradeStatus.Canceled => "取り下げ済み",
-        TradeStatus.Rejected => "却下済み",
-        TradeStatus.Proposed => "承認待ち",
-        _ => "不明"
-    };
-
-    private Color GetStatusColor() => RequestInfo.Status switch
-    {
-        TradeStatus.Executed => Color.Success,
-        TradeStatus.Canceled => Color.Default,
-        TradeStatus.Rejected => Color.Error,
-        TradeStatus.Proposed => Color.Warning,
-        _ => Color.Default
-    };
 }

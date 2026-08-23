@@ -42,28 +42,11 @@
 
     protected override void OnParametersSet()
     {
-        // Executed または Canceled の場合は非表示
-        switch (Request.Status)
-        {
-            case not TradeStatus.Proposed:
-                _visible = false;
-                return;
-        }
-
-        _isAdd = Request.RequestType == TaggingRequestType.Add;
-        var hasTag = Item.TagRelations?.Any(tr => tr.TagId == Request.RequestedTagId) ?? false;
-
-        // すでに関連付けが存在する追加リクエスト、または関連付けが存在しない削除リクエストは非表示（放置されているリクエスト対策）
-        switch (_isAdd, hasTag)
-        {
-            case (true, true):
-            case (false, false):
-                _visible = false;
-                return;
-        }
-
-        _replyCount = Request.Replies?.Count ?? 0;
-        _visible = true;
+        // 可視性・種別・リプライ件数の計算は ViewModel に委譲する (mainRules: 条件文回避 / SoC)
+        ItemTagRequestChipState state = ItemTagRequestChipViewModel.Compute(Request, Item);
+        _visible = state.Visible;
+        _isAdd = state.IsAdd;
+        _replyCount = state.ReplyCount;
     }
 
     private async Task OpenThreadDialogAsync()
