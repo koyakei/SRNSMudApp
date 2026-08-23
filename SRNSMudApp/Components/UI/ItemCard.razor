@@ -137,67 +137,18 @@
                          TaggingRequests="_taggingRequests"
                          OnDataChanged="OnDataChanged"
                          OnAddTagClicked="OnAddTagClicked"/>
-        <div class="d-flex justify-end mt-2">
-            <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline"
-                       Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
-                       OnClick="ToggleRepliesAsync">
-                リプライ
-            </MudButton>
-        </div>
+
+        @* リプライスレッド (表示専用子コンポーネント。リプライの描画はテンプレートで委譲) *@
+        <ItemReplyThread IsExpanded="_isRepliesExpanded"
+                         Replies="_replies"
+                         ReplyTemplate="ReplyTemplate"
+                         NewReplyContent="@_newReplyContent"
+                         NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
+                         IsSubmittingReply="_isSubmittingReply"
+                         OnToggleReplies="ToggleRepliesAsync"
+                         OnSubmitReply="SubmitReplyAsync"/>
     </div>
 </div>
-
-<MudCollapse Expanded="_isRepliesExpanded">
-    <MudDivider Class="my-3"/>
-    <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
-
-    @switch (_replies.Any())
-    {
-        case true:
-            <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
-                @foreach (var reply in _replies)
-                {
-                    <ItemCard Item="reply"
-                              CurrentUserId="@CurrentUserId"
-                              CurrentUserGoodTagId="@CurrentUserGoodTagId"
-                              CurrentUserBadTagId="@CurrentUserBadTagId"
-                              OnDataChanged="LoadRepliesAsync"
-                              AllTags="AllTags"
-                              AllTagRelationsToTags="AllTagRelationsToTags"
-                              HighlightEvents="HighlightEvents"
-                              OnEnsureSystemTags="OnEnsureSystemTags"/>
-                }
-            </div>
-            break;
-        case false:
-            break;
-    }
-
-    <div class="d-flex align-end gap-2 mt-2">
-        <MudTextField @bind-Value="_newReplyContent"
-                      Label="リプライを入力..."
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Lines="2"
-                      Immediate="true"
-                      Class="flex-grow-1"/>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   OnClick="SubmitReplyAsync"
-                   Disabled="@(string.IsNullOrWhiteSpace(_newReplyContent) || _isSubmittingReply)">
-            @switch (_isSubmittingReply)
-            {
-                case true:
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                    <span class="ms-2">送信中</span>
-                    break;
-                case false:
-                    <span>送信</span>
-                    break;
-            }
-        </MudButton>
-    </div>
-</MudCollapse>
 </MudCardContent>
 </MudCard>
 
@@ -213,6 +164,26 @@
     [Parameter] public int? CurrentUserBadTagId { get; set; }
     [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
     [Parameter] public List<TimelineEvent>? HighlightEvents { get; set; }
+
+    /// <summary>
+    ///     リプライ 1 件の描画テンプレート (ネストした ItemCard)。
+    ///     ItemReplyThread への描画委譲に使用する。
+    /// </summary>
+    private RenderFragment<Data.Item> ReplyTemplate => reply => builder =>
+    {
+        builder.OpenComponent<ItemCard>(0);
+        builder.AddAttribute(1, nameof(Item), reply);
+        builder.AddAttribute(2, nameof(CurrentUserId), CurrentUserId);
+        builder.AddAttribute(3, nameof(CurrentUserGoodTagId), CurrentUserGoodTagId);
+        builder.AddAttribute(4, nameof(CurrentUserBadTagId), CurrentUserBadTagId);
+        builder.AddAttribute(5, nameof(OnDataChanged),
+            EventCallback.Factory.Create(this, LoadRepliesAsync));
+        builder.AddAttribute(6, nameof(AllTags), AllTags);
+        builder.AddAttribute(7, nameof(AllTagRelationsToTags), AllTagRelationsToTags);
+        builder.AddAttribute(8, nameof(HighlightEvents), HighlightEvents);
+        builder.AddAttribute(9, nameof(OnEnsureSystemTags), OnEnsureSystemTags);
+        builder.CloseComponent();
+    };
 
     private bool _isExpanded;
     private bool _isOverflowing;

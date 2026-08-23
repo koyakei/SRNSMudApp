@@ -1,45 +1,42 @@
 @using SRNSMudApp.Data
-@using System.Diagnostics
 
-@RenderContent()
+@{
+    // ローカル変数経由でアクセスする (名前空間 SRNSMudApp.Components.Contract との名前衝突を避ける)
+    var contract = Contract;
+}
+
+@* コントラクト種別ごとのペイロード詳細を表示する。
+    種別ごとに表示するのは 1〜2 行の断片であるため、DynamicComponent + 子コンポーネント
+    分解は過剰な間接化となる (評価済み)。宣言的な @switch で直接記述し、
+    表示内容の変化は ContractCardContent のレンダリングテストで検証する。 *@
+@switch (contract.ContractType)
+{
+    case "Mutual":
+        <MudDivider Class="my-2"/>
+        <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
+        <MudText Typo="Typo.body2">Item ID: @(contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m ? m.OfferedTargetItemId : 0)</MudText>
+        <MudText Typo="Typo.body2">Tag ID: @(contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m2 ? m2.OfferedTagId : 0)</MudText>
+        break;
+    case "Gratis" when !string.IsNullOrEmpty(contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g ? g.RequesterMessage : ""):
+        <MudDivider Class="my-2"/>
+        <MudText Typo="Typo.subtitle2">メッセージ</MudText>
+        <MudText Typo="Typo.body2">@(contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g2 ? g2.RequesterMessage : "")</MudText>
+        break;
+    case "Gratis":
+        break;
+    case "Bounty":
+        <MudDivider Class="my-2"/>
+        <MudText Typo="Typo.subtitle2">報酬</MudText>
+        <MudText Typo="Typo.body2">Bounty (AssetId: @(contract.Payload is SRNSMudApp.Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0))</MudText>
+        break;
+    case "Trigger":
+        <MudDivider Class="my-2"/>
+        <MudText Typo="Typo.subtitle2">Public Offer Trigger</MudText>
+        break;
+}
 
 @code {
     [Parameter]
     [EditorRequired]
     public TaggingRequestEntity Contract { get; set; } = null!;
-
-    private RenderFragment RenderContent() => builder =>
-    {
-        RenderFragment content = Contract.ContractType switch
-        {
-            "Mutual" => 
-                (RenderFragment)(@<text>
-                    <MudDivider Class="my-2"/>
-                    <MudText Typo="Typo.subtitle2">提供されるアイテムとタグ</MudText>
-                    <MudText Typo="Typo.body2">Item ID: @(Contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m ? m.OfferedTargetItemId : 0)</MudText>
-                    <MudText Typo="Typo.body2">Tag ID: @(Contract.Payload is SRNSMudApp.Models.Unions.MutualPayload m2 ? m2.OfferedTagId : 0)</MudText>
-                </text>),
-            "Gratis" when !string.IsNullOrEmpty((Contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g ? g.RequesterMessage : "")) => 
-                (RenderFragment)(@<text>
-                    <MudDivider Class="my-2"/>
-                    <MudText Typo="Typo.subtitle2">メッセージ</MudText>
-                    <MudText Typo="Typo.body2">@(Contract.Payload is SRNSMudApp.Models.Unions.GratisPayload g2 ? g2.RequesterMessage : "")</MudText>
-                </text>),
-            "Gratis" => (RenderFragment)(@<text></text>),
-            "Bounty" => 
-                (RenderFragment)(@<text>
-                    <MudDivider Class="my-2"/>
-                    <MudText Typo="Typo.subtitle2">報酬</MudText>
-                    <MudText Typo="Typo.body2">Bounty (AssetId: @(Contract.Payload is SRNSMudApp.Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0))</MudText>
-                </text>),
-            "Trigger" => 
-                (RenderFragment)(@<text>
-                    <MudDivider Class="my-2"/>
-                    <MudText Typo="Typo.subtitle2">Public Offer Trigger</MudText>
-                </text>),
-            _ => throw new UnreachableException()
-        };
-
-        content(builder);
-    };
 }

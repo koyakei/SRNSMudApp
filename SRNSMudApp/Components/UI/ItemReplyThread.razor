@@ -1,0 +1,78 @@
+@using SRNSMudApp.Data
+
+@* ItemCard のリプライスレッド表示を担う表示専用コンポーネント。
+    サービス注入を持たず、データとコールバックのみで駆動するため
+    bUnit で純粋レンダリングテストが可能。 *@
+<div class="d-flex justify-end mt-2">
+    <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline"
+               Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
+               OnClick="@(async () => await OnToggleReplies.InvokeAsync())">
+        リプライ
+    </MudButton>
+</div>
+
+<MudCollapse Expanded="IsExpanded">
+    <MudDivider Class="my-3"/>
+    <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
+
+    @switch (Replies?.Any())
+    {
+        case true:
+            <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
+                @foreach (Data.Item reply in Replies!)
+                {
+                    // リプライの描画はコンテナ (ItemCard) がテンプレートとして提供する
+                    var template = ReplyTemplate;
+                    if (template != null)
+                    {
+                        @template(reply)
+                    }
+                }
+            </div>
+            break;
+    }
+
+    <div class="d-flex align-end gap-2 mt-2">
+        <MudTextField @bind-Value="@NewReplyContent"
+                      Label="リプライを入力..."
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="2"
+                      Immediate="true"
+                      Class="flex-grow-1"/>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(async () => await OnSubmitReply.InvokeAsync())"
+                   Disabled="@(string.IsNullOrWhiteSpace(NewReplyContent) || IsSubmittingReply)">
+            @switch (IsSubmittingReply)
+            {
+                case true:
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                    <span class="ms-2">送信中</span>
+                    break;
+                case false:
+                    <span>送信</span>
+                    break;
+            }
+        </MudButton>
+    </div>
+</MudCollapse>
+
+@code {
+    [Parameter] public bool IsExpanded { get; set; }
+
+    [Parameter] public IEnumerable<Data.Item>? Replies { get; set; }
+
+    /// <summary>リプライ 1 件の描画テンプレート (通常はネストした ItemCard)。</summary>
+    [Parameter] public RenderFragment<Data.Item>? ReplyTemplate { get; set; }
+
+    [Parameter] public string NewReplyContent { get; set; } = "";
+
+    [Parameter] public EventCallback<string> NewReplyContentChanged { get; set; }
+
+    [Parameter] public bool IsSubmittingReply { get; set; }
+
+    [Parameter] public EventCallback OnToggleReplies { get; set; }
+
+    [Parameter] public EventCallback OnSubmitReply { get; set; }
+}

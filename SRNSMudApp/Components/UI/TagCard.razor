@@ -1,3 +1,8 @@
+@* タグカード。
+    表示ロジックは TagCardViewModel、DB アクセスは ITagCardDataProvider に分離済み。
+    チップ一覧部分の独立コンポーネント化は評価したが、ポップオーバー開閉状態や
+    ダイアログ起動がカードの状態と強く結合しているため不採用 (純粋ロジックは
+    すべて ViewModel 側で単体テスト可能)。 *@
 @inject ITagCardDataProvider TagCardData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
