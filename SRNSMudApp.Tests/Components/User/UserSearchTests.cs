@@ -8,8 +8,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +18,8 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -63,10 +63,7 @@ public class UserSearchTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public void UserSearch_Renders_Initially()

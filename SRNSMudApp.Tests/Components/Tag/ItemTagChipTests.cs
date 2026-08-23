@@ -5,8 +5,6 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
-
-using SRNSMudApp.Tests.TestSupport;
 using Bunit.TestDoubles;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +17,8 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -51,10 +51,7 @@ public class ItemTagChipTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public void ItemTagChip_ShouldRenderTagNameAndWeight_ForTagRelation()

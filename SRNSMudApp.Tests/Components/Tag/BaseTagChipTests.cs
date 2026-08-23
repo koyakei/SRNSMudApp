@@ -1,11 +1,14 @@
 #region
 using System;
 using System.Threading.Tasks;
+
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
 using MudBlazor.Services;
+
 using SRNSMudApp.Components.Tag;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 #endregion
 
@@ -25,10 +28,7 @@ public class BaseTagChipTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorのKeyInterceptorServiceのエラーを防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public void BaseTagChip_ShouldRenderTagNameAndWeight()

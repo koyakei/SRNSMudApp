@@ -10,13 +10,13 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
 using Moq;
 
 using MudBlazor;
@@ -25,6 +25,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -57,10 +58,7 @@ public class TriggerPublicOfferDialogTests : IAsyncDisposable
                 .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     無償オファー（要求アセット量0）に対して自分のアイテムを選んで「実行する」を押すと、
@@ -105,7 +103,7 @@ public class TriggerPublicOfferDialogTests : IAsyncDisposable
 
         // Assert: 契約が作成されていること
         Assert.False(result!.Canceled);
-        int contractId = Assert.IsType<int>(result.Data);
+        var contractId = Assert.IsType<int>(result.Data);
 
         await using ApplicationDbContext db = CreateDbContext();
         TaggingRequestEntity contract =
@@ -165,10 +163,7 @@ public class TriggerPublicOfferDialogTests : IAsyncDisposable
         return (aliceTag, charlieItem, offer);
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

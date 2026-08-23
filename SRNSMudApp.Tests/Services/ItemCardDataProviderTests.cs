@@ -84,23 +84,14 @@ public class ItemCardDataProviderTests
         Assert.Equal(1, timeline.PreviousWeight);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _db.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _db.DisposeAsync();
 
     /// <summary>テスト用のシンプルなファクトリ。</summary>
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {
-        public ApplicationDbContext CreateDbContext()
-        {
-            return new ApplicationDbContext(options);
-        }
+        public ApplicationDbContext CreateDbContext() => new ApplicationDbContext(options);
 
-        public Task<ApplicationDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(CreateDbContext());
-        }
+        public Task<ApplicationDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult(CreateDbContext());
     }
 }

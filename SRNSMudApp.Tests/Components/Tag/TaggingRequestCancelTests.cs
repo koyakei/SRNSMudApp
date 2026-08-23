@@ -7,19 +7,19 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
 
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -56,10 +56,7 @@ public class TaggingRequestCancelTests : IAsyncDisposable
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task CancelButton_ShouldCancelRequestAndShowCanceledIconInteractively()
@@ -132,15 +129,9 @@ public class TaggingRequestCancelTests : IAsyncDisposable
         return (loaded, contract);
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
-    private Task<ApplicationDbContext> CreateDbContextAsync()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
-    }
+    private Task<ApplicationDbContext> CreateDbContextAsync() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

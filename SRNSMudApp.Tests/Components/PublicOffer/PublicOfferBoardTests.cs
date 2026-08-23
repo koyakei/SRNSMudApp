@@ -7,13 +7,13 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
 using Moq;
 
 using MudBlazor;
@@ -22,6 +22,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -56,10 +57,7 @@ public class PublicOfferBoardTests : IAsyncDisposable
         _ctx.Services.AddScoped<TaggingContractService>();
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     アクティブなオファーのみカード表示され（無償バッジ・提供者名付き）、
@@ -193,10 +191,7 @@ public class PublicOfferBoardTests : IAsyncDisposable
         return (aliceTag, inactiveTag, activeOffer);
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

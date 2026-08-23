@@ -66,101 +66,101 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         switch (existingRelation)
         {
             case null:
-            {
-                var newRelation = new TagRelation
                 {
-                    ItemId = itemId,
-                    TagId = goodTagId,
-                    OwnerId = userId,
-                    Weight = targetWeight,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                };
-                context.TagRelations.Add(newRelation);
-                await context.SaveChangesAsync();
-                return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
-            }
+                    var newRelation = new TagRelation
+                    {
+                        ItemId = itemId,
+                        TagId = goodTagId,
+                        OwnerId = userId,
+                        Weight = targetWeight,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    };
+                    context.TagRelations.Add(newRelation);
+                    await context.SaveChangesAsync();
+                    return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
+                }
             default:
                 switch (existingRelation.Weight == targetWeight)
                 {
                     // 同じ Weight なら投票取り消し
                     case true:
-                    {
-                        var deltaCancel = -existingRelation.Weight;
-                        switch (tag)
                         {
-                            case not null:
-                                var prevWeightCancel = tag.CachedWeight;
-                                tag.CachedWeight += deltaCancel;
-                                context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    SourceType = "TagRelationDelete",
-                                    SourceId = existingRelation.Id,
-                                    PreviousWeight = prevWeightCancel,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaCancel,
-                                    IsOwnerAction = true,
-                                    Reason = "Vote取り消し",
-                                    OwnerId = userId
-                                });
-                                break;
+                            var deltaCancel = -existingRelation.Weight;
+                            switch (tag)
+                            {
+                                case not null:
+                                    var prevWeightCancel = tag.CachedWeight;
+                                    tag.CachedWeight += deltaCancel;
+                                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                                    {
+                                        TagId = tag.Id,
+                                        TagNameSnapshot = tag.Name,
+                                        SourceType = "TagRelationDelete",
+                                        SourceId = existingRelation.Id,
+                                        PreviousWeight = prevWeightCancel,
+                                        NewWeight = tag.CachedWeight,
+                                        Delta = deltaCancel,
+                                        IsOwnerAction = true,
+                                        Reason = "Vote取り消し",
+                                        OwnerId = userId
+                                    });
+                                    break;
+                            }
+
+                            context.TimelineEvents!.Add(new TimelineEvent
+                            {
+                                OwnerId = userId,
+                                Target = new ItemTarget(itemId),
+                                FollowedTagId = goodTagId,
+                                EventType = "Delete",
+                                PreviousWeight = existingRelation.Weight
+                            });
+
+                            context.TagRelations.Remove(existingRelation);
+                            await context.SaveChangesAsync();
+                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, existingRelation.Weight);
                         }
-
-                        context.TimelineEvents!.Add(new TimelineEvent
-                        {
-                            OwnerId = userId,
-                            Target = new ItemTarget(itemId),
-                            FollowedTagId = goodTagId,
-                            EventType = "Delete",
-                            PreviousWeight = existingRelation.Weight
-                        });
-
-                        context.TagRelations.Remove(existingRelation);
-                        await context.SaveChangesAsync();
-                        return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, existingRelation.Weight);
-                    }
                     default:
-                    {
-                        var deltaUpdate = targetWeight - existingRelation.Weight;
-                        existingRelation.Weight = targetWeight;
-                        existingRelation.UpdatedDate = DateTime.UtcNow;
-
-                        switch (tag)
                         {
-                            case not null:
-                                var prevWeightUpdate = tag.CachedWeight;
-                                tag.CachedWeight += deltaUpdate;
-                                context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    SourceType = "TagRelationUpdate",
-                                    SourceId = existingRelation.Id,
-                                    PreviousWeight = prevWeightUpdate,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaUpdate,
-                                    IsOwnerAction = true,
-                                    Reason = "Vote変更",
-                                    OwnerId = userId
-                                });
-                                break;
+                            var deltaUpdate = targetWeight - existingRelation.Weight;
+                            existingRelation.Weight = targetWeight;
+                            existingRelation.UpdatedDate = DateTime.UtcNow;
+
+                            switch (tag)
+                            {
+                                case not null:
+                                    var prevWeightUpdate = tag.CachedWeight;
+                                    tag.CachedWeight += deltaUpdate;
+                                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                                    {
+                                        TagId = tag.Id,
+                                        TagNameSnapshot = tag.Name,
+                                        SourceType = "TagRelationUpdate",
+                                        SourceId = existingRelation.Id,
+                                        PreviousWeight = prevWeightUpdate,
+                                        NewWeight = tag.CachedWeight,
+                                        Delta = deltaUpdate,
+                                        IsOwnerAction = true,
+                                        Reason = "Vote変更",
+                                        OwnerId = userId
+                                    });
+                                    break;
+                            }
+
+                            context.TimelineEvents!.Add(new TimelineEvent
+                            {
+                                OwnerId = userId,
+                                Target = new ItemTarget(itemId),
+                                FollowedTagId = goodTagId,
+                                EventType = "Update",
+                                PreviousWeight = existingRelation.Weight - deltaUpdate,
+                                NewWeight = existingRelation.Weight
+                            });
+
+                            await context.SaveChangesAsync();
+                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
                         }
-
-                        context.TimelineEvents!.Add(new TimelineEvent
-                        {
-                            OwnerId = userId,
-                            Target = new ItemTarget(itemId),
-                            FollowedTagId = goodTagId,
-                            EventType = "Update",
-                            PreviousWeight = existingRelation.Weight - deltaUpdate,
-                            NewWeight = existingRelation.Weight
-                        });
-
-                        await context.SaveChangesAsync();
-                        return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
-                    }
                 }
         }
     }
@@ -210,19 +210,19 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         switch (initialTagIds is { Count: > 0 })
         {
             case true:
-            {
-                List<TagRelation> tagRelations = initialTagIds
-                    .Select(tagId => new TagRelation
-                    {
-                        TagId = tagId,
-                        Weight = 1,
-                        OwnerId = item.OwnerId
-                    })
-                    .ToList();
+                {
+                    var tagRelations = initialTagIds
+                        .Select(tagId => new TagRelation
+                        {
+                            TagId = tagId,
+                            Weight = 1,
+                            OwnerId = item.OwnerId
+                        })
+                        .ToList();
 
-                item.TagRelations = tagRelations;
-                break;
-            }
+                    item.TagRelations = tagRelations;
+                    break;
+                }
         }
 
         await context.SaveChangesAsync();

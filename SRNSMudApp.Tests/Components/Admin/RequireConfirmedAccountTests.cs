@@ -4,8 +4,6 @@ using System.Security.Claims;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +18,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Account;
 using SRNSMudApp.Components.Account.Pages.Debug;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
@@ -59,7 +58,10 @@ public class RequireConfirmedAccountTests : BunitContext
         UserManager<ApplicationUser> userManager = Services.GetRequiredService<UserManager<ApplicationUser>>();
         _ = await userManager.CreateAsync(new ApplicationUser
         {
-            Id = "user1", UserName = "testuser@example.com", Email = "testuser@example.com", EmailConfirmed = false
+            Id = "user1",
+            UserName = "testuser@example.com",
+            Email = "testuser@example.com",
+            EmailConfirmed = false
         });
 
         var httpContext = new DefaultHttpContext();

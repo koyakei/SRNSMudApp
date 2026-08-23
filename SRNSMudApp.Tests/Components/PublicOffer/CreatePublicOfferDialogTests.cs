@@ -9,9 +9,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
@@ -19,11 +16,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
+using Moq;
+
 using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -55,10 +55,7 @@ public class CreatePublicOfferDialogTests : IAsyncDisposable
                 .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     自分が所有するタグを選んで「公開する」を押すと、Gratisタイプ（要求アセット量0・アクティブ）の
@@ -70,7 +67,7 @@ public class CreatePublicOfferDialogTests : IAsyncDisposable
     public async Task Publish_WithOwnedTag_CreatesActiveFreeOffer()
     {
         // Arrange: alice とその所有タグを投入
-        int tagId = await SeedUserWithTagAsync("AliceTag");
+        var tagId = await SeedUserWithTagAsync("AliceTag");
 
         IRenderedComponent<AuthDialogHost> host = _ctx.Render<AuthDialogHost>();
 
@@ -123,10 +120,7 @@ public class CreatePublicOfferDialogTests : IAsyncDisposable
         return tag.Id;
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

@@ -38,10 +38,7 @@ public class TagEmbeddingServiceTests : IDisposable
         _db = new ApplicationDbContext(options);
     }
 
-    public void Dispose()
-    {
-        _db.Dispose();
-    }
+    public void Dispose() => _db.Dispose();
 
     /// <summary>
     ///     「反社会的勢力」で検索すると、意味的に近い「ヤクザ」タグが
@@ -52,7 +49,7 @@ public class TagEmbeddingServiceTests : IDisposable
     {
         // Arrange: 実サービスで embedding を生成してDB保存
         const string tagName = "ヤクザ";
-        float[] yakuzaEmbedding = (await _embeddingService.GenerateEmbeddingAsync(tagName)).ToArray();
+        var yakuzaEmbedding = (await _embeddingService.GenerateEmbeddingAsync(tagName)).ToArray();
         var dummyTag = new Tag
         {
             Name = $"Target_{Guid.NewGuid():N}",
@@ -65,7 +62,7 @@ public class TagEmbeddingServiceTests : IDisposable
         _ = await _db.SaveChangesAsync();
 
         // Act: クエリ文字列の embedding を生成し、コサイン類似度でランク付けする
-        float[] queryEmbedding = (await _embeddingService.GenerateEmbeddingAsync("反社会的勢力")).ToArray();
+        var queryEmbedding = (await _embeddingService.GenerateEmbeddingAsync("反社会的勢力")).ToArray();
 
         System.Collections.Generic.List<(Tag Tag, float Similarity)> ranked = _db.Tags.AsEnumerable()
             .Where(t => t.Embedding != null && t.Embedding.Length == queryEmbedding.Length)
@@ -75,8 +72,8 @@ public class TagEmbeddingServiceTests : IDisposable
 
         // Assert: ヤクザが先頭に来ること（Target_xxx より高い類似度）
         Assert.Equal(tagName, ranked[0].Tag.Name);
-        float yakuzaSimilarity = ranked.Single(x => x.Tag.Name == tagName).Item2;
-        float dummySimilarity = ranked.Single(x => x.Tag.Name.StartsWith("Target_")).Item2;
+        var yakuzaSimilarity = ranked.Single(x => x.Tag.Name == tagName).Item2;
+        var dummySimilarity = ranked.Single(x => x.Tag.Name.StartsWith("Target_")).Item2;
         Assert.True(yakuzaSimilarity > dummySimilarity,
             $"expected ヤクザ({yakuzaSimilarity:F4}) > dummy({dummySimilarity:F4})");
     }

@@ -6,10 +6,10 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Pages;
 
+using Item = SRNSMudApp.Data.Item;
 // 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
 // エイリアスを名前空間の内側に置く
 using Tag = SRNSMudApp.Data.Tag;
-using Item = SRNSMudApp.Data.Item;
 
 /// <summary>
 ///     NotificationsViewModel の単体テスト。
@@ -83,10 +83,7 @@ public class NotificationsViewModelTests
     }
 
     [Fact]
-    public void CreateHighlightEvents_WithoutTagId_ReturnsEmpty()
-    {
-        Assert.Empty(NotificationsViewModel.CreateHighlightEvents(CreateNotification(), "user-1"));
-    }
+    public void CreateHighlightEvents_WithoutTagId_ReturnsEmpty() => Assert.Empty(NotificationsViewModel.CreateHighlightEvents(CreateNotification(), "user-1"));
 
     [Theory]
     [InlineData(10, "10秒前")]

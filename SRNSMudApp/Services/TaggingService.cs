@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.EntityFrameworkCore;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 
@@ -39,7 +41,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         await (tupleOption switch
         {
-            None _ => Task.CompletedTask,
+            None => Task.CompletedTask,
             Some<(T entity, Tag tag)> some => (some.Value.entity.Tags.Any(t => t.Id == tagId) switch
             {
                 true => (TagPresenceState)new TagExists(),
@@ -65,13 +67,13 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         T? entity = await context.Set<T>().Include(e => e.Tags).FirstOrDefaultAsync(e => e.Id == entityId);
 
-        Option<T> entityOption = Option<T>.Create(entity);
+        var entityOption = Option<T>.Create(entity);
         await (entityOption switch
         {
-            None _ => Task.CompletedTask,
+            None => Task.CompletedTask,
             Some<T> someEntity => Option<Tag>.Create(someEntity.Value.Tags.FirstOrDefault(t => t.Id == tagId)) switch
             {
-                None _ => Task.CompletedTask,
+                None => Task.CompletedTask,
                 Some<Tag> someTag => RemoveTagAndSaveAsync(context, someEntity.Value, someTag.Value),
                 _ => Task.CompletedTask
             },

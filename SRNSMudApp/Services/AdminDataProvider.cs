@@ -33,7 +33,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
             await context.Database.BeginTransactionAsync();
         try
         {
-            List<string> allTagNames = linesToProcess
+            var allTagNames = linesToProcess
                 .SelectMany(values => values.Skip(1))
                 .Where(tagName => !string.IsNullOrWhiteSpace(tagName))
                 .Distinct()
@@ -60,14 +60,14 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
             }
 
             var importedItemCount = 0;
-            foreach (string[] values in linesToProcess)
+            foreach (var values in linesToProcess)
             {
                 var content = values[0];
                 var newItem = new Item
                 {
                     Content = content,
                     OwnerId = userId,
-                    TagRelations = new List<TagRelation>()
+                    TagRelations = []
                 };
                 context.Items.Add(newItem);
 

@@ -7,15 +7,14 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
 
 using MudBlazor;
 using MudBlazor.Services;
@@ -25,6 +24,7 @@ using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -62,10 +62,7 @@ public class TaggingRequestRejectTests : IAsyncDisposable
         _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task Submit_ShouldCloseDialogWithEnteredReason()
@@ -121,7 +118,7 @@ public class TaggingRequestRejectTests : IAsyncDisposable
             using ApplicationDbContext db = CreateDbContext();
             TaggingRequestEntity updated = db.TaggingRequestEntities.Find(contract.Id)!;
             Assert.Equal(TradeStatus.Rejected, updated.Status);
-            string expectedRejectionJson = System.Text.Json.JsonSerializer.Serialize(
+            var expectedRejectionJson = System.Text.Json.JsonSerializer.Serialize(
                 new RejectionReason("不適切なリクエストのため"));
             Assert.Equal(expectedRejectionJson, updated.RejectionInfoJson);
         });
@@ -192,10 +189,7 @@ public class TaggingRequestRejectTests : IAsyncDisposable
         Assert.Contains("却下済み", cut.Markup);
     }
 
-    private IRenderedComponent<AuthDialogHost> RenderEmptyHost()
-    {
-        return _ctx.Render<AuthDialogHost>();
-    }
+    private IRenderedComponent<AuthDialogHost> RenderEmptyHost() => _ctx.Render<AuthDialogHost>();
 
     private IRenderedComponent<AuthDialogHost> RenderHostWithList(TaggingRequestEntity[] requests)
     {
@@ -246,10 +240,7 @@ public class TaggingRequestRejectTests : IAsyncDisposable
         return contract;
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

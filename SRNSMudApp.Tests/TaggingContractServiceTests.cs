@@ -1,8 +1,8 @@
-using SRNSMudApp.Models.Unions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests;
@@ -112,7 +112,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.RightAssets!.Add(rightAsset);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItem.Id,
@@ -128,7 +130,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // When: ユーザーBが承認を実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userB);
-        
+
         // Assert
         // Then: ユーザーAが提供した RightAsset が消費される
         var assetIsBurned = await _dbContext.RightAssets.AnyAsync(a => a.Id == rightAsset.Id && a.IsBurned);
@@ -169,7 +171,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.Tags!.Add(tag);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItem.Id,
@@ -185,7 +189,7 @@ public class TaggingContractServiceTests : IDisposable
         // When: ユーザーBが承認を実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userB);
         Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
-        
+
         // Assert
         // Then: タグリレーションが作成される
         TagRelation? relation =
@@ -229,7 +233,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.RightAssets!.Add(rightAssetA);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Mutual", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Mutual",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -245,7 +251,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // When: ユーザーBが提案を受け入れ、「承認」を実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userB);
-        
+
         // Assert
         // Then: ユーザーAが提供したアセットが消費される
         var assetIsBurned = await _dbContext.RightAssets.AnyAsync(a => a.Id == rightAssetA.Id && a.IsBurned);
@@ -297,7 +303,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.Tags!.AddRange(tagA, tagB);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Mutual", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Mutual",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -314,7 +322,7 @@ public class TaggingContractServiceTests : IDisposable
         // When: ユーザーBが承認しようとする
         // Then: 対価アセットが必要である旨の例外が発生する
         var res = await _service.AcceptContractAsync(contract.Id, userB);
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("相互タグ付けには対価のアセットが必要です。", ex.ErrorMessage);
     }
@@ -352,7 +360,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.PublicTradeOffers!.Add(publicOffer);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Trigger", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Trigger",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -368,7 +378,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // When: ユーザーAがトリガーを実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userA);
-        
+
         // Assert
         // Then: アセットが消費され、リレーションと元帳（IsOwnerAction=false）が作成される。
         var assetIsBurned = await _dbContext.RightAssets.AnyAsync(a => a.Id == rightAsset.Id && a.IsBurned);
@@ -406,7 +416,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.PublicTradeOffers!.Add(publicOffer);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Trigger", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Trigger",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -422,7 +434,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // When: ユーザーAがトリガーを実行する
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userA);
-        
+
         // Assert
         // Then: オファー作成者(ユーザーB)名義の RightAsset が新規発行＆消費される
         TagWeightLedger? ledger = await _dbContext.TagWeightLedgers!.FirstOrDefaultAsync();
@@ -456,12 +468,17 @@ public class TaggingContractServiceTests : IDisposable
 
         var publicOffer = new PublicTradeOffer
         {
-            OwnerId = userB, OfferedTagId = tagB.Id, RequiredAssetAmount = 10, IsActive = true
+            OwnerId = userB,
+            OfferedTagId = tagB.Id,
+            RequiredAssetAmount = 10,
+            IsActive = true
         };
         _dbContext.PublicTradeOffers!.Add(publicOffer);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Trigger", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Trigger",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -478,7 +495,7 @@ public class TaggingContractServiceTests : IDisposable
         // When: ユーザーAがトリガーを実行する
         // Then: 量が不足している旨の例外が発生する
         var res = await _service.AcceptContractAsync(contract.Id, userA);
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("提供された RightAsset の量が不足しています。", ex.ErrorMessage);
     }
@@ -504,12 +521,17 @@ public class TaggingContractServiceTests : IDisposable
 
         var publicOffer = new PublicTradeOffer
         {
-            OwnerId = userB, OfferedTagId = tagB.Id, RequiredAssetAmount = 10, IsActive = true
+            OwnerId = userB,
+            OfferedTagId = tagB.Id,
+            RequiredAssetAmount = 10,
+            IsActive = true
         };
         _dbContext.PublicTradeOffers!.Add(publicOffer);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Trigger", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Trigger",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -526,7 +548,7 @@ public class TaggingContractServiceTests : IDisposable
         // When: ユーザーAがトリガーを実行する
         // Then: 対象のタグの権利ではない旨の例外が発生する
         var res = await _service.AcceptContractAsync(contract.Id, userA);
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("提供された RightAsset は対象のタグの権利ではありません。", ex.ErrorMessage);
     }
@@ -551,12 +573,17 @@ public class TaggingContractServiceTests : IDisposable
 
         var publicOffer = new PublicTradeOffer
         {
-            OwnerId = userB, OfferedTagId = tagB.Id, RequiredAssetAmount = 10, IsActive = false
+            OwnerId = userB,
+            OfferedTagId = tagB.Id,
+            RequiredAssetAmount = 10,
+            IsActive = false
         }; // 非アクティブ
         _dbContext.PublicTradeOffers!.Add(publicOffer);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Trigger", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Trigger",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -573,7 +600,7 @@ public class TaggingContractServiceTests : IDisposable
         // When: ユーザーAがトリガーを実行する
         // Then: 現在有効ではない旨の例外が発生する
         var res = await _service.AcceptContractAsync(contract.Id, userA);
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("この公開オファーは現在有効ではありません。", ex.ErrorMessage);
     }
@@ -586,7 +613,9 @@ public class TaggingContractServiceTests : IDisposable
     public async Task AcceptContractAsync_ShouldThrow_WhenUserIsNotOwner()
     {
         // Arrange
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             TagOwnerUserId = "UserB",
             Status = TradeStatus.Proposed,
             OwnerId = "UserA",
@@ -598,7 +627,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act & Assert
         var res = await _service.AcceptContractAsync(contract.Id, "WrongUser");
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("承認できない契約です。", ex.ErrorMessage);
     }
@@ -607,7 +636,9 @@ public class TaggingContractServiceTests : IDisposable
     public async Task AcceptContractAsync_ShouldThrow_WhenStatusIsNotProposed()
     {
         // Arrange
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             TagOwnerUserId = "UserB",
             Status = TradeStatus.Canceled,
             OwnerId = "UserA",
@@ -619,7 +650,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act & Assert
         var res = await _service.AcceptContractAsync(contract.Id, "UserB");
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("実行・承認できない状態の契約です。", ex.ErrorMessage);
     }
@@ -630,7 +661,9 @@ public class TaggingContractServiceTests : IDisposable
         // Arrange
         var requesterId = "UserA";
         var tagOwnerId = "UserB";
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = requesterId,
             TagOwnerUserId = tagOwnerId,
             Status = TradeStatus.Proposed,
@@ -643,7 +676,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act
         var cancelResult = await _service.CancelContractAsync(contract.Id, requesterId);
-        
+
         // Assert
         TaggingRequestEntity? updatedContract = await _dbContext.TaggingRequestEntities.FindAsync(contract.Id);
         Assert.Equal(TradeStatus.Canceled, updatedContract!.Status);
@@ -655,7 +688,9 @@ public class TaggingContractServiceTests : IDisposable
         // Arrange
         var requesterId = "UserA";
         var tagOwnerId = "UserB";
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = requesterId,
             TagOwnerUserId = tagOwnerId,
             Status = TradeStatus.Proposed,
@@ -668,7 +703,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act
         var cancelResult = await _service.CancelContractAsync(contract.Id, tagOwnerId);
-        
+
         // Assert
         TaggingRequestEntity? updatedContract = await _dbContext.TaggingRequestEntities.FindAsync(contract.Id);
         Assert.Equal(TradeStatus.Canceled, updatedContract!.Status);
@@ -678,7 +713,9 @@ public class TaggingContractServiceTests : IDisposable
     public async Task CancelContractAsync_ShouldThrow_WhenUserIsNeitherRequesterNorTagOwner()
     {
         // Arrange
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = "UserA",
             TagOwnerUserId = "UserB",
             Status = TradeStatus.Proposed,
@@ -691,7 +728,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act & Assert
         var res = await _service.CancelContractAsync(contract.Id, "UserC");
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("この契約をキャンセル・拒否する権限がありません。", ex.ErrorMessage);
     }
@@ -700,7 +737,9 @@ public class TaggingContractServiceTests : IDisposable
     public async Task CancelContractAsync_ShouldThrow_WhenStatusIsNotProposed()
     {
         // Arrange
-        var contract = new TaggingRequestEntity { ContractType = "Gratis", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             RequesterUserId = "UserA",
             TagOwnerUserId = "UserB",
             Status = TradeStatus.Executed,
@@ -713,7 +752,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act & Assert
         var res = await _service.CancelContractAsync(contract.Id, "UserA");
-                Assert.True(res is Failure);
+        Assert.True(res is Failure);
         var ex = res switch { Failure f => f, _ => throw new Exception("Expected Failure") };
         Assert.Equal("この状態の契約はキャンセルできません。", ex.ErrorMessage);
     }
@@ -743,7 +782,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.RightAssets!.Add(fulfillerAsset);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Bounty", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Bounty",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -757,7 +798,7 @@ public class TaggingContractServiceTests : IDisposable
         // Act
         // UserC fulfills it by providing their asset
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userC, fulfillerAsset.Id);
-        
+
         // Assert
         // Fulfiller's asset is burned
         var assetIsBurned = await _dbContext.RightAssets.AnyAsync(a => a.Id == fulfillerAsset.Id && a.IsBurned);
@@ -806,7 +847,9 @@ public class TaggingContractServiceTests : IDisposable
         _dbContext.RightAssets!.AddRange(rewardAsset, fulfillerAsset);
         await _dbContext.SaveChangesAsync();
 
-        var contract = new TaggingRequestEntity { ContractType = "Bounty", 
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Bounty",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
@@ -820,7 +863,7 @@ public class TaggingContractServiceTests : IDisposable
 
         // Act
         var acceptResult = await _service.AcceptContractAsync(contract.Id, userC, fulfillerAsset.Id);
-        
+
         // Assert
         // Fulfiller's asset is burned
         var fulfillerAssetIsBurned =

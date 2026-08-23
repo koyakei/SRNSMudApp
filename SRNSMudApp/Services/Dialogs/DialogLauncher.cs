@@ -16,7 +16,7 @@ public sealed class DialogLauncher(IDialogService dialogService) : IDialogLaunch
         return dialogService.ShowAsync(
             dialogType,
             title,
-            parameters ?? new DialogParameters(),
+            parameters ?? [],
             options ?? new DialogOptions());
     }
 }

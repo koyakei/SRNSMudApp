@@ -7,23 +7,23 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using Moq;
+
 using MudBlazor;
 using MudBlazor.Services;
 
-using SRNSMudApp.Components.UI;
 using SRNSMudApp.Components.Tag;
+using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -73,16 +73,13 @@ public class TagDeletionTrackingTests : IAsyncDisposable
         _ctx.Services.AddSingleton(_ => _launcherMock.Object);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task AddTagViaDialog_ThenCloseChip_RemovesRelationWithoutTrackingException()
     {
         // Arrange: ユーザー所有のタグとアイテムをシードし、ダイアログ結果を設定
-        (SRNSMudApp.Data.Item item, string tagName) = await SeedDataAsync();
+        (SRNSMudApp.Data.Item item, var tagName) = await SeedDataAsync();
         SetupAddTagDialogResult(item, tagName);
 
         IRenderedComponent<ItemCard> cut = RenderCard(item);

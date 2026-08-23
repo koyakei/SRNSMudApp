@@ -72,7 +72,7 @@ public class TagTableViewModelTests
     [Fact]
     public void GetTagSearchSuggestions_WithEmptyValue_ReturnsDistinctNamesLimitedTo20()
     {
-        List<Tag> tags = Enumerable.Range(1, 30)
+        var tags = Enumerable.Range(1, 30)
             .Select(i => CreateTag(i, $"tag-{i % 25}"))
             .ToList();
 
@@ -162,10 +162,7 @@ public class TagTableViewModelTests
     [Theory]
     [InlineData("user-1", true)]
     [InlineData("user-2", false)]
-    public void CanEditTag_OnlyForOwner(string userId, bool expected)
-    {
-        Assert.Equal(expected, TagTableViewModel.CanEditTag(CreateTag(ownerId: "user-1"), userId));
-    }
+    public void CanEditTag_OnlyForOwner(string userId, bool expected) => Assert.Equal(expected, TagTableViewModel.CanEditTag(CreateTag(ownerId: "user-1"), userId));
 
     [Fact]
     public void CanDeleteTag_SystemTagIsNotDeletable_EvenByOwner()
@@ -177,8 +174,5 @@ public class TagTableViewModelTests
     [Theory]
     [InlineData("user-1", true)]
     [InlineData("user-2", false)]
-    public void CanRemoveRelation_OnlyForRelationOwner(string userId, bool expected)
-    {
-        Assert.Equal(expected, TagTableViewModel.CanRemoveRelation(CreateRelation(1), userId));
-    }
+    public void CanRemoveRelation_OnlyForRelationOwner(string userId, bool expected) => Assert.Equal(expected, TagTableViewModel.CanRemoveRelation(CreateRelation(1), userId));
 }

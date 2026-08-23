@@ -102,31 +102,27 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<List<Item>> SearchItemsAsync(string? value, CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
-        switch (string.IsNullOrEmpty(value))
+        return string.IsNullOrEmpty(value) switch
         {
-            case true:
-                return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
-            default:
-                return await dbContext.Items
-                    .Where(i => i.Content.Contains(value))
-                    .Take(10)
-                    .ToListAsync(token);
-        }
+            true => await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token),
+            _ => await dbContext.Items
+                                .Where(i => i.Content.Contains(value))
+                                .Take(10)
+                                .ToListAsync(token),
+        };
     }
 
     public async Task<List<Tag>> SearchTagsByNameAsync(string? value, CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
-        switch (string.IsNullOrEmpty(value))
+        return string.IsNullOrEmpty(value) switch
         {
-            case true:
-                return await dbContext.Tags.Take(10).ToListAsync(token);
-            default:
-                return await dbContext.Tags
-                    .Where(t => t.Name.Contains(value))
-                    .Take(10)
-                    .ToListAsync(token);
-        }
+            true => await dbContext.Tags.Take(10).ToListAsync(token),
+            _ => await dbContext.Tags
+                                .Where(t => t.Name.Contains(value))
+                                .Take(10)
+                                .ToListAsync(token),
+        };
     }
 
     public async Task<BountyBoardData> GetActiveBountiesAsync()
@@ -142,7 +138,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             .AsNoTracking()
             .ToListAsync();
 
-        List<int> assetIds = bounties
+        var assetIds = bounties
             .Select(b => b.Payload is Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0)
             .Where(id => id != 0)
             .Distinct()

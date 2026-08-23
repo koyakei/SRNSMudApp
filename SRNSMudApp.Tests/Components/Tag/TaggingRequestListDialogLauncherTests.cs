@@ -57,7 +57,7 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
     [Fact]
     public void ClickRejectButton_LaunchesRejectDialogViaLauncher_WithExpectedTypeAndOptions()
     {
-        DialogResult canceled = DialogResult.Cancel();
+        var canceled = DialogResult.Cancel();
         _ = _referenceMock.Setup(r => r.Result).Returns(Task.FromResult<DialogResult?>(canceled));
         _ = _launcherMock
             .Setup(l => l.ShowAsync(typeof(RejectRequestDialog), "リクエストを却下", null, It.IsAny<DialogOptions>()))
@@ -101,8 +101,5 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
             .AddCascadingValue(Task.FromResult(BunitTestSetup.CreateAuthState(TagOwnerId))));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 }

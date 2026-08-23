@@ -20,10 +20,7 @@ using Tag = SRNSMudApp.Data.Tag;
 /// </summary>
 public class TagCardViewModelTests
 {
-    private static Tag CreateTag(List<TagRelationToTag>? relations = null)
-    {
-        return new Tag { Id = 1, Name = "root", OwnerId = "owner", TargetTagRelations = relations ?? [] };
-    }
+    private static Tag CreateTag(List<TagRelationToTag>? relations = null) => new Tag { Id = 1, Name = "root", OwnerId = "owner", TargetTagRelations = relations ?? [] };
 
     private static TagRelationToTag CreateRelation(int id, int tagId, string? tagName = null, bool isSystem = false,
         int weight = 1, string ownerId = "owner")
@@ -54,10 +51,7 @@ public class TagCardViewModelTests
     }
 
     [Fact]
-    public void GetTagScore_NoRelations_ReturnsZero()
-    {
-        Assert.Equal(0, TagCardViewModel.GetTagScore(CreateTag()));
-    }
+    public void GetTagScore_NoRelations_ReturnsZero() => Assert.Equal(0, TagCardViewModel.GetTagScore(CreateTag()));
 
     [Fact]
     public void IsTagUpvoted_MatchesRelationOwnerAndSystemTag()
@@ -193,18 +187,12 @@ public class TagCardViewModelTests
     [InlineData("", "不明")]
     [InlineData("short", "short")]
     [InlineData("verylongname", "verylon")]
-    public void GetShortOwnerName_TruncatesToSevenChars(string? name, string expected)
-    {
-        Assert.Equal(expected, TagCardViewModel.GetShortOwnerName(name));
-    }
+    public void GetShortOwnerName_TruncatesToSevenChars(string? name, string expected) => Assert.Equal(expected, TagCardViewModel.GetShortOwnerName(name));
 
     [Theory]
     [InlineData("user-1", "user-1", true)]
     [InlineData("owner-x", "user-1", false)]
-    public void IsRelationOwner_ComparesOwnerAndUser(string relationOwnerId, string currentUserId, bool expected)
-    {
-        Assert.Equal(expected, TagCardViewModel.IsRelationOwner(relationOwnerId, currentUserId));
-    }
+    public void IsRelationOwner_ComparesOwnerAndUser(string relationOwnerId, string currentUserId, bool expected) => Assert.Equal(expected, TagCardViewModel.IsRelationOwner(relationOwnerId, currentUserId));
 
     [Fact]
     public void IsSelfParent_DetectsSelfReference()
@@ -219,17 +207,11 @@ public class TagCardViewModelTests
     [Theory]
     [InlineData(10, 10, true)]
     [InlineData(10, 20, false)]
-    public void IsSameTagChange_DetectsNoOpChange(int currentTagId, int newTagId, bool expected)
-    {
-        Assert.Equal(expected, TagCardViewModel.IsSameTagChange(currentTagId, newTagId));
-    }
+    public void IsSameTagChange_DetectsNoOpChange(int currentTagId, int newTagId, bool expected) => Assert.Equal(expected, TagCardViewModel.IsSameTagChange(currentTagId, newTagId));
 
     [Theory]
     [InlineData(5, 5, false)]
     [InlineData(5, 7, true)]
     [InlineData(7, 5, true)]
-    public void HasWeightChange_DetectsWeightDelta(int currentWeight, int newWeight, bool expected)
-    {
-        Assert.Equal(expected, TagCardViewModel.HasWeightChange(currentWeight, newWeight));
-    }
+    public void HasWeightChange_DetectsWeightDelta(int currentWeight, int newWeight, bool expected) => Assert.Equal(expected, TagCardViewModel.HasWeightChange(currentWeight, newWeight));
 }

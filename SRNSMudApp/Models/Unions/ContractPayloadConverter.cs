@@ -35,11 +35,11 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
         writer.WriteStartObject();
         writer.WriteString("$type", value switch
         {
-            GratisPayload _ => nameof(GratisPayload),
-            MutualPayload _ => nameof(MutualPayload),
-            PublicOfferPayload _ => nameof(PublicOfferPayload),
-            BountyPayload _ => nameof(BountyPayload),
-            EmptyPayload _ => nameof(EmptyPayload),
+            GratisPayload => nameof(GratisPayload),
+            MutualPayload => nameof(MutualPayload),
+            PublicOfferPayload => nameof(PublicOfferPayload),
+            BountyPayload => nameof(BountyPayload),
+            EmptyPayload => nameof(EmptyPayload),
             _ => nameof(EmptyPayload)
         });
 

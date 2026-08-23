@@ -4,6 +4,8 @@ using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
 
+using System.Diagnostics.CodeAnalysis;
+
 using SRNSMudApp.Data;
 
 using Tag = SRNSMudApp.Data.Tag;
@@ -52,7 +54,7 @@ public class TagDialogDataProvider(
 
     public async Task<List<Tag>> SearchTagsAsync(string searchText)
     {
-        float[] queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
+        var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
 
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
@@ -63,7 +65,7 @@ public class TagDialogDataProvider(
 
         List<Tag> vectorTags = await dbContext.Tags.Where(x => x.Embedding != null).AsNoTracking().ToListAsync();
 
-        List<Tag> vectorMatches = vectorTags
+        var vectorMatches = vectorTags
             .Where(x => x.Embedding.Length == queryVector.Length)
             .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
             .Take(50)
@@ -83,6 +85,8 @@ public class TagDialogDataProvider(
         return await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task CreateTagAsync(Tag newTag)
     {
         try
@@ -100,6 +104,8 @@ public class TagDialogDataProvider(
         dbContext.Tags.Add(newTag);
         await dbContext.SaveChangesAsync();
     }
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<bool> UpdateTagAsync(int tagId, string name, string? content)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
@@ -128,6 +134,8 @@ public class TagDialogDataProvider(
         return true;
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
@@ -141,7 +149,7 @@ public class TagDialogDataProvider(
 
         try
         {
-            float[] queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
+            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
@@ -150,7 +158,7 @@ public class TagDialogDataProvider(
 
             List<Tag> vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
 
-            List<Tag> vectorMatches = vectorTags
+            var vectorMatches = vectorTags
                 .Where(x => x.Embedding.Length == queryVector.Length)
                 .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
                 .Take(50)

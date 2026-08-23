@@ -15,17 +15,11 @@ public static class DialogLauncherExtensions
         string title,
         DialogParameters? parameters = null,
         DialogOptions? options = null)
-        where TDialog : IComponent
-    {
-        return launcher.ShowAsync(typeof(TDialog), title, parameters, options);
-    }
+        where TDialog : IComponent => launcher.ShowAsync(typeof(TDialog), title, parameters, options);
 
     public static Task<IDialogReference> ShowAsync<TDialog>(
         this IDialogLauncher launcher,
         string title,
         DialogOptions options)
-        where TDialog : IComponent
-    {
-        return launcher.ShowAsync(typeof(TDialog), title, null, options);
-    }
+        where TDialog : IComponent => launcher.ShowAsync(typeof(TDialog), title, null, options);
 }

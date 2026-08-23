@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using AngleSharp.Dom;
+
 using Bunit;
 
 using Microsoft.AspNetCore.Components;
@@ -15,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+
 using Moq;
 
 using MudBlazor.Services;
@@ -73,10 +75,7 @@ public class DuplicateTaggingRequestCancelTests : IAsyncDisposable
         _ctx.Services.AddSingleton(_ => _contractDataMock.Object);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     タグオーナーがユーザーAの重複リクエストを承認しても、ユーザーBの

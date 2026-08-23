@@ -29,7 +29,7 @@ public static class TagTreeViewModel
                     .Take(2000);
         }
 
-        List<Tag> baseTags = tags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        var baseTags = tags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
         HashSet<int> resultIds = [];
 
         foreach (Tag tag in baseTags)
@@ -64,16 +64,16 @@ public static class TagTreeViewModel
         switch (parentId)
         {
             case null:
-            {
-                HashSet<int> allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
-                children =
-                [
-                    .. tagList
+                {
+                    var allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
+                    children =
+                    [
+                        .. tagList
                         .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
                         .OrderBy(t => t.Name)
-                ];
-                break;
-            }
+                    ];
+                    break;
+                }
             default:
                 children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
                 break;

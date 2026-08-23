@@ -26,8 +26,8 @@ public sealed class TimelineTargetConverter : JsonConverter<TimelineTarget>
         writer.WriteStartObject();
         writer.WriteString("$type", value switch
         {
-            ItemTarget _ => nameof(ItemTarget),
-            TagTarget _ => nameof(TagTarget),
+            ItemTarget => nameof(ItemTarget),
+            TagTarget => nameof(TagTarget),
             _ => nameof(ItemTarget)
         });
 

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+
 using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Data;

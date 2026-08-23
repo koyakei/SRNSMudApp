@@ -72,8 +72,5 @@ public class DialogLauncherTests : IAsyncDisposable
             Times.Once);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 }

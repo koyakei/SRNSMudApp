@@ -104,7 +104,7 @@ public class ItemListExportServiceTests
             }
         };
 
-        string json = ItemListExportService.Serialize(items);
+        var json = ItemListExportService.Serialize(items);
 
         Assert.Contains("\n", json);                       // インデント付き
         Assert.Contains("日本語コンテンツ", json);           // Unicode がそのまま出力される
@@ -134,10 +134,6 @@ public class ItemListExportServiceTests
     private sealed class StatusCodeHandler(HttpStatusCode statusCode) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new HttpResponseMessage(statusCode));
-        }
+            HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage(statusCode));
     }
 }
-

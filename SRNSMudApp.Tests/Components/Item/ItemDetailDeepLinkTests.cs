@@ -10,8 +10,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +22,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -77,10 +76,7 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
             options.UseInMemoryDatabase(dbName));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     「関連リクエスト」タブのクリックで URL に tab=requests が反映され、
@@ -89,7 +85,7 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
     [Fact]
     public async Task TabAndRowInteraction_UpdatesUrlQuery()
     {
-        (int itemId, int requestId) = await SeedDataAsync();
+        (var itemId, var requestId) = await SeedDataAsync();
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo($"http://localhost/ItemDetail/{itemId}");
@@ -123,7 +119,7 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
     [Fact]
     public async Task DeepLinkUrl_RestoresTabAndSelection()
     {
-        (int itemId, int requestId) = await SeedDataAsync();
+        (var itemId, var requestId) = await SeedDataAsync();
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(

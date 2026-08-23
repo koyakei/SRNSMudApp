@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -133,6 +134,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         });
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "コントラクト処理の任意の例外を結果ユニオンへ変換するため広く捕捉する")]
     private async Task<Result<string>> ProcessAcceptContractAtomicAsync(TaggingRequestEntity entity, string currentUserId, int? fulfillerAssetId)
     {
         await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
@@ -205,7 +208,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     private async Task<Result<string>> ExecuteGratisAsync(GratisContractData contractData, string executorUserId)
     {
         var contract = contractData.Entity;
-        
+
         var assetProcessResult = await (contract.ConsumedRightAsset switch
         {
             not null => UpdateConsumedAsset(contract.ConsumedRightAsset, contract.ConsumedRightAssetId!.Value),
@@ -219,7 +222,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         };
 
         Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId);
-        
+
         return await (requestedTag switch
         {
             null => Task.FromResult<Result<string>>(new Failure("Tag not found")),
@@ -300,7 +303,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return new Success<string>("タグを追加しました。");
     }
 
@@ -318,16 +321,16 @@ public class TaggingContractService(ApplicationDbContext dbContext)
 
     private Task<Result<string>> ProcessRelationDecreaseAsync(TaggingRequestEntity contract, Tag tag, TagRelation relation, int consumedAssetId, string executorUserId, bool isRemove)
     {
-        int prevWeight = relation.Weight;
-        int delta = isRemove ? -prevWeight : -contract.ProposedWeight;
+        var prevWeight = relation.Weight;
+        var delta = isRemove ? -prevWeight : -contract.ProposedWeight;
 
         _ = (isRemove || prevWeight + delta <= 0) switch
         {
-            true => (object)dbContext.TagRelations.Remove(relation),
+            true => dbContext.TagRelations.Remove(relation),
             false => (object)(relation.Weight += delta)
         };
 
-        int previousTagWeight = tag.CachedWeight;
+        var previousTagWeight = tag.CachedWeight;
         tag.CachedWeight += delta;
 
         _ = dbContext.TagWeightLedgers.Add(new TagWeightLedger
@@ -353,7 +356,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Update",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return Task.FromResult<Result<string>>(new Success<string>("タグを削除または削減しました。"));
     }
 
@@ -419,10 +422,10 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return await (processResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<string> _ => ProcessMutualOfferedAsync(contract, offeredTag, offeredTagAsset, executorUserId)
+            Success<string> => ProcessMutualOfferedAsync(contract, offeredTag, offeredTagAsset, executorUserId)
         });
     }
-    
+
     private async Task<Result<string>> ProcessMutualAddAsync(TaggingRequestEntity contract, Tag requestedTag, int requesterAssetId, string executorUserId)
     {
         var relation1 = new TagRelation
@@ -463,7 +466,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return new Success<string>("追加完了");
     }
 
@@ -477,14 +480,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             null => new Failure("対象のタグ付けが見つかりません。"),
             var r => new Success<TagRelation>(r)
         };
-        
+
         return removeResult switch
         {
             Failure f => f,
             Success<TagRelation> s => ProcessMutualRemoveRelation(contract, requestedTag, s.Value, requesterAssetId, executorUserId)
         };
     }
-    
+
     private Result<string> ProcessMutualRemoveRelation(TaggingRequestEntity contract, Tag requestedTag, TagRelation relation, int requesterAssetId, string executorUserId)
     {
         var prevWeight = relation.Weight;
@@ -518,7 +521,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Delete",
             PreviousWeight = prevWeight
         });
-        
+
         return new Success<string>("削除完了");
     }
 
@@ -564,15 +567,15 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return new Success<string>("相互タグ付けが完了しました。");
     }
 
     private async Task<Result<string>> ExecuteTriggerAsync(TriggerContractData contractData, string executorUserId)
     {
         var contract = contractData.Entity;
-        
-        int targetOfferId = contract.Payload is SRNSMudApp.Models.Unions.PublicOfferPayload p ? p.TargetPublicTradeOfferId : 0;
+
+        var targetOfferId = contract.Payload is SRNSMudApp.Models.Unions.PublicOfferPayload p ? p.TargetPublicTradeOfferId : 0;
         PublicTradeOffer? offer = await dbContext.PublicTradeOffers
                                      .FirstOrDefaultAsync(o => o.Id == targetOfferId);
 
@@ -589,7 +592,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Success<PublicTradeOffer> s => ProcessTriggerWithOfferAsync(contract, s.Value, executorUserId)
         });
     }
-    
+
     private async Task<Result<string>> ProcessTriggerWithOfferAsync(TaggingRequestEntity contract, PublicTradeOffer offer, string executorUserId)
     {
         var assetValidation = (offer.RequiredAssetAmount > 0) switch
@@ -597,7 +600,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             true => ValidateTriggerAsset(contract, offer),
             false => new Success<RightAsset?>(null)
         };
-        
+
         return await (assetValidation switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
@@ -615,7 +618,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             var a => new Success<RightAsset?>(a)
         };
     }
-    
+
     private async Task<Result<string>> ProcessTriggerAssetActionAsync(TaggingRequestEntity contract, PublicTradeOffer offer, RightAsset? validatedAsset, string executorUserId)
     {
         var consumedAssetId = await (validatedAsset switch
@@ -639,7 +642,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult(assetId);
     }
-    
+
     private async Task<int> CreateTriggerOwnerAssetAsync(PublicTradeOffer offer)
     {
         var ownerAsset = new RightAsset
@@ -672,14 +675,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             null => new Failure("Tag not found"),
             _ => new Success<Tag>(tag)
         };
-        
+
         return tagResult switch
         {
             Failure f => f,
             Success<Tag> s => CompleteTriggerAdd(contract, offer, consumedAssetId, s.Value, newRelation)
         };
     }
-    
+
     private Result<string> CompleteTriggerAdd(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation newRelation)
     {
         var prevWeight = tag.CachedWeight;
@@ -710,10 +713,10 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return new Success<string>("公開オファーを実行しました。");
     }
-    
+
     private async Task<Result<string>> ProcessTriggerRemoveAsync(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId)
     {
         TagRelation? relation = await dbContext.TagRelations
@@ -737,14 +740,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             null => new Failure("Tag not found"),
             _ => new Success<Tag>(tag)
         };
-        
+
         return tagResult switch
         {
             Failure f => f,
             Success<Tag> s => CompleteTriggerRemove(contract, offer, consumedAssetId, s.Value, relation, prevWeight)
         };
     }
-    
+
     private Result<string> CompleteTriggerRemove(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation relation, int prevWeight)
     {
         var previousWeight = tag.CachedWeight;
@@ -775,7 +778,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Delete",
             PreviousWeight = prevWeight
         });
-        
+
         return new Success<string>("公開オファーをキャンセル(Remove)しました。");
     }
 
@@ -790,7 +793,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Success<int> s => ProcessBountyRequestAsync(contract, fulfillerUserId, s.Value)
         });
     }
-    
+
     private async Task<Result<int>> ResolveBountyAssetProviderAsync(TaggingRequestEntity contract, string fulfillerUserId, int? fulfillerAssetId)
     {
         var state = (fulfillerAssetId.HasValue, contract.RequestedTag!.OwnerId == fulfillerUserId) switch
@@ -820,7 +823,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Success<RightAsset> s => ConsumeFulfillerAsset(s.Value)
         };
     }
-    
+
     private Result<int> ConsumeFulfillerAsset(RightAsset asset)
     {
         asset.IsBurned = true;
@@ -828,7 +831,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = dbContext.RightAssets.Update(asset);
         return new Success<int>(asset.Id);
     }
-    
+
     private async Task<Result<int>> MintAndConsumeGoodwillAssetAsync(string fulfillerUserId, int requestedTagId)
     {
         var rightAsset = new RightAsset
@@ -852,7 +855,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             _ => Task.FromResult<Result<string>>(new Failure("無効なリクエストタイプです。"))
         });
     }
-    
+
     private async Task<Result<string>> ProcessBountyAddAsync(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId)
     {
         var newRelation = new TagRelation
@@ -866,18 +869,18 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         _ = await dbContext.SaveChangesAsync();
 
         var rewardResult = await TransferBountyRewardAsync(contract, fulfillerUserId);
-        
+
         return await (rewardResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<bool> _ => ProcessBountyAddTagLedgerAsync(contract, fulfillerUserId, consumedAssetId, newRelation)
+            Success<bool> => ProcessBountyAddTagLedgerAsync(contract, fulfillerUserId, consumedAssetId, newRelation)
         });
     }
 
     private async Task<Result<string>> ProcessBountyAddTagLedgerAsync(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation newRelation)
     {
         Tag? tag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
-        
+
         Result<Tag> tagResult = tag switch
         {
             null => new Failure("Tag not found"),
@@ -890,7 +893,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Success<Tag> s => CompleteBountyAddTagLedger(contract, fulfillerUserId, consumedAssetId, newRelation, s.Value)
         };
     }
-    
+
     private Result<string> CompleteBountyAddTagLedger(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation newRelation, Tag tag)
     {
         var previousWeight = tag.CachedWeight;
@@ -921,7 +924,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Insert",
             NewWeight = contract.ProposedWeight
         });
-        
+
         return new Success<string>("バウンティリクエストを承認しました。");
     }
 
@@ -934,10 +937,10 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         };
         return actionState;
     }
-    
+
     private async Task<Result<bool>> ProcessRewardTransferAsync(TaggingRequestEntity contract, string fulfillerUserId)
     {
-        int rewardAssetId = contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b3 ? b3.OfferedRewardAssetId : 0;
+        var rewardAssetId = contract.Payload is SRNSMudApp.Models.Unions.BountyPayload b3 ? b3.OfferedRewardAssetId : 0;
         RightAsset? rewardAsset = await dbContext.RightAssets
             .FirstOrDefaultAsync(a => a.Id == rewardAssetId && a.OwnerId == contract.RequesterUserId);
 
@@ -948,14 +951,14 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         };
         return authResult;
     }
-    
+
     private Result<bool> CompleteRewardTransfer(RightAsset rewardAsset, string fulfillerUserId)
     {
         rewardAsset.OwnerId = fulfillerUserId;
         _ = dbContext.RightAssets.Update(rewardAsset);
         return new Success<bool>(true);
     }
-    
+
     private async Task<Result<string>> ProcessBountyRemoveAsync(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId)
     {
         TagRelation? relation = await dbContext.TagRelations
@@ -967,25 +970,25 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             var r => ProcessBountyRemoveRelationAsync(contract, fulfillerUserId, consumedAssetId, r)
         });
     }
-    
+
     private async Task<Result<string>> ProcessBountyRemoveRelationAsync(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation relation)
     {
         var prevWeight = relation.Weight;
         _ = dbContext.TagRelations.Remove(relation);
 
         var rewardResult = await TransferBountyRewardAsync(contract, fulfillerUserId);
-        
+
         return await (rewardResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<bool> _ => ProcessBountyRemoveTagLedgerAsync(contract, fulfillerUserId, consumedAssetId, relation, prevWeight)
+            Success<bool> => ProcessBountyRemoveTagLedgerAsync(contract, fulfillerUserId, consumedAssetId, relation, prevWeight)
         });
     }
 
     private async Task<Result<string>> ProcessBountyRemoveTagLedgerAsync(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation relation, int prevWeight)
     {
         Tag? tag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
-        
+
         Result<Tag> tagResult = tag switch
         {
             null => new Failure("Tag not found"),
@@ -998,7 +1001,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Success<Tag> s => CompleteBountyRemoveTagLedger(contract, fulfillerUserId, consumedAssetId, relation, prevWeight, s.Value)
         };
     }
-    
+
     private Result<string> CompleteBountyRemoveTagLedger(TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation relation, int prevWeight, Tag tag)
     {
         var previousWeight = tag.CachedWeight;
@@ -1029,7 +1032,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             EventType = "Delete",
             PreviousWeight = prevWeight
         });
-        
+
         return new Success<string>("バウンティリクエスト(削除)を承認しました。");
     }
 }

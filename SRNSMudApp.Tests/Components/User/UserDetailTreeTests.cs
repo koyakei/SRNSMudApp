@@ -9,8 +9,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +16,8 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -52,10 +52,7 @@ public class UserDetailTreeTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     ユーザー詳細ページの「作成したタグツリー」タブを開くと、そのユーザーが作成した
@@ -92,7 +89,7 @@ public class UserDetailTreeTests : IAsyncDisposable
         }
 
         // Act: タブ「作成したタグツリー」を開き、jqTreeInterop.init に渡されたJSONを取得
-        string? json = await ActivateTreeTabAndGetJson(testUserId);
+        var json = await ActivateTreeTabAndGetJson(testUserId);
 
         // Assert: タグがJSONに含まれる
         Assert.NotNull(json);
@@ -133,12 +130,12 @@ public class UserDetailTreeTests : IAsyncDisposable
         }
 
         // Act: user_a のページでタブ「作成したタグツリー」を開きJSONを取得
-        string? json = await ActivateTreeTabAndGetJson(userAId);
+        var json = await ActivateTreeTabAndGetJson(userAId);
 
         // Assert: 自分のタグはルートレベルに存在する（修正前は親が見つからず欠落していた）
         Assert.NotNull(json);
-        using JsonDocument document = JsonDocument.Parse(json!);
-        bool isRootLevel = document.RootElement.ValueKind == JsonValueKind.Array
+        using var document = JsonDocument.Parse(json!);
+        var isRootLevel = document.RootElement.ValueKind == JsonValueKind.Array
                            && document.RootElement.EnumerateArray().Any(node =>
                                node.TryGetProperty("id", out JsonElement id) && id.GetInt32() == tagAId);
         Assert.True(isRootLevel, $"タグ {userATagName}(id={tagAId}) がルートレベルに存在しません。JSON: {json}");

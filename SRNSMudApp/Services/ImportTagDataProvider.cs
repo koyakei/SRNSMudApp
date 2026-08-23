@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using System.Diagnostics.CodeAnalysis;
+
 using SRNSMudApp.Data;
 
 using Tag = SRNSMudApp.Data.Tag;
@@ -35,6 +37,8 @@ public class ImportTagDataProvider(
 {
     private static readonly Regex TagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F]+$");
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<List<Tag>> SearchUserTagsAsync(
         string userId,
         string? value,
@@ -51,7 +55,7 @@ public class ImportTagDataProvider(
 
         try
         {
-            float[] queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value!)).ToArray();
+            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value!)).ToArray();
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)))
@@ -60,7 +64,7 @@ public class ImportTagDataProvider(
 
             List<Tag> vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
 
-            List<Tag> vectorMatches = vectorTags
+            var vectorMatches = vectorTags
                 .Where(x => x.Embedding.Length == queryVector.Length)
                 .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
                 .Take(50)
@@ -81,6 +85,8 @@ public class ImportTagDataProvider(
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<int> ImportCsvTagsAsync(
         string userId,
         string selectedParentTagName,
@@ -113,7 +119,7 @@ public class ImportTagDataProvider(
 
             foreach (var line in lines)
             {
-                List<string> tagNames = line.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+                var tagNames = line.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
                 switch (tagNames.Count)
                 {
                     case 0: continue;
@@ -133,34 +139,34 @@ public class ImportTagDataProvider(
                     switch (existingTags.TryGetValue(tagName, out Tag? tag))
                     {
                         case false:
-                        {
-                            // Tag doesn't exist, create it
-                            var newTag = new Tag
                             {
-                                Name = tagName,
-                                OwnerId = userId,
-                                ParentTag = currentParentTag,
-                                CreatedDate = DateTime.UtcNow,
-                                UpdatedDate = DateTime.UtcNow
-                            };
+                                // Tag doesn't exist, create it
+                                var newTag = new Tag
+                                {
+                                    Name = tagName,
+                                    OwnerId = userId,
+                                    ParentTag = currentParentTag,
+                                    CreatedDate = DateTime.UtcNow,
+                                    UpdatedDate = DateTime.UtcNow
+                                };
 
-                            try
-                            {
-                                var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
-                                newTag.Embedding = embedding.ToArray();
+                                try
+                                {
+                                    var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                                    newTag.Embedding = embedding.ToArray();
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Embedding generation failed: {ex.Message}");
+                                }
+
+                                dbContext.Tags.Add(newTag);
+
+                                existingTags[tagName] = newTag;
+                                currentParentTag = newTag;
+                                createdCount++;
+                                continue;
                             }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Embedding generation failed: {ex.Message}");
-                            }
-
-                            dbContext.Tags.Add(newTag);
-
-                            existingTags[tagName] = newTag;
-                            currentParentTag = newTag;
-                            createdCount++;
-                            continue;
-                        }
                     }
 
                     switch (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))

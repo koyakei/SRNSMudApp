@@ -7,10 +7,10 @@ using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Components.Item;
 
+using Item = SRNSMudApp.Data.Item;
 // 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
 // using を名前空間の内側に置く。namespace Item も同名型と衝突する
 using Tag = SRNSMudApp.Data.Tag;
-using Item = SRNSMudApp.Data.Item;
 
 /// <summary>
 ///     ItemList ページのコードビハインド。
@@ -37,7 +37,7 @@ public partial class ItemList
     {
         // URL 復元は ItemListQueryState に一元化。タグ ID だけでは表示名が必要なため
         // フィルタ + ソートで参照される ID を一括取得して Tag 実体へ解決する
-        ItemListQueryState state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+        var state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
         Dictionary<int, Tag> tagsById = await ListData.GetTagsByIdsAsync(
             state.Filters.Select(f => f.TagId).Concat(state.SortEntries.Select(e => e.TagId)));
 
@@ -64,16 +64,13 @@ public partial class ItemList
 
     private async Task<IEnumerable<string>> SearchTagsAndUsersAsync(string? value, CancellationToken token)
     {
-        switch (TagSearchQuery.Parse(value))
+        return TagSearchQuery.Parse(value) switch
         {
-            case EmptySearch:
-                return [];
-            case TagWithUserSearch tagWithUserSearch:
-                return await ListData.SearchTagUserNamesAsync(
-                    tagWithUserSearch.TagName, tagWithUserSearch.UserName, token);
-            default:
-                return await ListData.SearchTagNameSuggestionsAsync(value ?? "", token);
-        }
+            EmptySearch => [],
+            TagWithUserSearch tagWithUserSearch => await ListData.SearchTagUserNamesAsync(
+                                tagWithUserSearch.TagName, tagWithUserSearch.UserName, token),
+            _ => await ListData.SearchTagNameSuggestionsAsync(value ?? "", token),
+        };
     }
 
     private async Task OnSearchTextChangedAsync(string? value)
@@ -224,7 +221,7 @@ public partial class ItemList
 
         ItemListExportData exportData = await ListData.LoadExportDataAsync(itemIds);
         IReadOnlyList<ExportItemDto> exportList = await ExportService.BuildExportAsync(exportData, _items);
-        string json = ItemListExportService.Serialize(exportList);
+        var json = ItemListExportService.Serialize(exportList);
 
         try
         {

@@ -35,7 +35,7 @@ public class TagTreePopoverViewModelTests
 
         var ids = TagTreePopoverViewModel.GetAutoExpandIds(target, tags);
 
-        Assert.Equal(new HashSet<int> { 3, 2, 1 }, ids);
+        Assert.Equal([3, 2, 1], ids);
     }
 
     [Fact]

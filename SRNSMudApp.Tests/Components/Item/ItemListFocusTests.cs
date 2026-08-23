@@ -10,8 +10,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +24,7 @@ using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -70,10 +69,7 @@ public class ItemListFocusTests : IAsyncDisposable
             options.UseInMemoryDatabase(dbName));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     アイテムカードをクリックすると、該当カードのスタイルにフォーカス用の
@@ -82,7 +78,7 @@ public class ItemListFocusTests : IAsyncDisposable
     [Fact]
     public async Task ClickingItemCard_AppliesFocusStyle_AndUpdatesUrl()
     {
-        (int firstItemId, int _) = await SeedItemsAsync();
+        (var firstItemId, var _) = await SeedItemsAsync();
 
         IRenderedComponent<ResourceList> cut =
             _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, LoadItems()));
@@ -94,7 +90,7 @@ public class ItemListFocusTests : IAsyncDisposable
 
         // Assert: フォーカススタイルが適用される
         IElement card = cut.Find($"#item-card-{firstItemId}");
-        string style = card.GetAttribute("style") ?? "";
+        var style = card.GetAttribute("style") ?? "";
         Assert.Contains("border-width: 2px", style);
         Assert.Contains("var(--mud-palette-primary)", style);
 
@@ -110,7 +106,7 @@ public class ItemListFocusTests : IAsyncDisposable
     [Fact]
     public async Task DirectUrlWithFocusItem_RestoresFocusStyle()
     {
-        (int _, int secondItemId) = await SeedItemsAsync();
+        (var _, var secondItemId) = await SeedItemsAsync();
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo($"http://localhost/?focus={secondItemId}");
@@ -121,13 +117,13 @@ public class ItemListFocusTests : IAsyncDisposable
         cut.WaitForState(() => cut.Markup.Contains($"item-card-{secondItemId}"));
 
         // Assert: 対象カードのみフォーカススタイルが適用されている
-        string focusedStyle = cut.Find($"#item-card-{secondItemId}").GetAttribute("style") ?? "";
+        var focusedStyle = cut.Find($"#item-card-{secondItemId}").GetAttribute("style") ?? "";
         Assert.Contains("border-width: 2px", focusedStyle);
         Assert.Contains("var(--mud-palette-primary)", focusedStyle);
 
         IElement otherCard = cut.FindAll("[id^='item-card-']").First(c =>
             c.GetAttribute("id") != $"item-card-{secondItemId}");
-        string otherStyle = otherCard.GetAttribute("style") ?? "";
+        var otherStyle = otherCard.GetAttribute("style") ?? "";
         Assert.DoesNotContain("border-width: 2px", otherStyle);
     }
 
@@ -138,7 +134,7 @@ public class ItemListFocusTests : IAsyncDisposable
     [Fact]
     public async Task AuthorLinkClick_NavigatesToUserDetail_WithoutFocusQuery()
     {
-        (int itemId, int _) = await SeedItemsAsync();
+        (var itemId, var _) = await SeedItemsAsync();
 
         IRenderedComponent<ResourceList> cut =
             _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, LoadItems()));
@@ -177,10 +173,7 @@ public class ItemListFocusTests : IAsyncDisposable
         return db.Items.OrderBy(i => i.Id).AsNoTracking().ToList();
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 }
 
 /// <summary>
@@ -234,10 +227,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     アイテムをフォーカスした状態でタグ検索を実行しても、フォーカス状態はリセットされず、
@@ -274,7 +264,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
         }
 
         System.Collections.Generic.List<SRNSMudApp.Data.Item> items = LoadItems();
-        int firstItemId = items.First().Id;
+        var firstItemId = items.First().Id;
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
@@ -294,19 +284,13 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
         // Assert: f= (タグフィルタ) と focus= が共存する
         cut.WaitForAssertion(() =>
         {
-            string uri = navigationManager.Uri;
+            var uri = navigationManager.Uri;
             Assert.Contains($"f={tagId}", uri);
             Assert.Contains($"focus={firstItemId}", uri);
         });
     }
 
-    private System.Collections.Generic.List<SRNSMudApp.Data.Item> LoadItems()
-    {
-        return CreateDbContext().Items.OrderBy(i => i.Id).ToList();
-    }
+    private System.Collections.Generic.List<SRNSMudApp.Data.Item> LoadItems() => CreateDbContext().Items.OrderBy(i => i.Id).ToList();
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 }

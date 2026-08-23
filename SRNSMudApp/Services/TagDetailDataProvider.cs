@@ -130,16 +130,16 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
                 await context.SaveChangesAsync();
                 return false;
             default:
-            {
-                var newFollow = new UserTagFollow
                 {
-                    TagId = tagId,
-                    OwnerId = currentUserId
-                };
-                context.UserTagFollows!.Add(newFollow);
-                await context.SaveChangesAsync();
-                return true;
-            }
+                    var newFollow = new UserTagFollow
+                    {
+                        TagId = tagId,
+                        OwnerId = currentUserId
+                    };
+                    context.UserTagFollows!.Add(newFollow);
+                    await context.SaveChangesAsync();
+                    return true;
+                }
         }
     }
 }

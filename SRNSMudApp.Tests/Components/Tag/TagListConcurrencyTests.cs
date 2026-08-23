@@ -7,19 +7,20 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
-
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
 using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using Moq;
+
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -56,10 +57,7 @@ public class TagListConcurrencyTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public void RenderingTagList_ShouldNotThrowConcurrencyException()

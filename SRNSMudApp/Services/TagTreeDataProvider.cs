@@ -72,15 +72,15 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         {
             List<Tag> selectedTagsFromDb = await context.Tags.Where(t => selectedIds.Contains(t.Id)).ToListAsync();
 
-            List<string> unauthorizedNames = selectedTagsFromDb
+            var unauthorizedNames = selectedTagsFromDb
                 .Where(t => t.OwnerId != userId)
                 .Select(t => t.Name)
                 .ToList();
-            List<string> systemNames = selectedTagsFromDb
+            var systemNames = selectedTagsFromDb
                 .Where(t => t.IsSystem)
                 .Select(t => t.Name)
                 .ToList();
-            List<int> authorizedIds = selectedTagsFromDb
+            var authorizedIds = selectedTagsFromDb
                 .Where(t => t.OwnerId == userId && !t.IsSystem)
                 .Select(t => t.Id)
                 .ToList();
@@ -91,61 +91,61 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             switch (authorizedIds.Count > 0)
             {
                 case true:
-                {
-                    List<Tag> tagsToDelete = await context.Tags
-                        .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == userId)
-                        .ToListAsync();
-
-                    switch (tagsToDelete.Count > 0)
                     {
-                        case true:
+                        List<Tag> tagsToDelete = await context.Tags
+                            .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == userId)
+                            .ToListAsync();
+
+                        switch (tagsToDelete.Count > 0)
                         {
-                            // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
-                            List<TagRelationToTag> relationsToDelete = await context.TagRelationToTags
-                                .Where(tr =>
-                                    authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
-                                .ToListAsync();
+                            case true:
+                                {
+                                    // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
+                                    List<TagRelationToTag> relationsToDelete = await context.TagRelationToTags
+                                        .Where(tr =>
+                                            authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
+                                        .ToListAsync();
 
-                            switch (relationsToDelete.Count > 0)
-                            {
-                                case true:
-                                    context.TagRelationToTags.RemoveRange(relationsToDelete);
+                                    switch (relationsToDelete.Count > 0)
+                                    {
+                                        case true:
+                                            context.TagRelationToTags.RemoveRange(relationsToDelete);
+                                            break;
+                                    }
+
+                                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
+                                    List<Tag> orphanedChildren = await context.Tags
+                                        .Where(t => t.ParentTagId != null &&
+                                                    authorizedIds.Contains(t.ParentTagId.Value) &&
+                                                    !authorizedIds.Contains(t.Id))
+                                        .ToListAsync();
+
+                                    foreach (Tag child in orphanedChildren)
+                                    {
+                                        child.ParentTagId = null;
+                                    }
+
+                                    // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
+                                    foreach (Tag tag in tagsToDelete)
+                                    {
+                                        tag.ParentTagId = null;
+                                    }
+
+                                    await context.SaveChangesAsync();
+
+                                    // タグ本体の削除
+                                    context.Tags.RemoveRange(tagsToDelete);
+                                    await context.SaveChangesAsync();
+
+                                    hasDeleted = true;
+                                    deletedCount = tagsToDelete.Count;
                                     break;
-                            }
-
-                            // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
-                            List<Tag> orphanedChildren = await context.Tags
-                                .Where(t => t.ParentTagId != null &&
-                                            authorizedIds.Contains(t.ParentTagId.Value) &&
-                                            !authorizedIds.Contains(t.Id))
-                                .ToListAsync();
-
-                            foreach (Tag child in orphanedChildren)
-                            {
-                                child.ParentTagId = null;
-                            }
-
-                            // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
-                            foreach (Tag tag in tagsToDelete)
-                            {
-                                tag.ParentTagId = null;
-                            }
-
-                            await context.SaveChangesAsync();
-
-                            // タグ本体の削除
-                            context.Tags.RemoveRange(tagsToDelete);
-                            await context.SaveChangesAsync();
-
-                            hasDeleted = true;
-                            deletedCount = tagsToDelete.Count;
-                            break;
+                                }
                         }
-                    }
 
-                    await transaction.CommitAsync();
-                    break;
-                }
+                        await transaction.CommitAsync();
+                        break;
+                    }
             }
 
             return new TagTreeDeleteResult(hasDeleted, deletedCount, unauthorizedNames, systemNames);

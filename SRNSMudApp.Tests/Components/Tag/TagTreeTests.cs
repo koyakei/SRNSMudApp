@@ -7,18 +7,19 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
-
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
 using Bunit.TestDoubles;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using Moq;
+
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 using Xunit.Abstractions;
 
@@ -36,7 +37,7 @@ public class TagTreeTests : IAsyncDisposable
     {
         _output = output;
         _ctx = new BunitContext();
-        
+
         // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
         _ = _ctx.Services.AddAuth("test-user-id");
         _ = _ctx.Services.AddSrnsComponentServices();
@@ -51,10 +52,7 @@ public class TagTreeTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task JqTree_InitializesWithCorrectJson_WhenSingleRootNodeHasMultipleChildren()
@@ -188,7 +186,10 @@ public class TagTreeTests : IAsyncDisposable
             // Seed a tag for another user to ensure sorting/prioritization works (though we won't hit the 2000 limit)
             var otherUserTag = new SRNSMudApp.Data.Tag
             {
-                Id = 22, Name = "OtherRoot", IsSystem = false, OwnerId = "other-user-id"
+                Id = 22,
+                Name = "OtherRoot",
+                IsSystem = false,
+                OwnerId = "other-user-id"
             };
 
             dbContext.Tags.AddRange(rootTag, childTag, otherUserTag);
@@ -296,7 +297,10 @@ public class TagTreeTests : IAsyncDisposable
             {
                 tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 10000 + i, Name = $"Tag {i}", IsSystem = false, OwnerId = "test-user-id"
+                    Id = 10000 + i,
+                    Name = $"Tag {i}",
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
                 });
             }
 
@@ -449,7 +453,10 @@ public class TagTreeTests : IAsyncDisposable
         {
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
             {
-                Id = 100, Name = "SoloTag", IsSystem = false, OwnerId = "test-user-id"
+                Id = 100,
+                Name = "SoloTag",
+                IsSystem = false,
+                OwnerId = "test-user-id"
             });
             _ = await dbContext.SaveChangesAsync();
         }
@@ -585,7 +592,10 @@ public class TagTreeTests : IAsyncDisposable
         {
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
             {
-                Id = 600, Name = "LonelyRoot", IsSystem = false, OwnerId = "test-user-id"
+                Id = 600,
+                Name = "LonelyRoot",
+                IsSystem = false,
+                OwnerId = "test-user-id"
             });
             _ = await dbContext.SaveChangesAsync();
         }
@@ -664,7 +674,10 @@ public class TagTreeTests : IAsyncDisposable
             {
                 _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 800 + i, Name = $"CountTag{i}", IsSystem = false, OwnerId = "test-user-id"
+                    Id = 800 + i,
+                    Name = $"CountTag{i}",
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
                 });
             }
 
@@ -820,7 +833,10 @@ public class TagTreeTests : IAsyncDisposable
             {
                 tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 2200 + i, Name = $"EmptySearchTag_{i}", IsSystem = false, OwnerId = "test-user-id"
+                    Id = 2200 + i,
+                    Name = $"EmptySearchTag_{i}",
+                    IsSystem = false,
+                    OwnerId = "test-user-id"
                 });
             }
 

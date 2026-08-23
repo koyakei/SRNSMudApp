@@ -35,7 +35,7 @@ public static class NotificationsViewModel
             return;
         }
 
-        Dictionary<int, Item> itemDict = items.ToDictionary(i => i.Id);
+        var itemDict = items.ToDictionary(i => i.Id);
         foreach (NotificationDto notification in notifications)
         {
             if (notification.AssociatedItemId != 0 &&

@@ -9,8 +9,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +21,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -69,15 +68,12 @@ public class ItemDetailTagWeightTests : IAsyncDisposable
             options.UseInMemoryDatabase(dbName));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task ClickingDecreaseWeightButton_ShowsUpdatedWeightInActionsColumn()
     {
-        (int itemId, string tagName) = await SeedDataAsync();
+        (var itemId, var tagName) = await SeedDataAsync();
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo($"http://localhost/ItemDetail/{itemId}");

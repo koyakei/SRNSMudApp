@@ -7,8 +7,6 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +18,8 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -61,10 +61,7 @@ public class AddItemTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     既存の ApplicationUser を OwnerId に持つ Item を保存しても、
@@ -81,7 +78,9 @@ public class AddItemTests : IAsyncDisposable
         {
             _ = dbContext.Users.Add(new ApplicationUser
             {
-                Id = ExistingUserId, UserName = "testuser", Email = "test@example.com"
+                Id = ExistingUserId,
+                UserName = "testuser",
+                Email = "test@example.com"
             });
             _ = await dbContext.SaveChangesAsync();
         }

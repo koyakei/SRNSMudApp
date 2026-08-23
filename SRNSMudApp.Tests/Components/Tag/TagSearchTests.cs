@@ -8,10 +8,9 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+
 using Moq;
 
 using MudBlazor.Services;
@@ -19,6 +18,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -59,10 +59,7 @@ public class TagSearchTests : IAsyncDisposable
             options.UseInMemoryDatabase(dbName));
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     「反社会的勢力」と入力すると、意味的に近い「ヤクザ」タグが候補に表示されること。
@@ -103,10 +100,7 @@ public class TagSearchTests : IAsyncDisposable
         Assert.Contains("ヤクザ", provider.Markup);
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     /// <summary>
     ///     類義語は同じベクトル、それ以外は直交ベクトルを返すフェイク。

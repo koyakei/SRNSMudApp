@@ -51,8 +51,8 @@ public class AuthController(
     private async Task<IActionResult> ProcessRiskAssessmentAsync(ExternalLoginRequest request, ExternalTokenPayload payload)
     {
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-        bool isRisky = await _riskService.IsRequestRiskyAsync(ip, request.DeviceId, payload.Email);
-        
+        var isRisky = await _riskService.IsRequestRiskyAsync(ip, request.DeviceId, payload.Email);
+
         return await (isRisky switch
         {
             true => Task.FromResult<IActionResult>(Forbid("Risk assessment failed.")),
@@ -88,7 +88,7 @@ public class AuthController(
         };
 
         IdentityResult createResult = await _userManager.CreateAsync(newUser);
-        
+
         return await (createResult.Succeeded switch
         {
             false => HandleCreateUserError(createResult),
@@ -106,7 +106,7 @@ public class AuthController(
     private async Task<IActionResult> AddLoginAndSignInAsync(ApplicationUser newUser, UserLoginInfo userLoginInfo)
     {
         IdentityResult addLoginResult = await _userManager.AddLoginAsync(newUser, userLoginInfo);
-        
+
         _ = addLoginResult.Succeeded switch
         {
             false => (object)Task.Run(() => _logger.LogError("Failed to add login to user: {Errors}",
@@ -121,7 +121,7 @@ public class AuthController(
     private async Task<IActionResult> LinkAndSignInAsync(ApplicationUser existingUser, UserLoginInfo userLoginInfo, string provider)
     {
         IList<UserLoginInfo> logins = await _userManager.GetLoginsAsync(existingUser);
-        
+
         _ = logins.Any(l => l.LoginProvider == provider && l.ProviderKey == userLoginInfo.ProviderKey) switch
         {
             false => await _userManager.AddLoginAsync(existingUser, userLoginInfo),

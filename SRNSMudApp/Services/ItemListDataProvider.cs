@@ -2,6 +2,8 @@ using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
 
+using System.Diagnostics.CodeAnalysis;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Services;
@@ -66,6 +68,8 @@ public class ItemListDataProvider(
         return await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<List<string>> SearchTagNameSuggestionsAsync(
         string searchText,
         CancellationToken token = default)
@@ -73,7 +77,7 @@ public class ItemListDataProvider(
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(token);
         try
         {
-            float[] queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
+            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
 
             List<Tag> textMatches = await context.Tags
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
@@ -85,7 +89,7 @@ public class ItemListDataProvider(
                 .AsNoTracking()
                 .ToListAsync(token);
 
-            List<Tag> vectorMatches = vectorTags
+            var vectorMatches = vectorTags
                 .Where(t => t.Embedding.Length == queryVector.Length)
                 .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryVector))
                 .Take(10)
@@ -207,7 +211,7 @@ public class ItemListDataProvider(
             .Where(tr => itemIds.Contains(tr.ItemId))
             .ToListAsync();
 
-        List<int> relatedTagIds = itemTags.Select(t => t.TagId).Distinct().ToList();
+        var relatedTagIds = itemTags.Select(t => t.TagId).Distinct().ToList();
 
         List<TagRelationToTag> tagToTags = await context.TagRelationToTags
             .Where(trt => relatedTagIds.Contains(trt.TargetTagId))

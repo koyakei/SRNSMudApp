@@ -59,14 +59,8 @@ public class ResourceListViewModelTests
     [InlineData(10, null, "#tag-card-10")]
     [InlineData(10, 20, "#tag-card-10")]
     [InlineData(null, 20, "#item-card-20")]
-    public void GetFocusSelector_PrefersTagOverItem(int? tagId, int? itemId, string expected)
-    {
-        Assert.Equal(expected, ResourceListViewModel.GetFocusSelector(tagId, itemId));
-    }
+    public void GetFocusSelector_PrefersTagOverItem(int? tagId, int? itemId, string expected) => Assert.Equal(expected, ResourceListViewModel.GetFocusSelector(tagId, itemId));
 
     [Fact]
-    public void GetFocusSelector_WithNoFocus_ReturnsNull()
-    {
-        Assert.Null(ResourceListViewModel.GetFocusSelector(null, null));
-    }
+    public void GetFocusSelector_WithNoFocus_ReturnsNull() => Assert.Null(ResourceListViewModel.GetFocusSelector(null, null));
 }

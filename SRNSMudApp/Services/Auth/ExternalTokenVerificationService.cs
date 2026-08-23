@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Google.Apis.Auth;
+
 using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Auth;
@@ -80,7 +81,7 @@ public class ExternalTokenVerificationService(HttpClient httpClient, ILogger<Ext
             request.Headers.UserAgent.ParseAdd("SRNSMudApp");
 
             HttpResponseMessage response = await _httpClient.SendAsync(request);
-            
+
             return await (response.IsSuccessStatusCode switch
             {
                 false => Task.FromResult<Result<ExternalTokenPayload>>(LogAndReturnFailure("Invalid GitHub token", null)),

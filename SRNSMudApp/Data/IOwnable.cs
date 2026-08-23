@@ -10,5 +10,3 @@ public interface IOwnable
 
     bool IsOwnedBy(string userId) => OwnerId == userId;
 }
-
-

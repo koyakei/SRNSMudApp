@@ -222,7 +222,7 @@ public class ItemListQueryStateTests
             new Uri("http://localhost/Item/ItemList?f=3&f=7@alice&sort=3:desc&sort=7:asc&item=11&item=22&focus=99&focusTag=6"));
         Dictionary<string, object?> parameters = original.BuildParameters();
 
-        string query = string.Join("&",
+        var query = string.Join("&",
             parameters.SelectMany(kv => kv.Value switch
             {
                 null => [],

@@ -7,14 +7,13 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
 using Moq;
 
 using MudBlazor.Services;
@@ -23,6 +22,7 @@ using SRNSMudApp.Components.Pages;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -65,10 +65,7 @@ public class PageRenderSmokeTests : IAsyncDisposable
         _ctx.Services.AddScoped(_ => embeddingMock.Object);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     ホームページ（/）がログイン済み状態で例外なくレンダリングできること。

@@ -146,7 +146,7 @@ public class TagRelationService(ApplicationDbContext context)
                 null => new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = currentUserId, Weight = 0 },
                 _ => relation
             };
-            
+
             _ = relation.Id switch
             {
                 0 => context.TagRelations.Add(relation),

@@ -8,8 +8,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +19,8 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -50,10 +50,7 @@ public class UserManagementTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task RendersUserManagement_And_TogglesAdminRole()
@@ -82,7 +79,9 @@ public class UserManagementTests : IAsyncDisposable
         {
             _ = dbContext.Users.Add(new ApplicationUser
             {
-                Id = "user1", UserName = "testuser@example.com", Email = "testuser@example.com"
+                Id = "user1",
+                UserName = "testuser@example.com",
+                Email = "testuser@example.com"
             });
             _ = await dbContext.SaveChangesAsync();
         }

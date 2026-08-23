@@ -1,10 +1,10 @@
-using SRNSMudApp.Models.Unions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using Moq;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Services;
@@ -45,7 +45,9 @@ public class ItemTagServiceTests : IDisposable
         var user = new ApplicationUser { Id = userId, UserName = "TestUser" };
         _dbContext.Users.Add(user);
 
-        var request = new TaggingRequestEntity { ContractType = "Gratis", 
+        var request = new TaggingRequestEntity
+        {
+            ContractType = "Gratis",
             OwnerId = userId,
             TargetItemId = 1,
             RequestedTagId = 1,
@@ -164,7 +166,10 @@ public class ItemTagServiceTests : IDisposable
         _dbContext.Tags.AddRange(targetTag, childTag);
         var relation = new TagRelationToTag
         {
-            TargetTagId = targetTag.Id, TagId = childTag.Id, OwnerId = userId, Weight = 3
+            TargetTagId = targetTag.Id,
+            TagId = childTag.Id,
+            OwnerId = userId,
+            Weight = 3
         };
         _dbContext.TagRelationToTags.Add(relation);
         await _dbContext.SaveChangesAsync();

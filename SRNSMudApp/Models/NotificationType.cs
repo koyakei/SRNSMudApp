@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+
 using MudBlazor;
+
 using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Models;
@@ -32,31 +34,31 @@ public union NotificationType(
 {
     public readonly string Icon => this switch
     {
-        TagRequestNotification      => Icons.Material.Filled.Mail,
-        ItemReplyNotification       => Icons.Material.Filled.Reply,
+        TagRequestNotification => Icons.Material.Filled.Mail,
+        ItemReplyNotification => Icons.Material.Filled.Reply,
         RequestRejectedNotification => Icons.Material.Filled.Cancel,
         RequestApprovedNotification => Icons.Material.Filled.CheckCircle,
-        RequestReplyNotification    => Icons.Material.Filled.Forum,
+        RequestReplyNotification => Icons.Material.Filled.Forum,
         _ => throw new UnreachableException()
     };
 
     public readonly string IconColor => this switch
     {
-        TagRequestNotification      => "Primary",
-        ItemReplyNotification       => "Info",
+        TagRequestNotification => "Primary",
+        ItemReplyNotification => "Info",
         RequestRejectedNotification => "Error",
         RequestApprovedNotification => "Success",
-        RequestReplyNotification    => "Secondary",
+        RequestReplyNotification => "Secondary",
         _ => throw new UnreachableException()
     };
 
     public readonly string SourceType => this switch
     {
-        TagRequestNotification      => "TagRequest",
-        ItemReplyNotification       => "ItemReply",
+        TagRequestNotification => "TagRequest",
+        ItemReplyNotification => "ItemReply",
         RequestRejectedNotification => "RequestRejected",
         RequestApprovedNotification => "RequestApproved",
-        RequestReplyNotification    => "RequestReply",
+        RequestReplyNotification => "RequestReply",
         _ => throw new UnreachableException()
     };
 }

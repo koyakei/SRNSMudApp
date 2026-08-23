@@ -1,7 +1,8 @@
 #region
 
-using Bunit;
 using AngleSharp.Dom;
+
+using Bunit;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -31,10 +32,7 @@ public class ItemReplyThreadTests : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    private static SRNSMudApp.Data.Item CreateItem(int id, string content)
-    {
-        return new SRNSMudApp.Data.Item { Id = id, Content = content, OwnerId = "owner" };
-    }
+    private static SRNSMudApp.Data.Item CreateItem(int id, string content) => new SRNSMudApp.Data.Item { Id = id, Content = content, OwnerId = "owner" };
 
     [Fact]
     public void Collapsed_DoesNotRenderReplyList()

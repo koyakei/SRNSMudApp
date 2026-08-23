@@ -14,8 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using SRNSMudApp.Data;
-using SRNSMudApp.Services.Auth;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services.Auth;
 
 using Testcontainers.MsSql;
 
@@ -125,7 +125,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         // DBスキーマをマイグレーションで初期化はProgram.cs側で行われるため、ここでは削除する
         // (EnsureCreatedAsync を MigrateAsync に変更したため、重複を避ける)
-        
+
         EndpointDataSource endpoints = _host.Services.GetRequiredService<EndpointDataSource>();
         File.WriteAllLines("/tmp/endpoints.txt",
             endpoints.Endpoints.Select(e => e.GetType().Name + ": " + (e.DisplayName ?? "unknown")));
@@ -135,7 +135,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         IServerAddressesFeature? addresses = server.Features.Get<IServerAddressesFeature>();
 
         File.AppendAllText("/tmp/debug.txt", $"[DEBUG] Addresses.Count: {addresses?.Addresses.Count}\n");
-        foreach(var addr in addresses?.Addresses ?? []) {
+        foreach (var addr in addresses?.Addresses ?? [])
+        {
             File.AppendAllText("/tmp/debug.txt", $"[DEBUG] Address: {addr}\n");
         }
 

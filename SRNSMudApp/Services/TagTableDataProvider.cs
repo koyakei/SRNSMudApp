@@ -96,25 +96,25 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         switch (entity.Tag)
         {
             case not null:
-            {
-                Data.Tag tag = entity.Tag;
-                var prevWeight = tag.CachedWeight;
-                tag.CachedWeight -= entity.Weight;
-                context.TagWeightLedgers!.Add(new TagWeightLedger
                 {
-                    TagId = tag.Id,
-                    TagNameSnapshot = tag.Name,
-                    SourceType = "TagRelationToTagDelete",
-                    SourceId = entity.Id,
-                    PreviousWeight = prevWeight,
-                    NewWeight = tag.CachedWeight,
-                    Delta = -entity.Weight,
-                    IsOwnerAction = true,
-                    Reason = "タグの関連付け解除",
-                    OwnerId = entity.OwnerId
-                });
-                break;
-            }
+                    Data.Tag tag = entity.Tag;
+                    var prevWeight = tag.CachedWeight;
+                    tag.CachedWeight -= entity.Weight;
+                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = tag.Id,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelationToTagDelete",
+                        SourceId = entity.Id,
+                        PreviousWeight = prevWeight,
+                        NewWeight = tag.CachedWeight,
+                        Delta = -entity.Weight,
+                        IsOwnerAction = true,
+                        Reason = "タグの関連付け解除",
+                        OwnerId = entity.OwnerId
+                    });
+                    break;
+                }
         }
 
         context.Remove(entity);

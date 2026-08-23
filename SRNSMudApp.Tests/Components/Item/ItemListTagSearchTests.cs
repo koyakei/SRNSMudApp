@@ -10,8 +10,6 @@ using AngleSharp.Dom;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +23,8 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -71,10 +71,7 @@ public class ItemListTagSearchTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     タグ候補選択後に検索を実行すると、選択タグのチップが表示され、

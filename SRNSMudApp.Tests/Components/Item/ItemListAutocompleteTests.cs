@@ -9,8 +9,6 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +22,8 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
 using Xunit;
 
 #endregion
@@ -73,10 +73,7 @@ public class ItemListAutocompleteTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     検索語に対するサジェスト候補が「タグ名 @」形式で返ること、および
@@ -108,15 +105,15 @@ public class ItemListAutocompleteTests : IAsyncDisposable
             await autocomplete.Instance.SearchFunc!("Item1", CancellationToken.None);
 
         // Assert 1: 候補は「タグ名 @」形式そのもの（末尾にスペース付き @）
-        string expected = TagName + " @";
-        string actual = Assert.Single(suggestions);
+        var expected = TagName + " @";
+        var actual = Assert.Single(suggestions);
         Assert.Equal(expected, actual);
 
         // Act 2: 候補選択を再現（MudAutocomplete は選択時に ValueChanged へ候補文字列を流す）
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(expected));
 
         // Assert 2: 検索欄の値が「タグ名 @」になっている
-        string? value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
+        var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
             .GetAttribute("value");
         Assert.Equal(expected, value);
     }

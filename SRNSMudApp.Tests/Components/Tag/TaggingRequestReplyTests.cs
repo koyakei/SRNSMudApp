@@ -8,15 +8,14 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-using Moq;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
 
 using MudBlazor;
 using MudBlazor.Services;
@@ -25,6 +24,7 @@ using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -62,10 +62,7 @@ public class TaggingRequestReplyTests : IAsyncDisposable
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     [Fact]
     public async Task ThreadDialog_ShouldShowRequestMessage_WhenRequestHasNoRequestItem()
@@ -124,7 +121,7 @@ public class TaggingRequestReplyTests : IAsyncDisposable
             Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             RequestedTag = new SRNSMudApp.Data.Tag { Name = "ReplyTestTag", OwnerId = TagOwnerId },
-            Replies = new List<SRNSMudApp.Data.Item> { new() { Content = "reply-1", OwnerId = TagOwnerId } }
+            Replies = [new() { Content = "reply-1", OwnerId = TagOwnerId }]
         };
         SRNSMudApp.Data.Item item = new() { Content = "chip-item", OwnerId = ItemOwnerId };
 
@@ -170,10 +167,7 @@ public class TaggingRequestReplyTests : IAsyncDisposable
         return await dialogService.ShowAsync<TaggingRequestThreadDialog>("リクエストスレッド", dialogParameters);
     }
 
-    private IRenderedComponent<AuthDialogHost> RenderHost()
-    {
-        return _ctx.Render<AuthDialogHost>();
-    }
+    private IRenderedComponent<AuthDialogHost> RenderHost() => _ctx.Render<AuthDialogHost>();
 
     private async Task<TaggingRequestEntity> SeedRequestAsync()
     {
@@ -204,10 +198,7 @@ public class TaggingRequestReplyTests : IAsyncDisposable
         return contract;
     }
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-    }
+    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {

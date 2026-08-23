@@ -226,11 +226,11 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         NotificationReadState? existing = await context.NotificationReadStates!
             .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
 
-        Option<NotificationReadState> option = Option<NotificationReadState>.Create(existing);
+        var option = Option<NotificationReadState>.Create(existing);
         await (option switch
         {
-            None _ => AddNewReadStateAsync(context, userId, sourceId, sourceType),
-            Some<NotificationReadState> _ => Task.CompletedTask,
+            None => AddNewReadStateAsync(context, userId, sourceId, sourceType),
+            Some<NotificationReadState> => Task.CompletedTask,
             null => Task.CompletedTask
         });
     }

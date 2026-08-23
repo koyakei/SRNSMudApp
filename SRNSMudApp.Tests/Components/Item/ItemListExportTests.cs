@@ -11,8 +11,6 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using SRNSMudApp.Tests.TestSupport;
-
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +23,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -84,10 +83,7 @@ public class ItemListExportTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
 
     /// <summary>
     ///     URL を含むアイテムを JSON エクスポートすると、出力に LinkPreview（タイトル付き）が
@@ -122,7 +118,7 @@ public class ItemListExportTests : IAsyncDisposable
 
         cut.WaitForAssertion(() => Assert.NotEmpty(downloadJs.Invocations));
 
-        string json = Assert.IsType<string>(downloadJs.Invocations.Single().Arguments[1]);
+        var json = Assert.IsType<string>(downloadJs.Invocations.Single().Arguments[1]);
 
         // Assert: JSON に example.com の LinkPreview（タイトル非空）が含まれる
         List<ExportItemDto>? exportList =
@@ -134,11 +130,11 @@ public class ItemListExportTests : IAsyncDisposable
         Assert.NotNull(exportList);
         Assert.NotEmpty(exportList!);
 
-            System.Collections.Generic.List<ExportLinkPreviewDto> previews = exportList
-            .Where(i => i.LinkPreviews is { Count: > 0 })
-            .SelectMany(i => i.LinkPreviews)
-            .Where(lp => lp.Url.Contains("example.com"))
-            .ToList();
+        var previews = exportList
+        .Where(i => i.LinkPreviews is { Count: > 0 })
+        .SelectMany(i => i.LinkPreviews)
+        .Where(lp => lp.Url.Contains("example.com"))
+        .ToList();
 
         Assert.NotEmpty(previews);
         Assert.All(previews, lp => Assert.False(string.IsNullOrWhiteSpace(lp.Title)));

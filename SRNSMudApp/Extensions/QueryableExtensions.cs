@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+
 using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Extensions;
@@ -13,7 +14,7 @@ public static class QueryableExtensions
         return option switch
         {
             Some<TValue> some => source.Where(predicateFactory.Compile()(some.Value)),
-            None _ => source,
+            None => source,
             null => source
         };
     }
