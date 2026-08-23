@@ -1,5 +1,6 @@
 @using System.Security.Claims
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject ITagTableDataProvider TagTableData
 @inject NavigationManager NavigationManager
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
@@ -187,8 +188,7 @@
                 break;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _allTagsCache = await context.Tags.AsNoTracking().ToListAsync();
+        _allTagsCache = await TagTableData.GetAllTagsAsync();
     }
 
     private bool FilterFunc(Tag tag)
@@ -264,66 +264,18 @@
 
     private async Task AddTagToTagAsync(Tag targetTag, Tag selectedTag)
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var alreadyExists = await context.TagRelationToTags
-            .AnyAsync(tr => tr.TargetTagId == targetTag.Id && tr.TagId == selectedTag.Id);
-
-        switch (alreadyExists)
+        TagCardOperationResult result =
+            await TagTableData.AddRelationAsync(targetTag.Id, selectedTag.Id, _currentUserId);
+        switch (result)
         {
-            case true:
+            case TagCardOperationResult.AlreadyExists:
                 Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
                 break;
-            case false:
-                await ExecuteAddTagToTagAsync(context, targetTag, selectedTag);
+            case TagCardOperationResult.Success:
+                Snackbar.Add("タグを追加しました。", Severity.Success);
+                await NotifyDataChangedAsync();
                 break;
         }
-    }
-
-    private async Task ExecuteAddTagToTagAsync(ApplicationDbContext context, Tag targetTag, Tag selectedTag)
-    {
-        var newRelation = new TagRelationToTag
-        {
-            TargetTagId = targetTag.Id,
-            TagId = selectedTag.Id,
-            Weight = 1,
-            OwnerId = _currentUserId
-        };
-
-        context.Set<TagRelationToTag>().Add(newRelation);
-        await context.SaveChangesAsync();
-
-        var tagFromDb = await context.Tags.FindAsync(selectedTag.Id);
-        switch (tagFromDb)
-        {
-            case not null:
-                await UpdateTagWeightLedgerAsync(context, tagFromDb, newRelation);
-                break;
-            case null:
-                break;
-        }
-
-        Snackbar.Add("タグを追加しました。", Severity.Success);
-        await NotifyDataChangedAsync();
-    }
-
-    private async Task UpdateTagWeightLedgerAsync(ApplicationDbContext context, Tag tagFromDb, TagRelationToTag newRelation)
-    {
-        var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight += 1;
-        context.TagWeightLedgers!.Add(new TagWeightLedger
-        {
-            TagId = tagFromDb.Id,
-            TagNameSnapshot = tagFromDb.Name,
-            SourceType = "TagRelationToTagInsert",
-            SourceId = newRelation.Id,
-            PreviousWeight = prevWeight,
-            NewWeight = tagFromDb.CachedWeight,
-            Delta = 1,
-            IsOwnerAction = true,
-            Reason = "タグにタグを追加",
-            OwnerId = _currentUserId
-        });
-        await context.SaveChangesAsync();
     }
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
@@ -341,48 +293,14 @@
 
     private async Task ExecuteRemoveTagToTagRelationAsync(TagRelationToTag relation)
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var entity = await context.TagRelationToTags.Include(tr => tr.Tag).FirstOrDefaultAsync(tr => tr.Id == relation.Id);
-        
-        switch (entity)
+        TagCardOperationResult result = await TagTableData.RemoveRelationAsync(relation.Id);
+        switch (result)
         {
-            case not null:
-                await RemoveEntityAndLedgerAsync(context, entity);
-                break;
-            case null:
+            case TagCardOperationResult.Success:
+                Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+                await NotifyDataChangedAsync();
                 break;
         }
-    }
-
-    private async Task RemoveEntityAndLedgerAsync(ApplicationDbContext context, TagRelationToTag entity)
-    {
-        switch (entity.Tag)
-        {
-            case not null:
-                var tag = entity.Tag;
-                var prevWeight = tag.CachedWeight;
-                tag.CachedWeight -= entity.Weight;
-                context.TagWeightLedgers!.Add(new TagWeightLedger
-                {
-                    TagId = tag.Id,
-                    TagNameSnapshot = tag.Name,
-                    SourceType = "TagRelationToTagDelete",
-                    SourceId = entity.Id,
-                    PreviousWeight = prevWeight,
-                    NewWeight = tag.CachedWeight,
-                    Delta = -entity.Weight,
-                    IsOwnerAction = true,
-                    Reason = "タグの関連付け解除",
-                    OwnerId = _currentUserId
-                });
-                break;
-        }
-
-        context.Remove(entity);
-        await context.SaveChangesAsync();
-        Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
-
-        await NotifyDataChangedAsync();
     }
 
     private async Task EditTagAsync(Tag tag)
@@ -445,32 +363,20 @@
     {
         try
         {
-            await using var context = await DbFactory.CreateDbContextAsync();
-            var tagToDelete = await context.Tags.FindAsync(tag.Id);
-            
-            switch (tagToDelete)
+            if (await TagTableData.DeleteTagAsync(tag.Id))
             {
-                case not null:
-                    await PerformTagDeletionAsync(context, tagToDelete);
-                    break;
-                case null:
-                    Snackbar.Add("対象のタグが既に削除されているか、見つかりません。", Severity.Warning);
-                    break;
+                await NotifyDataChangedAsync();
+                Snackbar.Add("タグを削除しました。", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("対象のタグが既に削除されているか、見つかりません。", Severity.Warning);
             }
         }
         catch (Exception ex)
         {
             Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
         }
-    }
-
-    private async Task PerformTagDeletionAsync(ApplicationDbContext context, Tag tagToDelete)
-    {
-        context.Tags.Remove(tagToDelete);
-        await context.SaveChangesAsync();
-
-        await NotifyDataChangedAsync();
-        Snackbar.Add("タグを削除しました。", Severity.Success);
     }
 
     private async Task NotifyDataChangedAsync()
