@@ -4,7 +4,8 @@
 
 @attribute [Authorize]
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 
@@ -107,30 +108,9 @@
     private async Task LoadDataAsync()
     {
         _isLoading = true;
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
-        _bounties = await dbContext.TaggingRequestEntities
-            .Where(b => b.ContractType == "Bounty")
-            .Include(b => b.TargetItem)
-            .Include(b => b.RequestedTag)
-            .Where(b => b.Status == TradeStatus.Proposed)
-            .OrderByDescending(b => b.CreatedDate)
-            .AsNoTracking()
-            .ToListAsync();
-
-        var assetIds = _bounties
-            .Select(b => b.Payload is SRNSMudApp.Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0)
-            .Where(id => id != 0)
-            .Distinct()
-            .ToList();
-
-        var assets = await dbContext.RightAssets!
-            .Include(a => a.TargetTag)
-            .Where(a => assetIds.Contains(a.Id))
-            .AsNoTracking()
-            .ToListAsync();
-
-        _rewardAssets = assets.ToDictionary(a => a.Id);
+        BountyBoardData board = await ContractData.GetActiveBountiesAsync();
+        _bounties = board.Bounties;
+        _rewardAssets = board.RewardAssets;
 
         _isLoading = false;
     }

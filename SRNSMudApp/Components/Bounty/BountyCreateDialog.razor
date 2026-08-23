@@ -1,5 +1,6 @@
 @using System.Security.Claims
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -76,41 +77,17 @@
 
     private async Task LoadMyAssetsAsync()
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        _myAssets = await dbContext.RightAssets
-            .Include(a => a.TargetTag)
-            .Where(a => a.OwnerId == _currentUserId && !a.IsBurned)
-            .ToListAsync();
+        _myAssets = await ContractData.GetAvailableRightAssetsAsync(_currentUserId);
     }
 
     private async Task<IEnumerable<Item>> SearchItems(string value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        switch (string.IsNullOrEmpty(value))
-        {
-            case true:
-                return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
-            case false:
-                return await dbContext.Items
-                    .Where(i => i.Content.Contains(value))
-                    .Take(10)
-                    .ToListAsync(token);
-        }
+        return await ContractData.SearchItemsAsync(value, token);
     }
 
     private async Task<IEnumerable<Tag>> SearchTags(string value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        switch (string.IsNullOrEmpty(value))
-        {
-            case true:
-                return await dbContext.Tags.Take(10).ToListAsync(token);
-            case false:
-                return await dbContext.Tags
-                    .Where(t => t.Name.Contains(value))
-                    .Take(10)
-                    .ToListAsync(token);
-        }
+        return await ContractData.SearchTagsByNameAsync(value, token);
     }
 
     private async Task Submit()
@@ -120,8 +97,6 @@
         {
             case true: return;
         }
-
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
 
         var bounty = new TaggingRequestEntity
         {
@@ -135,8 +110,7 @@
             Payload = new SRNSMudApp.Models.Unions.BountyPayload(_selectedRewardAsset?.Id ?? 0)
         };
 
-        dbContext.TaggingRequestEntities.Add(bounty);
-        await dbContext.SaveChangesAsync();
+        await ContractData.CreateBountyAsync(bounty);
 
         Snackbar.Add("タグ付けの依頼（バウンティ）を作成しました。", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));

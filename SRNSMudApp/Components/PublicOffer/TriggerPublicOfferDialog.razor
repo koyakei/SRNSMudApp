@@ -1,5 +1,6 @@
 @using System.Security.Claims
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -78,29 +79,15 @@
 
     private async Task LoadMyAssetsAsync()
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        // Asset must match the OfferedTagId (usually they trade for the same tag they are offering? Wait, no.
-        // "ユーザーが提供する RightAsset の TargetTagId は、OfferedTagId と一致しているか判定に使用します"
-        // Yes, the required asset must be for the OfferedTagId.)
-        _validAssets = await dbContext.RightAssets
-            .Include(a => a.TargetTag)
-            .Where(a => a.OwnerId == _currentUserId && !a.IsBurned && a.TargetTagId == Offer.OfferedTagId && a.Amount >= Offer.RequiredAssetAmount)
-            .ToListAsync();
+        // Asset must match the OfferedTagId
+        // ("ユーザーが提供する RightAsset の TargetTagId は、OfferedTagId と一致しているか判定に使用します")
+        _validAssets = await ContractData.GetValidRightAssetsAsync(
+            _currentUserId, Offer.OfferedTagId, Offer.RequiredAssetAmount);
     }
 
     private async Task<IEnumerable<Item>> SearchItems(string? value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        switch (string.IsNullOrEmpty(value))
-        {
-            case true:
-                return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
-            case false:
-                return await dbContext.Items
-                    .Where(i => i.Content.Contains(value))
-                    .Take(10)
-                    .ToListAsync(token);
-        }
+        return await ContractData.SearchItemsAsync(value, token);
     }
 
     private async Task Submit()
@@ -115,8 +102,6 @@
             case true: return;
         }
 
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
         var triggerContract = new TaggingRequestEntity
         {
             ContractType = "Trigger",
@@ -130,8 +115,7 @@
             ConsumedRightAssetId = _selectedAsset?.Id
         };
 
-        dbContext.TaggingRequestEntities.Add(triggerContract);
-        await dbContext.SaveChangesAsync();
+        await ContractData.CreateTriggerContractAsync(triggerContract);
 
         MudDialog.Close(DialogResult.Ok(triggerContract.Id));
     }

@@ -1,5 +1,6 @@
 @using System.Security.Claims
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -41,17 +42,7 @@
 
     private async Task<IEnumerable<Tag>> SearchMyTags(string? value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        var query = dbContext.Tags.Where(t => t.OwnerId == _currentUserId);
-
-        switch (!string.IsNullOrEmpty(value))
-        {
-            case true:
-                query = query.Where(t => t.Name.Contains(value));
-                break;
-        }
-
-        return await query.Take(10).ToListAsync(token);
+        return await ContractData.SearchMyTagsAsync(_currentUserId, value, token);
     }
 
     private async Task Submit()
@@ -62,8 +53,6 @@
             case true: return;
         }
 
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
         var offer = new PublicTradeOffer
         {
             OwnerId = _currentUserId,
@@ -72,8 +61,7 @@
             IsActive = true
         };
 
-        dbContext.PublicTradeOffers!.Add(offer);
-        await dbContext.SaveChangesAsync();
+        await ContractData.CreatePublicOfferAsync(offer);
 
         Snackbar.Add("公開オファーを作成しました。", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));

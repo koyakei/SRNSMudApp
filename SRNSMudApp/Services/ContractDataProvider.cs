@@ -18,6 +18,11 @@ public sealed record ContractManagementPageData(
     List<TaggingRequestEntity> IncomingContracts,
     List<TaggingRequestEntity> OutgoingContracts);
 
+/// <summary>バウンティボードの表示データ。</summary>
+public sealed record BountyBoardData(
+    List<TaggingRequestEntity> Bounties,
+    Dictionary<int, RightAsset> RewardAssets);
+
 /// <summary>
 ///     コントラクト系コンポーネント (ContractManagement / ProposeContractDialog) 用の
 ///     データアクセスを分離するインターフェース。
@@ -36,6 +41,29 @@ public interface IContractDataProvider
 
     /// <summary>タグを名前部分一致で検索する。</summary>
     Task<List<Tag>> SearchTagsByNameAsync(string? value, CancellationToken token = default);
+
+    /// <summary>アクティブなバウンティと報酬アセットを取得する。</summary>
+    Task<BountyBoardData> GetActiveBountiesAsync();
+
+    /// <summary>アクティブな公開オファーを取得する。</summary>
+    Task<List<PublicTradeOffer>> GetActivePublicOffersAsync();
+
+    /// <summary>自分の公開オファーを取り下げる。所有者一致時のみ無効化される。</summary>
+    Task<bool> DeactivatePublicOfferAsync(int offerId, string userId);
+
+    /// <summary>指定ユーザー所有のタグを名前部分一致で検索する (最大 10 件)。</summary>
+    Task<List<Tag>> SearchMyTagsAsync(string userId, string? value, CancellationToken token = default);
+
+    Task CreatePublicOfferAsync(PublicTradeOffer offer);
+
+    Task CreateBountyAsync(TaggingRequestEntity bounty);
+
+    Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract);
+
+    /// <summary>条件に合う未消費 RightAsset (TargetTag 込み) を取得する。</summary>
+    Task<List<RightAsset>> GetValidRightAssetsAsync(string userId, int? targetTagId = null, int? minAmount = null);
+
+    Task<RightAsset?> GetRightAssetByIdAsync(int assetId);
 }
 
 public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IContractDataProvider
@@ -102,5 +130,132 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     .Take(10)
                     .ToListAsync(token);
         }
+    }
+
+    public async Task<BountyBoardData> GetActiveBountiesAsync()
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+
+        List<TaggingRequestEntity> bounties = await dbContext.TaggingRequestEntities
+            .Where(b => b.ContractType == "Bounty")
+            .Include(b => b.TargetItem)
+            .Include(b => b.RequestedTag)
+            .Where(b => b.Status == TradeStatus.Proposed)
+            .OrderByDescending(b => b.CreatedDate)
+            .AsNoTracking()
+            .ToListAsync();
+
+        List<int> assetIds = bounties
+            .Select(b => b.Payload is Models.Unions.BountyPayload bp ? bp.OfferedRewardAssetId : 0)
+            .Where(id => id != 0)
+            .Distinct()
+            .ToList();
+
+        List<RightAsset> assets = await dbContext.RightAssets!
+            .Include(a => a.TargetTag)
+            .Where(a => assetIds.Contains(a.Id))
+            .AsNoTracking()
+            .ToListAsync();
+
+        return new BountyBoardData(bounties, assets.ToDictionary(a => a.Id));
+    }
+
+    public async Task<List<PublicTradeOffer>> GetActivePublicOffersAsync()
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        return await dbContext.PublicTradeOffers!
+            .Include(o => o.OfferedTag)
+            .Include(o => o.Owner)
+            .Where(o => o.IsActive)
+            .OrderByDescending(o => o.CreatedDate)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    public async Task<bool> DeactivatePublicOfferAsync(int offerId, string userId)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        PublicTradeOffer? entity = await dbContext.PublicTradeOffers!.FindAsync(offerId);
+        switch (entity != null && entity.OwnerId == userId)
+        {
+            case true:
+                entity.IsActive = false;
+                await dbContext.SaveChangesAsync();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public async Task<List<Tag>> SearchMyTagsAsync(
+        string userId,
+        string? value,
+        CancellationToken token = default)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
+        IQueryable<Tag> query = dbContext.Tags.Where(t => t.OwnerId == userId);
+
+        switch (!string.IsNullOrEmpty(value))
+        {
+            case true:
+                query = query.Where(t => t.Name.Contains(value));
+                break;
+        }
+
+        return await query.Take(10).ToListAsync(token);
+    }
+
+    public async Task CreatePublicOfferAsync(PublicTradeOffer offer)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        dbContext.PublicTradeOffers!.Add(offer);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task CreateBountyAsync(TaggingRequestEntity bounty)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        dbContext.TaggingRequestEntities.Add(bounty);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        dbContext.TaggingRequestEntities.Add(triggerContract);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task<List<RightAsset>> GetValidRightAssetsAsync(
+        string userId,
+        int? targetTagId = null,
+        int? minAmount = null)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        IQueryable<RightAsset> query = dbContext.RightAssets
+            .Include(a => a.TargetTag)
+            .Where(a => a.OwnerId == userId && !a.IsBurned);
+
+        switch (targetTagId.HasValue)
+        {
+            case true:
+                query = query.Where(a => a.TargetTagId == targetTagId.Value);
+                break;
+        }
+
+        switch (minAmount.HasValue)
+        {
+            case true:
+                query = query.Where(a => a.Amount >= minAmount.Value);
+                break;
+        }
+
+        return await query.ToListAsync();
+    }
+
+    public async Task<RightAsset?> GetRightAssetByIdAsync(int assetId)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        return await dbContext.RightAssets.Include(a => a.TargetTag).FirstOrDefaultAsync(a => a.Id == assetId);
     }
 }

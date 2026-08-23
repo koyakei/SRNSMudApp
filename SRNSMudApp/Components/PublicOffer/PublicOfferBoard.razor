@@ -5,7 +5,8 @@
 
 @attribute [Authorize]
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 @inject TaggingContractService ContractService
@@ -106,15 +107,7 @@
     private async Task LoadDataAsync()
     {
         _isLoading = true;
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
-        _offers = await dbContext.PublicTradeOffers!
-            .Include(o => o.OfferedTag)
-            .Include(o => o.Owner)
-            .Where(o => o.IsActive)
-            .OrderByDescending(o => o.CreatedDate)
-            .AsNoTracking()
-            .ToListAsync();
+        _offers = await ContractData.GetActivePublicOffersAsync();
 
         _isLoading = false;
     }
@@ -164,16 +157,10 @@
 
     private async Task DeactivateOffer(PublicTradeOffer offer)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        var entity = await dbContext.PublicTradeOffers!.FindAsync(offer.Id);
-        switch (entity != null && entity.OwnerId == _currentUserId)
+        if (await ContractData.DeactivatePublicOfferAsync(offer.Id, _currentUserId))
         {
-            case true:
-                entity.IsActive = false;
-                await dbContext.SaveChangesAsync();
-                Snackbar.Add("オファーを取り下げました。", Severity.Success);
-                await LoadDataAsync();
-                break;
+            Snackbar.Add("オファーを取り下げました。", Severity.Success);
+            await LoadDataAsync();
         }
     }
 

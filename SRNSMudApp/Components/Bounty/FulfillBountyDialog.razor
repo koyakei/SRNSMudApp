@@ -1,7 +1,8 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
 @using SRNSMudApp.Models.Unions
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject TaggingContractService ContractService
 @inject ISnackbar Snackbar
 
@@ -108,11 +109,9 @@
     private async Task LoadDataAsync()
     {
         _isLoading = true;
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
         if (Bounty.Payload is SRNSMudApp.Models.Unions.BountyPayload bp && bp.OfferedRewardAssetId != 0)
         {
-            _offeredRewardAsset = await dbContext.RightAssets.Include(a => a.TargetTag).FirstOrDefaultAsync(a => a.Id == bp.OfferedRewardAssetId);
+            _offeredRewardAsset = await ContractData.GetRightAssetByIdAsync(bp.OfferedRewardAssetId);
         }
 
         _canFulfillAsOwner = Bounty.RequestedTag.OwnerId == _currentUserId;
@@ -120,10 +119,7 @@
         switch (!_canFulfillAsOwner)
         {
             case true:
-                _myValidAssets = await dbContext.RightAssets
-                    .Include(a => a.TargetTag)
-                    .Where(a => a.OwnerId == _currentUserId && a.TargetTagId == Bounty.RequestedTagId && !a.IsBurned)
-                    .ToListAsync();
+                _myValidAssets = await ContractData.GetValidRightAssetsAsync(_currentUserId, Bounty.RequestedTagId);
 
                 switch (_myValidAssets.Count == 1)
                 {
