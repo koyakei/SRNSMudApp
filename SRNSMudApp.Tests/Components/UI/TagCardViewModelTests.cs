@@ -197,4 +197,39 @@ public class TagCardViewModelTests
     {
         Assert.Equal(expected, TagCardViewModel.GetShortOwnerName(name));
     }
+
+    [Theory]
+    [InlineData("user-1", "user-1", true)]
+    [InlineData("owner-x", "user-1", false)]
+    public void IsRelationOwner_ComparesOwnerAndUser(string relationOwnerId, string currentUserId, bool expected)
+    {
+        Assert.Equal(expected, TagCardViewModel.IsRelationOwner(relationOwnerId, currentUserId));
+    }
+
+    [Fact]
+    public void IsSelfParent_DetectsSelfReference()
+    {
+        Tag tag = new() { Id = 1, Name = "self", OwnerId = "u1" };
+        Tag other = new() { Id = 2, Name = "other", OwnerId = "u1" };
+
+        Assert.True(TagCardViewModel.IsSelfParent(tag, tag));
+        Assert.False(TagCardViewModel.IsSelfParent(tag, other));
+    }
+
+    [Theory]
+    [InlineData(10, 10, true)]
+    [InlineData(10, 20, false)]
+    public void IsSameTagChange_DetectsNoOpChange(int currentTagId, int newTagId, bool expected)
+    {
+        Assert.Equal(expected, TagCardViewModel.IsSameTagChange(currentTagId, newTagId));
+    }
+
+    [Theory]
+    [InlineData(5, 5, false)]
+    [InlineData(5, 7, true)]
+    [InlineData(7, 5, true)]
+    public void HasWeightChange_DetectsWeightDelta(int currentWeight, int newWeight, bool expected)
+    {
+        Assert.Equal(expected, TagCardViewModel.HasWeightChange(currentWeight, newWeight));
+    }
 }

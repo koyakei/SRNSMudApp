@@ -44,72 +44,12 @@
 
         <div class="d-flex justify-space-between align-start">
             <div>
-                @{
-                    var content = Item.Content ?? "内容なし";
-                    var showExpandBtn = _isOverflowing;
-                }
-
-                <div id="@($"item-content-{Item.Id}")"
-                     class="@($"resource-content {(!_isExpanded ? "line-clamp-2" : "")}")">
-                    <MudText Typo="Typo.subtitle1"
-                             Class="font-inherit" Style="white-space: pre-wrap;">
-                        @content
-                    </MudText>
-                </div>
-                @{
-                    var urls = ExtractUrls(content);
-                }
-                @switch (urls.Any())
-                {
-                    case true:
-                        <div class="d-flex flex-column gap-2 mb-2 mt-2">
-                            @foreach (var url in urls.Take(3))
-                            {
-                                <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
-                            }
-                        </div>
-                        break;
-                    case false:
-                        break;
-                }
-                @switch (showExpandBtn)
-                {
-                    case true:
-                        <MudLink OnClick="ToggleExpand" Color="Color.Primary"
-                                 Typo="Typo.body2" Underline="Underline.Hover" Class="cursor-pointer">
-                            @(_isExpanded switch { true => "閉じる", false => "もっと見る" })
-                        </MudLink>
-                        break;
-                    case false:
-                        break;
-                }
-                <MudText Typo="Typo.caption" Color="Color.Secondary"
-                         Class="mb-2 mt-2 d-block">
-                    投稿者:
-                    @switch (string.IsNullOrEmpty(Item.OwnerId))
-                    {
-                        case false:
-                            <span @onclick:stopPropagation="true">
-                                <MudLink Href="@($"/User/UserDetail/{Item.OwnerId}")"
-                                         Color="Color.Inherit"
-                                         Underline="Underline.Hover">
-                                    @(Item.Owner?.UserName)
-                                </MudLink>
-                            </span>
-                            break;
-                        case true:
-                            @(Item.Owner?.UserName ?? "不明")
-                            break;
-                    }
-                    <span class="mx-1">|</span>
-                    最終更新:
-                    <span @onclick:stopPropagation="true">
-                        <MudLink Href="@($"/ItemDetail/{Item.Id}")" Color="Color.Inherit"
-                                 Underline="Underline.Hover">
-                            @Item.UpdatedDate.ToLocalTime().ToString("g")
-                        </MudLink>
-                    </span>
-                </MudText>
+                @* 本文・URL プレビュー・メタ情報は表示専用子コンポーネントへ委譲 *@
+                <ItemCardContent ItemId="Item.Id"
+                                 Content="@Item.Content"
+                                 OwnerId="@Item.OwnerId"
+                                 OwnerUserName="@(Item.Owner?.UserName)"
+                                 UpdatedDate="Item.UpdatedDate"/>
             </div>
 
             @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
@@ -185,12 +125,7 @@
         builder.CloseComponent();
     };
 
-    private bool _isExpanded;
-    private bool _isOverflowing;
-
     private DotNetObjectReference<ItemCard>? _dotNetRef;
-    private bool _needsOverflowCheck = true;
-
     private List<TaggingRequestEntity> _taggingRequests = [];
 
     private bool _isRepliesExpanded;
@@ -215,14 +150,10 @@
             true => HandleFirstRenderAsync(),
             false => Task.CompletedTask
         });
-
-        await (_needsOverflowCheck switch
-        {
-            true => HandleOverflowCheckAsync(),
-            false => Task.CompletedTask
-        });
     }
 
+    /// <summary>スクロールによるフォーカス検知 (IntersectionObserver) を初期化する。
+    /// オーバーフロー検知は ItemCardContent 子コンポーネント側に集約。</summary>
     private async Task HandleFirstRenderAsync()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
@@ -243,12 +174,7 @@
         {
             // ignored
         }
-    }
 
-    private async Task HandleOverflowCheckAsync()
-    {
-        _needsOverflowCheck = false;
-        await UpdateOverflowStateAsync();
         try
         {
             await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#item-card-{Item.Id}");
@@ -257,13 +183,6 @@
         {
             // ignored
         }
-    }
-
-    [JSInvokable]
-    public void OnWindowResized()
-    {
-        _needsOverflowCheck = true;
-        InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
@@ -277,46 +196,9 @@
         }
     }
 
-    private async Task UpdateOverflowStateAsync()
-    {
-        switch (_isExpanded)
-        {
-            case true:
-                return;
-        }
-
-        try
-        {
-            var overflowIds = await JS.InvokeAsync<int[]>("contentOverflowHelper.checkOverflow", new[] { Item.Id });
-            var isOverflowing = overflowIds.Contains(Item.Id);
-            switch (_isOverflowing != isOverflowing)
-            {
-                case true:
-                    _isOverflowing = isOverflowing;
-                    StateHasChanged();
-                    break;
-            }
-        }
-        catch (Exception)
-        {
-            // ignored
-        }
-    }
-
     private string GetItemCardStyle()
     {
         return ItemCardViewModel.GetItemCardStyle(IsFocused);
-    }
-
-    private void ToggleExpand()
-    {
-        _isExpanded = !_isExpanded;
-        switch (!_isExpanded)
-        {
-            case true:
-                _needsOverflowCheck = true; // Re-check when collapsing
-                break;
-        }
     }
 
     private async Task CancelTaggingRequestAsync()
@@ -406,16 +288,6 @@
         {
             _isSubmittingReply = false;
         }
-    }
-
-    private static string GetShortOwnerName(string? name)
-    {
-        return ItemCardViewModel.GetShortOwnerName(name);
-    }
-
-    private static IReadOnlyList<string> ExtractUrls(string? text)
-    {
-        return ItemCardViewModel.ExtractUrls(text);
     }
 
     // --- Voting Logic ---

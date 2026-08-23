@@ -34,7 +34,7 @@ using Xunit;
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
-///     ResourceList / ItemCard のフォーカス状態とURLクエリ（focusItem=）の双方向同期を検証する。
+///     ResourceList / ItemCard のフォーカス状態とURLクエリ（focus=）の双方向同期を検証する。
 ///     スクロールによる自動フォーカス（IntersectionObserver）は実ブラウザAPI依存のため
 ///     ItemListFocusE2ETests に残す。
 ///     （ItemListFocusE2ETests のうちクリックフォーカス・URL直接遷移・作者リンクの移行テスト）
@@ -77,7 +77,7 @@ public class ItemListFocusTests : IAsyncDisposable
 
     /// <summary>
     ///     アイテムカードをクリックすると、該当カードのスタイルにフォーカス用の
-    ///     border-width: 2px と primary カラーが適用され、URLに focusItem={id} が付与されること。
+    ///     border-width: 2px と primary カラーが適用され、URLに focus={id} が付与されること。
     /// </summary>
     [Fact]
     public async Task ClickingItemCard_AppliesFocusStyle_AndUpdatesUrl()
@@ -100,11 +100,11 @@ public class ItemListFocusTests : IAsyncDisposable
 
         // Assert: URLが更新される
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains($"focusItem={firstItemId}", navigationManager.Uri);
+        Assert.Contains($"focus={firstItemId}", navigationManager.Uri);
     }
 
     /// <summary>
-    ///     focusItem={id} 付きURLで初期化した場合、該当カードに最初からフォーカススタイルが
+    ///     focus={id} 付きURLで初期化した場合、該当カードに最初からフォーカススタイルが
     ///     適用されていること（URL→状態）。
     /// </summary>
     [Fact]
@@ -113,7 +113,7 @@ public class ItemListFocusTests : IAsyncDisposable
         (int _, int secondItemId) = await SeedItemsAsync();
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo($"http://localhost/?focusItem={secondItemId}");
+        navigationManager.NavigateTo($"http://localhost/?focus={secondItemId}");
 
         IRenderedComponent<ResourceList> cut =
             _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, LoadItems()));
@@ -148,7 +148,7 @@ public class ItemListFocusTests : IAsyncDisposable
         // フォーカス状態にする
         cut.Find($"#item-card-{itemId}").Click();
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains($"focusItem={itemId}", navigationManager.Uri);
+        Assert.Contains($"focus={itemId}", navigationManager.Uri);
 
         // Act & Assert: 作者リンクの遷移先を検証
         // （bUnit ではアンカーの実際のナビゲーションが発生しないため、リンク先URLを直接検証する。
@@ -184,7 +184,7 @@ public class ItemListFocusTests : IAsyncDisposable
 }
 
 /// <summary>
-///     タグ検索フィルタ適用後も URL に tags= と focusItem= が共存することを検証する。
+///     タグ検索フィルタ適用後も URL に tags= と focus= が共存することを検証する。
 ///     （ItemListFocusE2ETests.ItemFocus_WithTagFilterAndScroll の前半部分の移行テスト）
 /// </summary>
 public class ItemListFocusWithTagFilterTests : IAsyncDisposable
@@ -241,7 +241,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
 
     /// <summary>
     ///     アイテムをフォーカスした状態でタグ検索を実行しても、フォーカス状態はリセットされず、
-    ///     URL に tags={tagId} と focusItem={itemId} の両方が共存すること。
+    ///     URL に tags={tagId} と focus={itemId} の両方が共存すること。
     /// </summary>
     [Fact]
     public async Task TagSearchAfterFocus_KeepsBothQueryParameters()
@@ -283,7 +283,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
 
         // Act 1: アイテムをクリックしてフォーカス
         cut.Find($"#item-card-{firstItemId}").Click();
-        Assert.Contains($"focusItem={firstItemId}", navigationManager.Uri);
+        Assert.Contains($"focus={firstItemId}", navigationManager.Uri);
 
         // Act 2: タグ検索を実行（Phase 2-4 の ItemListTagSearchTests と同じ手順）
         IRenderedComponent<MudAutocomplete<string>> autocomplete =
@@ -291,12 +291,12 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName + " @"));
         autocomplete.Find(".mud-input-adornment button").Click();
 
-        // Assert: tags= と focusItem= が共存する
+        // Assert: f= (タグフィルタ) と focus= が共存する
         cut.WaitForAssertion(() =>
         {
             string uri = navigationManager.Uri;
-            Assert.Contains($"tags={tagId}", uri);
-            Assert.Contains($"focusItem={firstItemId}", uri);
+            Assert.Contains($"f={tagId}", uri);
+            Assert.Contains($"focus={firstItemId}", uri);
         });
     }
 

@@ -77,7 +77,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .Property(t => t.Embedding)
             .HasConversion(
                 v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-                v => v == null ? null : JsonSerializer.Deserialize<float[]>(v, (JsonSerializerOptions?)null)
+                v => v == null ? null : JsonSerializer.Deserialize<float[]>(v, (JsonSerializerOptions?)null)!
             )
             .Metadata.SetValueComparer(embeddingComparer);
 

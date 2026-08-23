@@ -7,90 +7,19 @@
 @inject IItemTagService ItemTagService
 
 @{
-    var tagId = TagRelation.Tag?.Id ?? -1;
-    var isDeleted = HighlightEvent?.EventType == "Delete";
-    var isInserted = HighlightEvent?.EventType == "Insert";
-    var isUpdated = HighlightEvent?.EventType == "Update";
-    var weightIncreased = HighlightEvent != null && HighlightEvent.NewWeight > HighlightEvent.PreviousWeight;
-
-    var isMyTag = TagRelation.OwnerId == CurrentUserId;
-    
-    var bgColor = isDeleted switch
-    {
-        true => "#E0E0E0",
-        false => (HighlightEvent != null) switch
-        {
-            true => "#FFEB3B",
-            false => isMyTag switch
-            {
-                true => ChipIndex < ChipBackgrounds.Length ? ChipBackgrounds[ChipIndex] : ChipBackgrounds[0],
-                false => "#FFF9C4"
-            }
-        }
-    };
-
-    var textColor = isDeleted switch
-    {
-        true => "#9E9E9E",
-        false => (HighlightEvent != null) switch
-        {
-            true => "#F57F17",
-            false => isMyTag switch
-            {
-                true => ChipIndex < ChipTextColors.Length ? ChipTextColors[ChipIndex] : ChipTextColors[0],
-                false => "#5C4B00"
-            }
-        }
-    };
-
-    var fontWeight = (HighlightEvent != null) switch
-    {
-        true => "bold",
-        false => "normal"
-    };
-
-    var tagName = ShowNameAndOwner switch
-    {
-        true => TagRelation.Tag?.Name ?? "不明",
-        false => (string?)null
-    };
-
-    var ownerName = ShowNameAndOwner switch
-    {
-        true => GetShortOwnerName(TagRelation.Tag?.Owner?.UserName),
-        false => (string?)null
-    };
-
-    var chipId = $"tag-chip-{Item.Id}-{tagId}";
-    var displayWeight = isDeleted switch
-    {
-        true => $"{HighlightEvent?.PreviousWeight}",
-        false => (isUpdated || isInserted) switch
-        {
-            true => $"{HighlightEvent?.PreviousWeight} → {HighlightEvent?.NewWeight}",
-            false => TagRelation.Weight.ToString()
-        }
-    };
-    
-    var addBtnColor = weightIncreased switch
-    {
-        true => Color.Success,
-        false => Color.Inherit
-    };
-
-    var addedTags = AllTagRelationsToTags
-        .Where(ttr => ttr.TargetTagId == tagId && ttr.Tag != null && !ttr.Tag.IsSystem)
-        .ToList();
+    // 純粋な表示計算は ItemTagChipViewModel に委譲
+    var vm = ItemTagChipViewModel.GetDisplay(TagRelation, Item.Id, CurrentUserId, HighlightEvent,
+        ChipIndex, ChipBackgrounds, ChipTextColors, ShowNameAndOwner, AllTagRelationsToTags);
 }
 
-<BaseTagChip ChipId="@chipId"
-             TagName="@tagName"
-             Style="@($"background: {bgColor}; color: {textColor}; font-weight: {fontWeight}")"
-             TagStyle="@(isDeleted switch { true => "text-decoration: line-through;", false => "" })"
-             OwnerName="@ownerName"
+<BaseTagChip ChipId="@vm.ChipId"
+             TagName="@vm.TagName"
+             Style="@($"background: {vm.BackgroundColor}; color: {vm.TextColor}; font-weight: {vm.FontWeight}")"
+             TagStyle="@(vm.IsDeleted switch { true => "text-decoration: line-through;", false => "" })"
+             OwnerName="@vm.OwnerName"
              CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
              OnClose="@(_ => RemoveTagRelationAsync())"
-             OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))">
+             OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{vm.TagId}"))">
     <PrefixContent>
         <MudIconButton Icon="@Icons.Material.Filled.LocalOffer"
                        Size="Size.Small" Color="Color.Inherit"
@@ -98,55 +27,14 @@
                        OnClick="@(() => OnAddTagToTagClicked(TagRelation.Tag))"/>
     </PrefixContent>
     <WeightContent>
-        @switch (isDeleted)
-        {
-            case false:
-                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
-                               Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
-                               OnClick="@(() => UpdateTagRelationWeightAsync(-1))"
-                               title="Weightを減らす"/>
-                break;
-            case true:
-                break;
-        }
-        <MudLink Color="Color.Inherit" Underline="Underline.Hover"
-                 Class="mx-1 cursor-pointer font-weight-bold" OnClick="@(async () =>
-                                                                       {
-                                                                           await (isDeleted switch
-                                                                           {
-                                                                               false => EditTagRelationWeightAsync(),
-                                                                               true => Task.CompletedTask
-                                                                           });
-                                                                       })">
-            @switch (isDeleted)
-            {
-                case true:
-                    <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
-                             Class="mr-1" Style="font-size: 1rem; vertical-align: middle;"/>
-                    break;
-                case false:
-                    break;
-            }
-            <span style="vertical-align: middle;">@displayWeight</span>
-        </MudLink>
-        @switch (isDeleted)
-        {
-            case false:
-                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
-                               Color="@addBtnColor" Class="chip-icon-btn pa-0 mx-1"
-                               OnClick="@(() => UpdateTagRelationWeightAsync(1))"
-                               title="Weightを増やす"/>
-
-                <MudIconButton
-                    Icon="@(isMyTag switch { true => Icons.Material.Filled.Delete, false => Icons.Material.Outlined.Delete })"
-                    Size="Size.Small"
-                    Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
-                    OnClick="@RemoveTagRelationAsync"
-                    title="関連付けを削除"/>
-                break;
-            case true:
-                break;
-        }
+        <ItemTagChipWeightContent IsDeleted="@vm.IsDeleted"
+                                  IsMyTag="@vm.IsMyTag"
+                                  DisplayWeight="@vm.DisplayWeight"
+                                  AddButtonColor="@vm.AddButtonColor"
+                                  OnDecreaseWeight="@(() => UpdateTagRelationWeightAsync(-1))"
+                                  OnIncreaseWeight="@(() => UpdateTagRelationWeightAsync(1))"
+                                  OnEditWeight="EditTagRelationWeightAsync"
+                                  OnRemoveRelation="RemoveTagRelationAsync"/>
     </WeightContent>
     <ActionContent>
         <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
@@ -155,42 +43,10 @@
                        OnClick="ToggleTagTreePopover"/>
     </ActionContent>
     <PopoverContent>
-        @switch (addedTags.Any())
-        {
-            case true:
-                <MudPopover Open="@_isTreePopoverOpen"
-                            AnchorOrigin="Origin.BottomCenter"
-                            TransformOrigin="Origin.TopCenter"
-                            OverflowBehavior="OverflowBehavior.FlipAlways"
-                            Paper="true"
-                            Class="added-tags-popover pa-2 mt-1 rounded-lg">
-                    <div class="d-flex flex-column gap-1">
-                        @foreach (var added in addedTags)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                     Color="Color.Primary"
-                                     Class="small-chip"
-                                     CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
-                                     OnClose="@(_ => RemoveTagToTagRelationAsync(added))">
-                                <div class="d-flex align-center">
-                                    <MudIcon
-                                        Icon="@Icons.Material.Filled.SubdirectoryArrowRight"
-                                        Size="Size.Small"
-                                        Class="mr-1 small-icon"/>
-                                    <a class="small-chip-link"
-                                       @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{added.TagId}"))"
-                                       @onclick:stopPropagation="true">
-                                        @added.Tag?.Name
-                                    </a>
-                                </div>
-                            </MudChip>
-                        }
-                    </div>
-                </MudPopover>
-                break;
-            case false:
-                break;
-        }
+        <AddedTagsPopover IsOpen="@_isTreePopoverOpen"
+                          AddedTags="@vm.AddedTags"
+                          OnRemoveRelation="RemoveTagToTagRelationAsync"
+                          OnNavigate="@(tagId => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"/>
 
         @* タグツリーポップオーバー *@
         <MudPopover Open="@(_isTreePopoverOpen && TagRelation.Tag != null)"
@@ -230,10 +86,9 @@
         _isTreePopoverOpen = !_isTreePopoverOpen;
     }
 
-    private static string GetShortOwnerName(string? name)
-    {
-        return ItemCardViewModel.GetShortOwnerName(name);
-    }
+    /// <summary>親へデータ変更を通知する。</summary>
+    private Task NotifyChangedAsync() =>
+        OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
 
     private async Task RemoveTagRelationAsync()
     {
@@ -245,36 +100,39 @@
         });
     }
 
-    private async Task ProposeRemovalContractAsync()
+    private Task ProposeRemovalContractAsync() =>
+        ProposeContractAsync(-TagRelation.Weight, isRemovalRequest: true);
+
+    /// <summary>自分以外のタグの Weight 変更・削除をコントラクト提案ダイアログ経由で行う。</summary>
+    private async Task ProposeContractAsync(int weightDelta, bool isRemovalRequest)
     {
         var parameters = new DialogParameters<ProposeContractDialog>
         {
             { x => x.TargetItem, Item },
             { x => x.RequestedTag, TagRelation.Tag },
-            { x => x.WeightDelta, -TagRelation.Weight },
-            { x => x.IsRemovalRequest, true }
+            { x => x.WeightDelta, weightDelta },
+            { x => x.IsRemovalRequest, isRemovalRequest }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
-        var result = await dialog.Result;
-        
+        IDialogReference dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+        DialogResult? result = await dialog.Result;
+
         await ((result?.Canceled == true) switch
         {
-            false => OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask,
+            false => NotifyChangedAsync(),
             _ => Task.CompletedTask
         });
     }
 
     private async Task ExecuteRemovalAsync()
     {
-        // awaitの結果を直接switchで評価する（変数を宣言しない）
         await (await ItemTagService.RemoveTagRelationAsync(TagRelation.Id, CurrentUserId) switch
         {
             null => HandleSuccessfulRemoval(),
-            string err => HandleError(err) // 型宣言を伴うパターンマッチで安全に受け取る
+            string err => HandleError(err)
         });
     }
-    
+
     private Task HandleSuccessfulRemoval()
     {
         var localRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == TagRelation.Id);
@@ -285,7 +143,7 @@
         };
 
         Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
-        return OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
+        return NotifyChangedAsync();
     }
 
     private Task HandleError(string error)
@@ -304,32 +162,15 @@
         });
     }
 
-    private async Task ProposeUpdateContractAsync(int delta)
-    {
-        var parameters = new DialogParameters<ProposeContractDialog>
-        {
-            { x => x.TargetItem, Item },
-            { x => x.RequestedTag, TagRelation.Tag },
-            { x => x.WeightDelta, delta },
-            { x => x.IsRemovalRequest, false }
-        };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
-        var result = await dialog.Result;
-        
-        await ((result?.Canceled == true) switch
-        {
-            false => OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask,
-            _ => Task.CompletedTask
-        });
-    }
+    private Task ProposeUpdateContractAsync(int delta) =>
+        ProposeContractAsync(delta, isRemovalRequest: false);
 
     private async Task ExecuteWeightUpdateAsync(int delta)
     {
         var result = await ItemTagService.UpdateTagWeightAsync(TagRelation.Id, delta, CurrentUserId);
         await (result switch
         {
-            UpdateWeightResult.Success => OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask,
+            UpdateWeightResult.Success => NotifyChangedAsync(),
             UpdateWeightResult.NoPermission => HandleError("関連付けた本人ではないため、Weightを変更する権限がありません。"),
             UpdateWeightResult.NotFound => HandleError("タグの関連付けが見つかりません。"),
             _ => HandleError("不明なエラーが発生しました。")
@@ -349,8 +190,8 @@
     {
         var parameters = new DialogParameters { ["Weight"] = TagRelation.Weight };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<WeightEditDialog>("Weightの一括変更", parameters, options);
-        var result = await dialog.Result;
+        IDialogReference dialog = await DialogLauncher.ShowAsync<WeightEditDialog>("Weightの一括変更", parameters, options);
+        DialogResult? result = await dialog.Result;
 
         await ((result?.Canceled == false, result?.Data is int) switch
         {
@@ -373,7 +214,7 @@
         var error = await ItemTagService.SetTagWeightAsync(TagRelation.Id, newWeight, CurrentUserId);
         await (error switch
         {
-            null => OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask,
+            null => NotifyChangedAsync(),
             _ => HandleError(error)
         });
     }
@@ -405,7 +246,7 @@
     {
         Snackbar.Add("タグを変更しました。", Severity.Success);
         _isTreePopoverOpen = false;
-        return OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
+        return NotifyChangedAsync();
     }
 
     private async Task OnAddTagToTagClicked(Tag? targetTag)
@@ -413,21 +254,29 @@
         await (targetTag switch
         {
             null => Task.CompletedTask,
-            not null => ShowAddTagToTagDialogAsync(targetTag)
+            not null => ExecuteWithTagSelection("関連タグの追加", targetTag, ExecuteAddTagToTagAsync)
         });
     }
 
-    private async Task ShowAddTagToTagDialogAsync(Tag targetTag)
+    /// <summary>タグ選択ダイアログを表示し、選択されたタグで処理を実行する共通フロー。</summary>
+    private async Task ExecuteWithTagSelection(
+        string title, Tag targetTag, Func<Tag, Tag, Task> execute)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("関連タグの追加", options);
-        var result = await dialog.Result;
+        IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>(title, options);
+        DialogResult? result = await dialog.Result;
 
-        await ((result?.Canceled == false, result?.Data is Tag) switch
+        if (result is not { Canceled: false })
         {
-            (true, true) => ExecuteAddTagToTagAsync(targetTag, (Tag)result.Data!),
-            _ => Task.CompletedTask
-        });
+            return;
+        }
+
+        if (result.Data is not Tag selectedTag)
+        {
+            return;
+        }
+
+        await execute(targetTag, selectedTag);
     }
 
     private async Task ExecuteAddTagToTagAsync(Tag targetTag, Tag selectedTag)
@@ -435,15 +284,9 @@
         var error = await ItemTagService.AddTagToTagAsync(targetTag.Id, selectedTag.Id, CurrentUserId);
         await (error switch
         {
-            null => HandleSuccessfulAddTagToTag(),
+            null => HandleSuccessMessage("タグを追加しました。"),
             _ => HandleError(error)
         });
-    }
-
-    private Task HandleSuccessfulAddTagToTag()
-    {
-        Snackbar.Add("タグを追加しました。", Severity.Success);
-        return OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
     }
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
@@ -460,15 +303,9 @@
         var error = await ItemTagService.RemoveTagToTagRelationAsync(relationId, CurrentUserId);
         await (error switch
         {
-            null => HandleSuccessfulRemoveTagToTag(),
+            null => HandleSuccessMessage("タグの関連付けを解除しました。"),
             _ => HandleError(error)
         });
-    }
-
-    private Task HandleSuccessfulRemoveTagToTag()
-    {
-        Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
-        return OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
     }
 
     private async Task OnAddChildTagFromTree(Tag? targetTag)
@@ -476,20 +313,7 @@
         await (targetTag switch
         {
             null => Task.CompletedTask,
-            not null => ShowAddChildTagDialogAsync(targetTag)
-        });
-    }
-
-    private async Task ShowAddChildTagDialogAsync(Tag targetTag)
-    {
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", options);
-        var result = await dialog.Result;
-
-        await ((result?.Canceled == false, result?.Data is Tag) switch
-        {
-            (true, true) => ExecuteSetParentTagAsync(targetTag, (Tag)result.Data!),
-            _ => Task.CompletedTask
+            not null => ExecuteWithTagSelection("子タグの追加", targetTag, ExecuteSetParentTagAsync)
         });
     }
 
@@ -498,14 +322,14 @@
         var error = await ItemTagService.SetParentTagAsync(parentTag.Id, childTag.Id, CurrentUserId, AllTags);
         await (error switch
         {
-            null => HandleSuccessfulSetParentTag(),
+            null => HandleSuccessMessage("子タグとして設定しました。"),
             _ => HandleError(error)
         });
     }
 
-    private Task HandleSuccessfulSetParentTag()
+    private Task HandleSuccessMessage(string message)
     {
-        Snackbar.Add("子タグとして設定しました。", Severity.Success);
-        return OnDataChanged.HasDelegate ? OnDataChanged.InvokeAsync() : Task.CompletedTask;
+        Snackbar.Add(message, Severity.Success);
+        return NotifyChangedAsync();
     }
 }

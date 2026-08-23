@@ -1,0 +1,36 @@
+@* ItemTagChip に付与された「タグ→タグ」関連一覧を表示するポップオーバー。表示専用子コンポーネント。 *@
+<MudPopover Open="@IsOpen"
+            AnchorOrigin="Origin.BottomCenter"
+            TransformOrigin="Origin.TopCenter"
+            OverflowBehavior="OverflowBehavior.FlipAlways"
+            Paper="true"
+            Class="added-tags-popover pa-2 mt-1 rounded-lg">
+    <div class="d-flex flex-column gap-1">
+        @foreach (var added in AddedTags)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="Color.Primary"
+                     Class="small-chip"
+                     CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
+                     OnClose="@(_ => OnRemoveRelation.InvokeAsync(added))">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.SubdirectoryArrowRight"
+                             Size="Size.Small"
+                             Class="mr-1 small-icon"/>
+                    <a class="small-chip-link"
+                       @onclick="@(() => OnNavigate.InvokeAsync(added.TagId))"
+                       @onclick:stopPropagation="true">
+                        @added.Tag?.Name
+                    </a>
+                </div>
+            </MudChip>
+        }
+    </div>
+</MudPopover>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public IReadOnlyList<TagRelationToTag> AddedTags { get; set; } = [];
+    [Parameter] public EventCallback<TagRelationToTag> OnRemoveRelation { get; set; }
+    [Parameter] public EventCallback<int> OnNavigate { get; set; }
+}

@@ -6,6 +6,8 @@ namespace SRNSMudApp.Components.UI;
 
 // using を名前空間の内側に置くことで、兄弟名前空間 SRNSMudApp.Components.Tag よりも
 // 先に SRNSMudApp.Data の Tag 型を解決させる
+using System.Globalization;
+
 using MudBlazor;
 
 using SRNSMudApp.Data;
@@ -78,7 +80,7 @@ public static class TagCardViewModel
     public static TagCardDisplayList BuildDisplayList(Tag tag, List<TimelineEvent>? highlightEvents, bool areTagsExpanded)
     {
         List<TagRelationToTag> allTags = tag.TargetTagRelations?
-            .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+            .Where(tr => tr.Tag is { IsSystem: false })
             .OrderByDescending(tr => tr.Weight)
             .ToList() ?? [];
 
@@ -88,7 +90,7 @@ public static class TagCardViewModel
             case not null:
                 foreach (TimelineEvent ev in highlightEvents.Where(e => e.EventType == "Delete"))
                 {
-                    switch (ev.FollowedTag != null && allTags.All(t => t.TagId != ev.FollowedTagId))
+                    switch (ev.FollowedTag is not null && allTags.All(t => t.TagId != ev.FollowedTagId))
                     {
                         case true:
                             allTags.Add(new TagRelationToTag
@@ -144,7 +146,7 @@ public static class TagCardViewModel
             ? $"{highlightEvent?.PreviousWeight} → {highlightEvent?.NewWeight}"
             : isDeleted
                 ? $"{highlightEvent?.PreviousWeight}"
-                : relation.Weight.ToString();
+                : relation.Weight.ToString(CultureInfo.InvariantCulture);
 
         return new TagCardChipDisplayInfo
         {
@@ -163,17 +165,30 @@ public static class TagCardViewModel
     public static bool HasParentCycle(Tag parentTag, Tag childTag, List<Tag> allTags)
     {
         // 循環参照の簡易チェック
-        int? currentParent = parentTag.ParentTagId;
+        var currentParent = parentTag.ParentTagId;
         var hasCycle = false;
         while (currentParent != null && !hasCycle)
         {
             hasCycle = currentParent == childTag.Id;
-            Tag? p = allTags.FirstOrDefault(t => t.Id == currentParent);
+            var p = allTags.FirstOrDefault(t => t.Id == currentParent);
             currentParent = p?.ParentTagId;
         }
 
         return hasCycle;
     }
+
+    /// <summary>現在ユーザーがそのリレーションの所有者 (操作権限あり) かどうかを判定する。</summary>
+    public static bool IsRelationOwner(string relationOwnerId, string currentUserId) =>
+        relationOwnerId == currentUserId;
+
+    /// <summary>自分自身を親タグに設定しようとしているかどうかを判定する。</summary>
+    public static bool IsSelfParent(Tag parentTag, Tag childTag) => parentTag.Id == childTag.Id;
+
+    /// <summary>同一タグへの変更 (無意味な変更) かどうかを判定する。</summary>
+    public static bool IsSameTagChange(int currentTagId, int newTagId) => currentTagId == newTagId;
+
+    /// <summary>Weight に変化があるかどうかを判定する。</summary>
+    public static bool HasWeightChange(int currentWeight, int newWeight) => currentWeight != newWeight;
 
     public static string GetShortOwnerName(string? name)
     {

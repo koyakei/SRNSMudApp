@@ -16,7 +16,7 @@ namespace SRNSMudApp.E2ETests;
 ///     スクロールによる自動フォーカス（IntersectionObserver ベース）の検証のみを担う。
 ///     クリックフォーカスとスタイル適用、URL直接遷移によるフォーカス復元は
 ///     SRNSMudApp.Tests/Components/Item/ItemListFocusTests へ移行済み。
-///     タグフィルタとの併用（tags= と focusItem= の共存）も同ファイルへ移行済み。
+///     タグフィルタとの併用（tags= と focus= の共存）も同ファイルへ移行済み。
 ///     作者リンククリックの挙動も同ファイルへ移行済み。
 /// </summary>
 [TestFixture]
@@ -92,8 +92,8 @@ public class ItemListFocusE2ETests : PageTest
             // 画面の中央に到達できる中間のアイテムをスクロール先にする
             Item scrollTargetItem = db.Items.OrderByDescending(i => i.UpdatedDate).Skip(5).First();
 
-            // 初期状態では URL に focusItem がないこと
-            Assert.That(Page.Url, Does.Not.Contain($"focusItem={scrollTargetItem.Id}"));
+            // 初期状態では URL に focus がないこと
+            Assert.That(Page.Url, Does.Not.Contain($"focus={scrollTargetItem.Id}"));
 
             _ = await Page.EvaluateAsync(
                 $"document.getElementById('item-card-{scrollTargetItem.Id}').scrollIntoView({{ block: 'center' }});");
@@ -102,7 +102,7 @@ public class ItemListFocusE2ETests : PageTest
             await Task.Delay(1500);
 
             // URLが自動的に更新されていることを確認
-            await Expect(Page).ToHaveURLAsync(new Regex($"focusItem={scrollTargetItem.Id}"));
+            await Expect(Page).ToHaveURLAsync(new Regex($"focus={scrollTargetItem.Id}"));
         }
     }
 }

@@ -171,7 +171,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceId = reply.Id,
                 Kind = new ItemReplyNotification(
                     ReplyItemId: reply.Id,
-                    ParentItemId: reply.ParentItemId.Value,
+                    ParentItemId: reply.ParentItemId!.Value,
                     ActorName: ownerName
                 ),
                 Message = $"{ownerName}さんがあなたのアイテムにリプライしました。",
@@ -193,7 +193,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceId = reply.Id,
                 Kind = new RequestReplyNotification(
                     ReplyItemId: reply.Id,
-                    RequestId: reply.TaggingRequestEntityId.Value,
+                    RequestId: reply.TaggingRequestEntityId!.Value,
                     ActorName: ownerName
                 ),
                 Message = $"{ownerName}さんがあなたのリクエストに返信しました。",

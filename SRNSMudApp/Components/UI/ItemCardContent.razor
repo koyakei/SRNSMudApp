@@ -1,0 +1,194 @@
+@* アイテム本文の表示専用子コンポーネント。
+   本文の展開/折りたたみ・URL プレビュー・投稿者/最終更新メタ情報を担い、
+   オーバーフロー検知の JS インターオープンをここに集約する。 *@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div>
+    <div id="@($"item-content-{ItemId}")"
+         class="@($"resource-content {(!_isExpanded ? "line-clamp-2" : "")}")">
+        <MudText Typo="Typo.subtitle1"
+                 Class="font-inherit" Style="white-space: pre-wrap;">
+            @DisplayContent
+        </MudText>
+    </div>
+
+    @switch (_urls.Any())
+    {
+        case true:
+            <div class="d-flex flex-column gap-2 mb-2 mt-2">
+                @foreach (var url in _urls.Take(3))
+                {
+                    <UrlPreviewCard Url="@url"/>
+                }
+            </div>
+            break;
+    }
+
+    @switch (_isOverflowing)
+    {
+        case true:
+            <MudLink OnClick="ToggleExpand" Color="Color.Primary"
+                     Typo="Typo.body2" Underline="Underline.Hover" Class="cursor-pointer">
+                @(_isExpanded switch { true => "閉じる", false => "もっと見る" })
+            </MudLink>
+            break;
+    }
+
+    <MudText Typo="Typo.caption" Color="Color.Secondary"
+             Class="mb-2 mt-2 d-block">
+        投稿者:
+        @switch (string.IsNullOrEmpty(OwnerId))
+        {
+            case false:
+                <span @onclick:stopPropagation="true">
+                    <MudLink Href="@($"/User/UserDetail/{OwnerId}")"
+                             Color="Color.Inherit"
+                             Underline="Underline.Hover">
+                        @OwnerUserName
+                    </MudLink>
+                </span>
+                break;
+            case true:
+                @(OwnerUserName ?? "不明")
+                break;
+        }
+        <span class="mx-1">|</span>
+        最終更新:
+        <span @onclick:stopPropagation="true">
+            <MudLink Href="@($"/ItemDetail/{ItemId}")" Color="Color.Inherit"
+                     Underline="Underline.Hover">
+                @UpdatedDate.ToLocalTime().ToString("g")
+            </MudLink>
+        </span>
+    </MudText>
+</div>
+
+@code {
+    [Parameter] public int ItemId { get; set; }
+    [Parameter] public string? Content { get; set; }
+    [Parameter] public string? OwnerId { get; set; }
+    [Parameter] public string? OwnerUserName { get; set; }
+    [Parameter] public DateTime UpdatedDate { get; set; }
+
+    private string DisplayContent => string.IsNullOrWhiteSpace(Content) ? "内容なし" : Content;
+
+    private bool _isExpanded;
+    private bool _isOverflowing;
+
+    private IReadOnlyList<string> _urls = [];
+
+    private DotNetObjectReference<ItemCardContent>? _dotNetRef;
+    private bool _needsOverflowCheck = true;
+
+    protected override void OnParametersSet()
+    {
+        _urls = ItemCardViewModel.ExtractUrls(Content);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await (firstRender switch
+        {
+            true => InitializeOverflowHelperAsync(),
+            false => Task.CompletedTask
+        });
+
+        await (_needsOverflowCheck switch
+        {
+            true => CheckOverflowNowAsync(),
+            false => Task.CompletedTask
+        });
+    }
+
+    /// <summary>オーバーフロー監視 (resize 通知) のための DotNetObjectReference を登録する。</summary>
+    private async Task InitializeOverflowHelperAsync()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.init", _dotNetRef);
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+    }
+
+    private async Task CheckOverflowNowAsync()
+    {
+        _needsOverflowCheck = false;
+        await UpdateOverflowStateAsync();
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#item-card-{ItemId}");
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+    }
+
+    /// <summary>resize 時にオーバーフロー状態を再計算するためのコールバック。</summary>
+    [JSInvokable]
+    public void OnWindowResized()
+    {
+        _needsOverflowCheck = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateOverflowStateAsync()
+    {
+        switch (_isExpanded)
+        {
+            case true:
+                return;
+        }
+
+        try
+        {
+            var overflowIds = await JS.InvokeAsync<int[]>("contentOverflowHelper.checkOverflow", new[] { ItemId });
+            var isOverflowing = overflowIds.Contains(ItemId);
+            switch (_isOverflowing != isOverflowing)
+            {
+                case true:
+                    _isOverflowing = isOverflowing;
+                    StateHasChanged();
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+    }
+
+    private void ToggleExpand()
+    {
+        _isExpanded = !_isExpanded;
+        switch (!_isExpanded)
+        {
+            case true:
+                _needsOverflowCheck = true; // 折りたたみ時に再チェック
+                break;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        switch (_dotNetRef)
+        {
+            case not null:
+                try
+                {
+                    await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                _dotNetRef.Dispose();
+                break;
+        }
+    }
+}

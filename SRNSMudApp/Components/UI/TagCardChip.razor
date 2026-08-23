@@ -1,0 +1,99 @@
+@* TagCard 内の「タグ→タグ」関連付けチップ 1 個分 (+タグツリーポップオーバー) を担う
+   表示専用子コンポーネント。サービス注入なし・[Parameter] / EventCallback のみで bUnit テスト可能。
+   ダイアログ起動・DB 操作はすべて親 (TagCard) 側に委譲する。 *@
+<span id="@ChipId"
+      class="position-relative d-inline-flex align-center">
+    <MudChip T="string" Size="Size.Small"
+             Class="custom-chip"
+             Style="@($"background: {Display.BackgroundColor}; color: {Display.TextColor}; font-weight: {(HighlightEvent != null ? "bold" : "normal")}")"
+             CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
+             OnClose="@(() => OnRemoveRelation.InvokeAsync())">
+        <div class="d-flex align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.LocalOffer"
+                           Size="Size.Small" Color="Color.Inherit"
+                           Class="chip-icon-btn mr-1"
+                           OnClick="@(() => OnAddTagToTag.InvokeAsync())"/>
+            <span class="d-flex align-center">
+                <a class="chip-link mr-1"
+                   style="@(Display.IsDeleted ? "text-decoration: line-through;" : "")"
+                   @onclick="@(() => OnNavigate.InvokeAsync())"
+                   @onclick:stopPropagation="true">
+                    @(Relation.Tag?.Name ?? "不明")
+                </a>
+                @switch (Display.IsDeleted)
+                {
+                    case false:
+                        <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                       Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
+                                       OnClick="@(() => OnDecreaseWeight.InvokeAsync())"
+                                       title="Weightを減らす"/>
+                        break;
+                }
+                <MudLink Color="Color.Inherit" Underline="Underline.Hover"
+                         Class="mx-1 cursor-pointer font-weight-bold"
+                         OnClick="@(() => (Display.IsDeleted ? Task.CompletedTask : OnEditWeight.InvokeAsync()))">
+                    @switch (Display.IsDeleted)
+                    {
+                        case true:
+                            <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                     Class="mr-1" Style="font-size: 1rem; vertical-align: middle;"/>
+                            break;
+                    }
+                    <span style="vertical-align: middle;">@Display.DisplayWeight</span>
+                </MudLink>
+                @switch (Display.IsDeleted)
+                {
+                    case false:
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                       Color="@Display.AddButtonColor" Class="chip-icon-btn pa-0 mx-1"
+                                       OnClick="@(() => OnIncreaseWeight.InvokeAsync())"
+                                       title="Weightを増やす"/>
+                        break;
+                }
+                <span class="ml-1">(@SRNSMudApp.Components.UI.TagCardViewModel.GetShortOwnerName(Relation.Tag?.Owner?.UserName))</span>
+            </span>
+            <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                           Size="Size.Small" Color="Color.Inherit"
+                           Class="chip-icon-btn ml-1"
+                           OnClick="@(() => OnToggleTree.InvokeAsync())"/>
+        </div>
+    </MudChip>
+
+    @* tags tree UI if any *@
+    <MudPopover Open="@(IsActive && Relation.Tag != null)"
+                AnchorOrigin="Origin.TopCenter"
+                TransformOrigin="Origin.BottomCenter"
+                OverflowBehavior="OverflowBehavior.FlipAlways"
+                Class="tree-popover" Paper="false">
+        <TagTreePopoverContent TargetTag="@Relation.Tag"
+                               AllTags="@AllTags"
+                               EnableSwap="true"
+                               EnableExpand="true"
+                               EnableNavigation="true"
+                               EnableAddChild="true"
+                               OnAddChildTag="OnAddChildTag"
+                               OnSwap="OnSwapTag"/>
+    </MudPopover>
+</span>
+
+@using SRNSMudApp.Data
+@using SRNSMudApp.Components.Tag
+
+@code {
+    [Parameter] [EditorRequired] public TagRelationToTag Relation { get; set; } = null!;
+    [Parameter] [EditorRequired] public TagCardChipDisplayInfo Display { get; set; } = null!;
+    [Parameter] public TimelineEvent? HighlightEvent { get; set; }
+    [Parameter] public string ChipId { get; set; } = "";
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+
+    [Parameter] public EventCallback OnRemoveRelation { get; set; }
+    [Parameter] public EventCallback OnAddTagToTag { get; set; }
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    [Parameter] public EventCallback OnDecreaseWeight { get; set; }
+    [Parameter] public EventCallback OnIncreaseWeight { get; set; }
+    [Parameter] public EventCallback OnEditWeight { get; set; }
+    [Parameter] public EventCallback OnToggleTree { get; set; }
+    [Parameter] public EventCallback<int> OnSwapTag { get; set; }
+    [Parameter] public EventCallback<Tag?> OnAddChildTag { get; set; }
+}

@@ -18,6 +18,8 @@
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0"/>
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0"/>
     <PackageReference Include="Testcontainers.MsSql" Version="3.8.0"/>
+    <!-- Testcontainers の依存 SSH.NET に高危険度脆弱性 (GHSA-q939-rpr3-3284) のため修正版を直接参照 -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0"/>
   </ItemGroup>
 
   <ItemGroup>

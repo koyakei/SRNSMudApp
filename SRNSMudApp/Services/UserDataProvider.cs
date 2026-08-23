@@ -4,9 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 
-// 名前空間の内側でエイリアスして Data の型を確実に解決させる
-using SRNSMudApp.Data;
-
 using Item = SRNSMudApp.Data.Item;
 using Tag = SRNSMudApp.Data.Tag;
 

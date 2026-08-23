@@ -55,6 +55,9 @@ builder.Services.AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
 // ItemList のデータアクセス分離
 builder.Services.AddScoped<IItemListDataProvider, ItemListDataProvider>();
 
+// ItemList の JSON エクスポート構築分離
+builder.Services.AddScoped<IItemListExportService, ItemListExportService>();
+
 // TagTree のデータアクセス分離
 builder.Services.AddScoped<ITagTreeDataProvider, TagTreeDataProvider>();
 

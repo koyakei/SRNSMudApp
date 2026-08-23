@@ -78,13 +78,13 @@ public class ItemListTagSearchTests : IAsyncDisposable
 
     /// <summary>
     ///     タグ候補選択後に検索を実行すると、選択タグのチップが表示され、
-    ///     URL のクエリへ tags= パラメータが反映されることを検証する。
+    ///     URL のクエリへ f= パラメータが反映されることを検証する。
     ///     （ItemListTagSearchE2ETests/ClickingSuggestion_AddsTagChip の移行テスト。
     ///     URL からのフィルタ復元は ItemListQueryStateTests が担保済みのため、
     ///     本テストはチップ表示と URL クエリ生成を担当する）
     /// </summary>
     [Fact]
-    public async Task ExecutingTagSearch_ShowsTagChip_AndReflectsTagsQueryParameter()
+    public async Task ExecutingTagSearch_ShowsTagChip_AndReflectsFilterQueryParameter()
     {
         // Arrange: ユーザーとタグを事前投入
         IDbContextFactory<ApplicationDbContext> dbFactory =
@@ -115,8 +115,8 @@ public class ItemListTagSearchTests : IAsyncDisposable
             Assert.Contains(TagName, chip.TextContent);
         });
 
-        // Assert 2: URL クエリに tags= が含まれる
+        // Assert 2: URL クエリに f= (タグフィルタ) が含まれる
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains("tags=", navigationManager.Uri);
+        Assert.Contains("f=", navigationManager.Uri);
     }
 }

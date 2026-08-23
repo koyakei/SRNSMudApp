@@ -1,0 +1,55 @@
+@* ソート条件エディタ。ソート対象タグ追加・優先度チップ・JSON エクスポートボタンを持つ表示専用子コンポーネント。
+   状態はすべて親から [Parameter] / EventCallback 経由で受け渡し、サービス注入なしで bUnit テスト可能。 *@
+<div class="d-flex flex-column gap-2 mb-4">
+    <div class="d-flex justify-space-between align-end flex-wrap gap-2">
+        <MudAutocomplete T="Tag"
+                         Label="ソート対象タグを追加"
+                         Value="null"
+                         ValueChanged="OnSortTargetTagAdded"
+                         SearchFunc="@SearchSortTags"
+                         ToStringFunc="@(t => t == null ? "" : t.Name)"
+                         Clearable="false"
+                         ResetValueOnEmptyText="true"
+                         Variant="Variant.Outlined"
+                         Margin="Margin.Dense"
+                         Style="min-width: 250px;"/>
+
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="@(() => OnExport.InvokeAsync())">
+            JSONエクスポート
+        </MudButton>
+    </div>
+
+    @switch (SortConditions.Any())
+    {
+        case true:
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="align-center">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">ソート優先度 (左から):</MudText>
+                @foreach (var condition in SortConditions)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                             OnClose="@(_ => OnRemoveCondition.InvokeAsync(condition))">
+                        <span class="d-flex align-center">
+                            @condition.Tag.Name
+                            <MudIconButton
+                                Icon="@(condition.Order == SortOrder.Desc ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                                Size="Size.Small" Color="Color.Inherit" Class="ml-1 pa-0"
+                                OnClick="@(() => OnToggleOrder.InvokeAsync(condition))"
+                                title="@(condition.Order == SortOrder.Desc ? "降順 (クリックで昇順に変更)" : "昇順 (クリックで降順に変更)")"/>
+                        </span>
+                    </MudChip>
+                }
+            </MudStack>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<SortCondition> SortConditions { get; set; } = [];
+    [Parameter] public EventCallback<Tag?> OnSortTargetTagAdded { get; set; }
+    [Parameter] public Func<string?, CancellationToken, Task<IEnumerable<Tag>>> SearchSortTags { get; set; } =
+        (_, _) => Task.FromResult<IEnumerable<Tag>>([]);
+    [Parameter] public EventCallback<SortCondition> OnToggleOrder { get; set; }
+    [Parameter] public EventCallback<SortCondition> OnRemoveCondition { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+}

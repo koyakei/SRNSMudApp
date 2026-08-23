@@ -1,8 +1,7 @@
 @* タグカード。
     表示ロジックは TagCardViewModel、DB アクセスは ITagCardDataProvider に分離済み。
-    チップ一覧部分の独立コンポーネント化は評価したが、ポップオーバー開閉状態や
-    ダイアログ起動がカードの状態と強く結合しているため不採用 (純粋ロジックは
-    すべて ViewModel 側で単体テスト可能)。 *@
+    チップ 1 個分 (+タグツリーポップオーバー) は表示専用子コンポーネント TagCardChip へ委譲し、
+    ダイアログ起動・DB 操作はカード側に集約する。 *@
 @inject ITagCardDataProvider TagCardData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
@@ -82,87 +81,21 @@
                         var chipId = $"tag-tagchip-{Tag.Id}-{tagId}";
                         var isActive = _activePopoverTagId == tagId && _activePopoverChipKey == chipId;
 
-                        <span id="@chipId"
-                              class="position-relative d-inline-flex align-center">
-                            <MudChip T="string" Size="Size.Small"
-                                     Class="custom-chip"
-                                     Style="@($"background: {chip.BackgroundColor}; color: {chip.TextColor}; font-weight: {(highlightEvent != null ? "bold" : "normal")}")"
-                                     CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
-                                     OnClose="@(_ => RemoveTagToTagRelationAsync(tr))">
-                                <div class="d-flex align-center">
-                                    <MudIconButton Icon="@Icons.Material.Filled.LocalOffer"
-                                                   Size="Size.Small" Color="Color.Inherit"
-                                                   Class="chip-icon-btn mr-1"
-                                                   OnClick="@(() => OnAddTagToTagClicked(tr.Tag))"/>
-                                    <span class="d-flex align-center">
-                                        <a class="chip-link mr-1"
-                                           style="@(chip.IsDeleted ? "text-decoration: line-through;" : "")"
-                                           @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
-                                           @onclick:stopPropagation="true">
-                                            @(tr.Tag?.Name ?? "不明")
-                                        </a>
-                                        @switch (chip.IsDeleted)
-                                        {
-                                            case false:
-                                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
-                                                               Color="Color.Inherit" Class="chip-icon-btn pa-0 mx-1"
-                                                               OnClick="@(() => UpdateTagToTagWeightAsync(tr, -1))"
-                                                               title="Weightを減らす"/>
-                                                break;
-                                        }
-                                        <MudLink Color="Color.Inherit" Underline="Underline.Hover"
-                                                 Class="mx-1 cursor-pointer font-weight-bold" OnClick="@(async () =>
-                                                                                                        {
-                                                                                                            switch (chip.IsDeleted)
-                                                                                                            {
-                                                                                                                case false:
-                                                                                                                    await EditTagToTagWeightAsync(tr);
-                                                                                                                    break;
-                                                                                                            }
-                                                                                                        })">
-                                            @switch (chip.IsDeleted)
-                                            {
-                                                case true:
-                                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
-                                                             Class="mr-1" Style="font-size: 1rem; vertical-align: middle;"/>
-                                                    break;
-                                            }
-                                            <span style="vertical-align: middle;">@chip.DisplayWeight</span>
-                                        </MudLink>
-                                        @switch (chip.IsDeleted)
-                                        {
-                                            case false:
-                                                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
-                                                               Color="@chip.AddButtonColor" Class="chip-icon-btn pa-0 mx-1"
-                                                               OnClick="@(() => UpdateTagToTagWeightAsync(tr, 1))"
-                                                               title="Weightを増やす"/>
-                                                break;
-                                        }
-                                        <span class="ml-1">(@TagCardViewModel.GetShortOwnerName(tr.Tag?.Owner?.UserName))</span>
-                                    </span>
-                                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
-                                                   Size="Size.Small" Color="Color.Inherit"
-                                                   Class="chip-icon-btn ml-1"
-                                                   OnClick="@(() => ToggleTagTreePopover(tagId, chipId))"/>
-                                </div>
-                            </MudChip>
-
-                            @* tags tree UI if any *@
-                            <MudPopover Open="@(isActive && tr.Tag != null)"
-                                        AnchorOrigin="Origin.TopCenter"
-                                        TransformOrigin="Origin.BottomCenter"
-                                        OverflowBehavior="OverflowBehavior.FlipAlways"
-                                        Class="tree-popover" Paper="false">
-                                <TagTreePopoverContent TargetTag="@tr.Tag"
-                                                       AllTags="@AllTags"
-                                                       EnableSwap="true"
-                                                       EnableExpand="true"
-                                                       EnableNavigation="true"
-                                                       EnableAddChild="true"
-                                                       OnAddChildTag="OnAddChildTagFromTree"
-                                                       OnSwap="@(newTagId => ChangeTagTagAsync(tr, newTagId))"/>
-                            </MudPopover>
-                        </span>
+                        <TagCardChip Relation="tr"
+                                     Display="chip"
+                                     HighlightEvent="highlightEvent"
+                                     ChipId="@chipId"
+                                     IsActive="@isActive"
+                                     AllTags="@AllTags"
+                                     OnRemoveRelation="@(() => RemoveTagToTagRelationAsync(tr))"
+                                     OnAddTagToTag="@(() => OnAddTagToTagClicked(tr.Tag))"
+                                     OnNavigate="@(() => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"
+                                     OnDecreaseWeight="@(() => UpdateTagToTagWeightAsync(tr, -1))"
+                                     OnIncreaseWeight="@(() => UpdateTagToTagWeightAsync(tr, 1))"
+                                     OnEditWeight="@(() => EditTagToTagWeightAsync(tr))"
+                                     OnToggleTree="@(() => ToggleTagTreePopover(tagId, chipId))"
+                                     OnSwapTag="@(newTagId => ChangeTagTagAsync(tr, newTagId))"
+                                     OnAddChildTag="OnAddChildTagFromTree"/>
                     }
 
                     @switch (display.HasManyTags)
@@ -281,13 +214,29 @@
         _areTagsExpanded = !_areTagsExpanded;
     }
 
+    private void ClosePopover()
+    {
+        _activePopoverTagId = -1;
+        _activePopoverChipKey = "";
+    }
+
+    /// <summary>親へデータ変更を通知する。</summary>
+    private async Task NotifyChangedAsync()
+    {
+        switch (OnDataChanged.HasDelegate)
+        {
+            case true:
+                await OnDataChanged.InvokeAsync();
+                break;
+        }
+    }
+
     private async Task ToggleTagTreePopover(int tagId, string chipKey)
     {
         switch (_activePopoverTagId == tagId && _activePopoverChipKey == chipKey)
         {
             case true:
-                _activePopoverTagId = -1;
-                _activePopoverChipKey = "";
+                ClosePopover();
                 break;
             case false:
                 _activePopoverTagId = tagId;
@@ -343,31 +292,38 @@
         var oppositeSystemTagId = isUpvote ? CurrentUserBadTagId!.Value : CurrentUserGoodTagId!.Value;
 
         await TagCardData.ToggleTagVoteAsync(Tag.Id, CurrentUserId, targetSystemTagId, oppositeSystemTagId);
-        switch (OnDataChanged.HasDelegate)
-        {
-            case true:
-                await OnDataChanged.InvokeAsync();
-                break;
-        }
+        await NotifyChangedAsync();
     }
 
     // --- Tag Operations ---
     private async Task OnAddTagToTagClicked(Tag? targetTag)
     {
-        switch (targetTag)
+        await (targetTag switch
         {
-            case null: return;
-        }
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("関連タグの追加", options);
-        var result = await dialog.Result;
+            null => Task.CompletedTask,
+            not null => ExecuteWithTagSelection("関連タグの追加", targetTag, AddTagToTagAsync)
+        });
+    }
 
-        switch (result)
+    /// <summary>タグ選択ダイアログを表示し、選択されたタグで処理を実行する共通フロー。</summary>
+    private async Task ExecuteWithTagSelection(
+        string title, Tag targetTag, Func<Tag, Tag, Task> execute)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>(title, options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is not { Canceled: false })
         {
-            case { Canceled: false, Data: Tag selectedTag }:
-                await AddTagToTagAsync(targetTag, selectedTag);
-                break;
+            return;
         }
+
+        if (result.Data is not Tag selectedTag)
+        {
+            return;
+        }
+
+        await execute(targetTag, selectedTag);
     }
 
     private async Task AddTagToTagAsync(Tag targetTag, Tag selectedTag)
@@ -381,22 +337,16 @@
                 return;
             case TagCardOperationResult.Success:
                 Snackbar.Add("タグを追加しました。", Severity.Success);
-                switch (OnDataChanged.HasDelegate)
-                {
-                    case true:
-                        await OnDataChanged.InvokeAsync();
-                        break;
-                }
-
+                await NotifyChangedAsync();
                 break;
         }
     }
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
     {
-        switch (relation.OwnerId != CurrentUserId)
+        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            case true:
+            case false:
                 Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
                 return;
         }
@@ -406,22 +356,16 @@
         {
             case TagCardOperationResult.Success:
                 Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
-                switch (OnDataChanged.HasDelegate)
-                {
-                    case true:
-                        await OnDataChanged.InvokeAsync();
-                        break;
-                }
-
+                await NotifyChangedAsync();
                 break;
         }
     }
 
     private async Task UpdateTagToTagWeightAsync(TagRelationToTag relation, int delta)
     {
-        switch (relation.OwnerId != CurrentUserId)
+        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            case true:
+            case false:
                 Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
                 return;
         }
@@ -431,22 +375,16 @@
         switch (result)
         {
             case TagCardOperationResult.Success:
-                switch (OnDataChanged.HasDelegate)
-                {
-                    case true:
-                        await OnDataChanged.InvokeAsync();
-                        break;
-                }
-
+                await NotifyChangedAsync();
                 break;
         }
     }
 
     private async Task EditTagToTagWeightAsync(TagRelationToTag relation)
     {
-        switch (relation.OwnerId != CurrentUserId)
+        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            case true:
+            case false:
                 Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
                 return;
         }
@@ -460,9 +398,9 @@
         {
             case { Canceled: false, Data: int newWeight }:
             {
-                switch (newWeight == relation.Weight)
+                switch (TagCardViewModel.HasWeightChange(relation.Weight, newWeight))
                 {
-                    case true: return;
+                    case false: return;
                 }
 
                 TagCardOperationResult opResult =
@@ -470,13 +408,7 @@
                 switch (opResult)
                 {
                     case TagCardOperationResult.Success:
-                        switch (OnDataChanged.HasDelegate)
-                        {
-                            case true:
-                                await OnDataChanged.InvokeAsync();
-                                break;
-                        }
-
+                        await NotifyChangedAsync();
                         break;
                 }
 
@@ -487,14 +419,14 @@
 
     private async Task ChangeTagTagAsync(TagRelationToTag oldRelation, int newTagId)
     {
-        switch (oldRelation.TagId == newTagId)
+        switch (TagCardViewModel.IsSameTagChange(oldRelation.TagId, newTagId))
         {
             case true: return;
         }
 
-        switch (oldRelation.OwnerId != CurrentUserId)
+        switch (TagCardViewModel.IsRelationOwner(oldRelation.OwnerId, CurrentUserId))
         {
-            case true:
+            case false:
                 Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
                 return;
         }
@@ -508,41 +440,24 @@
                 return;
             case TagCardOperationResult.Success:
                 Snackbar.Add("タグを変更しました。", Severity.Success);
-
-                _activePopoverTagId = -1;
-                _activePopoverChipKey = "";
-                switch (OnDataChanged.HasDelegate)
-                {
-                    case true:
-                        await OnDataChanged.InvokeAsync();
-                        break;
-                }
-
+                ClosePopover();
+                await NotifyChangedAsync();
                 break;
         }
     }
 
     private async Task OnAddChildTagFromTree(Tag? targetTag)
     {
-        switch (targetTag)
+        await (targetTag switch
         {
-            case null: return;
-        }
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", options);
-        var result = await dialog.Result;
-
-        switch (result)
-        {
-            case { Canceled: false, Data: Tag selectedTag }:
-                await SetParentTagAsync(targetTag, selectedTag);
-                break;
-        }
+            null => Task.CompletedTask,
+            not null => ExecuteWithTagSelection("子タグの追加", targetTag, SetParentTagAsync)
+        });
     }
 
     private async Task SetParentTagAsync(Tag parentTag, Tag childTag)
     {
-        switch (childTag.Id == parentTag.Id)
+        switch (TagCardViewModel.IsSelfParent(parentTag, childTag))
         {
             case true:
                 Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
@@ -565,13 +480,7 @@
                 return;
             case TagCardOperationResult.Success:
                 Snackbar.Add("子タグとして設定しました。", Severity.Success);
-                switch (OnDataChanged.HasDelegate)
-                {
-                    case true:
-                        await OnDataChanged.InvokeAsync();
-                        break;
-                }
-
+                await NotifyChangedAsync();
                 break;
         }
     }

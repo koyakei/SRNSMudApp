@@ -1,9 +1,9 @@
 @using SRNSMudApp.Services
+@using SRNSMudApp.Components.Item
 @inject IHomeDataProvider HomeData
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @using System.Security.Claims
-@using Microsoft.AspNetCore.WebUtilities
 @implements IAsyncDisposable
 
 @* ===== タグリスト ===== *@
@@ -74,22 +74,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var uri = new Uri(NavigationManager.Uri);
-        var query = QueryHelpers.ParseQuery(uri.Query);
-
-        switch (query.TryGetValue("focusTag", out var focusTagStr))
-        {
-            case true when int.TryParse(focusTagStr, out var focusTag):
-                _focusTagId = focusTag;
-                break;
-        }
-
-        switch (query.TryGetValue("focusItem", out var focusItemStr))
-        {
-            case true when int.TryParse(focusItemStr, out var focusItem):
-                _focusItemId = focusItem;
-                break;
-        }
+        // URL 形式の知識は ItemListQueryState に一元化
+        ItemListQueryState state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+        _focusTagId = state.FocusTagId;
+        _focusItemId = state.FocusItemId;
 
         var authState = await AuthState!;
         _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
@@ -130,30 +118,38 @@
         {
             case true:
                 _hasScrolledToFocus = true;
-                switch ((_focusTagId.HasValue, _focusItemId.HasValue))
-                {
-                    case (true, _):
-                        try
-                        {
-                            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#tag-card-{_focusTagId.Value}");
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-                        break;
-                    case (false, true):
-                        try
-                        {
-                            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#item-card-{_focusItemId.Value}");
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-                        break;
-                }
+                await ScrollToFocusTargetAsync();
                 break;
+        }
+    }
+
+    /// <summary>focusTag を優先してスクロールする。タグ未指定の場合は focusItem へスクロールする。</summary>
+    private async Task ScrollToFocusTargetAsync()
+    {
+        switch (_focusTagId)
+        {
+            case int tagId:
+                await TryScrollAsync($"#tag-card-{tagId}");
+                return;
+        }
+
+        switch (_focusTagId is null ? _focusItemId : null)
+        {
+            case int itemId:
+                await TryScrollAsync($"#item-card-{itemId}");
+                break;
+        }
+    }
+
+    private async Task TryScrollAsync(string selector)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", selector);
+        }
+        catch (Exception)
+        {
+            // ignored
         }
     }
 
@@ -186,12 +182,13 @@
             case false: return;
         }
 
-        var parameters = new Dictionary<string, object?>
+        // 現在の URL から状態を読み取り、focus 系パラメータのみ差し替える
+        ItemListQueryState updated = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri)) with
         {
-            { "focusTag", _focusTagId },
-            { "focusItem", _focusItemId }
+            FocusTagId = _focusTagId,
+            FocusItemId = _focusItemId
         };
-        var newUri = NavigationManager.GetUriWithQueryParameters(parameters);
+        var newUri = NavigationManager.GetUriWithQueryParameters(updated.BuildParameters());
         NavigationManager.NavigateTo(newUri, replace: true);
     }
 
