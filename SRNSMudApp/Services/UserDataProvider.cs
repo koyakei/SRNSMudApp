@@ -36,6 +36,8 @@ public interface IUserDataProvider
 
     /// <summary>全ユーザーを取得する。</summary>
     Task<List<ApplicationUser>> GetAllUsersAsync();
+
+    Task<ApplicationUser?> FindUserByIdAsync(string userId);
 }
 
 public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IUserDataProvider
@@ -109,5 +111,10 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
         return await dbContext.Users.AsNoTracking().ToListAsync();
+    }
+    public async Task<ApplicationUser?> FindUserByIdAsync(string userId)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        return await dbContext.Users.FindAsync(userId);
     }
 }

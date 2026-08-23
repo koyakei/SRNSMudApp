@@ -3,7 +3,9 @@
 @using System.Security.Claims
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IUserDataProvider UserData
+@inject ITagDialogDataProvider TagDialogData
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
@@ -52,8 +54,6 @@
         string? userId = null;
         ApplicationUser? currentUser = null;
 
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-
         switch (user.Identity is { IsAuthenticated: true })
         {
             case true:
@@ -61,7 +61,7 @@
                 switch (string.IsNullOrEmpty(userId))
                 {
                     case false:
-                        currentUser = await dbContext.Users.FindAsync(userId);
+                        currentUser = await UserData.FindUserByIdAsync(userId!);
                         break;
                 }
                 break;
@@ -82,10 +82,9 @@
             Owner = currentUser,
             CachedWeight = 0
         };
-        dbContext.Tags.Add(tag);
         try
         {
-            await dbContext.SaveChangesAsync();
+            await TagDialogData.CreateTagWithoutEmbeddingAsync(tag);
             NavigationManager.NavigateTo("/Tag/TagList");
         }
         catch (DbUpdateException ex)

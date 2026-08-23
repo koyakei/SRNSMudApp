@@ -1,5 +1,6 @@
 @using SRNSMudApp.Services
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject ITagDialogDataProvider TagDialogData
 @inject ISnackbar Snackbar
 @inject ITagEmbeddingService TagEmbeddingService
 
@@ -60,32 +61,15 @@
 
         try
         {
-            await using var context = await DbFactory.CreateDbContextAsync();
-            var tagToUpdate = await context.Tags.FindAsync(Tag.Id);
+            bool updated = await TagDialogData.UpdateTagAsync(Tag.Id, _editName, _editContent);
 
-            switch (tagToUpdate)
+            switch (updated)
             {
-                case not null:
-                    tagToUpdate.Name = _editName;
-                    tagToUpdate.Content = _editContent;
-
-                    // タグ名が変更された場合などに備え、ベクトルも再生成する
-                    try
-                    {
-                        var embedding = await TagEmbeddingService.GenerateEmbeddingAsync(_editName);
-                        tagToUpdate.Embedding = embedding.ToArray();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
-                    }
-
-                    await context.SaveChangesAsync();
-
-                    // 成功した場合はダイアログを閉じ、結果として true を返す
+                // 成功した場合はダイアログを閉じ、結果として true を返す
+                case true:
                     MudDialog.Close(DialogResult.Ok(true));
                     break;
-                case null:
+                case false:
                     Snackbar.Add("対象のタグが見つかりませんでした。", Severity.Error);
                     MudDialog.Cancel();
                     break;

@@ -29,6 +29,18 @@ public interface ITagDialogDataProvider
     Task<Tag?> FindTagByNameAsync(string tagName);
 
     Task CreateTagAsync(Tag newTag);
+
+    /// <summary>ベクトルを生成せずにタグを作成する (旧 AddTag ページの挙動を維持)。</summary>
+    Task CreateTagWithoutEmbeddingAsync(Tag newTag);
+
+    /// <summary>タグ名・内容を更新し、ベクトルを再生成する。対象が存在しない場合は false。</summary>
+    Task<bool> UpdateTagAsync(int tagId, string name, string? content);
+
+    /// <summary>全タグを対象にテキスト+ベクトル検索を行う (失敗時はテキスト検索にフォールバック、最大 50 件)。</summary>
+    Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default);
+
+    /// <summary>タグ一覧 (Owner / TargetTagRelations 込み) を取得する。</summary>
+    Task<List<Tag>> GetTagsWithDetailsAsync();
 }
 
 public class TagDialogDataProvider(
@@ -87,6 +99,97 @@ public class TagDialogDataProvider(
             Console.WriteLine($"Embedding generation failed: {ex.Message}");
         }
 
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        dbContext.Tags.Add(newTag);
+        await dbContext.SaveChangesAsync();
+    }
+    public async Task<bool> UpdateTagAsync(int tagId, string name, string? content)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
+        switch (tagToUpdate)
+        {
+            case null:
+                return false;
+        }
+
+        tagToUpdate.Name = name;
+        tagToUpdate.Content = content;
+
+        // タグ名が変更された場合などに備え、ベクトルも再生成する
+        try
+        {
+            var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(name);
+            tagToUpdate.Embedding = embedding.ToArray();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
+        }
+
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default)
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
+        IQueryable<Tag> query = dbContext.Tags.AsQueryable();
+
+        switch (string.IsNullOrEmpty(value))
+        {
+            case true:
+                return await query.AsNoTracking().Take(50).ToListAsync(token);
+        }
+
+        try
+        {
+            float[] queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
+
+            List<Tag> textMatches = await query
+                .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
+                .AsNoTracking()
+                .ToListAsync(token);
+
+            List<Tag> vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
+
+            List<Tag> vectorMatches = vectorTags
+                .Where(x => x.Embedding.Length == queryVector.Length)
+                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
+                .Take(50)
+                .ToList();
+
+            return
+            [
+                .. textMatches.Concat(vectorMatches)
+                    .DistinctBy(x => x.Id)
+                    .Take(50)
+            ];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Vector search failed: {ex.Message}");
+            query = query.Where(x =>
+                x.Name.Contains(value) ||
+                x.Content.Contains(value)
+            );
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
+        }
+    }
+
+    public async Task<List<Tag>> GetTagsWithDetailsAsync()
+    {
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        return await dbContext.Tags
+            .Include(t => t.Owner)
+            .Include(t => t.TargetTagRelations)
+            .ThenInclude(tr => tr.Tag)
+            .ThenInclude(t => t.Owner)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+    public async Task CreateTagWithoutEmbeddingAsync(Tag newTag)
+    {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
         dbContext.Tags.Add(newTag);
         await dbContext.SaveChangesAsync();

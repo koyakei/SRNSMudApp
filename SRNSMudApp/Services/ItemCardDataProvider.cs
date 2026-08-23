@@ -42,6 +42,9 @@ public interface IItemCardDataProvider
 
     /// <summary>アイテムを初期タグ付きで作成する。</summary>
     Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds);
+
+    /// <summary>アイテム本文を更新する。対象が存在しない場合は false。</summary>
+    Task<bool> UpdateItemContentAsync(int itemId, string content);
 }
 
 public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemCardDataProvider
@@ -223,5 +226,19 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         }
 
         await context.SaveChangesAsync();
+    }
+    public async Task<bool> UpdateItemContentAsync(int itemId, string content)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        Item? itemToUpdate = await context.Items.FindAsync(itemId);
+        switch (itemToUpdate)
+        {
+            case null:
+                return false;
+        }
+
+        itemToUpdate.Content = content;
+        await context.SaveChangesAsync();
+        return true;
     }
 }

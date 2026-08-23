@@ -1,6 +1,7 @@
 @page "/Tag/TagList"
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject ITagDialogDataProvider TagDialogData
 
 <MudText Typo="Typo.h4" GutterBottom="true">Tag List</MudText>
 
@@ -16,14 +17,7 @@
 
     private async Task LoadDataAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        tags = await context.Tags
-            .Include(t => t.Owner)
-            .Include(t => t.TargetTagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .AsNoTracking()
-            .ToListAsync();
+        tags = await TagDialogData.GetTagsWithDetailsAsync();
 
         // StateHasChanged();
     }

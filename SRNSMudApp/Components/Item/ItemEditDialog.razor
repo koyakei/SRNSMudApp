@@ -1,4 +1,5 @@
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IItemCardDataProvider ItemCardData
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -53,19 +54,15 @@
 
         try
         {
-            await using var context = await DbFactory.CreateDbContextAsync();
-            var itemToUpdate = await context.Items.FindAsync(Item.Id);
+            bool updated = await ItemCardData.UpdateItemContentAsync(Item.Id, _editContent);
 
-            switch (itemToUpdate)
+            switch (updated)
             {
-                case not null:
-                    itemToUpdate.Content = _editContent;
-                    await context.SaveChangesAsync();
-
-                    // 成功した場合はダイアログを閉じ、結果として true を返す
+                // 成功した場合はダイアログを閉じ、結果として true を返す
+                case true:
                     MudDialog.Close(DialogResult.Ok(true));
                     break;
-                case null:
+                case false:
                     Snackbar.Add("対象のアイテムが見つかりませんでした。", Severity.Error);
                     MudDialog.Cancel();
                     break;

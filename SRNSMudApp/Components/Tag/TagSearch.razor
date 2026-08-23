@@ -2,7 +2,8 @@
 @using System.Numerics.Tensors
 @using SRNSMudApp.Services
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject ITagDialogDataProvider TagDialogData
 @inject ITagEmbeddingService TagEmbeddingService
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
@@ -48,51 +49,7 @@
 
     private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        var query = dbContext.Tags.AsQueryable();
-
-        return await (string.IsNullOrEmpty(value) switch
-        {
-            true => query.AsNoTracking().Take(50).ToListAsync(token).ContinueWith(t => (IEnumerable<Tag>)t.Result, token),
-            false => ExecuteSearchAsync(query, value, token)
-        });
+        return await TagDialogData.SearchTagsWithFallbackAsync(value, token);
     }
 
-    private async Task<IEnumerable<Tag>> ExecuteSearchAsync(IQueryable<Tag> query, string value, CancellationToken token)
-    {
-        try
-        {
-            var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(value);
-            var queryArray = queryVector.ToArray();
-
-            var textMatches = await query
-                .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
-                .AsNoTracking()
-                .ToListAsync(token);
-
-            var vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
-
-            var vectorMatches = vectorTags
-                .Where(x => x.Embedding.Length == queryArray.Length)
-                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryArray))
-                .Take(50)
-                .ToList();
-
-            return
-            [
-                .. textMatches.Concat(vectorMatches)
-                    .DistinctBy(x => x.Id)
-                    .Take(50)
-            ];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Vector search failed: {ex.Message}");
-            query = query.Where(x =>
-                x.Name.Contains(value) ||
-                x.Content.Contains(value)
-            );
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
-        }
-    }
 }
