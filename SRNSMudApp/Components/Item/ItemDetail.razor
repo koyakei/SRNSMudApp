@@ -1,102 +1,90 @@
-@page "/ItemDetail/{ItemId:int}"
-@using System.Security.Claims
-@using SRNSMudApp.Components.UI
-@using SRNSMudApp.Services
-@rendermode InteractiveServer
-
-@using SRNSMudApp.Data
-@using SRNSMudApp.Models
-@using System.Diagnostics
-
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
-    @(_pageState switch
-    {
-        Loading => @<MudText>読み込み中...</MudText>,
-        Failed f => @<MudAlert Severity="Severity.Error">@f.Error.Message</MudAlert>,
-        Empty e => @<MudText>@e.Message</MudText>,
-        Loaded<ItemDetailData> data => @<div>
-            <div class="d-flex align-center mb-4">
-                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                               OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
-                <MudText Typo="Typo.h5">アイテム詳細</MudText>
+    @* ページ状態の描画は AsyncPageView (RenderFragment 差し替え) に委譲する (mainRules: 条件文回避) *@
+    <SRNSMudApp.Components.UI.AsyncPageView T="ItemDetailData" State="_pageState">
+        <LoadedContent Context="data">
+            <div>
+                <div class="d-flex align-center mb-4">
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                   OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+                    <MudText Typo="Typo.h5">アイテム詳細</MudText>
+                </div>
+
+                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"
+                         ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
+                    <MudTabPanel Text="詳細 (Details)">
+                        <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { data.Item }"
+                                                                   OnDataChanged="LoadDataAsync"/>
+
+                        @switch (data.Item.TagRelations)
+                        {
+                            case not null:
+                                <SRNSMudApp.Components.Tag.ItemTagTable
+                                    TagRelations="@data.Item.TagRelations"
+                                    Item="@data.Item"
+                                    CurrentUserId="@_currentUserId"
+                                    AllTags="@_allTags"
+                                    AllTagRelationsToTags="@_allTagRelationsToTags"
+                                    OnDataChanged="LoadDataAsync"/>
+                                break;
+                        }
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="関連リクエスト (Related Requests)">
+                        @switch (!data.Requests.Any())
+                        {
+                            case true:
+                                <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
+                                break;
+                            case false:
+                                <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Requests" OnRequestChanged="LoadDataAsync"
+                                                                              SelectedRequest="_selectedRequest"
+                                                                              SelectedRequestChanged="OnSelectedRequestChanged">
+                                    <RejectButtonTemplate Context="request">
+                                        <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
+                                                   OnClick="@(() => OpenRejectDialogAsync(request))">
+                                            リジェクト
+                                        </MudButton>
+                                    </RejectButtonTemplate>
+                                </SRNSMudApp.Components.Tag.TaggingRequestList>
+                                break;
+                        }
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="タグ履歴">
+                        @switch (!data.Ledgers.Any())
+                        {
+                            case true:
+                                <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
+                                break;
+                            case false:
+                                <MudList T="TagWeightLedger">
+                                    @foreach (var ledger in data.Ledgers)
+                                    {
+                                        <MudListItem>
+                                            <div class="d-flex align-center">
+                                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                                    @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
+                                                </MudChip>
+                                                <MudText Typo="Typo.body2"
+                                                         Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
+                                                         Class="mr-2">
+                                                    @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
+                                                </MudText>
+                                                <MudText Typo="Typo.body2" Class="mr-2">
+                                                    @ledger.Owner?.UserName
+                                                </MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
+                                                    @ledger.CreatedDate.ToLocalTime().ToString("g")
+                                                </MudText>
+                                            </div>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                                break;
+                        }
+                    </MudTabPanel>
+                </MudTabs>
             </div>
-
-            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"
-                     ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
-                <MudTabPanel Text="詳細 (Details)">
-                    <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { data.Data.Item }"
-                                                               OnDataChanged="LoadDataAsync"/>
-
-                    @switch (data.Data.Item.TagRelations)
-                    {
-                        case not null:
-                            <SRNSMudApp.Components.Tag.ItemTagTable
-                                TagRelations="@data.Data.Item.TagRelations"
-                                Item="@data.Data.Item"
-                                CurrentUserId="@_currentUserId"
-                                AllTags="@_allTags"
-                                AllTagRelationsToTags="@_allTagRelationsToTags"
-                                OnDataChanged="LoadDataAsync"/>
-                            break;
-                    }
-                </MudTabPanel>
-
-                <MudTabPanel Text="関連リクエスト (Related Requests)">
-                    @switch (!data.Data.Requests.Any())
-                    {
-                        case true:
-                            <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
-                            break;
-                        case false:
-                            <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Data.Requests" OnRequestChanged="LoadDataAsync"
-                                                                          SelectedRequest="_selectedRequest"
-                                                                          SelectedRequestChanged="OnSelectedRequestChanged">
-                                <RejectButtonTemplate Context="request">
-                                    <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
-                                               OnClick="@(() => OpenRejectDialogAsync(request))">
-                                        リジェクト
-                                    </MudButton>
-                                </RejectButtonTemplate>
-                            </SRNSMudApp.Components.Tag.TaggingRequestList>
-                            break;
-                    }
-                </MudTabPanel>
-
-                <MudTabPanel Text="タグ履歴">
-                    @switch (!data.Data.Ledgers.Any())
-                    {
-                        case true:
-                            <MudText Typo="Typo.body1" Color="Color.Default">履歴はありません</MudText>
-                            break;
-                        case false:
-                            <MudList T="TagWeightLedger">
-                                @foreach (var ledger in data.Data.Ledgers)
-                                {
-                                    <MudListItem>
-                                        <div class="d-flex align-center">
-                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
-                                                @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
-                                            </MudChip>
-                                            <MudText Typo="Typo.body2"
-                                                     Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
-                                                     Class="mr-2">
-                                                @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
-                                            </MudText>
-                                            <MudText Typo="Typo.body2" Class="mr-2">
-                                                @ledger.Owner?.UserName
-                                            </MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
-                                                @ledger.CreatedDate.ToLocalTime().ToString("g")
-                                            </MudText>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            </MudList>
-                            break;
-                    }
-                </MudTabPanel>
-            </MudTabs>
-        </div>,
-        _ => throw new UnreachableException()
-    })
+        </LoadedContent>
+    </SRNSMudApp.Components.UI.AsyncPageView>
 </MudContainer>

@@ -1,0 +1,64 @@
+@* ページ状態 (AsyncPageState<T>) を網羅的パターンマッチングで描画する汎用表示コンポーネント。
+   mainRules「条件文回避」: UI の振る舞いを RenderFragment の差し替えで決定し、
+   呼び出し側の switch 文を排除する。各状態の既定描画を内蔵し、
+   差分だけ上書き可能。サービス注入なしで bUnit レンダリングテストが可能。 *@
+@namespace SRNSMudApp.Components.UI
+@typeparam T
+
+@switch (State)
+{    case Loading:
+        @if (LoadingContent != null)
+        {
+            @LoadingContent
+        }
+        else
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Class="mx-auto my-4 d-block"/>
+        }
+        break;
+    case Empty empty:
+        @if (EmptyContent != null)
+        {
+            @EmptyContent(empty.Message)
+        }
+        else
+        {
+            <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary" Class="pa-4">
+                @empty.Message
+            </MudText>
+        }
+        break;
+    case Failed failed:
+        @if (FailedContent != null)
+        {
+            @FailedContent(failed.Error)
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error">
+                エラーが発生しました: @failed.Error.Message
+            </MudAlert>
+        }
+        break;
+    case Loaded<T> loaded:
+        @LoadedContent(loaded.Data)
+        break;
+}
+
+@code {
+    /// <summary>描画対象のページ状態。</summary>
+    [Parameter] public AsyncPageState<T>? State { get; set; }
+
+    /// <summary>読み込み中の描画。未指定なら既定のスピナーを表示する。</summary>
+    [Parameter] public RenderFragment? LoadingContent { get; set; }
+
+    /// <summary>データ不在時の描画。引数は状態に渡されたメッセージ。未指定なら既定表示。</summary>
+    [Parameter] public RenderFragment<string>? EmptyContent { get; set; }
+
+    /// <summary>失敗時の描画。引数は発生した例外。未指定なら既定のエラーアラートを表示する。</summary>
+    [Parameter] public RenderFragment<Exception>? FailedContent { get; set; }
+
+    /// <summary>成功時にデータを受け取って描画する必須フラグメント。</summary>
+    // RenderFragment<T> は「値を受けて RenderFragment を返す」カリー化デリゲートのため、既定は空フラグメント
+    [Parameter] [EditorRequired] public RenderFragment<T> LoadedContent { get; set; } = _ => builder => { };
+}
