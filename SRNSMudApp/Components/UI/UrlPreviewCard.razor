@@ -1,7 +1,8 @@
+@* リンクプレビューの表示専用子コンポーネント。
+   プレビューデータの取得は LoadPreview デリゲート経由で親に委譲し、
+   本コンポーネントはサービス注入なしでレンダリング可能。 *@
 @using SRNSMudApp.Models
-@using SRNSMudApp.Services
 @namespace SRNSMudApp.Components.UI
-@inject LinkPreviewService PreviewService
 
 @switch (_isLoading)
 {
@@ -71,6 +72,9 @@
 @code {
     [Parameter] [EditorRequired] public string Url { get; set; } = null!;
 
+    /// <summary>プレビューデータ取得デリゲート（親から注入。null の場合は取得しない）。</summary>
+    [Parameter] public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }
+
     [Inject] private IJSRuntime JS { get; set; } = null!;
 
     private LinkPreviewData? _previewData;
@@ -84,12 +88,19 @@
             case true: return;
         }
 
-        _selectedText = ExtractTextFragment(Url);
+        _selectedText = UrlPreviewCardViewModel.ExtractTextFragment(Url);
+
+        switch (LoadPreview)
+        {
+            case null:
+                _isLoading = false;
+                return;
+        }
 
         _isLoading = true;
         _previewData = null;
 
-        _previewData = await PreviewService.GetPreviewAsync(Url);
+        _previewData = await LoadPreview(Url);
 
         _isLoading = false;
     }

@@ -128,12 +128,12 @@ public class ImportTagDataProvider(
                 foreach (var tagName in tagNames)
                 {
                     // Validate tag name
-                    if (!(TagNameRegex.IsMatch(tagName)))
+                    if (!TagNameRegex.IsMatch(tagName))
                     {
                         throw new InvalidOperationException($"不正なタグ名が含まれています: '{tagName}'");
                     }
 
-                    if (!(existingTags.TryGetValue(tagName, out Tag? tag)))
+                    if (!existingTags.TryGetValue(tagName, out Tag? tag))
                     {
                         {
                             // Tag doesn't exist, create it
@@ -148,7 +148,7 @@ public class ImportTagDataProvider(
 
                             try
                             {
-                                var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                                ReadOnlyMemory<float> embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
                                 newTag.Embedding = embedding.ToArray();
                             }
                             catch (Exception ex)
@@ -156,7 +156,7 @@ public class ImportTagDataProvider(
                                 Console.WriteLine($"Embedding generation failed: {ex.Message}");
                             }
 
-                            dbContext.Tags.Add(newTag);
+                            _ = dbContext.Tags.Add(newTag);
 
                             existingTags[tagName] = newTag;
                             currentParentTag = newTag;
@@ -178,7 +178,7 @@ public class ImportTagDataProvider(
                 }
             }
 
-            await dbContext.SaveChangesAsync();
+            _ = await dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return createdCount;

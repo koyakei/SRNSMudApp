@@ -1,10 +1,10 @@
 using SRNSMudApp.Data;
 
+// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
+
 namespace SRNSMudApp.Components.Tag;
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     添付タグ列の表示状態。
 /// </summary>
@@ -43,7 +43,7 @@ public static class TagTableViewModel
     /// </summary>
     public static IReadOnlyList<string> GetTagSearchSuggestions(IEnumerable<Tag>? sourceTags, string? value)
     {
-        var tags = sourceTags ?? [];
+        IEnumerable<Tag> tags = sourceTags ?? [];
         return string.IsNullOrEmpty(value)
             ? [.. tags.Select(t => t.Name).Distinct().Take(20)]
             : [.. tags
@@ -70,7 +70,7 @@ public static class TagTableViewModel
     /// </summary>
     public static AttachedTagsDisplay GetAttachedTagsDisplay(Tag tag, bool isExpanded)
     {
-        var allTags = GetAttachedTags(tag);
+        IReadOnlyList<TagRelationToTag> allTags = GetAttachedTags(tag);
         var hasManyTags = allTags.Count >= AttachedTagsDisplay.ManyTagsThreshold;
         var hiddenCount = hasManyTags && !isExpanded
             ? allTags.Count - AttachedTagsDisplay.DisplayLimit

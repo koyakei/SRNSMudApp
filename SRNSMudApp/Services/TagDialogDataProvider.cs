@@ -90,7 +90,7 @@ public class TagDialogDataProvider(
     {
         try
         {
-            var embedding =
+            ReadOnlyMemory<float> embedding =
                 await tagEmbeddingService.GenerateEmbeddingAsync($"{newTag.Name} {newTag.Content}");
             newTag.Embedding = embedding.ToArray();
         }
@@ -100,8 +100,8 @@ public class TagDialogDataProvider(
         }
 
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.Tags.Add(newTag);
-        await dbContext.SaveChangesAsync();
+        _ = dbContext.Tags.Add(newTag);
+        _ = await dbContext.SaveChangesAsync();
     }
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
@@ -120,7 +120,7 @@ public class TagDialogDataProvider(
         // タグ名が変更された場合などに備え、ベクトルも再生成する
         try
         {
-            var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(name);
+            ReadOnlyMemory<float> embedding = await tagEmbeddingService.GenerateEmbeddingAsync(name);
             tagToUpdate.Embedding = embedding.ToArray();
         }
         catch (Exception ex)
@@ -128,7 +128,7 @@ public class TagDialogDataProvider(
             Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
         }
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return true;
     }
 
@@ -193,7 +193,7 @@ public class TagDialogDataProvider(
     public async Task CreateTagWithoutEmbeddingAsync(Tag newTag)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.Tags.Add(newTag);
-        await dbContext.SaveChangesAsync();
+        _ = dbContext.Tags.Add(newTag);
+        _ = await dbContext.SaveChangesAsync();
     }
 }

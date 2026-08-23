@@ -42,11 +42,11 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await (tupleOption switch
         {
             None => Task.CompletedTask,
-            Some<(T entity, Tag tag)> some => (some.Value.entity.Tags.Any(t => t.Id == tagId) switch
+            Some<(T entity, Tag tag)> some => some.Value.entity.Tags.Any(t => t.Id == tagId) switch
             {
                 true => (TagPresenceState)new TagExists(),
                 false => new TagMissing()
-            }) switch
+            } switch
             {
                 TagExists => Task.CompletedTask,
                 _ => AddTagAndSaveAsync(context, some.Value.entity, some.Value.tag)
@@ -118,7 +118,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         };
 
         request.Status = TradeStatus.Rejected;
-        request.Rejection = new SRNSMudApp.Models.Unions.RejectionReason(comment ?? "");
+        request.Rejection = new RejectionReason(comment ?? "");
 
         _ = await context.SaveChangesAsync();
     }

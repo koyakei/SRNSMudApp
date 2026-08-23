@@ -52,6 +52,8 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
         _ = _ctx.Services.AddInMemoryDbFactory();
         _ctx.Services.AddScoped<TaggingContractService>();
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
+        // 却下ダイアログの起動は ITaggingRequestActions 経由で行われる
+        _ = _ctx.Services.AddScoped<ITaggingRequestActions, TaggingRequestActions>();
     }
 
     [Fact]

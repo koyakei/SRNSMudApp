@@ -2,9 +2,7 @@
 @using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
 @inject IDialogLauncher DialogLauncher
-@inject TaggingContractService TaggingContractService
-@inject ITaggingService TaggingService
-@inject ISnackbar Snackbar
+@inject ITaggingRequestActions RequestActions
 <MudTable T="TaggingRequestEntity" Items="[.. Requests.Where(r => r.Status != TradeStatus.Rejected)]" Hover="true"
           Breakpoint="Breakpoint.Sm" Elevation="0"
           @bind-SelectedItem="SelectedRequest" OnRowClick="OnRowClicked" RowClassFunc="SelectedRowClassFunc">
@@ -105,21 +103,7 @@
 
     private bool CanApprove(TaggingRequestEntity request)
     {
-        switch (request.Status)
-        {
-            case not TradeStatus.Proposed:
-                return false;
-            default:
-                switch (request.ContractType)
-                {
-                    case "Trigger":
-                        return request.RequesterUserId == _currentUserId;
-                    case "Bounty":
-                        return true; // Anyone can theoretically fulfill a bounty
-                    default:
-                        return request.TagOwnerUserId == _currentUserId;
-                }
-        }
+        return RequestActions.CanApprove(request, _currentUserId);
     }
 
     private async Task ApproveRequestAsync(TaggingRequestEntity request)
@@ -129,15 +113,9 @@
             case null: return;
         }
 
-        try
+        if (await RequestActions.ApproveAsync(request.Id, _currentUserId))
         {
-            await TaggingContractService.AcceptContractAsync(request.Id, _currentUserId);
-            Snackbar.Add("リクエストを承認しました。", Severity.Success);
             await OnRequestChanged.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"承認に失敗しました: {ex.Message}", Severity.Error);
         }
     }
 
@@ -148,25 +126,9 @@
             case null: return;
         }
 
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
-        var result = await dialog.Result;
-
-        switch (result)
+        if (await RequestActions.RejectViaDialogAsync(request.Id, _currentUserId))
         {
-            case { Canceled: false }:
-                try
-                {
-                    var comment = result.Data as string;
-                    await TaggingService.RejectRequestAsync(request.Id, _currentUserId, comment);
-                    Snackbar.Add("リクエストを却下しました。", Severity.Success);
-                    await OnRequestChanged.InvokeAsync();
-                }
-                catch (Exception ex)
-                {
-                    Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
-                }
-                break;
+            await OnRequestChanged.InvokeAsync();
         }
     }
 

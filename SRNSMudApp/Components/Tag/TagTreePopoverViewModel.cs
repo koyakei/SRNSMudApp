@@ -1,6 +1,6 @@
-namespace SRNSMudApp.Components.Tag;
-
 // 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
+
+namespace SRNSMudApp.Components.Tag;
 
 using Tag = SRNSMudApp.Data.Tag;
 
@@ -34,7 +34,7 @@ public static class TagTreePopoverViewModel
         var current = allTags.FirstOrDefault(t => t.Id == targetTag.Id);
         while (current != null)
         {
-            expanded.Add(current.Id);
+            _ = expanded.Add(current.Id);
             current = allTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
         }
 
@@ -66,7 +66,7 @@ public static class TagTreePopoverViewModel
         var rootTag = targetTag;
         while (curr != null)
         {
-            ancestors.Add(curr.Id);
+            _ = ancestors.Add(curr.Id);
             rootTag = curr;
             curr = allTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
         }
@@ -113,7 +113,7 @@ public static class TagTreePopoverViewModel
             return;
         }
 
-        foreach (var child in children)
+        foreach (Tag child in children)
         {
             if (enableExpand || isParent || isCurrent || isChild)
             {

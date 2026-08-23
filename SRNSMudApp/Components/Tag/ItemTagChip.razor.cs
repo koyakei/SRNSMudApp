@@ -7,14 +7,13 @@ using SRNSMudApp.Components.UI;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
-namespace SRNSMudApp.Components.Tag;
-
 // 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 using SRNSMudApp.Data;
 
+namespace SRNSMudApp.Components.Tag;
+
 using Item = SRNSMudApp.Data.Item;
 using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagChip のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、タグ操作・ダイアログ起動などの
@@ -99,13 +98,13 @@ public partial class ItemTagChip
             _ => false
         };
 
-        Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+        _ = Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
         return NotifyChangedAsync();
     }
 
     private Task HandleError(string error)
     {
-        Snackbar.Add(error, Severity.Error);
+        _ = Snackbar.Add(error, Severity.Error);
         return Task.CompletedTask;
     }
 
@@ -124,7 +123,7 @@ public partial class ItemTagChip
 
     private async Task ExecuteWeightUpdateAsync(int delta)
     {
-        var result = await ItemTagService.UpdateTagWeightAsync(TagRelation.Id, delta, CurrentUserId);
+        UpdateWeightResult result = await ItemTagService.UpdateTagWeightAsync(TagRelation.Id, delta, CurrentUserId);
         await (result switch
         {
             UpdateWeightResult.Success => NotifyChangedAsync(),
@@ -201,7 +200,7 @@ public partial class ItemTagChip
 
     private Task HandleSuccessfulChangeTag()
     {
-        Snackbar.Add("タグを変更しました。", Severity.Success);
+        _ = Snackbar.Add("タグを変更しました。", Severity.Success);
         _isTreePopoverOpen = false;
         return NotifyChangedAsync();
     }
@@ -286,7 +285,7 @@ public partial class ItemTagChip
 
     private Task HandleSuccessMessage(string message)
     {
-        Snackbar.Add(message, Severity.Success);
+        _ = Snackbar.Add(message, Severity.Success);
         return NotifyChangedAsync();
     }
 }

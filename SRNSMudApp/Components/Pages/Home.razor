@@ -1,9 +1,11 @@
 @page "/"
 @using System.Security.Claims
+@using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
 
 @rendermode InteractiveServer
 @inject IHomeDataProvider HomeData
+@inject ISystemTagEnsurer SystemTagEnsurer
 @inject NavigationManager NavigationManager
 
 <PageTitle>Home</PageTitle>
@@ -150,26 +152,14 @@
 
     public async Task EnsureSystemTagsExistAsync()
     {
-        await ((string.IsNullOrEmpty(_currentUserId), _currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue) switch
-        {
-            (false, false) => ExecuteEnsureSystemTagsAsync(),
-            _ => Task.CompletedTask
-        });
-    }
+        (SystemTagIds ids, bool refetch) = await SystemTagEnsurer.EnsureAsync(
+            _currentUserId, new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId));
+        _currentUserGoodTagId = ids.GoodTagId;
+        _currentUserBadTagId = ids.BadTagId;
 
-    private async Task ExecuteEnsureSystemTagsAsync()
-    {
-        SystemTagsResult result = await HomeData.EnsureSystemTagsAsync(_currentUserId);
-
-        switch (result.Created)
+        if (refetch)
         {
-            case true:
-                await FetchTagsAsync(); // Reload all tags list
-                break;
-            case false:
-                _currentUserGoodTagId = result.GoodTagId;
-                _currentUserBadTagId = result.BadTagId;
-                break;
+            await FetchTagsAsync(); // Reload all tags list
         }
     }
 

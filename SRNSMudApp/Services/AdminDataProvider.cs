@@ -67,7 +67,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                     OwnerId = userId,
                     TagRelations = []
                 };
-                context.Items.Add(newItem);
+                _ = context.Items.Add(newItem);
 
                 IEnumerable<string> tagNamesInLine =
                     values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
@@ -91,7 +91,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 importedItemCount++;
             }
 
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return importedItemCount;
@@ -114,14 +114,14 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
     public async Task CreateInvitationAsync(Invitation invitation)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        context.Invitations!.Add(invitation);
-        await context.SaveChangesAsync();
+        _ = context.Invitations!.Add(invitation);
+        _ = await context.SaveChangesAsync();
     }
 
     public async Task DeleteInvitationAsync(Invitation invitation)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        context.Invitations!.Remove(invitation);
-        await context.SaveChangesAsync();
+        _ = context.Invitations!.Remove(invitation);
+        _ = await context.SaveChangesAsync();
     }
 }

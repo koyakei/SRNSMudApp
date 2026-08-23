@@ -25,14 +25,12 @@ public union TagSearchQuery(TagNameSearch, TagWithUserSearch, IncompleteSearch, 
         }
 
         var splitParts = text.Split(" @", 2, StringSplitOptions.RemoveEmptyEntries);
-        if (splitParts.Length == 0) return new EmptySearch();
-
-        var tagName = splitParts[0];
-        if (splitParts.Length > 1)
+        if (splitParts.Length == 0)
         {
-            return new TagWithUserSearch(tagName, splitParts[1]);
+            return new EmptySearch();
         }
 
-        return new TagNameSearch(tagName);
+        var tagName = splitParts[0];
+        return splitParts.Length > 1 ? new TagWithUserSearch(tagName, splitParts[1]) : new TagNameSearch(tagName);
     }
 }

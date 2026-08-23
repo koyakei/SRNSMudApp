@@ -13,11 +13,11 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropIndex(
+        _ = migrationBuilder.DropIndex(
             name: "IX_TaggingRequestContracts_RequestItemId",
             table: "TaggingRequestContracts");
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "SourceId",
             table: "TagWeightLedgers",
             type: "int",
@@ -25,7 +25,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldClrType: typeof(int),
             oldType: "int");
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "RequestItemId",
             table: "TaggingRequestContracts",
             type: "int",
@@ -33,7 +33,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldClrType: typeof(int),
             oldType: "int");
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ConsumedRightAssetId",
             table: "TaggingRequestContracts",
             type: "int",
@@ -41,7 +41,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldClrType: typeof(int),
             oldType: "int");
 
-        migrationBuilder.CreateIndex(
+        _ = migrationBuilder.CreateIndex(
             name: "IX_TaggingRequestContracts_RequestItemId",
             table: "TaggingRequestContracts",
             column: "RequestItemId",
@@ -52,11 +52,11 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropIndex(
+        _ = migrationBuilder.DropIndex(
             name: "IX_TaggingRequestContracts_RequestItemId",
             table: "TaggingRequestContracts");
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "SourceId",
             table: "TagWeightLedgers",
             type: "int",
@@ -66,7 +66,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldType: "int",
             oldNullable: true);
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "RequestItemId",
             table: "TaggingRequestContracts",
             type: "int",
@@ -76,7 +76,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldType: "int",
             oldNullable: true);
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ConsumedRightAssetId",
             table: "TaggingRequestContracts",
             type: "int",
@@ -86,7 +86,7 @@ public partial class _20260819063906_UpdateNullableForeignKeys : Migration
             oldType: "int",
             oldNullable: true);
 
-        migrationBuilder.CreateIndex(
+        _ = migrationBuilder.CreateIndex(
             name: "IX_TaggingRequestContracts_RequestItemId",
             table: "TaggingRequestContracts",
             column: "RequestItemId",

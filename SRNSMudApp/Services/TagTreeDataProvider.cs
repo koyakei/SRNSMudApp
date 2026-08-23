@@ -44,15 +44,12 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         foreach (Tag repairedTag in repaired)
         {
             Tag? dbTag = await context.Tags.FindAsync(repairedTag.Id);
-            if (dbTag is not null)
-            {
-                dbTag.ParentTagId = null;
-            }
+            dbTag?.ParentTagId = null;
         }
 
         if (repaired.Count > 0)
         {
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
 
         return tags;
@@ -121,11 +118,11 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                         tag.ParentTagId = null;
                     }
 
-                    await context.SaveChangesAsync();
+                    _ = await context.SaveChangesAsync();
 
                     // タグ本体の削除
                     context.Tags.RemoveRange(tagsToDelete);
-                    await context.SaveChangesAsync();
+                    _ = await context.SaveChangesAsync();
 
                     hasDeleted = true;
                     deletedCount = tagsToDelete.Count;
@@ -146,8 +143,8 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     public async Task AddTagAsync(Tag tag)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        context.Tags.Add(tag);
-        await context.SaveChangesAsync();
+        _ = context.Tags.Add(tag);
+        _ = await context.SaveChangesAsync();
     }
 
     public async Task<bool> UpdateParentAsync(int tagId, int? parentTagId)
@@ -159,7 +156,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             case not null:
                 tagToUpdate.ParentTagId = parentTagId;
                 tagToUpdate.UpdatedDate = DateTime.UtcNow;
-                await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync();
                 return true;
             default:
                 return false;

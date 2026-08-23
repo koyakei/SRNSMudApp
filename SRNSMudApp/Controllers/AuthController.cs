@@ -42,7 +42,7 @@ public class AuthController(
         return await (result switch
         {
             Failure => Task.FromResult<IActionResult>(Unauthorized("Invalid token.")),
-            Success<ExternalTokenPayload> { Value: { ProviderKey: null } } => Task.FromResult<IActionResult>(Unauthorized("Invalid token.")),
+            Success<ExternalTokenPayload> { Value.ProviderKey: null } => Task.FromResult<IActionResult>(Unauthorized("Invalid token.")),
             Success<ExternalTokenPayload> success => ProcessRiskAssessmentAsync(request, success.Value),
             _ => Task.FromResult<IActionResult>(Unauthorized("Invalid token."))
         });
@@ -62,8 +62,8 @@ public class AuthController(
 
     private async Task<IActionResult> ProcessUserLoginAsync(ExternalLoginRequest request, ExternalTokenPayload payload)
     {
-        var userLoginInfo = new UserLoginInfo(request.Provider, payload.ProviderKey!, request.Provider);
-        ApplicationUser? existingUser = await _userManager.FindByLoginAsync(request.Provider, payload.ProviderKey!);
+        var userLoginInfo = new UserLoginInfo(request.Provider, payload.ProviderKey, request.Provider);
+        ApplicationUser? existingUser = await _userManager.FindByLoginAsync(request.Provider, payload.ProviderKey);
 
         existingUser = existingUser switch
         {

@@ -14,12 +14,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using Microsoft.Extensions.Http;
+
 using MudBlazor.Services;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
-
 #endregion
 
 namespace SRNSMudApp.Tests.TestSupport;
@@ -41,7 +42,14 @@ public static class BunitTestSetup
     /// </summary>
     public static IServiceCollection AddSrnsComponentServices(this IServiceCollection services)
     {
+        // ItemCard 経由で UrlPreviewCard のプレビュー取得に使用される。
+        // 個別テストで Fake ハンドラ付きインスタンスを登録する場合は上書きされる
+        _ = services.AddHttpClient();
+
         return services
+            .AddSingleton<LinkPreviewService>()
+            .AddScoped<ITaggingRequestActions, TaggingRequestActions>()
+            .AddScoped<ISystemTagEnsurer, SystemTagEnsurer>()
             .AddScoped<IDialogLauncher, DialogLauncher>()
             .AddScoped<ITagCardDataProvider, TagCardDataProvider>()
             .AddScoped<IItemCardDataProvider, ItemCardDataProvider>()

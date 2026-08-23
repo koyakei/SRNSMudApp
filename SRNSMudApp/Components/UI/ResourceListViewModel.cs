@@ -1,7 +1,7 @@
-namespace SRNSMudApp.Components.UI;
-
 // 兄弟名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
 // エイリアスを名前空間の内側に置く
+
+namespace SRNSMudApp.Components.UI;
 
 using Tag = SRNSMudApp.Data.Tag;
 

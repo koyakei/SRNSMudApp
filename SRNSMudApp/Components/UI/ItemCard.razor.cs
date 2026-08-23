@@ -11,6 +11,8 @@ using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
+// 兄弟名前空間 SRNSMudApp.Components.Tag / .Item が同名型と解決されるため、
+// エイリアスを名前空間の内側に置く
 
 // IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
 // 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
@@ -18,11 +20,8 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.UI;
 
-using Item = SRNSMudApp.Data.Item;
-// 兄弟名前空間 SRNSMudApp.Components.Tag / .Item が同名型と解決されるため、
-// エイリアスを名前空間の内側に置く
 using Tag = SRNSMudApp.Data.Tag;
-
+using Item = SRNSMudApp.Data.Item;
 /// <summary>
 ///     ItemCard のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、JS 連携・返信・投票・ダイアログ起動などの
@@ -36,6 +35,7 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private TaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
+    [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
 
     [Parameter][EditorRequired] public Item Item { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
@@ -134,7 +134,7 @@ public partial class ItemCard : IAsyncDisposable
     {
         if (elementId == $"item-card-{Item.Id}")
         {
-            OnFocus.InvokeAsync(Item.Id);
+            _ = OnFocus.InvokeAsync(Item.Id);
         }
     }
 
@@ -150,14 +150,14 @@ public partial class ItemCard : IAsyncDisposable
         }
         try
         {
-            await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
+            _ = await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
             Item.AsRequestOf.Status = TradeStatus.Canceled;
-            Snackbar.Add("リクエストを取り下げました。", Severity.Success);
+            _ = Snackbar.Add("リクエストを取り下げました。", Severity.Success);
             await NotifyDataChangedAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            _ = Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
         }
     }
 
@@ -171,14 +171,14 @@ public partial class ItemCard : IAsyncDisposable
         }
         try
         {
-            await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
+            _ = await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
             Item.AsRequestOf.Status = TradeStatus.Executed;
-            Snackbar.Add("リクエストを承認しました。", Severity.Success);
+            _ = Snackbar.Add("リクエストを承認しました。", Severity.Success);
             await NotifyDataChangedAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            _ = Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
         }
     }
 
@@ -232,7 +232,7 @@ public partial class ItemCard : IAsyncDisposable
     {
         if (string.IsNullOrEmpty(CurrentUserId))
         {
-            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
             return;
         }
 
@@ -242,9 +242,9 @@ public partial class ItemCard : IAsyncDisposable
             false => Task.CompletedTask
         });
 
-        if (!(CurrentUserGoodTagId.HasValue))
+        if (!CurrentUserGoodTagId.HasValue)
         {
-            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            _ = Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
             return;
         }
 
@@ -257,7 +257,7 @@ public partial class ItemCard : IAsyncDisposable
         switch (result.Action)
         {
             case ItemVoteAction.Removed when existingRelation != null:
-                Item.TagRelations.Remove(existingRelation);
+                _ = Item.TagRelations.Remove(existingRelation);
                 break;
             case ItemVoteAction.Updated when existingRelation != null:
                 existingRelation.Weight = result.Weight;
@@ -285,7 +285,7 @@ public partial class ItemCard : IAsyncDisposable
     {
         if (Item.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
             return;
         }
 
@@ -298,7 +298,7 @@ public partial class ItemCard : IAsyncDisposable
         {
             case { Canceled: false }:
                 await NotifyDataChangedAsync();
-                Snackbar.Add("アイテムを更新しました。", Severity.Success);
+                _ = Snackbar.Add("アイテムを更新しました。", Severity.Success);
                 break;
         }
     }
@@ -307,14 +307,14 @@ public partial class ItemCard : IAsyncDisposable
     {
         if (Item.OwnerId != CurrentUserId)
         {
-            Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
             return;
         }
 
         await ItemCardData.DeleteItemAsync(Item.Id);
         await NotifyDataChangedAsync();
 
-        Snackbar.Add("アイテムを削除しました。", Severity.Success);
+        _ = Snackbar.Add("アイテムを削除しました。", Severity.Success);
     }
 
     // --- Tag Operations ---
@@ -349,7 +349,7 @@ public partial class ItemCard : IAsyncDisposable
         var alreadyExists = Item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
         if (alreadyExists)
         {
-            Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+            _ = Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
             return;
         }
 
@@ -390,7 +390,7 @@ public partial class ItemCard : IAsyncDisposable
             Item.TagRelations.Add(newRelation);
         }
 
-        Snackbar.Add("タグを追加しました。", Severity.Success);
+        _ = Snackbar.Add("タグを追加しました。", Severity.Success);
         await NotifyDataChangedAsync();
     }
 

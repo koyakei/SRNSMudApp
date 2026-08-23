@@ -102,10 +102,10 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         foreach (TaggingRequestEntity req in rejectedRequests)
         {
             var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
-            var commentMsg = string.IsNullOrWhiteSpace((req.Rejection is SRNSMudApp.Models.Unions.RejectionReason r ? r.Reason : "")) switch
+            var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
             {
                 true => "",
-                false => $"\n理由: {(req.Rejection is SRNSMudApp.Models.Unions.RejectionReason rr ? rr.Reason : "")}"
+                false => $"\n理由: {(req.Rejection is RejectionReason rr ? rr.Reason : "")}"
             };
             var typeStr = req.RequestType switch
             {
@@ -123,7 +123,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
                     RequestId: req.Id,
                     TagName: req.RequestedTag?.Name,
                     RequestType: req.RequestType,
-                    RejectComment: (req.Rejection is SRNSMudApp.Models.Unions.RejectionReason rr2 ? rr2.Reason : ""),
+                    RejectComment: req.Rejection is RejectionReason rr2 ? rr2.Reason : "",
                     TargetItemId: req.TargetItemId,
                     TargetTagId: req.RequestedTagId
                 ),
@@ -219,7 +219,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task<int> GetUnreadCountAsync(string userId)
     {
-        var notifications = await GetUserNotificationsAsync(userId);
+        List<NotificationDto> notifications = await GetUserNotificationsAsync(userId);
         return notifications.Count(n => !n.IsRead);
     }
 

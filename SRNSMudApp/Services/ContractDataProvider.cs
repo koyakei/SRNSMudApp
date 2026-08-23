@@ -173,7 +173,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         {
             case true:
                 entity.IsActive = false;
-                await dbContext.SaveChangesAsync();
+                _ = await dbContext.SaveChangesAsync();
                 return true;
             default:
                 return false;
@@ -199,22 +199,22 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task CreatePublicOfferAsync(PublicTradeOffer offer)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.PublicTradeOffers!.Add(offer);
-        await dbContext.SaveChangesAsync();
+        _ = dbContext.PublicTradeOffers!.Add(offer);
+        _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task CreateBountyAsync(TaggingRequestEntity bounty)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.TaggingRequestEntities.Add(bounty);
-        await dbContext.SaveChangesAsync();
+        _ = dbContext.TaggingRequestEntities.Add(bounty);
+        _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.TaggingRequestEntities.Add(triggerContract);
-        await dbContext.SaveChangesAsync();
+        _ = dbContext.TaggingRequestEntities.Add(triggerContract);
+        _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task<List<RightAsset>> GetValidRightAssetsAsync(

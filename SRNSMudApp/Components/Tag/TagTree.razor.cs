@@ -11,12 +11,12 @@ using MudBlazor;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
-namespace SRNSMudApp.Components.Tag;
-
 // 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 
-using Tag = SRNSMudApp.Data.Tag;
 
+namespace SRNSMudApp.Components.Tag;
+
+using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     TagTree ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、jqTree との JS 連携・
@@ -49,7 +49,7 @@ public partial class TagTree : IAsyncDisposable
     {
         if (AuthState is not null)
         {
-            var authState = await AuthState;
+            AuthenticationState authState = await AuthState;
             _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
 
@@ -100,7 +100,7 @@ public partial class TagTree : IAsyncDisposable
     /// <summary>初期化済みの場合、jqTree 側のデータを現在のフィルタ結果で差し替える。</summary>
     private async Task ReloadTreeDataAsync()
     {
-        if (!(_isTreeInitialized))
+        if (!_isTreeInitialized)
         {
             return;
         }
@@ -145,7 +145,7 @@ public partial class TagTree : IAsyncDisposable
         {
             case null:
             case { Count: 0 }:
-                Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
+                _ = Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
                 return;
             default:
                 break;
@@ -159,23 +159,23 @@ public partial class TagTree : IAsyncDisposable
 
             if (result.UnauthorizedNames.Count > 0)
             {
-                Snackbar.Add($"削除権限がないためスキップしました: {string.Join(", ", result.UnauthorizedNames)}", Severity.Warning);
+                _ = Snackbar.Add($"削除権限がないためスキップしました: {string.Join(", ", result.UnauthorizedNames)}", Severity.Warning);
             }
 
             if (result.SystemNames.Count > 0)
             {
-                Snackbar.Add($"システムタグは削除できないためスキップしました: {string.Join(", ", result.SystemNames)}", Severity.Warning);
+                _ = Snackbar.Add($"システムタグは削除できないためスキップしました: {string.Join(", ", result.SystemNames)}", Severity.Warning);
             }
 
             if (result.HasDeleted)
             {
                 hasDeleted = true;
-                Snackbar.Add($"{result.DeletedCount}個のタグを削除しました。", Severity.Success);
+                _ = Snackbar.Add($"{result.DeletedCount}個のタグを削除しました。", Severity.Success);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"削除中にエラーが発生しました: {ex.Message}", Severity.Error);
+            _ = Snackbar.Add($"削除中にエラーが発生しました: {ex.Message}", Severity.Error);
         }
 
         if (hasDeleted)
@@ -217,7 +217,7 @@ public partial class TagTree : IAsyncDisposable
 
                     await TagTreeData.AddTagAsync(newTag);
 
-                    Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
+                    _ = Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
 
                     await LoadDataAsync();
                     StateHasChanged();
@@ -225,11 +225,11 @@ public partial class TagTree : IAsyncDisposable
                 }
                 catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.Ordinal) == true)
                 {
-                    Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
+                    _ = Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
                 }
                 catch (Exception ex)
                 {
-                    Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+                    _ = Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
                 }
                 break;
             default:
@@ -240,7 +240,7 @@ public partial class TagTree : IAsyncDisposable
     /// <summary>移動要求が無効な場合に、クライアント側のツリー状態をサーバー側の状態で復元する。</summary>
     private async Task RejectTreeMoveAsync(string message, Severity severity)
     {
-        Snackbar.Add(message, severity);
+        _ = Snackbar.Add(message, severity);
         StateHasChanged();
         await ReloadTreeDataAsync();
     }
@@ -289,12 +289,12 @@ public partial class TagTree : IAsyncDisposable
         {
             if (await TagTreeData.UpdateParentAsync(movedItem.Id, movedItem.ParentTagId))
             {
-                Snackbar.Add("タグ構造を更新しました。", Severity.Success);
+                _ = Snackbar.Add("タグ構造を更新しました。", Severity.Success);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"保存時にエラーが発生しました: {ex.Message}", Severity.Error);
+            _ = Snackbar.Add($"保存時にエラーが発生しました: {ex.Message}", Severity.Error);
         }
 
         StateHasChanged();

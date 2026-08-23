@@ -125,8 +125,8 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
         switch (followRecord)
         {
             case not null:
-                context.UserTagFollows!.Remove(followRecord);
-                await context.SaveChangesAsync();
+                _ = context.UserTagFollows!.Remove(followRecord);
+                _ = await context.SaveChangesAsync();
                 return false;
             default:
                 {
@@ -135,8 +135,8 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
                         TagId = tagId,
                         OwnerId = currentUserId
                     };
-                    context.UserTagFollows!.Add(newFollow);
-                    await context.SaveChangesAsync();
+                    _ = context.UserTagFollows!.Add(newFollow);
+                    _ = await context.SaveChangesAsync();
                     return true;
                 }
         }

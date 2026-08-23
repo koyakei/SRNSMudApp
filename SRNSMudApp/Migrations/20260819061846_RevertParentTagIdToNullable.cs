@@ -13,7 +13,7 @@ public partial class _20260819061846_RevertParentTagIdToNullable : Migration
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ParentTagId",
             table: "Tags",
             type: "int",
@@ -25,7 +25,7 @@ public partial class _20260819061846_RevertParentTagIdToNullable : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ParentTagId",
             table: "Tags",
             type: "int",

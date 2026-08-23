@@ -1,8 +1,3 @@
-#region
-
-#endregion
-
-namespace SRNSMudApp.Components.UI;
 
 // using を名前空間の内側に置くことで、兄弟名前空間 SRNSMudApp.Components.Tag よりも
 // 先に SRNSMudApp.Data の Tag 型を解決させる
@@ -12,8 +7,13 @@ using MudBlazor;
 
 using SRNSMudApp.Data;
 
-using Tag = SRNSMudApp.Data.Tag;
+#region
 
+#endregion
+
+namespace SRNSMudApp.Components.UI;
+
+using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     チップ 1 個分の表示情報。
 /// </summary>

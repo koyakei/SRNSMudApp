@@ -13,7 +13,7 @@ public partial class _20260819084332_MakeTagWeightLedgerConsumedRightAssetOption
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ConsumedRightAssetId",
             table: "TagWeightLedgers",
             type: "int",
@@ -25,7 +25,7 @@ public partial class _20260819084332_MakeTagWeightLedgerConsumedRightAssetOption
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ConsumedRightAssetId",
             table: "TagWeightLedgers",
             type: "int",

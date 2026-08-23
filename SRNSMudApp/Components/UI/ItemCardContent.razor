@@ -1,6 +1,7 @@
 @* アイテム本文の表示専用子コンポーネント。
    本文の展開/折りたたみ・URL プレビュー・投稿者/最終更新メタ情報を担い、
    オーバーフロー検知の JS インターオープンをここに集約する。 *@
+@using SRNSMudApp.Models
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -19,7 +20,7 @@
             <div class="d-flex flex-column gap-2 mb-2 mt-2">
                 @foreach (var url in _urls.Take(3))
                 {
-                    <UrlPreviewCard Url="@url"/>
+                    <UrlPreviewCard Url="@url" LoadPreview="@LoadPreview"/>
                 }
             </div>
             break;
@@ -70,6 +71,9 @@
     [Parameter] public string? OwnerId { get; set; }
     [Parameter] public string? OwnerUserName { get; set; }
     [Parameter] public DateTime UpdatedDate { get; set; }
+
+    /// <summary>リンクプレビュー取得デリゲート（UrlPreviewCard へ委譲）。</summary>
+    [Parameter] public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }
 
     private string DisplayContent => string.IsNullOrWhiteSpace(Content) ? "内容なし" : Content;
 

@@ -2,9 +2,7 @@
 @using SRNSMudApp.Services
 @inject IItemTagService ItemTagService
 @inject IHomeDataProvider HomeData
-@inject TaggingContractService TaggingContractService
-@inject ITaggingService TaggingService
-@inject ISnackbar Snackbar
+@inject ITaggingRequestActions RequestActions
 @inject IDialogLauncher DialogLauncher
 
 <MudDialog>
@@ -187,16 +185,7 @@
 
     private bool CanApprove(TaggingRequestEntity request)
     {
-        return request.Status switch
-        {
-            TradeStatus.Proposed => request.ContractType switch
-            {
-                "Trigger" => request.RequesterUserId == _currentUserId,
-                "Bounty" => true,
-                _ => request.TagOwnerUserId == _currentUserId
-            },
-            _ => false
-        };
+        return RequestActions.CanApprove(request, _currentUserId);
     }
 
     private async Task ApproveRequestAsync()
@@ -206,15 +195,9 @@
             case null: return;
         }
 
-        try
+        if (await RequestActions.ApproveAsync(TaggingRequest.Id, _currentUserId))
         {
-            await TaggingContractService.AcceptContractAsync(TaggingRequest.Id, _currentUserId);
-            Snackbar.Add("リクエストを承認しました。", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"承認に失敗しました: {ex.Message}", Severity.Error);
         }
     }
 
@@ -225,25 +208,9 @@
             case null: return;
         }
 
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
-        var result = await dialog.Result;
-
-        switch (result)
+        if (await RequestActions.RejectViaDialogAsync(TaggingRequest.Id, _currentUserId))
         {
-            case { Canceled: false }:
-                try
-                {
-                    var comment = result.Data as string;
-                    await TaggingService.RejectRequestAsync(TaggingRequest.Id, _currentUserId, comment);
-                    Snackbar.Add("リクエストを却下しました。", Severity.Success);
-                    MudDialog.Close(DialogResult.Ok(true));
-                }
-                catch (Exception ex)
-                {
-                    Snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
-                }
-                break;
+            MudDialog.Close(DialogResult.Ok(true));
         }
     }
 

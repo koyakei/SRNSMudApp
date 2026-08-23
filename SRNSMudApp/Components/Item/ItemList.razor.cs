@@ -7,14 +7,13 @@ using Microsoft.JSInterop;
 
 using SRNSMudApp.Models;
 using SRNSMudApp.Services;
+// 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
+// using を名前空間の内側に置く。namespace Item も同名型と衝突する
 
 namespace SRNSMudApp.Components.Item;
 
 using Item = SRNSMudApp.Data.Item;
-// 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
-// using を名前空間の内側に置く。namespace Item も同名型と衝突する
 using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemList ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、状態保持とサービス呼び出しはこちらに集約する。
@@ -155,8 +154,8 @@ public partial class ItemList
 
     private async Task RemoveTagFilter(TagFilter filter)
     {
-        _selectedFilters.Remove(filter);
-        _sortConditions.RemoveAll(c => c.Tag.Id == filter.Tag.Id);
+        _ = _selectedFilters.Remove(filter);
+        _ = _sortConditions.RemoveAll(c => c.Tag.Id == filter.Tag.Id);
         UpdateUrlQuery();
         await LoadDataAsync();
     }
@@ -200,7 +199,7 @@ public partial class ItemList
 
     private async Task RemoveSortCondition(SortCondition condition)
     {
-        _sortConditions.Remove(condition);
+        _ = _sortConditions.Remove(condition);
         UpdateUrlQuery();
         await LoadDataAsync();
     }

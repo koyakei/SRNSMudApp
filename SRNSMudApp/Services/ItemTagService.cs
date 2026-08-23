@@ -266,11 +266,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、Weightを変更する権限がありません。") switch
             {
                 OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
-                OperationAuthorized => ((someRel.Value.Weight == newWeight) switch
+                OperationAuthorized => (someRel.Value.Weight == newWeight) switch
                 {
                     true => (WeightComparisonState)new SameWeight(),
                     false => new DifferentWeight()
-                }) switch
+                } switch
                 {
                     SameWeight => Task.FromResult<string?>(null),
                     DifferentWeight => ExecuteSetTagWeightAsync(context, someRel.Value, newWeight, currentUserId)
@@ -332,11 +332,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             Some<TagRelation> someRel => CheckAuth(someRel.Value.OwnerId == currentUserId, "関連付けた本人ではないため、変更する権限がありません。") switch
             {
                 OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
-                OperationAuthorized => ((someRel.Value.TagId == newTagId) switch
+                OperationAuthorized => (someRel.Value.TagId == newTagId) switch
                 {
                     true => (TagComparisonState)new SameTag(),
                     false => new DifferentTag()
-                }) switch
+                } switch
                 {
                     SameTag => Task.FromResult<string?>(null),
                     DifferentTag => ProcessChangeItemTagRelation(context, someRel.Value, newTagId, itemId)
@@ -482,11 +482,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Tag> allTagsForCycleCheck)
     {
-        return await (((childTagId == parentTagId) switch
+        return await ((childTagId == parentTagId) switch
         {
             true => (TagComparisonState)new SameTag(),
             false => new DifferentTag()
-        }) switch
+        } switch
         {
             SameTag => Task.FromResult<string?>("自分自身を親にすることはできません。"),
             DifferentTag => ProcessParentTagCycleCheck(parentTagId, childTagId, currentUserId, allTagsForCycleCheck)

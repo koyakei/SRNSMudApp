@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Components.Pages;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 
 #endregion
 
@@ -24,7 +25,7 @@ public interface IHomeDataProvider
     Task<List<int>> GetFollowedTagIdsAsync(string userId);
 
     /// <summary>全タグとタグ間リレーション (Tag / TargetTag 込み) を取得する。</summary>
-    Task<(List<Data.Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync();
+    Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync();
 
     /// <summary>good / bad システムタグを取得し、無ければ作成する。</summary>
     Task<SystemTagsResult> EnsureSystemTagsAsync(string userId);
@@ -43,10 +44,10 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             .ToListAsync();
     }
 
-    public async Task<(List<Data.Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync()
+    public async Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync()
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        List<Data.Tag> tags = await context.Tags
+        List<Tag> tags = await context.Tags
             .Include(t => t.Owner)
             .AsNoTracking()
             .ToListAsync();
@@ -63,15 +64,15 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     public async Task<SystemTagsResult> EnsureSystemTagsAsync(string userId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        Data.Tag? goodTag =
+        Tag? goodTag =
             await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "good" && t.IsSystem);
-        Data.Tag? badTag =
+        Tag? badTag =
             await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem);
 
         var created = false;
         if (goodTag is null)
         {
-            goodTag = new Data.Tag
+            goodTag = new Tag
             {
                 Name = "good",
                 IsSystem = true,
@@ -79,13 +80,13 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             };
-            context.Tags.Add(goodTag);
+            _ = context.Tags.Add(goodTag);
             created = true;
         }
 
         if (badTag is null)
         {
-            badTag = new Data.Tag
+            badTag = new Tag
             {
                 Name = "bad",
                 IsSystem = true,
@@ -93,14 +94,14 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             };
-            context.Tags.Add(badTag);
+            _ = context.Tags.Add(badTag);
             created = true;
         }
 
         switch (created)
         {
             case true:
-                await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync();
                 return new SystemTagsResult(null, null, true);
             default:
                 return new SystemTagsResult(goodTag!.Id, badTag!.Id, false);
@@ -148,7 +149,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                     .ToListAsync()
             };
 
-            var target = (feedGroup.Events.Count > 0 ? feedGroup.Events[0] : null)?.Target;
+            TimelineTarget? target = (feedGroup.Events.Count > 0 ? feedGroup.Events[0] : null)?.Target;
             switch (target)
             {
                 case Models.Unions.ItemTarget it:

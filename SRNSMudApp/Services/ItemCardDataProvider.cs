@@ -76,8 +76,8 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         CreatedDate = DateTime.UtcNow,
                         UpdatedDate = DateTime.UtcNow
                     };
-                    context.TagRelations.Add(newRelation);
-                    await context.SaveChangesAsync();
+                    _ = context.TagRelations.Add(newRelation);
+                    _ = await context.SaveChangesAsync();
                     return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
                 }
             default:
@@ -91,7 +91,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                             {
                                 var prevWeightCancel = tag.CachedWeight;
                                 tag.CachedWeight += deltaCancel;
-                                context.TagWeightLedgers!.Add(new TagWeightLedger
+                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
@@ -106,7 +106,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 });
                             }
 
-                            context.TimelineEvents!.Add(new TimelineEvent
+                            _ = context.TimelineEvents!.Add(new TimelineEvent
                             {
                                 OwnerId = userId,
                                 Target = new ItemTarget(itemId),
@@ -115,8 +115,8 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 PreviousWeight = existingRelation.Weight
                             });
 
-                            context.TagRelations.Remove(existingRelation);
-                            await context.SaveChangesAsync();
+                            _ = context.TagRelations.Remove(existingRelation);
+                            _ = await context.SaveChangesAsync();
                             return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, existingRelation.Weight);
                         }
                     default:
@@ -129,7 +129,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                             {
                                 var prevWeightUpdate = tag.CachedWeight;
                                 tag.CachedWeight += deltaUpdate;
-                                context.TagWeightLedgers!.Add(new TagWeightLedger
+                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
@@ -144,7 +144,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 });
                             }
 
-                            context.TimelineEvents!.Add(new TimelineEvent
+                            _ = context.TimelineEvents!.Add(new TimelineEvent
                             {
                                 OwnerId = userId,
                                 Target = new ItemTarget(itemId),
@@ -154,7 +154,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 NewWeight = existingRelation.Weight
                             });
 
-                            await context.SaveChangesAsync();
+                            _ = await context.SaveChangesAsync();
                             return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
                         }
                 }
@@ -167,8 +167,8 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         Item? item = await context.Items.FindAsync(itemId);
         if (item is not null)
         {
-            context.Items.Remove(item);
-            await context.SaveChangesAsync();
+            _ = context.Items.Remove(item);
+            _ = await context.SaveChangesAsync();
         }
     }
 
@@ -199,7 +199,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        context.Items.Add(item);
+        _ = context.Items.Add(item);
 
         switch (initialTagIds is { Count: > 0 })
         {
@@ -221,7 +221,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                 break;
         }
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
     }
     public async Task<bool> UpdateItemContentAsync(int itemId, string content)
     {
@@ -233,7 +233,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         }
 
         itemToUpdate.Content = content;
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return true;
     }
 }

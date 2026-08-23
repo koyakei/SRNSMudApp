@@ -14,20 +14,19 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
     public override ContractPayload Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
+        JsonElement root = doc.RootElement;
 
-        if (!root.TryGetProperty("$type", out var typeProp))
-            return new EmptyPayload();
-
-        return typeProp.GetString() switch
-        {
-            nameof(GratisPayload) => root.Deserialize<GratisPayload>(options)!,
-            nameof(MutualPayload) => root.Deserialize<MutualPayload>(options)!,
-            nameof(PublicOfferPayload) => root.Deserialize<PublicOfferPayload>(options)!,
-            nameof(BountyPayload) => root.Deserialize<BountyPayload>(options)!,
-            nameof(EmptyPayload) => new EmptyPayload(),
-            _ => new EmptyPayload()
-        };
+        return !root.TryGetProperty("$type", out JsonElement typeProp)
+            ? new EmptyPayload()
+            : typeProp.GetString() switch
+            {
+                nameof(GratisPayload) => root.Deserialize<GratisPayload>(options)!,
+                nameof(MutualPayload) => root.Deserialize<MutualPayload>(options)!,
+                nameof(PublicOfferPayload) => root.Deserialize<PublicOfferPayload>(options)!,
+                nameof(BountyPayload) => root.Deserialize<BountyPayload>(options)!,
+                nameof(EmptyPayload) => new EmptyPayload(),
+                _ => new EmptyPayload()
+            };
     }
 
     public override void Write(Utf8JsonWriter writer, ContractPayload value, JsonSerializerOptions options)

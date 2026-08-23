@@ -2,28 +2,27 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace SRNSMudApp.Migrations
+namespace SRNSMudApp.Migrations;
+
+/// <inheritdoc />
+public partial class AddProposedWeightToTaggingRequestEntity : Migration
 {
     /// <inheritdoc />
-    public partial class AddProposedWeightToTaggingRequestEntity : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<int>(
-                name: "ProposedWeight",
-                table: "TaggingRequestContracts",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
-        }
+        _ = migrationBuilder.AddColumn<int>(
+            name: "ProposedWeight",
+            table: "TaggingRequestContracts",
+            type: "int",
+            nullable: false,
+            defaultValue: 0);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "ProposedWeight",
-                table: "TaggingRequestContracts");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        _ = migrationBuilder.DropColumn(
+            name: "ProposedWeight",
+            table: "TaggingRequestContracts");
     }
 }

@@ -109,18 +109,15 @@ public sealed class ItemListExportService(LinkPreviewService linkPreviewService)
         Dictionary<int, Tag> allTags,
         IReadOnlyCollection<TagRelationToTag> tagToTags)
     {
-        if (!allTags.TryGetValue(relation.TagId, out Tag? tag))
-        {
-            return null;
-        }
-
-        return new ExportTagDto
-        {
-            Name = tag.Name,
-            Content = tag.Content,
-            ParentTags = [.. CollectParentTags(tag, allTags)],
-            RelatedTags = [.. CollectRelatedTags(tag.Id, allTags, tagToTags)]
-        };
+        return !allTags.TryGetValue(relation.TagId, out Tag? tag)
+            ? null
+            : new ExportTagDto
+            {
+                Name = tag.Name,
+                Content = tag.Content,
+                ParentTags = [.. CollectParentTags(tag, allTags)],
+                RelatedTags = [.. CollectRelatedTags(tag.Id, allTags, tagToTags)]
+            };
     }
 
     private static IEnumerable<ExportTagSimpleDto> CollectParentTags(Tag tag, Dictionary<int, Tag> allTags)
@@ -138,7 +135,7 @@ public sealed class ItemListExportService(LinkPreviewService linkPreviewService)
         Dictionary<int, Tag> allTags,
         IReadOnlyCollection<TagRelationToTag> tagToTags)
     {
-        var relatedIds = tagToTags.Where(trt => trt.TargetTagId == tagId).Select(trt => trt.TagId);
+        IEnumerable<int> relatedIds = tagToTags.Where(trt => trt.TargetTagId == tagId).Select(trt => trt.TagId);
 
         return relatedIds
             .Select(id => allTags.TryGetValue(id, out Tag? attached) ? ToSimpleDto(attached) : null)
@@ -150,8 +147,8 @@ public sealed class ItemListExportService(LinkPreviewService linkPreviewService)
 
     private async Task<List<ExportLinkPreviewDto>> BuildLinkPreviewsAsync(string? content)
     {
-        var urls = ItemCardViewModel.ExtractUrls(content).Take(MaxLinkPreviewsPerItem);
-        var previews = await Task.WhenAll(urls.Select(async url =>
+        IEnumerable<string> urls = ItemCardViewModel.ExtractUrls(content).Take(MaxLinkPreviewsPerItem);
+        ExportLinkPreviewDto?[] previews = await Task.WhenAll(urls.Select(async url =>
         {
             LinkPreviewData preview = await linkPreviewService.GetPreviewAsync(url);
             return preview.IsSuccess ? ToDto(preview) : null;

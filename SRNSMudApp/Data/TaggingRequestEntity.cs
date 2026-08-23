@@ -51,7 +51,7 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
     public string ContractPayloadJson { get; set; } = string.Empty;
 
     /// <summary>ContractPayload union の JSON シリアライズ/デシリアライズ用オプション（キャッシュ）</summary>
-    private static readonly JsonSerializerOptions PayloadJsonOptions = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions PayloadJsonOptions = new()
     {
         Converters = { new ContractPayloadConverter() }
     };
@@ -59,12 +59,9 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
     [NotMapped]
     public ContractPayload Payload
     {
-        get
-        {
-            if (string.IsNullOrEmpty(ContractPayloadJson))
-                return new EmptyPayload();
-            return JsonSerializer.Deserialize<ContractPayload>(ContractPayloadJson, PayloadJsonOptions);
-        }
+        get => string.IsNullOrEmpty(ContractPayloadJson)
+            ? new EmptyPayload()
+            : JsonSerializer.Deserialize<ContractPayload>(ContractPayloadJson, PayloadJsonOptions);
         set => ContractPayloadJson = JsonSerializer.Serialize(value, PayloadJsonOptions);
     }
 

@@ -13,7 +13,7 @@ public partial class _20260819065808_RevertItemNullableForeignKeys : Migration
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "TaggingRequestEntityId",
             table: "Items",
             type: "int",
@@ -21,7 +21,7 @@ public partial class _20260819065808_RevertItemNullableForeignKeys : Migration
             oldClrType: typeof(int),
             oldType: "int");
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ParentItemId",
             table: "Items",
             type: "int",
@@ -33,7 +33,7 @@ public partial class _20260819065808_RevertItemNullableForeignKeys : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "TaggingRequestEntityId",
             table: "Items",
             type: "int",
@@ -43,7 +43,7 @@ public partial class _20260819065808_RevertItemNullableForeignKeys : Migration
             oldType: "int",
             oldNullable: true);
 
-        migrationBuilder.AlterColumn<int>(
+        _ = migrationBuilder.AlterColumn<int>(
             name: "ParentItemId",
             table: "Items",
             type: "int",

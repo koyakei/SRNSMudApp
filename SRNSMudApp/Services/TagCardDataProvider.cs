@@ -68,11 +68,11 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
         if (targetRelation is not null)
         {
-            context.TagRelationToTags.Remove(targetRelation);
+            _ = context.TagRelationToTags.Remove(targetRelation);
         }
         else
         {
-            context.TagRelationToTags.Add(new TagRelationToTag
+            _ = context.TagRelationToTags.Add(new TagRelationToTag
             {
                 TargetTagId = tagId,
                 TagId = targetSystemTagId,
@@ -82,11 +82,11 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
             if (oppositeRelation is not null)
             {
-                context.TagRelationToTags.Remove(oppositeRelation);
+                _ = context.TagRelationToTags.Remove(oppositeRelation);
             }
         }
 
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
     }
 
     public async Task<TagCardOperationResult> AddTagToTagAsync(
@@ -111,8 +111,8 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             OwnerId = ownerId
         };
 
-        context.Set<TagRelationToTag>().Add(newRelation);
-        context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.Set<TagRelationToTag>().Add(newRelation);
+        _ = context.TimelineEvents!.Add(new TimelineEvent
         {
             OwnerId = ownerId,
             Target = new TagTarget(targetTagId),
@@ -120,14 +120,14 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             EventType = "Insert",
             NewWeight = 1
         });
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
 
         Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
         if (tagFromDb is not null)
         {
             var prevWeight = tagFromDb.CachedWeight;
             tagFromDb.CachedWeight += 1;
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
@@ -140,7 +140,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 Reason = "タグの新規追加",
                 OwnerId = ownerId
             });
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
 
         return TagCardOperationResult.Success;
@@ -159,7 +159,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 {
                     var prevWeight = tag.CachedWeight;
                     tag.CachedWeight -= entity.Weight;
-                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    _ = context.TagWeightLedgers!.Add(new TagWeightLedger
                     {
                         TagId = tag.Id,
                         TagNameSnapshot = tag.Name,
@@ -174,8 +174,8 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     });
                 }
 
-                context.Remove(entity);
-                context.TimelineEvents!.Add(new TimelineEvent
+                _ = context.Remove(entity);
+                _ = context.TimelineEvents!.Add(new TimelineEvent
                 {
                     OwnerId = ownerId,
                     Target = new TagTarget(entity.TargetTagId),
@@ -183,7 +183,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     EventType = "Delete",
                     PreviousWeight = entity.Weight
                 });
-                await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync();
                 return TagCardOperationResult.Success;
             default:
                 return TagCardOperationResult.NotFound;
@@ -206,7 +206,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         entity.UpdatedDate = DateTime.UtcNow;
 
         await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによる直接ウェイト変更");
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return TagCardOperationResult.Success;
     }
 
@@ -227,7 +227,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         entity.UpdatedDate = DateTime.UtcNow;
 
         await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによるWeightの一括変更");
-        await context.SaveChangesAsync();
+        _ = await context.SaveChangesAsync();
         return TagCardOperationResult.Success;
     }
 
@@ -252,7 +252,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             case not null:
                 entity.TagId = newTagId;
                 entity.UpdatedDate = DateTime.UtcNow;
-                await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync();
                 return TagCardOperationResult.Success;
             default:
                 return TagCardOperationResult.NotFound;
@@ -276,7 +276,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
                 entity.ParentTagId = parentTagId;
                 entity.UpdatedDate = DateTime.UtcNow;
-                await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync();
                 return TagCardOperationResult.Success;
             default:
                 return TagCardOperationResult.NotFound;
@@ -295,7 +295,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         {
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight += delta;
-            context.TagWeightLedgers.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -309,7 +309,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 OwnerId = ownerId
             });
 
-            context.TimelineEvents.Add(new TimelineEvent
+            _ = context.TimelineEvents.Add(new TimelineEvent
             {
                 OwnerId = ownerId,
                 Target = new TagTarget(entity.TargetTagId),

@@ -8,16 +8,16 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
+// 兄弟名前空間 SRNSMudApp.Components.Tag が同名型と解決されるため、
+// エイリアスを名前空間の内側に置く
+
 // IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
 // 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
 #pragma warning disable IDE0010, IDE0072
 
 namespace SRNSMudApp.Components.UI;
 
-// 兄弟名前空間 SRNSMudApp.Components.Tag が同名型と解決されるため、
-// エイリアスを名前空間の内側に置く
 using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     TagCard のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、JS 連携・投票・タグ操作・ダイアログ起動などの
@@ -53,7 +53,7 @@ public partial class TagCard : IAsyncDisposable
     {
         if (elementId == $"tag-card-{Tag.Id}")
         {
-            OnFocus.InvokeAsync(Tag.Id);
+            _ = OnFocus.InvokeAsync(Tag.Id);
         }
     }
 
@@ -151,7 +151,7 @@ public partial class TagCard : IAsyncDisposable
     {
         if (string.IsNullOrEmpty(CurrentUserId))
         {
-            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
             return;
         }
 
@@ -162,7 +162,7 @@ public partial class TagCard : IAsyncDisposable
 
         if (!CurrentUserGoodTagId.HasValue || !CurrentUserBadTagId.HasValue)
         {
-            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            _ = Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
             return;
         }
 
@@ -211,10 +211,10 @@ public partial class TagCard : IAsyncDisposable
         switch (result)
         {
             case TagCardOperationResult.AlreadyExists:
-                Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+                _ = Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
                 return;
             case TagCardOperationResult.Success:
-                Snackbar.Add("タグを追加しました。", Severity.Success);
+                _ = Snackbar.Add("タグを追加しました。", Severity.Success);
                 await NotifyChangedAsync();
                 break;
             case TagCardOperationResult.NotFound:
@@ -225,9 +225,9 @@ public partial class TagCard : IAsyncDisposable
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
     {
-        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
+        if (!TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
             return;
         }
 
@@ -235,7 +235,7 @@ public partial class TagCard : IAsyncDisposable
         switch (result)
         {
             case TagCardOperationResult.Success:
-                Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
+                _ = Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
                 await NotifyChangedAsync();
                 break;
             case TagCardOperationResult.NotFound:
@@ -246,9 +246,9 @@ public partial class TagCard : IAsyncDisposable
 
     private async Task UpdateTagToTagWeightAsync(TagRelationToTag relation, int delta)
     {
-        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
+        if (!TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
             return;
         }
 
@@ -267,9 +267,9 @@ public partial class TagCard : IAsyncDisposable
 
     private async Task EditTagToTagWeightAsync(TagRelationToTag relation)
     {
-        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
+        if (!TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
         {
-            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
             return;
         }
 
@@ -311,9 +311,9 @@ public partial class TagCard : IAsyncDisposable
             case true: return;
         }
 
-        if (!(TagCardViewModel.IsRelationOwner(oldRelation.OwnerId, CurrentUserId)))
+        if (!TagCardViewModel.IsRelationOwner(oldRelation.OwnerId, CurrentUserId))
         {
-            Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
+            _ = Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
             return;
         }
 
@@ -322,10 +322,10 @@ public partial class TagCard : IAsyncDisposable
         switch (result)
         {
             case TagCardOperationResult.AlreadyExists:
-                Snackbar.Add("変更先のタグは既に追加されています。", Severity.Warning);
+                _ = Snackbar.Add("変更先のタグは既に追加されています。", Severity.Warning);
                 return;
             case TagCardOperationResult.Success:
-                Snackbar.Add("タグを変更しました。", Severity.Success);
+                _ = Snackbar.Add("タグを変更しました。", Severity.Success);
                 ClosePopover();
                 await NotifyChangedAsync();
                 break;
@@ -348,13 +348,13 @@ public partial class TagCard : IAsyncDisposable
     {
         if (TagCardViewModel.IsSelfParent(parentTag, childTag))
         {
-            Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
+            _ = Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
             return;
         }
 
         if (TagCardViewModel.HasParentCycle(parentTag, childTag, AllTags))
         {
-            Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
+            _ = Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
             return;
         }
 
@@ -363,10 +363,10 @@ public partial class TagCard : IAsyncDisposable
         switch (result)
         {
             case TagCardOperationResult.NotOwner:
-                Snackbar.Add("対象タグの作成者ではないため、親タグを変更する権限がありません。", Severity.Error);
+                _ = Snackbar.Add("対象タグの作成者ではないため、親タグを変更する権限がありません。", Severity.Error);
                 return;
             case TagCardOperationResult.Success:
-                Snackbar.Add("子タグとして設定しました。", Severity.Success);
+                _ = Snackbar.Add("子タグとして設定しました。", Severity.Success);
                 await NotifyChangedAsync();
                 break;
             case TagCardOperationResult.NotFound:

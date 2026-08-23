@@ -8,17 +8,16 @@ public sealed class TimelineTargetConverter : JsonConverter<TimelineTarget>
     public override TimelineTarget Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
+        JsonElement root = doc.RootElement;
 
-        if (!root.TryGetProperty("$type", out var typeProp))
-            return new ItemTarget(0);
-
-        return typeProp.GetString() switch
-        {
-            nameof(ItemTarget) => root.Deserialize<ItemTarget>(options)!,
-            nameof(TagTarget) => root.Deserialize<TagTarget>(options)!,
-            _ => new ItemTarget(0)
-        };
+        return !root.TryGetProperty("$type", out JsonElement typeProp)
+            ? new ItemTarget(0)
+            : typeProp.GetString() switch
+            {
+                nameof(ItemTarget) => root.Deserialize<ItemTarget>(options)!,
+                nameof(TagTarget) => root.Deserialize<TagTarget>(options)!,
+                _ => new ItemTarget(0)
+            };
     }
 
     public override void Write(Utf8JsonWriter writer, TimelineTarget value, JsonSerializerOptions options)

@@ -1,10 +1,10 @@
 @using System.Security.Claims
-@using System.Text.RegularExpressions
 @using Microsoft.AspNetCore.Identity
 @rendermode InteractiveServer
 
 @namespace SRNSMudApp.Components.Item
 
+@using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
 @inject IItemCardDataProvider ItemCardData
 @inject NavigationManager NavigationManager
@@ -39,7 +39,7 @@
 
                         @* 抽出したURLのプレビューを表示 *@
                         @{
-                            var urls = ExtractUrls(_newItem.Content);
+                            var urls = ItemCardViewModel.ExtractUrls(_newItem.Content);
                         }
                         @switch (urls.Any())
                         {
@@ -107,74 +107,37 @@
 
     private async Task HandleValidSubmit()
     {
-        switch (string.IsNullOrWhiteSpace(_newItem!.Content))
+        if (string.IsNullOrWhiteSpace(_newItem!.Content))
         {
-            case false:
-                try
-                {
-                    await ItemCardData.CreateItemAsync(
-                        _newItem, InitialTags?.Select(t => t.Id).ToList());
+            return;
+        }
 
-                    _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
+        try
+        {
+            await ItemCardData.CreateItemAsync(
+                _newItem, InitialTags?.Select(t => t.Id).ToList());
 
-                    Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
+            _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
 
-                    switch (OnItemAdded.HasDelegate)
-                    {
-                        case true:
-                            await OnItemAdded.InvokeAsync();
-                            break;
-                        case false:
-                            NavigationManager.NavigateTo(NavigationManager.Uri, true);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    var msg = $"[AddItem ERROR] {ex}";
-                    Console.WriteLine(msg);
-                    File.WriteAllText("/tmp/additem_error.txt", msg);
-                    Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
-                }
-                break;
-            case true:
-                Console.WriteLine("Empty content");
-                break;
+            Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
+
+            if (OnItemAdded.HasDelegate)
+            {
+                await OnItemAdded.InvokeAsync();
+            }
+            else
+            {
+                NavigationManager.NavigateTo(NavigationManager.Uri, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
         }
     }
 
     private void HandleInvalidSubmit(EditContext context)
     {
-        Console.WriteLine("[AddItem] Form is INVALID. Validation messages:");
-        foreach (var msg in context.GetValidationMessages())
-        {
-            Console.WriteLine(msg);
-        }
-
-        File.WriteAllText("/tmp/additem_invalid.txt", string.Join("\n", context.GetValidationMessages()));
+        Snackbar.Add("入力内容を確認してください。", Severity.Warning);
     }
-
-    private static readonly Regex UrlRegex = new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)");
-
-    private static List<string> ExtractUrls(string? text)
-    {
-        switch (string.IsNullOrWhiteSpace(text))
-        {
-            case true: return [];
-        }
-        var results = new List<string>();
-        var matches = UrlRegex.Matches(text);
-        foreach (Match match in matches)
-        {
-            switch (!results.Contains(match.Value))
-            {
-                case true:
-                    results.Add(match.Value);
-                    break;
-            }
-        }
-
-        return results;
-    }
-
 }

@@ -495,3 +495,12 @@ testsprite_tests/tmp/config.json
 .nuget/
 *.py
 *.csx
+# Workspace hygiene: ログ・一時成果物・マシン固有ファイルを追跡しない
+*.log
+*.log.*
+build_output.txt
+test_errors*.txt
+arning*
+Library/
+patch_*.sh
+print_test.cs

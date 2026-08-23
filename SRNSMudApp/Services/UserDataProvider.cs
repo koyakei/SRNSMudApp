@@ -92,7 +92,7 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
-        var query = dbContext.Users.AsQueryable();
+        IQueryable<ApplicationUser> query = dbContext.Users.AsQueryable();
 
         return await (string.IsNullOrEmpty(value) switch
         {

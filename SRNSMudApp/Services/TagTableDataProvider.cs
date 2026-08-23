@@ -14,7 +14,7 @@ namespace SRNSMudApp.Services;
 /// </summary>
 public interface ITagTableDataProvider
 {
-    Task<List<Data.Tag>> GetAllTagsAsync();
+    Task<List<Tag>> GetAllTagsAsync();
 
     /// <summary>タグ間リレーションを追加する。既存の場合は <see cref="TagCardOperationResult.AlreadyExists" />。</summary>
     Task<TagCardOperationResult> AddRelationAsync(int targetTagId, int selectedTagId, string ownerId);
@@ -28,7 +28,7 @@ public interface ITagTableDataProvider
 
 public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagTableDataProvider
 {
-    public async Task<List<Data.Tag>> GetAllTagsAsync()
+    public async Task<List<Tag>> GetAllTagsAsync()
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.Tags.AsNoTracking().ToListAsync();
@@ -44,7 +44,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             return TagCardOperationResult.AlreadyExists;
         }
 
-        var newRelation = new Data.TagRelationToTag
+        var newRelation = new TagRelationToTag
         {
             TargetTagId = targetTagId,
             TagId = selectedTagId,
@@ -52,15 +52,15 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             OwnerId = ownerId
         };
 
-        context.Set<Data.TagRelationToTag>().Add(newRelation);
-        await context.SaveChangesAsync();
+        _ = context.Set<TagRelationToTag>().Add(newRelation);
+        _ = await context.SaveChangesAsync();
 
-        Data.Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
+        Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
         if (tagFromDb is not null)
         {
             var prevWeight = tagFromDb.CachedWeight;
             tagFromDb.CachedWeight += 1;
-            context.TagWeightLedgers!.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
@@ -73,7 +73,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                 Reason = "タグにタグを追加",
                 OwnerId = ownerId
             });
-            await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
         }
 
         return TagCardOperationResult.Success;
@@ -82,7 +82,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<TagCardOperationResult> RemoveRelationAsync(int relationId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        Data.TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
+        TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
             .FirstOrDefaultAsync(tr => tr.Id == relationId);
         if (entity is null)
         {
@@ -91,10 +91,10 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
         if (entity.Tag is not null)
         {
-            Data.Tag tag = entity.Tag;
+            Tag tag = entity.Tag;
             var prevWeight = tag.CachedWeight;
             tag.CachedWeight -= entity.Weight;
-            context.TagWeightLedgers.Add(new TagWeightLedger
+            _ = context.TagWeightLedgers.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
@@ -109,20 +109,20 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             });
         }
 
-        context.Remove(entity);
-        await context.SaveChangesAsync();
+        _ = context.Remove(entity);
+        _ = await context.SaveChangesAsync();
         return TagCardOperationResult.Success;
     }
 
     public async Task<bool> DeleteTagAsync(int tagId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        Data.Tag? tagToDelete = await context.Tags.FindAsync(tagId);
+        Tag? tagToDelete = await context.Tags.FindAsync(tagId);
         switch (tagToDelete)
         {
             case not null:
-                context.Tags.Remove(tagToDelete);
-                await context.SaveChangesAsync();
+                _ = context.Tags.Remove(tagToDelete);
+                _ = await context.SaveChangesAsync();
                 return true;
             default:
                 return false;

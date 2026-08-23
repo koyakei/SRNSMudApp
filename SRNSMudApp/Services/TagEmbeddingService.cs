@@ -10,7 +10,7 @@ public class TagEmbeddingService(LocalEmbedder embedder) : ITagEmbeddingService
 {
     public async Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string text)
     {
-        var embedding = await Task.Run(() => embedder.Embed(text));
+        EmbeddingF32 embedding = await Task.Run(() => embedder.Embed(text));
         return embedding.Values;
     }
 }

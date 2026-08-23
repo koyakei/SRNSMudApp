@@ -96,6 +96,8 @@ builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
 // Register TaggingService
 builder.Services.AddTransient<ITaggingService, TaggingService>();
+builder.Services.AddScoped<ITaggingRequestActions, TaggingRequestActions>();
+builder.Services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
 
 builder.Services.AddScoped<INotificationService, NotificationService>();
 

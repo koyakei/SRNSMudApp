@@ -2,15 +2,15 @@
 
 using System.Text.Json;
 
+// 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
+// using を名前空間の内側に置く
+
+
 #endregion
 
 namespace SRNSMudApp.Components.Tag;
 
-// 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
-// using を名前空間の内側に置く
-
 using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     TagTree コンポーネントに含まれる純粋な表示・ツリー操作ロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
@@ -36,7 +36,7 @@ public static class TagTreeViewModel
 
         foreach (Tag tag in baseTags)
         {
-            resultIds.Add(tag.Id);
+            _ = resultIds.Add(tag.Id);
 
             Tag current = tag;
             var stopAncestors = false;
@@ -44,7 +44,7 @@ public static class TagTreeViewModel
             {
                 Tag? parent = tags.FirstOrDefault(t => t.Id == current.ParentTagId);
                 stopAncestors = parent == null || !resultIds.Add(parent.Id);
-                if (!(stopAncestors))
+                if (!stopAncestors)
                 {
                     current = parent!;
                 }
@@ -146,7 +146,7 @@ public static class TagTreeViewModel
 
             while (current != null && !recursionStack.Contains(current.Id) && !visited.Contains(current.Id))
             {
-                recursionStack.Add(current.Id);
+                _ = recursionStack.Add(current.Id);
                 path.Add(current);
                 current = current.ParentTagId != null ? tags.FirstOrDefault(t => t.Id == current.ParentTagId) : null;
             }
@@ -163,8 +163,8 @@ public static class TagTreeViewModel
 
             foreach (Tag p in path)
             {
-                recursionStack.Remove(p.Id);
-                visited.Add(p.Id);
+                _ = recursionStack.Remove(p.Id);
+                _ = visited.Add(p.Id);
             }
         }
 

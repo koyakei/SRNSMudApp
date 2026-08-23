@@ -94,11 +94,10 @@ public class ItemListDataProvider(
                 .Take(10)
                 .ToList();
 
-            return textMatches.Concat(vectorMatches)
+            return [.. textMatches.Concat(vectorMatches)
                 .Select(t => t.Name + " @") // 末尾に " @" を付与
                 .Distinct()
-                .Take(10)
-                .ToList();
+                .Take(10)];
         }
         catch
         {
@@ -136,7 +135,7 @@ public class ItemListDataProvider(
         return (users.Count == 0 && string.IsNullOrWhiteSpace(userSearch)) switch
         {
             true => [tagName + " @"],
-            false => users.Select(u => tagName + " @" + u).ToList()
+            false => [.. users.Select(u => tagName + " @" + u)]
         };
     }
 
@@ -229,18 +228,13 @@ public class ItemListDataProvider(
         foreach (ItemListSort sort in sorts)
         {
             var targetId = sort.TagId;
-            if (orderedQuery == null)
-            {
-                orderedQuery = sort.Ascending
+            orderedQuery = orderedQuery == null
+                ? sort.Ascending
                     ? query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
-            else
-            {
-                orderedQuery = sort.Ascending
+                    : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : sort.Ascending
                     ? orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
                     : orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
         }
 
         return orderedQuery ?? query.OrderByDescending(i => i.UpdatedDate);
@@ -258,18 +252,13 @@ public class ItemListDataProvider(
         foreach (ItemListSort sort in sorts)
         {
             var targetId = sort.TagId;
-            if (orderedQuery == null)
-            {
-                orderedQuery = sort.Ascending
+            orderedQuery = orderedQuery == null
+                ? sort.Ascending
                     ? query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
-            else
-            {
-                orderedQuery = sort.Ascending
+                    : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : sort.Ascending
                     ? orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
                     : orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-            }
         }
 
         return orderedQuery ?? query.OrderByDescending(t => t.UpdatedDate);

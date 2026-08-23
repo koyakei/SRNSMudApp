@@ -1,11 +1,11 @@
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
+// 親名前空間 Pages と同名型の衝突を避けるため、エイリアスを置く
+
 namespace SRNSMudApp.Components.Pages;
 
-// 親名前空間 Pages と同名型の衝突を避けるため、エイリアスを置く
 using Item = SRNSMudApp.Data.Item;
-
 /// <summary>
 ///     NotificationsPage コンポーネントに含まれる純粋なロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
@@ -70,8 +70,8 @@ public static class NotificationsViewModel
     /// </summary>
     public static string GetRelativeTime(DateTimeOffset dateTime, DateTimeOffset? now = null)
     {
-        var current = now ?? DateTimeOffset.UtcNow;
-        var timeSpan = current - dateTime;
+        DateTimeOffset current = now ?? DateTimeOffset.UtcNow;
+        TimeSpan timeSpan = current - dateTime;
         return timeSpan switch
         {
             _ when timeSpan <= TimeSpan.FromSeconds(60) => $"{timeSpan.Seconds}秒前",
