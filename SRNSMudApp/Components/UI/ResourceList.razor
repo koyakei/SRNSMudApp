@@ -1,4 +1,5 @@
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IHomeDataProvider HomeData
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @using System.Security.Claims
@@ -97,16 +98,9 @@
 
     private async Task FetchTagsAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _allTags = await context.Tags
-            .AsNoTracking()
-            .ToListAsync();
-
-        _allTagRelationsToTags = await context.TagRelationToTags
-            .Include(tr => tr.Tag)
-            .Include(tr => tr.TargetTag)
-            .AsNoTracking()
-            .ToListAsync();
+        (List<Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
+        _allTags = tags;
+        _allTagRelationsToTags = relations;
 
         switch (string.IsNullOrEmpty(_currentUserId))
         {
@@ -213,38 +207,16 @@
             case true: return;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
-        var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+        SystemTagsResult result = await HomeData.EnsureSystemTagsAsync(_currentUserId);
 
-        var created = false;
-        switch (goodTag)
-        {
-            case null:
-                goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-                context.Tags.Add(goodTag);
-                created = true;
-                break;
-        }
-
-        switch (badTag)
-        {
-            case null:
-                badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow };
-                context.Tags.Add(badTag);
-                created = true;
-                break;
-        }
-
-        switch (created)
+        switch (result.Created)
         {
             case true:
-                await context.SaveChangesAsync();
                 await FetchTagsAsync();
                 break;
             case false:
-                _currentUserGoodTagId = goodTag.Id;
-                _currentUserBadTagId = badTag.Id;
+                _currentUserGoodTagId = result.GoodTagId;
+                _currentUserBadTagId = result.BadTagId;
                 break;
         }
     }
