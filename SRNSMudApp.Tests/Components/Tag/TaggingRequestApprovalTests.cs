@@ -7,6 +7,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
+
+using SRNSMudApp.Tests.TestSupport;
 using Moq;
 
 using Microsoft.AspNetCore.Components.Authorization;
@@ -40,7 +42,7 @@ public class TaggingRequestApprovalTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.Services.AddAuthorizationCore();
 
         var authState = CreateAuthState(TagOwnerId);

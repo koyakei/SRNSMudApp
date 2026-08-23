@@ -12,7 +12,7 @@
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
     <MudPaper Elevation="1" Class="pa-4">
@@ -291,7 +291,7 @@
         if (_userId == null) return;
         
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<SRNSMudApp.Components.UI.RejectRequestDialog>("リクエストを却下", options);
+        var dialog = await DialogLauncher.ShowAsync<SRNSMudApp.Components.UI.RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)

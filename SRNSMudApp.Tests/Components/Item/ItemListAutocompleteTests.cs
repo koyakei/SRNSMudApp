@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +41,7 @@ public class ItemListAutocompleteTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
 
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // ItemList 配下の AddItem / ResourceList / AuthorizeView が認証カスケードを必要とする。
         // AuthorizeView のため bUnit の認可テストダブルを使用し、AddItem 用に NameIdentifier クレームを付与する

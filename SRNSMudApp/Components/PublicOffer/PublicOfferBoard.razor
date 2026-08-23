@@ -6,7 +6,7 @@
 @attribute [Authorize]
 
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 @inject TaggingContractService ContractService
 
@@ -122,7 +122,7 @@
     private async Task OpenCreateDialog()
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<CreatePublicOfferDialog>("公開オファーの作成", options);
+        var dialog = await DialogLauncher.ShowAsync<CreatePublicOfferDialog>("公開オファーの作成", options);
         var result = await dialog.Result;
 
         switch (!result.Canceled)
@@ -137,7 +137,7 @@
     {
         var parameters = new DialogParameters<TriggerPublicOfferDialog> { { x => x.Offer, offer } };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<TriggerPublicOfferDialog>("オファーに応じる", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<TriggerPublicOfferDialog>("オファーに応じる", parameters, options);
         var result = await dialog.Result;
 
         switch (!result.Canceled && result.Data is int)

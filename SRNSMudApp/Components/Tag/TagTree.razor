@@ -4,7 +4,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 @using System.Security.Claims
 @using System.Text.Json
@@ -404,7 +404,7 @@
             case true: return;
         }
 
-        var dialog = await DialogService.ShowAsync<TagCreateChildDialog>("子タグの追加");
+        var dialog = await DialogLauncher.ShowAsync<TagCreateChildDialog>("子タグの追加");
         var result = await dialog.Result;
 
         switch (result)

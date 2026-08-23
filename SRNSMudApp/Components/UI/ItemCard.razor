@@ -1,5 +1,5 @@
 @inject IItemTagService ItemTagService
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
@@ -639,7 +639,7 @@
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var parameters = new DialogParameters { ["Item"] = Item };
-        var dialog = await DialogService.ShowAsync<ItemEditDialog>("アイテムの編集", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<ItemEditDialog>("アイテムの編集", parameters, options);
         var result = await dialog.Result;
 
         switch (result)
@@ -680,7 +680,7 @@
     private async Task OnAddTagClicked()
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<TagAddDialog>("タグの追加", options);
+        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("タグの追加", options);
         var result = await dialog.Result;
 
         switch (result)
@@ -728,7 +728,7 @@
             { x => x.WeightDelta, 1 }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
         var result = await dialog.Result;
         
         switch (result)

@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -44,7 +46,7 @@ public class ItemListExportTests : IAsyncDisposable
     public ItemListExportTests()
     {
         _ctx = new BunitContext();
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // ItemList 配下の AddItem / ResourceList / AuthorizeView が認証カスケードを必要とする
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();

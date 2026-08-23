@@ -1,7 +1,7 @@
 @using System.Security.Claims
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager NavigationManager
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 
 @switch (ShowHeader)
@@ -252,7 +252,7 @@
     private async Task OnAddTagToTagClicked(Tag targetTag)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<TagAddDialog>("タグにタグを追加", options);
+        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("タグにタグを追加", options);
         var result = await dialog.Result;
 
         await (result switch
@@ -403,7 +403,7 @@
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var parameters = new DialogParameters { ["Tag"] = tag };
 
-        var dialog = await DialogService.ShowAsync<TagEditDialog>("タグの編集", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<TagEditDialog>("タグの編集", parameters, options);
         var result = await dialog.Result;
 
         switch (result)

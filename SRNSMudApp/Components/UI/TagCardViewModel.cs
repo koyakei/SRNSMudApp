@@ -1,0 +1,186 @@
+#region
+
+#endregion
+
+namespace SRNSMudApp.Components.UI;
+
+// using を名前空間の内側に置くことで、兄弟名前空間 SRNSMudApp.Components.Tag よりも
+// 先に SRNSMudApp.Data の Tag 型を解決させる
+using MudBlazor;
+
+using SRNSMudApp.Data;
+
+using Tag = SRNSMudApp.Data.Tag;
+
+/// <summary>
+///     チップ 1 個分の表示情報。
+/// </summary>
+public record TagCardChipDisplayInfo
+{
+    public bool IsDeleted { get; init; }
+    public bool IsInserted { get; init; }
+    public bool IsUpdated { get; init; }
+    public bool WeightIncreased { get; init; }
+    public string BackgroundColor { get; init; } = "#FFF9C4";
+    public string TextColor { get; init; } = "#5C4B00";
+    public string DisplayWeight { get; init; } = "";
+    public Color AddButtonColor { get; init; } = Color.Inherit;
+}
+
+/// <summary>
+///     タグチップ一覧の表示計算結果。
+/// </summary>
+public record TagCardDisplayList(
+    List<TagRelationToTag> TagsToDisplay,
+    bool HasManyTags,
+    int HiddenCount);
+
+/// <summary>
+///     TagCard コンポーネントに含まれる純粋な表示ロジックを切り出した ViewModel。
+///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
+/// </summary>
+public static class TagCardViewModel
+{
+    public const int DisplayLimit = 4;
+    private const int HasManyThreshold = 5;
+
+    private static readonly string[] ChipBackgrounds = ["#EEEDFE"];
+    private static readonly string[] ChipTextColors = ["#26215C"];
+
+    /// <summary>good / bad システムタグへのリレーション数からスコアを計算する。</summary>
+    public static int GetTagScore(Tag tag)
+    {
+        var goodCount =
+            tag.TargetTagRelations?.Count(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true) ?? 0;
+        var badCount =
+            tag.TargetTagRelations?.Count(tr => tr.Tag?.Name == "bad" && tr.Tag?.IsSystem == true) ?? 0;
+        return goodCount - badCount;
+    }
+
+    public static bool IsTagUpvoted(Tag tag, int? currentUserGoodTagId, string currentUserId)
+    {
+        return currentUserGoodTagId.HasValue &&
+               tag.TargetTagRelations?.Any(tr =>
+                   tr.TagId == currentUserGoodTagId.Value && tr.OwnerId == currentUserId) == true;
+    }
+
+    public static bool IsTagDownvoted(Tag tag, int? currentUserBadTagId, string currentUserId)
+    {
+        return currentUserBadTagId.HasValue &&
+               tag.TargetTagRelations?.Any(tr =>
+                   tr.TagId == currentUserBadTagId.Value && tr.OwnerId == currentUserId) == true;
+    }
+
+    /// <summary>
+    ///     表示対象のタグリレーション一覧を構築する。
+    ///     システムタグを除外し、削除イベントがあれば仮想的なリレーションとして追加する。
+    /// </summary>
+    public static TagCardDisplayList BuildDisplayList(Tag tag, List<TimelineEvent>? highlightEvents, bool areTagsExpanded)
+    {
+        List<TagRelationToTag> allTags = tag.TargetTagRelations?
+            .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+            .OrderByDescending(tr => tr.Weight)
+            .ToList() ?? [];
+
+        // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelationToTag としてリストに追加して表示する
+        switch (highlightEvents)
+        {
+            case not null:
+                foreach (TimelineEvent ev in highlightEvents.Where(e => e.EventType == "Delete"))
+                {
+                    switch (ev.FollowedTag != null && allTags.All(t => t.TagId != ev.FollowedTagId))
+                    {
+                        case true:
+                            allTags.Add(new TagRelationToTag
+                            {
+                                TagId = ev.FollowedTagId,
+                                Tag = ev.FollowedTag,
+                                Weight = ev.PreviousWeight,
+                                OwnerId = ev.OwnerId // fake owner
+                            });
+                            break;
+                    }
+                }
+
+                break;
+        }
+
+        var hasManyTags = allTags.Count >= HasManyThreshold;
+        List<TagRelationToTag> tagsToDisplay =
+            areTagsExpanded || !hasManyTags ? allTags : [.. allTags.Take(DisplayLimit)];
+        var hiddenCount = hasManyTags ? allTags.Count - DisplayLimit : 0;
+
+        return new TagCardDisplayList(tagsToDisplay, hasManyTags, hiddenCount);
+    }
+
+    /// <summary>チップ 1 個分の色・Weight 表示などの表示情報を計算する。</summary>
+    public static TagCardChipDisplayInfo GetChipDisplayInfo(
+        TagRelationToTag relation,
+        TimelineEvent? highlightEvent,
+        bool isMyTag,
+        int index)
+    {
+        var isDeleted = highlightEvent?.EventType == "Delete";
+        var isInserted = highlightEvent?.EventType == "Insert";
+        var isUpdated = highlightEvent?.EventType == "Update";
+        var weightIncreased = highlightEvent != null && highlightEvent.NewWeight > highlightEvent.PreviousWeight;
+
+        var bgColor = isDeleted
+            ? "#E0E0E0"
+            : highlightEvent != null
+                ? "#FFEB3B"
+                : isMyTag
+                    ? index < ChipBackgrounds.Length ? ChipBackgrounds[index] : ChipBackgrounds[0]
+                    : "#FFF9C4";
+        var textColor = isDeleted
+            ? "#9E9E9E"
+            : highlightEvent != null
+                ? "#F57F17"
+                : isMyTag
+                    ? index < ChipTextColors.Length ? ChipTextColors[index] : ChipTextColors[0]
+                    : "#5C4B00";
+
+        var displayWeight = isUpdated || isInserted
+            ? $"{highlightEvent?.PreviousWeight} → {highlightEvent?.NewWeight}"
+            : isDeleted
+                ? $"{highlightEvent?.PreviousWeight}"
+                : relation.Weight.ToString();
+
+        return new TagCardChipDisplayInfo
+        {
+            IsDeleted = isDeleted,
+            IsInserted = isInserted,
+            IsUpdated = isUpdated,
+            WeightIncreased = weightIncreased,
+            BackgroundColor = bgColor,
+            TextColor = textColor,
+            DisplayWeight = displayWeight,
+            AddButtonColor = weightIncreased ? Color.Success : Color.Inherit
+        };
+    }
+
+    /// <summary>親タグを設定した際に循環参照が発生するかどうかを判定する。</summary>
+    public static bool HasParentCycle(Tag parentTag, Tag childTag, List<Tag> allTags)
+    {
+        // 循環参照の簡易チェック
+        int? currentParent = parentTag.ParentTagId;
+        var hasCycle = false;
+        while (currentParent != null && !hasCycle)
+        {
+            hasCycle = currentParent == childTag.Id;
+            Tag? p = allTags.FirstOrDefault(t => t.Id == currentParent);
+            currentParent = p?.ParentTagId;
+        }
+
+        return hasCycle;
+    }
+
+    public static string GetShortOwnerName(string? name)
+    {
+        return string.IsNullOrEmpty(name) switch
+        {
+            true => "不明",
+            false => name.Length > 7 ? name[..7] : name
+        };
+    }
+}

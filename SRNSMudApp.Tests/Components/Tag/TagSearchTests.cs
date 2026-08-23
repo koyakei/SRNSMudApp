@@ -8,6 +8,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -48,7 +50,7 @@ public class TagSearchTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         _ctx.Services.AddScoped<ITagEmbeddingService>(_ => new FakeEmbeddingService());
 

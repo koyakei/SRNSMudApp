@@ -5,6 +5,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
+
+using SRNSMudApp.Tests.TestSupport;
 using Bunit.TestDoubles;
 
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +35,7 @@ public class ItemTagChipTests : IAsyncDisposable
         _ctx = new TestContext();
 
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         var claims = new[] { new Claim(ClaimTypes.Name, "test-user-id"), new Claim(ClaimTypes.NameIdentifier, "test-user-id") };
         var identity = new ClaimsIdentity(claims, "TestAuthType");
         var claimsPrincipal = new ClaimsPrincipal(identity);

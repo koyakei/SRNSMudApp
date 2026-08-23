@@ -1,6 +1,6 @@
 @using SRNSMudApp.Components.PublicOffer
 @namespace SRNSMudApp.Components.UI
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 
 <MudTable Items="@Offers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true" Dense="true"
@@ -54,7 +54,7 @@
             { "Offer", offer }
         };
 
-        var dialog = await DialogService.ShowAsync<TriggerPublicOfferDialog>("オファーを受諾", parameters);
+        var dialog = await DialogLauncher.ShowAsync<TriggerPublicOfferDialog>("オファーを受諾", parameters);
         var result = await dialog.Result;
 
         switch (result)

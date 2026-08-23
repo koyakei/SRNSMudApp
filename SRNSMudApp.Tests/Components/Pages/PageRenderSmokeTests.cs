@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
@@ -42,7 +44,7 @@ public class PageRenderSmokeTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         AuthenticationState authState = CreateAuthState(UserId);
         Mock<AuthenticationStateProvider> authMock = new();
@@ -53,6 +55,9 @@ public class PageRenderSmokeTests : IAsyncDisposable
         _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase(dbName)
                 .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+
+        // Home が TagCard を描画するため、その依存も登録する
+        _ = _ctx.Services.AddSrnsComponentServices();
 
         Mock<ITagEmbeddingService> embeddingMock = new();
         _ = embeddingMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>()))

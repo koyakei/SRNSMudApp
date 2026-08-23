@@ -2,6 +2,8 @@
 using System;
 using System.Threading.Tasks;
 using Bunit;
+
+using SRNSMudApp.Tests.TestSupport;
 using MudBlazor.Services;
 using SRNSMudApp.Components.Tag;
 using Xunit;
@@ -18,7 +20,7 @@ public class BaseTagChipTests : IAsyncDisposable
     public BaseTagChipTests()
     {
         _ctx = new TestContext();
-        _ctx.Services.AddMudServices();
+        _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

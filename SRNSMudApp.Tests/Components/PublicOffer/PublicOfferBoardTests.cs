@@ -6,6 +6,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
+
+using SRNSMudApp.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
@@ -38,7 +40,7 @@ public class PublicOfferBoardTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.Services.AddAuthorizationCore();
 
         AuthenticationState authState = CreateAuthState(CharlieUserId);

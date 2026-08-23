@@ -5,7 +5,7 @@
 @attribute [Authorize]
 
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -138,7 +138,7 @@
     private async Task OpenCreateDialog()
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<BountyCreateDialog>("タグ付けの依頼を作成", options);
+        var dialog = await DialogLauncher.ShowAsync<BountyCreateDialog>("タグ付けの依頼を作成", options);
         var result = await dialog.Result;
 
         switch (!result.Canceled)
@@ -153,7 +153,7 @@
     {
         var parameters = new DialogParameters<FulfillBountyDialog> { { x => x.Bounty, bounty } };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<FulfillBountyDialog>("依頼を叶える", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<FulfillBountyDialog>("依頼を叶える", parameters, options);
         var result = await dialog.Result;
 
         switch (!result.Canceled)

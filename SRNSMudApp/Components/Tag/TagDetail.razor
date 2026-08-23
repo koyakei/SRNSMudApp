@@ -2,7 +2,7 @@
 @using System.Security.Claims
 @rendermode InteractiveServer
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
@@ -194,7 +194,7 @@
             { "Tag", _tag }
         };
 
-        var dialog = await DialogService.ShowAsync<TagEditDialog>("タグを編集", parameters);
+        var dialog = await DialogLauncher.ShowAsync<TagEditDialog>("タグを編集", parameters);
         var result = await dialog.Result;
 
         switch (result)

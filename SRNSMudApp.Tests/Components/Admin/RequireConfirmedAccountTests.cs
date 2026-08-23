@@ -4,6 +4,8 @@ using System.Security.Claims;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -27,7 +29,7 @@ public class RequireConfirmedAccountTests : TestContext
 {
     public RequireConfirmedAccountTests()
     {
-        _ = Services.AddMudServices();
+        _ = Services.AddMudServices().AddSrnsComponentServices();
         _ = Services.AddLogging();
 
         var authStateProviderMock = new Mock<AuthenticationStateProvider>();

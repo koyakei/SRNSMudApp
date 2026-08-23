@@ -9,6 +9,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,7 +35,7 @@ public class UserDetailTreeTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
 
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // 子コンポーネント ResourceList が認証カスケードを要求するため bUnit の認可テストダブルを登録する
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();

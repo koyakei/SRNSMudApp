@@ -2,7 +2,7 @@
 @using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Components.UI
 @inject NavigationManager NavigationManager
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 
 @switch (_visible)
 {
@@ -80,7 +80,7 @@
             FullWidth = true
         };
 
-        var dialog = await DialogService.ShowAsync<TaggingRequestThreadDialog>($"Request: {Request.RequestedTag?.Name}", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<TaggingRequestThreadDialog>($"Request: {Request.RequestedTag?.Name}", parameters, options);
         await dialog.Result;
         
         switch (OnDataChanged.HasDelegate)

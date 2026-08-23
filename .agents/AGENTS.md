@@ -19,6 +19,14 @@ Blazor環境におけるCBOおよびRFCの急増を防ぐため、以下のパ�
 
 Facadeパターン: 複数のサービスに依存する複雑なコンポーネントには、処理をまとめるFacade層を設けること。
 
+## Blazor コンポーネント設計規約 (単体テスト容易性)
+
+1. ダイアログ起動: コンポーネントから MudBlazor の `IDialogService` を直接注入してはならない。必ず `SRNSMudApp.Services.Dialogs.IDialogLauncher` を注入し、`DialogLauncher.ShowAsync<TDialog>(title, parameters, options)` 経由で起動すること。テストでは `IDialogLauncher` をモックして起動時の型・タイトル・オプションを検証できる。
+2. データアクセス: `.razor` / `.razor.cs` 内で `IDbContextFactory<ApplicationDbContext>` を直接使用してはならない。データ取得・更新は `Services/` 配下のインターフェース経由に分離すること。
+3. ロジック配置: 純粋な計算・状態遷移は ViewModel クラス（例: `ItemCardViewModel`）または code-behind (.razor.cs partial class) に置き、bUnit を介さない xUnit 単体テストを可能にする。
+4. 表示専用子コンポーネント: 大きなページコンポーネントは「状態保持コンテナ」と「表示専用子コンポーネント」に分割する。子コンポーネントは `[Parameter]` のデータ + `RenderFragment?` スロット（例: `BaseTagChip` の `PrefixContent` 等）のみを受け取り、サービス注入なしで bUnit レンダリングテストが可能な構成にする。型による表示切り替えが必要な場合は `DynamicComponent` と型マッピングを検討すること。
+5. テスト共通セットアップ: bUnit テストでは `SRNSMudApp.Tests/TestSupport/BunitTestSetup` (`AddAuth()`, `AddInMemoryDbFactory()`, `AddSrnsDialogs()`, `CreateAuthState()`, `AuthHost`) を利用し、セットアップコードの重複を避けること。
+
 詳細な実装ルールは .agent/rules/ 配下の指定に従うこと。
 
 ## C# ReSharper Compatibility

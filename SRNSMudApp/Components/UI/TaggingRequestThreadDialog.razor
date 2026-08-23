@@ -5,7 +5,7 @@
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 
 <MudDialog>
     <DialogContent>
@@ -226,7 +226,7 @@
         }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
+        var dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("リクエストを却下", options);
         var result = await dialog.Result;
 
         switch (result)

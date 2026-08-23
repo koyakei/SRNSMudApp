@@ -16,6 +16,7 @@ using SRNSMudApp.Components.Account;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Auth;
+using SRNSMudApp.Services.Dialogs;
 
 using _Imports = SRNSMudApp.Client._Imports;
 
@@ -41,6 +42,12 @@ builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("AuthRa
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+// Dialog 起動の抽象化 (単体テスト用モック差し替えポイント)
+builder.Services.AddScoped<IDialogLauncher, DialogLauncher>();
+
+// TagCard のデータアクセス分離
+builder.Services.AddScoped<ITagCardDataProvider, TagCardDataProvider>();
 
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();

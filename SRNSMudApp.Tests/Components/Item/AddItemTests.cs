@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +37,7 @@ public class AddItemTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
 
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // AddItem は [CascadingParameter] Task<AuthenticationState> で認証情報を受ける
         Claim[] claims = [new(ClaimTypes.NameIdentifier, ExistingUserId), new(ClaimTypes.Name, "testuser")];

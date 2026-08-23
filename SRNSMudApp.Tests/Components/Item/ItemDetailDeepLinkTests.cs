@@ -10,6 +10,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +47,7 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized(UserName);

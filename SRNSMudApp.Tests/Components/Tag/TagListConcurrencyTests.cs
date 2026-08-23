@@ -7,6 +7,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
+
+using SRNSMudApp.Tests.TestSupport;
 using Moq;
 using Bunit.TestDoubles;
 
@@ -35,7 +37,7 @@ public class TagListConcurrencyTests : IAsyncDisposable
 
         // Add MudBlazor services
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // Setup mock authentication
         var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };

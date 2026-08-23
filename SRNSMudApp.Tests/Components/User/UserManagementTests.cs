@@ -8,6 +8,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +37,7 @@ public class UserManagementTests : IAsyncDisposable
         _ctx = new TestContext();
 
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         var authStateProviderMock = new Mock<AuthenticationStateProvider>();
         Claim[] claims =

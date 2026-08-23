@@ -1,7 +1,7 @@
 @using SRNSMudApp.Components.Contract
 @using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
-@inject IDialogService DialogService
+@inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject IItemTagService ItemTagService
@@ -255,7 +255,7 @@
             { x => x.IsRemovalRequest, true }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
         var result = await dialog.Result;
         
         await ((result?.Canceled == true) switch
@@ -314,7 +314,7 @@
             { x => x.IsRemovalRequest, false }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
         var result = await dialog.Result;
         
         await ((result?.Canceled == true) switch
@@ -349,7 +349,7 @@
     {
         var parameters = new DialogParameters { ["Weight"] = TagRelation.Weight };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<WeightEditDialog>("Weightの一括変更", parameters, options);
+        var dialog = await DialogLauncher.ShowAsync<WeightEditDialog>("Weightの一括変更", parameters, options);
         var result = await dialog.Result;
 
         await ((result?.Canceled == false, result?.Data is int) switch
@@ -420,7 +420,7 @@
     private async Task ShowAddTagToTagDialogAsync(Tag targetTag)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<TagAddDialog>("関連タグの追加", options);
+        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("関連タグの追加", options);
         var result = await dialog.Result;
 
         await ((result?.Canceled == false, result?.Data is Tag) switch
@@ -483,7 +483,7 @@
     private async Task ShowAddChildTagDialogAsync(Tag targetTag)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<TagAddDialog>("子タグの追加", options);
+        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", options);
         var result = await dialog.Result;
 
         await ((result?.Canceled == false, result?.Data is Tag) switch

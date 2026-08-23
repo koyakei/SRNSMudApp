@@ -8,6 +8,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,7 +36,7 @@ public class UserSearchTests : IAsyncDisposable
         _ctx = new TestContext();
 
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         // Since MudBlazor Popover requires JS, we need to mock it in bUnit or use Bunit.Web.JSInterop
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 

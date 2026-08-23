@@ -10,6 +10,8 @@ using AngleSharp.Dom;
 
 using Bunit;
 
+using SRNSMudApp.Tests.TestSupport;
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -47,7 +49,7 @@ public class ItemListFocusTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // ResourceList / ItemCard が認証カスケードを必要とする（bUnit の認可テストダブル）
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
@@ -196,7 +198,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
     {
         _ctx = new BunitContext();
 
-        _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized("tagfocus_user");
