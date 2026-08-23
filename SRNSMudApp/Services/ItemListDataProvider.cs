@@ -130,7 +130,7 @@ public class ItemListDataProvider(
 
         List<string?> users = await usersQuery.Distinct().Take(10).ToListAsync(token);
 
-        return (!users.Any() && string.IsNullOrWhiteSpace(userSearch)) switch
+        return (users.Count == 0 && string.IsNullOrWhiteSpace(userSearch)) switch
         {
             true => [tagName + " @"],
             false => users.Select(u => tagName + " @" + u).ToList()
@@ -164,7 +164,7 @@ public class ItemListDataProvider(
 
         // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
         List<Tag> foundTags;
-        switch (filters.Any())
+        switch (filters.Count != 0)
         {
             case true:
                 foreach (ItemListFilter filter in filters)
@@ -218,7 +218,7 @@ public class ItemListDataProvider(
 
     private static IQueryable<Item> ApplyItemSort(IQueryable<Item> query, IReadOnlyList<ItemListSort> sorts)
     {
-        switch (!sorts.Any())
+        switch (sorts.Count == 0)
         {
             case true:
                 return query.OrderByDescending(i => i.UpdatedDate);
@@ -249,7 +249,7 @@ public class ItemListDataProvider(
 
     private static IQueryable<Tag> ApplyTagSort(IQueryable<Tag> query, IReadOnlyList<ItemListSort> sorts)
     {
-        switch (!sorts.Any())
+        switch (sorts.Count == 0)
         {
             case true:
                 return query.OrderByDescending(t => t.UpdatedDate);

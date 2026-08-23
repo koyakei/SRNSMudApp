@@ -36,7 +36,7 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
     [NotMapped]
     public RejectionInfo Rejection
     {
-        get => string.IsNullOrEmpty(RejectionInfoJson) ? new NoRejection() : JsonSerializer.Deserialize<RejectionInfo>(RejectionInfoJson)!;
+        get => string.IsNullOrEmpty(RejectionInfoJson) ? new NoRejection() : JsonSerializer.Deserialize<RejectionInfo>(RejectionInfoJson);
         set => RejectionInfoJson = JsonSerializer.Serialize(value);
     }
 
@@ -62,7 +62,7 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
         {
             if (string.IsNullOrEmpty(ContractPayloadJson))
                 return new EmptyPayload();
-            return JsonSerializer.Deserialize<ContractPayload>(ContractPayloadJson, PayloadJsonOptions)!;
+            return JsonSerializer.Deserialize<ContractPayload>(ContractPayloadJson, PayloadJsonOptions);
         }
         set => ContractPayloadJson = JsonSerializer.Serialize(value, PayloadJsonOptions);
     }

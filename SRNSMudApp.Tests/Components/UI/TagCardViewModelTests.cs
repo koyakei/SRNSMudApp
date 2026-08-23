@@ -35,7 +35,7 @@ public class TagCardViewModelTests
             TargetTagId = 1,
             Weight = weight,
             OwnerId = ownerId,
-            Tag = tagName == null ? null : new Tag { Id = tagId, Name = tagName, IsSystem = isSystem, OwnerId = "tag-owner" }
+            Tag = tagName == null ? null! : new Tag { Id = tagId, Name = tagName, IsSystem = isSystem, OwnerId = "tag-owner" }
         };
     }
 

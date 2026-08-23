@@ -70,13 +70,24 @@ public static class BunitTestSetup
     }
 
     /// <summary>
-    ///     MudBlazor サービスと、指定ユーザーで固定した認証状態モックを登録する。
+    ///     MudBlazor サービスと、指定ユーザー（任意でロール）で固定した認証状態モックを登録する。
     /// </summary>
-    public static Mock<AuthenticationStateProvider> AddAuth(this IServiceCollection services, string userId = DefaultUserId)
+    public static Mock<AuthenticationStateProvider> AddAuth(
+        this IServiceCollection services,
+        string userId = DefaultUserId,
+        params string[] roles)
     {
         _ = services.AddMudServices();
 
-        AuthenticationState authState = CreateAuthState(userId);
+        Claim[] claims =
+        [
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Name, userId),
+            ..roles.Select(r => new Claim(ClaimTypes.Role, r))
+        ];
+        ClaimsIdentity identity = new(claims, "TestAuthType");
+        AuthenticationState authState = new(new ClaimsPrincipal(identity));
+
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         services.AddScoped(_ => authMock.Object);

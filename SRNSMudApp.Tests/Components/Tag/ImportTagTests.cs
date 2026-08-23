@@ -32,28 +32,20 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class ImportTagTests : IAsyncDisposable
 {
-    private readonly TestContext _ctx;
+    private readonly BunitContext _ctx;
 
     public ImportTagTests()
     {
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
 
-        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
-        var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };
-        var identity = new ClaimsIdentity(claims, "TestAuthType");
-        var claimsPrincipal = new ClaimsPrincipal(identity);
-        var authState = new Microsoft.AspNetCore.Components.Authorization.AuthenticationState(claimsPrincipal);
-
-        var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
-        authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
+        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+        _ = _ctx.Services.AddAuth("testuser");
+        _ = _ctx.Services.AddSrnsComponentServices();
         // ImportTag は [CascadingParameter] Task<AuthenticationState> で認証情報を受けるためカスケード値も登録する
-        _ = _ctx.Services.AddCascadingValue(_ => System.Threading.Tasks.Task.FromResult(authState));
-        _ctx.Services.AddAuthorizationCore();
+        _ = _ctx.Services.AddCascadingValue(_ => System.Threading.Tasks.Task.FromResult(BunitTestSetup.CreateAuthState("testuser")));
 
         var dbName = Guid.NewGuid().ToString();
         // ImportTag.ImportData が BeginTransactionAsync を呼ぶため InMemory のトランザクション警告を無視する
@@ -71,7 +63,7 @@ public class ImportTagTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

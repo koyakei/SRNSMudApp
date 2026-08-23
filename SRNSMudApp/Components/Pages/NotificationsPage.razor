@@ -1,6 +1,7 @@
 @page "/notifications"
 @rendermode InteractiveServer
 @using System.Security.Claims
+@using SRNSMudApp.Components.UI
 @using SRNSMudApp.Models
 @using SRNSMudApp.Services
 @using MudBlazor
@@ -93,11 +94,7 @@
                                             OnReject="@(() => RejectRequestAsync(notification))" />
                                     }
                                     @{
-                                        var highlightEvents = new List<TimelineEvent>();
-                                        if (notification.HighlightTagId.HasValue)
-                                        {
-                                            highlightEvents.Add(new TimelineEvent { EventType = "Update", FollowedTagId = notification.HighlightTagId.Value, OwnerId = _userId ?? "" });
-                                        }
+                                        var highlightEvents = NotificationsViewModel.CreateHighlightEvents(notification, _userId);
                                     }
                                     <SRNSMudApp.Components.UI.ItemCard Item="@notification.AssociatedItem"
                                                                            AllTags="@_allTags"
@@ -156,33 +153,22 @@
 
         if (!string.IsNullOrEmpty(_userId))
         {
-            var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _userId && t.Name == "good" && t.IsSystem);
-            var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _userId && t.Name == "bad" && t.IsSystem);
-            _currentUserGoodTagId = goodTag?.Id;
-            _currentUserBadTagId = badTag?.Id;
+            var systemTags = ResourceListViewModel.FindSystemTags(_allTags, _userId);
+            _currentUserGoodTagId = systemTags.GoodTagId;
+            _currentUserBadTagId = systemTags.BadTagId;
         }
     }
 
     private async Task FetchAssociatedItemsAsync()
     {
-        var itemIds = _notifications
-            .Where(n => n.AssociatedItemId != 0)
-            .Select(n => n.AssociatedItemId)
-            .Distinct()
-            .ToList();
-
-        if (!itemIds.Any()) return;
+        IReadOnlyList<int> itemIds = NotificationsViewModel.GetAssociatedItemIds(_notifications);
+        if (itemIds.Count == 0)
+        {
+            return;
+        }
 
         List<Item> items = await NotificationsData.GetAssociatedItemsAsync(itemIds);
-
-        var itemDict = items.ToDictionary(i => i.Id);
-        foreach (var notification in _notifications)
-        {
-            if (notification.AssociatedItemId != 0 && itemDict.TryGetValue(notification.AssociatedItemId, out var item))
-            {
-                notification.AssociatedItem = item;
-            }
-        }
+        NotificationsViewModel.MapAssociatedItems(_notifications, items);
     }
 
     public async Task EnsureSystemTagsExistAsync()
@@ -214,11 +200,7 @@
 
     private static string GetRelativeTime(DateTimeOffset dateTime)
     {
-        var timeSpan = DateTimeOffset.UtcNow - dateTime;
-        if (timeSpan <= TimeSpan.FromSeconds(60)) return $"{timeSpan.Seconds}秒前";
-        if (timeSpan <= TimeSpan.FromMinutes(60)) return $"{timeSpan.Minutes}分前";
-        if (timeSpan <= TimeSpan.FromHours(24)) return $"{timeSpan.Hours}時間前";
-        return $"{timeSpan.Days}日前";
+        return NotificationsViewModel.GetRelativeTime(dateTime);
     }
 
     private async Task ApproveRequestAsync(NotificationDto notification)

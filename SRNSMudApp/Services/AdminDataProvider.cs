@@ -52,7 +52,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 existingTags[tagName] = newTag;
             }
 
-            switch (newTags.Any())
+            switch (newTags.Count != 0)
             {
                 case true:
                     context.Tags.AddRange(newTags);

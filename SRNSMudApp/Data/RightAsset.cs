@@ -18,7 +18,7 @@ public class RightAsset : BaseEntity
     [NotMapped]
     public BurnStatus Status
     {
-        get => string.IsNullOrEmpty(BurnStatusJson) ? new NotBurned() : JsonSerializer.Deserialize<BurnStatus>(BurnStatusJson)!;
+        get => string.IsNullOrEmpty(BurnStatusJson) ? new NotBurned() : JsonSerializer.Deserialize<BurnStatus>(BurnStatusJson);
         set => BurnStatusJson = JsonSerializer.Serialize(value);
     }
 

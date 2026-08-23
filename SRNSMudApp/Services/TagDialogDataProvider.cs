@@ -111,7 +111,7 @@ public class TagDialogDataProvider(
         }
 
         tagToUpdate.Name = name;
-        tagToUpdate.Content = content;
+        tagToUpdate.Content = content ?? "";
 
         // タグ名が変更された場合などに備え、ベクトルも再生成する
         try

@@ -27,31 +27,18 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.User;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class UserManagementTests : IAsyncDisposable
 {
-    private readonly TestContext _ctx;
+    private readonly BunitContext _ctx;
 
     public UserManagementTests()
     {
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
 
-        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
-
-        var authStateProviderMock = new Mock<AuthenticationStateProvider>();
-        Claim[] claims =
-        [
-            new(ClaimTypes.NameIdentifier, "test-user-id"), new(ClaimTypes.Role, "Admin")
-        ];
-        var identity = new ClaimsIdentity(claims, "TestAuthType");
-        var user = new ClaimsPrincipal(identity);
-        _ = authStateProviderMock.Setup(x => x.GetAuthenticationStateAsync())
-            .ReturnsAsync(new AuthenticationState(user));
-
-        _ = _ctx.Services.AddScoped(sp => authStateProviderMock.Object);
-        // AuthorizeView needs AuthorizationService
-        _ = _ctx.Services.AddAuthorizationCore();
+        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+        _ = _ctx.Services.AddAuth("test-user-id", "Admin");
+        _ = _ctx.Services.AddSrnsComponentServices();
 
         var dbName = Guid.NewGuid().ToString();
         _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -62,7 +49,7 @@ public class UserManagementTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

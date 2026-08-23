@@ -4,6 +4,11 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 
+// CA1508: union 型 (Option<T> / CheckAuth 結果など) の網羅的パターンマッチでは、先行アームの後の
+// Some / エラー型アームが静的に「常に真」とみなされるが、網羅性確保のためアームは必須。
+// 解析器の誤検知のため、ファイル単位で抑制する。
+#pragma warning disable CA1508
+
 namespace SRNSMudApp.Services;
 
 public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFactory) : INotificationService
@@ -232,7 +237,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
     private static async Task AddNewReadStateAsync(ApplicationDbContext context, string userId, int sourceId, string sourceType)
     {
-        _ = context.NotificationReadStates!.Add(new NotificationReadState
+        _ = context.NotificationReadStates.Add(new NotificationReadState
         {
             UserId = userId,
             SourceId = sourceId,

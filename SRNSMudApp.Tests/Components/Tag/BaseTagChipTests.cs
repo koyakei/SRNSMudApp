@@ -11,20 +11,20 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class BaseTagChipTests : IAsyncDisposable
 {
-    // TestContextのインスタンスをプライベートフィールドとして保持（コンポジション・パターン）
-    private readonly TestContext _ctx;
+    // BunitContextのインスタンスをプライベートフィールドとして保持（コンポジション・パターン）
+    private readonly BunitContext _ctx;
 
     public BaseTagChipTests()
     {
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
         _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorのKeyInterceptorServiceのエラーを防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorのKeyInterceptorServiceのエラーを防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -150,7 +150,7 @@ public class TagRelationService(ApplicationDbContext context)
             _ = relation.Id switch
             {
                 0 => context.TagRelations.Add(relation),
-                _ => null!
+                _ => null
             };
 
             relation.Weight += manipulationDelta;

@@ -26,28 +26,20 @@ using Xunit.Abstractions;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class TagTreeTests : IAsyncDisposable
 {
     private readonly ITestOutputHelper _output;
-    private readonly TestContext _ctx;
+    private readonly BunitContext _ctx;
 
     public TagTreeTests(ITestOutputHelper output)
     {
         _output = output;
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
         
-        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
-        var claims = new[] { new Claim(ClaimTypes.Name, "test-user-id"), new Claim(ClaimTypes.NameIdentifier, "test-user-id") };
-        var identity = new ClaimsIdentity(claims, "TestAuthType");
-        var claimsPrincipal = new ClaimsPrincipal(identity);
-        var authState = new Microsoft.AspNetCore.Components.Authorization.AuthenticationState(claimsPrincipal);
-
-        var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
-        authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
-        _ctx.Services.AddAuthorizationCore();
+        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+        _ = _ctx.Services.AddAuth("test-user-id");
+        _ = _ctx.Services.AddSrnsComponentServices();
 
         var dbName = Guid.NewGuid().ToString();
         _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -58,7 +50,7 @@ public class TagTreeTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

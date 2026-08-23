@@ -74,12 +74,12 @@
                         <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small"
                                        OnClick="@(() => ToggleTree(context.Id))" title="タグツリーを表示"/>
 
-                        @switch (!string.IsNullOrEmpty(_currentUserId) && context.OwnerId == _currentUserId)
+                        @switch (!string.IsNullOrEmpty(_currentUserId) && TagTableViewModel.CanEditTag(context, _currentUserId))
                         {
                             case true:
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
                                                OnClick="@(() => EditTagAsync(context))" title="編集"/>
-                                @switch (!context.IsSystem)
+                                @switch (TagTableViewModel.CanDeleteTag(context, _currentUserId))
                                 {
                                     case true:
                                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
@@ -111,26 +111,10 @@
         </MudTd>
         <MudTd DataLabel="Attached Tags">
             @{
-                var allTags = context.TargetTagRelations?
-                    .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
-                    .OrderByDescending(tr => tr.Weight)
-                    .ToList() ?? [];
-                var areTagsExpanded = _expandedTagIds.Contains(context.Id);
-                var hasManyTags = allTags.Count >= 3;
-                const int displayLimit = 2;
-                var tagsToDisplay = (areTagsExpanded || !hasManyTags) switch
-                {
-                    true => allTags,
-                    false => [.. allTags.Take(displayLimit)]
-                };
-                var hiddenCount = hasManyTags switch
-                {
-                    true => allTags.Count - displayLimit,
-                    false => 0
-                };
+                var attachedDisplay = TagTableViewModel.GetAttachedTagsDisplay(context, _expandedTagIds.Contains(context.Id));
             }
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="align-items-center">
-                @foreach (var tr in tagsToDisplay)
+                @foreach (var tr in attachedDisplay.TagsToDisplay)
                 {
                     <BaseTagChip TagName="@(tr.Tag?.Name ?? "不明")"
                                  Variant="Variant.Outlined"
@@ -138,13 +122,13 @@
                                  OnClose="@(_ => RemoveTagToTagRelationAsync(tr))"
                                  OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tr.Tag?.Id}"))"/>
                 }
-                @switch (hasManyTags)
+                @switch (attachedDisplay.HasManyTags)
                 {
                     case true:
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
                                  OnClick="@(() => ToggleTagExpand(context.Id))"
                                  Class="tag-chip-more">
-                            @(areTagsExpanded switch { true => "閉じる", false => $"+{hiddenCount} more" })
+                            @attachedDisplay.ToggleLabel
                         </MudChip>
                         break;
                     case false:
@@ -193,36 +177,13 @@
 
     private bool FilterFunc(Tag tag)
     {
-        return string.IsNullOrWhiteSpace(tagSearch) switch
-        {
-            true => true,
-            false => tag.Name.Contains(tagSearch, StringComparison.OrdinalIgnoreCase) switch
-            {
-                true => true,
-                false => (tag.Content?.Contains(tagSearch, StringComparison.OrdinalIgnoreCase) == true) switch
-                {
-                    true => true,
-                    false => tag.Owner?.UserName?.Contains(tagSearch, StringComparison.OrdinalIgnoreCase) == true
-                }
-            }
-        };
+        return TagTableViewModel.FilterFunc(tag, tagSearch);
     }
 
     private async Task<IEnumerable<string>> SearchTags(string? value, CancellationToken token)
     {
         await Task.Yield();
-
-        var sourceTags = Tags ?? [];
-
-        return string.IsNullOrEmpty(value) switch
-        {
-            true => sourceTags.Select(t => t.Name).Distinct().Take(20),
-            false => sourceTags
-                .Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase))
-                .Select(t => t.Name)
-                .Distinct()
-                .Take(20)
-        };
+        return TagTableViewModel.GetTagSearchSuggestions(Tags, value);
     }
 
     private readonly HashSet<int> _expandedTagIds = [];
@@ -280,13 +241,13 @@
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
     {
-        switch (relation.OwnerId != _currentUserId)
+        switch (TagTableViewModel.CanRemoveRelation(relation, _currentUserId))
         {
             case true:
-                Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+                await ExecuteRemoveTagToTagRelationAsync(relation);
                 break;
             case false:
-                await ExecuteRemoveTagToTagRelationAsync(relation);
+                Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
                 break;
         }
     }
@@ -305,13 +266,13 @@
 
     private async Task EditTagAsync(Tag tag)
     {
-        switch (tag.OwnerId != _currentUserId)
+        switch (TagTableViewModel.CanEditTag(tag, _currentUserId))
         {
             case true:
-                Snackbar.Add("タグの作成者本人ではないため、編集する権限がありません。", Severity.Error);
+                await ShowTagEditDialogAsync(tag);
                 break;
             case false:
-                await ShowTagEditDialogAsync(tag);
+                Snackbar.Add("タグの作成者本人ではないため、編集する権限がありません。", Severity.Error);
                 break;
         }
     }
@@ -340,21 +301,16 @@
 
     private async Task DeleteTagAsync(Tag tag)
     {
-        switch (tag.OwnerId != _currentUserId)
+        switch (TagTableViewModel.CanDeleteTag(tag, _currentUserId))
         {
             case true:
-                Snackbar.Add("タグの作成者本人ではないため、削除する権限がありません。", Severity.Error);
+                await ExecuteDeleteTagAsync(tag);
+                break;
+            case false when tag.IsSystem:
+                Snackbar.Add("システムタグは削除できません。", Severity.Error);
                 break;
             case false:
-                switch (tag.IsSystem)
-                {
-                    case true:
-                        Snackbar.Add("システムタグは削除できません。", Severity.Error);
-                        break;
-                    case false:
-                        await ExecuteDeleteTagAsync(tag);
-                        break;
-                }
+                Snackbar.Add("タグの作成者本人ではないため、削除する権限がありません。", Severity.Error);
                 break;
         }
     }

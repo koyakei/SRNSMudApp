@@ -8,7 +8,6 @@ namespace SRNSMudApp.Components.Tag;
 
 // 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
 // using を名前空間の内側に置く
-using SRNSMudApp.Data;
 
 using Tag = SRNSMudApp.Data.Tag;
 

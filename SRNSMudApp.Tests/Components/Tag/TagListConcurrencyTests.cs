@@ -26,34 +26,23 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class TagListConcurrencyTests : IAsyncDisposable
 {
-    private readonly TestContext _ctx;
+    private readonly BunitContext _ctx;
 
     public TagListConcurrencyTests()
     {
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
 
-        // Add MudBlazor services
-        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+        _ = _ctx.Services.AddAuth("testuser");
+        _ = _ctx.Services.AddSrnsComponentServices();
 
         // TagDialogDataProvider が依存する埋め込みサービスのモック
         var embeddingMock = new Moq.Mock<SRNSMudApp.Services.ITagEmbeddingService>();
         embeddingMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(Array.Empty<float>());
         _ctx.Services.AddScoped(_ => embeddingMock.Object);
-
-        // Setup mock authentication
-        var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };
-        var identity = new ClaimsIdentity(claims, "TestAuthType");
-        var claimsPrincipal = new ClaimsPrincipal(identity);
-        var authState = new Microsoft.AspNetCore.Components.Authorization.AuthenticationState(claimsPrincipal);
-
-        var authMock = new Moq.Mock<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
-        authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        _ctx.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(_ => authMock.Object);
-        _ctx.Services.AddAuthorizationCore();
 
         // Setup In-Memory database
         var dbName = Guid.NewGuid().ToString();
@@ -66,7 +55,7 @@ public class TagListConcurrencyTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

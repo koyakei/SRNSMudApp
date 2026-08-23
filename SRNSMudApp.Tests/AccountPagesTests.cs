@@ -16,7 +16,7 @@ using SRNSMudApp.Components.Account.Shared;
 
 namespace SRNSMudApp.Tests;
 
-public class AccountPagesTests : TestContext
+public class AccountPagesTests : BunitContext
 {
     public AccountPagesTests()
     {
@@ -45,11 +45,11 @@ public class AccountPagesTests : TestContext
     public void PasskeySubmit_RendersWithoutException_WhenHttpContextIsNull()
     {
         // Arrange
-        var testContext = new TestContext();
+        var testContext = new BunitContext();
 
         // Mock AntiforgeryStateProvider
         // In bUnit, AntiforgeryStateProvider is not registered by default.
-        // We can either mock it or just use Bunit.TestContext.Services to add a dummy implementation or use bUnit's built-in support if available.
+        // We can either mock it or just use Bunit.BunitContext.Services to add a dummy implementation or use bUnit's built-in support if available.
         // However, for AntiforgeryStateProvider, the simplest is to just add it as a mock or use the underlying mechanism if possible.
         // Actually, since AntiforgeryStateProvider is an abstract class, we can mock it with Moq.
         var antiforgeryStateProviderMock = new Mock<AntiforgeryStateProvider>();

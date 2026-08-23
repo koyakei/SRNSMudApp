@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 using SRNSMudApp.Models.Unions;
@@ -16,7 +15,7 @@ public class Invitation : BaseEntity
     [NotMapped]
     public InvitationSource Source
     {
-        get => string.IsNullOrEmpty(InvitationSourceJson) ? new SystemInvitation() : JsonSerializer.Deserialize<InvitationSource>(InvitationSourceJson)!;
+        get => string.IsNullOrEmpty(InvitationSourceJson) ? new SystemInvitation() : JsonSerializer.Deserialize<InvitationSource>(InvitationSourceJson);
         set => InvitationSourceJson = JsonSerializer.Serialize(value);
     }
 

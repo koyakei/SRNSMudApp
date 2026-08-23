@@ -111,7 +111,7 @@ public class AuthController(
         {
             false => (object)Task.Run(() => _logger.LogError("Failed to add login to user: {Errors}",
                 string.Join(", ", addLoginResult.Errors.Select(e => e.Description)))),
-            true => null!
+            true => null
         };
 
         await _signInManager.SignInAsync(newUser, true);
@@ -125,7 +125,7 @@ public class AuthController(
         _ = logins.Any(l => l.LoginProvider == provider && l.ProviderKey == userLoginInfo.ProviderKey) switch
         {
             false => await _userManager.AddLoginAsync(existingUser, userLoginInfo),
-            true => null!
+            true => null
         };
 
         await _signInManager.SignInAsync(existingUser, true);

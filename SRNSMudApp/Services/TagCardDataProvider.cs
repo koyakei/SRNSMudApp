@@ -309,7 +309,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             case not null:
                 var prevWeight = tag.CachedWeight;
                 tag.CachedWeight += delta;
-                context.TagWeightLedgers!.Add(new TagWeightLedger
+                context.TagWeightLedgers.Add(new TagWeightLedger
                 {
                     TagId = tag.Id,
                     TagNameSnapshot = tag.Name,
@@ -323,7 +323,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     OwnerId = ownerId
                 });
 
-                context.TimelineEvents!.Add(new TimelineEvent
+                context.TimelineEvents.Add(new TimelineEvent
                 {
                     OwnerId = ownerId,
                     Target = new TagTarget(entity.TargetTagId),

@@ -184,8 +184,8 @@ public class DuplicateTaggingRequestCancelTests : IAsyncDisposable
 
         TaggingRequestEntity contractA = Create(UserAId);
         TaggingRequestEntity contractB = Create(UserBId);
-        contractA.Owner = db.Users.Find(UserAId);
-        contractB.Owner = db.Users.Find(UserBId);
+        contractA.Owner = db.Users.Find(UserAId)!;
+        contractB.Owner = db.Users.Find(UserBId)!;
         db.TaggingRequestEntities!.AddRange(contractA, contractB);
         _ = await db.SaveChangesAsync();
 

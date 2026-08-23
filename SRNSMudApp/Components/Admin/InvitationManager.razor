@@ -100,7 +100,7 @@
             InvitationCode = code,
             ExpirationDate = DateTime.UtcNow.AddDays(7), // 7 days expiration
             IsUsed = false,
-            InvitedByAdminId = _currentUserId,
+            InvitedByAdminId = _currentUserId ?? string.Empty,
             OwnerId = _currentUserId ?? "system"
         };
 

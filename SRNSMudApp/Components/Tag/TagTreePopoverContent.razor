@@ -103,20 +103,6 @@
     private readonly List<TagTreeLine> _treeLines = [];
     private readonly HashSet<int> _expandedTreeTagIds = [];
 
-    private record TagTreeLine(
-        int TagId,
-        string Indent,
-        string Icon,
-        string Name,
-        string Role,
-        bool IsCurrent,
-        bool IsParent,
-        bool IsChild,
-        bool IsSibling,
-        bool HasChildren,
-        bool IsExpanded
-    );
-
     protected override void OnParametersSet()
     {
         switch ((TargetTag, AllTags))
@@ -130,11 +116,9 @@
         {
             case false:
                 // Auto-expand parents of TargetTag
-                var current = AllTags.FirstOrDefault(t => t.Id == TargetTag.Id);
-                while (current != null)
+                foreach (var id in TagTreePopoverViewModel.GetAutoExpandIds(TargetTag, AllTags.ToList()))
                 {
-                    _expandedTreeTagIds.Add(current.Id);
-                    current = AllTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
+                    _expandedTreeTagIds.Add(id);
                 }
                 break;
         }
@@ -150,77 +134,8 @@
             case true: return;
         }
 
-        var ancestors = new HashSet<int>();
-        var curr = AllTags.FirstOrDefault(t => t.Id == (TargetTag.ParentTagId != 0 ? TargetTag.ParentTagId : -1));
-        var rootTag = TargetTag;
-        while (curr != null)
-        {
-            ancestors.Add(curr.Id);
-            rootTag = curr;
-            curr = AllTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
-        }
-
-        var siblings = AllTags
-            .Where(t => t.ParentTagId == TargetTag.ParentTagId && t.Id != TargetTag.Id)
-            .Select(t => t.Id)
-            .ToHashSet();
-
-        AddTreeLinesRecursive(_treeLines, rootTag, 0, TargetTag.Id, ancestors, siblings);
-    }
-
-    private void AddTreeLinesRecursive(List<TagTreeLine> lines, Tag current, int depth, int targetTagId, HashSet<int> ancestors, HashSet<int> siblings)
-    {
-        var children = AllTags.Where(t => t.ParentTagId == current.Id).OrderBy(t => t.Name).ToList();
-        var hasChildren = children.Any();
-        var isExpanded = _expandedTreeTagIds.Contains(current.Id) || !EnableExpand;
-        var isCurrent = current.Id == targetTagId;
-
-        var isParent = ancestors.Contains(current.Id);
-        var isSibling = siblings.Contains(current.Id);
-        var isChild = current.ParentTagId == targetTagId;
-
-        var role = isCurrent ? "自身" : isParent ? "親" : isSibling ? "兄弟" : isChild ? "子" : "";
-
-        var indent = new string(' ', depth * 2);
-        var icon = (EnableExpand, hasChildren) switch
-        {
-            (true, true) => isExpanded ? "▼" : "▶",
-            (false, true) => isParent || isCurrent ? isExpanded ? "▼" : "▶" : isChild ? "▶" : "▷",
-            (false, false) => true switch
-            {
-                _ when isParent => "▷",
-                _ when isSibling => "◇",
-                _ when isCurrent => "◆",
-                _ when isChild => "▶",
-                _ => "▷"
-            },
-            _ => "◆"
-        };
-
-        lines.Add(new TagTreeLine(current.Id, indent, icon, current.Name, role, isCurrent, isParent, isChild, isSibling, hasChildren, isExpanded));
-
-        switch (!isExpanded && EnableExpand)
-        {
-            case true: return;
-        }
-
-        foreach (var child in children)
-        {
-            switch (EnableExpand)
-            {
-                case false:
-                    switch (isParent || isCurrent || isChild)
-                    {
-                        case true:
-                            AddTreeLinesRecursive(lines, child, depth + 1, targetTagId, ancestors, siblings);
-                            break;
-                    }
-                    break;
-                case true:
-                    AddTreeLinesRecursive(lines, child, depth + 1, targetTagId, ancestors, siblings);
-                    break;
-            }
-        }
+        _treeLines.AddRange(TagTreePopoverViewModel.BuildTreeLines(
+            TargetTag, AllTags.ToList(), _expandedTreeTagIds, EnableExpand));
     }
 
     private void OnLineClicked(TagTreeLine line)

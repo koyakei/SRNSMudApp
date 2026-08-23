@@ -90,15 +90,9 @@
         _allTags = tags;
         _allTagRelationsToTags = relations;
 
-        switch (string.IsNullOrEmpty(_currentUserId))
-        {
-            case false:
-                var goodTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
-                var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
-                _currentUserGoodTagId = goodTag?.Id;
-                _currentUserBadTagId = badTag?.Id;
-                break;
-        }
+        var systemTags = ResourceListViewModel.FindSystemTags(_allTags, _currentUserId);
+        _currentUserGoodTagId = systemTags.GoodTagId;
+        _currentUserBadTagId = systemTags.BadTagId;
     }
 
     private async Task NotifyChangedAsync()
@@ -126,17 +120,11 @@
     /// <summary>focusTag を優先してスクロールする。タグ未指定の場合は focusItem へスクロールする。</summary>
     private async Task ScrollToFocusTargetAsync()
     {
-        switch (_focusTagId)
+        var selector = ResourceListViewModel.GetFocusSelector(_focusTagId, _focusItemId);
+        switch (selector)
         {
-            case int tagId:
-                await TryScrollAsync($"#tag-card-{tagId}");
-                return;
-        }
-
-        switch (_focusTagId is null ? _focusItemId : null)
-        {
-            case int itemId:
-                await TryScrollAsync($"#item-card-{itemId}");
+            case not null:
+                await TryScrollAsync(selector);
                 break;
         }
     }
@@ -198,10 +186,10 @@
         {
             case true: return;
         }
-        
-        switch (_currentUserGoodTagId.HasValue && _currentUserBadTagId.HasValue)
+
+        if (new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId).IsComplete)
         {
-            case true: return;
+            return;
         }
 
         SystemTagsResult result = await HomeData.EnsureSystemTagsAsync(_currentUserId);

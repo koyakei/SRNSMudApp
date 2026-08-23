@@ -26,14 +26,14 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.User;
 
-// TestContextの継承をやめ、IAsyncDisposableを実装します
+// BunitContextの継承をやめ、IAsyncDisposableを実装します
 public class UserSearchTests : IAsyncDisposable
 {
-    private readonly TestContext _ctx;
+    private readonly BunitContext _ctx;
 
     public UserSearchTests()
     {
-        _ctx = new TestContext();
+        _ctx = new BunitContext();
 
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -62,7 +62,7 @@ public class UserSearchTests : IAsyncDisposable
         _ = _ctx.Services.AddSingleton(mockDbFactory.Object);
     }
 
-    // 非同期でTestContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
+    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

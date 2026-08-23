@@ -25,25 +25,14 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.Admin;
 
-public class RequireConfirmedAccountTests : TestContext
+public class RequireConfirmedAccountTests : BunitContext
 {
     public RequireConfirmedAccountTests()
     {
-        _ = Services.AddMudServices().AddSrnsComponentServices();
+        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+        _ = Services.AddAuth("test-admin-id", "Admin");
+        _ = Services.AddSrnsComponentServices();
         _ = Services.AddLogging();
-
-        var authStateProviderMock = new Mock<AuthenticationStateProvider>();
-        Claim[] claims =
-        [
-            new(ClaimTypes.NameIdentifier, "test-admin-id"), new(ClaimTypes.Role, "Admin")
-        ];
-        var identity = new ClaimsIdentity(claims, "TestAuthType");
-        var user = new ClaimsPrincipal(identity);
-        _ = authStateProviderMock.Setup(x => x.GetAuthenticationStateAsync())
-            .ReturnsAsync(new AuthenticationState(user));
-
-        _ = Services.AddScoped(sp => authStateProviderMock.Object);
-        _ = Services.AddAuthorizationCore();
 
         // Setup real Identity with In-Memory DB
         var dbName = Guid.NewGuid().ToString();

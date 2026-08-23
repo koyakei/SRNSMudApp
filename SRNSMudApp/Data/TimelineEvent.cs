@@ -20,7 +20,7 @@ public class TimelineEvent : BaseEntity
     [NotMapped]
     public TimelineTarget Target
     {
-        get => string.IsNullOrEmpty(TimelineTargetJson) ? new ItemTarget(0) : JsonSerializer.Deserialize<TimelineTarget>(TimelineTargetJson, Options)!;
+        get => string.IsNullOrEmpty(TimelineTargetJson) ? new ItemTarget(0) : JsonSerializer.Deserialize<TimelineTarget>(TimelineTargetJson, Options);
         set => TimelineTargetJson = JsonSerializer.Serialize(value, Options);
     }
 

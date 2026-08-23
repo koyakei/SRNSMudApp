@@ -7,6 +7,11 @@ using SRNSMudApp.Models.Unions;
 
 #endregion
 
+// CA1508: union 型 (Option<T> / CheckAuth 結果など) の網羅的パターンマッチでは、先行アームの後の
+// Some / エラー型アームが静的に「常に真」とみなされるが、網羅性確保のためアームは必須。
+// 解析器の誤検知のため、ファイル単位で抑制する。
+#pragma warning disable CA1508
+
 namespace SRNSMudApp.Services;
 
 public record OperationAuthorized;
@@ -79,7 +84,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
         _ = context.TagRelations.Add(newRelation);
 
-        _ = context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.TimelineEvents.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
             Target = new ItemTarget(itemId),
@@ -93,7 +98,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var prevWeight = tagFromDb.CachedWeight;
         tagFromDb.CachedWeight += 1;
 
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tagFromDb.Id,
             TagNameSnapshot = tagFromDb.Name,
@@ -132,7 +137,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     private static async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
     {
-        _ = context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.TimelineEvents.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
             Target = new ItemTarget(relation.ItemId),
@@ -159,7 +164,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         var prevWeight = tag.CachedWeight;
         tag.CachedWeight -= relation.Weight;
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
@@ -216,7 +221,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         var prevWeight = tag.CachedWeight;
         tag.CachedWeight += delta;
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
@@ -230,7 +235,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             OwnerId = currentUserId
         });
 
-        _ = context.TimelineEvents!.Add(new TimelineEvent
+        _ = context.TimelineEvents.Add(new TimelineEvent
         {
             OwnerId = currentUserId,
             Target = new ItemTarget(entity.ItemId),
@@ -292,7 +297,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         var prevWeight = tag.CachedWeight;
         tag.CachedWeight += delta;
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
@@ -396,7 +401,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var prevWeight = tagFromDb.CachedWeight;
         tagFromDb.CachedWeight += 1;
 
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tagFromDb.Id,
             TagNameSnapshot = tagFromDb.Name,
@@ -453,7 +458,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var prevWeight = tag.CachedWeight;
         tag.CachedWeight -= entity.Weight;
 
-        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+        _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
