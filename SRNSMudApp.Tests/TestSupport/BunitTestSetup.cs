@@ -46,7 +46,8 @@ public static class BunitTestSetup
             .AddScoped<IItemCardDataProvider, ItemCardDataProvider>()
             .AddScoped<IItemListDataProvider, ItemListDataProvider>()
             .AddScoped<ITagTreeDataProvider, TagTreeDataProvider>()
-            .AddScoped<ITagTableDataProvider, TagTableDataProvider>();
+            .AddScoped<ITagTableDataProvider, TagTableDataProvider>()
+            .AddScoped<IHomeDataProvider, HomeDataProvider>();
     }
 
     /// <summary>

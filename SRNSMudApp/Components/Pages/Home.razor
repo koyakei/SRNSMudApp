@@ -1,8 +1,9 @@
 @page "/"
 @using System.Security.Claims
+@using SRNSMudApp.Services
 
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IHomeDataProvider HomeData
 @inject NavigationManager NavigationManager
 
 <PageTitle>Home</PageTitle>
@@ -120,27 +121,16 @@
 
     private async Task LoadUserDataAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _followedTagIds = await db.UserTagFollows!
-            .Where(f => f.OwnerId == _currentUserId)
-            .Select(f => f.TagId)
-            .ToListAsync();
+        _followedTagIds = await HomeData.GetFollowedTagIdsAsync(_currentUserId);
 
         await FetchTagsAsync();
     }
 
     private async Task FetchTagsAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _allTags = await context.Tags
-            .AsNoTracking()
-            .ToListAsync();
-
-        _allTagRelationsToTags = await context.TagRelationToTags
-            .Include(tr => tr.Tag)
-            .Include(tr => tr.TargetTag)
-            .AsNoTracking()
-            .ToListAsync();
+        (List<Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
+        _allTags = tags;
+        _allTagRelationsToTags = relations;
 
         _ = string.IsNullOrEmpty(_currentUserId) switch
         {
@@ -169,52 +159,18 @@
 
     private async Task ExecuteEnsureSystemTagsAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var goodTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "good" && t.IsSystem);
-        var badTag = await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
+        SystemTagsResult result = await HomeData.EnsureSystemTagsAsync(_currentUserId);
 
-        var created = false;
-        _ = goodTag switch
+        switch (result.Created)
         {
-            null => (goodTag = new Tag { Name = "good", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow }, context.Tags.Add(goodTag), created = true),
-            _ => (null, null, false)
-        };
-
-        _ = badTag switch
-        {
-            null => (badTag = new Tag { Name = "bad", IsSystem = true, OwnerId = _currentUserId, CreatedDate = DateTime.UtcNow, UpdatedDate = DateTime.UtcNow }, context.Tags.Add(badTag), created = true),
-            _ => (null, null, false)
-        };
-
-        await (created switch
-        {
-            true => SaveAndReloadTagsAsync(context),
-            false => AssignExistingSystemTags(goodTag!, badTag!)
-        });
-    }
-
-    private async Task SaveAndReloadTagsAsync(ApplicationDbContext context)
-    {
-        await context.SaveChangesAsync();
-        await FetchTagsAsync(); // Reload all tags list
-    }
-
-    private Task AssignExistingSystemTags(Tag goodTag, Tag badTag)
-    {
-        _currentUserGoodTagId = goodTag.Id;
-        _currentUserBadTagId = badTag.Id;
-        return Task.CompletedTask;
-    }
-
-    public class TimelineFeedGroup
-    {
-        public string TimelineTargetJson { get; set; } = "";
-        public DateTime LatestEventDate { get; set; }
-
-        public Item? Item { get; set; }
-        public Tag? Tag { get; set; }
-
-        public List<TimelineEvent> Events { get; set; } = [];
+            case true:
+                await FetchTagsAsync(); // Reload all tags list
+                break;
+            case false:
+                _currentUserGoodTagId = result.GoodTagId;
+                _currentUserBadTagId = result.BadTagId;
+                break;
+        }
     }
 
     private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimeline(ItemsProviderRequest request)
@@ -228,82 +184,9 @@
 
     private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimelineDataAsync(ItemsProviderRequest request)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        var query = db.TimelineEvents!
-            .Where(e => _followedTagIds!.Contains(e.FollowedTagId));
-
-        var groupedQuery = query
-            .GroupBy(e => e.TimelineTargetJson)
-            .Select(g => new
-            {
-                TimelineTargetJson = g.Key,
-                LatestEventDate = g.Max(e => e.CreatedDate)
-            })
-            .OrderByDescending(g => g.LatestEventDate);
-
-        var totalGroups = await groupedQuery.CountAsync();
-
-        var pagedGroups = await groupedQuery
-            .Skip(request.StartIndex)
-            .Take(request.Count)
-            .ToListAsync();
-
-        var feedGroups = new List<TimelineFeedGroup>();
-        foreach (var pg in pagedGroups)
-        {
-            var feedGroup = new TimelineFeedGroup
-            {
-                TimelineTargetJson = pg.TimelineTargetJson,
-                LatestEventDate = pg.LatestEventDate,
-                Events = await db.TimelineEvents!
-                    .Where(e => _followedTagIds!.Contains(e.FollowedTagId) && e.TimelineTargetJson == pg.TimelineTargetJson)
-                    .Include(e => e.FollowedTag)
-                    .AsNoTracking()
-                    .ToListAsync()
-            };
-
-            var target = feedGroup.Events.FirstOrDefault()?.Target;
-            await (target switch
-            {
-                SRNSMudApp.Models.Unions.ItemTarget it => LoadItemForFeedGroupAsync(db, feedGroup, it.TargetItemId),
-                SRNSMudApp.Models.Unions.TagTarget tt => LoadTagForFeedGroupAsync(db, feedGroup, tt.TargetTagId),
-                _ => Task.CompletedTask
-            });
-
-            switch (feedGroup.Item != null || feedGroup.Tag != null)
-            {
-                case true:
-                    feedGroups.Add(feedGroup);
-                    break;
-                case false:
-                    break;
-            }
-        }
-
-        return new ItemsProviderResult<TimelineFeedGroup>(feedGroups, totalGroups);
-    }
-
-    private async Task LoadItemForFeedGroupAsync(ApplicationDbContext db, TimelineFeedGroup feedGroup, int targetId)
-    {
-        feedGroup.Item = await db.Items!
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(i => i.Id == targetId);
-    }
-
-    private async Task LoadTagForFeedGroupAsync(ApplicationDbContext db, TimelineFeedGroup feedGroup, int targetId)
-    {
-        feedGroup.Tag = await db.Tags!
-            .Include(t => t.Owner)
-            .Include(t => t.TargetTagRelations!)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == targetId);
+        HomeTimelinePage page =
+            await HomeData.LoadTimelineAsync(_followedTagIds!, request.StartIndex, request.Count);
+        return new ItemsProviderResult<TimelineFeedGroup>(page.Groups, page.TotalCount);
     }
 
     private class TimelineFeedGroupComparer : IEqualityComparer<TimelineFeedGroup>

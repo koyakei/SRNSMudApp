@@ -61,6 +61,9 @@ builder.Services.AddScoped<ITagTreeDataProvider, TagTreeDataProvider>();
 // TagTable のデータアクセス分離
 builder.Services.AddScoped<ITagTableDataProvider, TagTableDataProvider>();
 
+// Home のデータアクセス分離
+builder.Services.AddScoped<IHomeDataProvider, HomeDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
