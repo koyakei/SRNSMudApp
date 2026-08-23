@@ -49,6 +49,9 @@ builder.Services.AddScoped<IDialogLauncher, DialogLauncher>();
 // TagCard のデータアクセス分離
 builder.Services.AddScoped<ITagCardDataProvider, TagCardDataProvider>();
 
+// ItemCard のデータアクセス分離
+builder.Services.AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 

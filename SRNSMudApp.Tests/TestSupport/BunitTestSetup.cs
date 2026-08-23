@@ -34,15 +34,16 @@ public static class BunitTestSetup
 
     /// <summary>
     ///     コンポーネントが依存するアプリ側サービスを登録する
-    ///     (<see cref="IDialogLauncher" /> 実装と <see cref="ITagCardDataProvider" /> 実装)。
+    ///     (<see cref="IDialogLauncher" /> 実装と Tag/Item Card データプロバイダ実装)。
     ///     委譲先の MudBlazor サービスは AddMudServices() が、
-    ///     <see cref="TagCardDataProvider" /> の依存は AddInMemoryDbFactory() が登録するものを利用する。
+    ///     データプロバイダの依存は AddInMemoryDbFactory() が登録するものを利用する。
     /// </summary>
     public static IServiceCollection AddSrnsComponentServices(this IServiceCollection services)
     {
         return services
             .AddScoped<IDialogLauncher, DialogLauncher>()
-            .AddScoped<ITagCardDataProvider, TagCardDataProvider>();
+            .AddScoped<ITagCardDataProvider, TagCardDataProvider>()
+            .AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
     }
 
     /// <summary>

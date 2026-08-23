@@ -10,7 +10,7 @@
 @using SRNSMudApp.Services
 @inject TaggingContractService TaggingContractService
 @implements IAsyncDisposable
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IItemCardDataProvider ItemCardData
 
 <MudCard id="@($"item-card-{Item.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Item.Id))" Outlined="true"
          Class="rounded-xl scroll-observe-target" Style="@GetItemCardStyle()">
@@ -498,133 +498,53 @@
         var targetWeight = isUpvote ? 1 : -1;
         var goodTagId = CurrentUserGoodTagId!.Value;
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var relations = await context.TagRelations.Where(tr => tr.ItemId == Item.Id && tr.OwnerId == CurrentUserId).ToListAsync();
-
-        var existingRelation = relations.FirstOrDefault(tr => tr.TagId == goodTagId);
-
-        await (existingRelation switch
+        ItemVoteResult result = await ItemCardData.ToggleItemVoteAsync(Item.Id, CurrentUserId, goodTagId, targetWeight);
+        switch (result.Action)
         {
-            not null => HandleExistingVoteAsync(context, existingRelation, targetWeight, goodTagId),
-            null => HandleNewVoteAsync(context, targetWeight, goodTagId)
-        });
-
-        await context.SaveChangesAsync();
-
-        await (OnDataChanged.HasDelegate switch
-        {
-            true => OnDataChanged.InvokeAsync(),
-            false => Task.CompletedTask
-        });
-    }
-
-    private async Task HandleExistingVoteAsync(ApplicationDbContext context, TagRelation existingRelation, int targetWeight, int goodTagId)
-    {
-        var tag = await context.Tags.FindAsync(goodTagId);
-        switch (existingRelation.Weight == targetWeight)
-        {
-            case true:
-                var deltaCancel = -existingRelation.Weight;
-                switch (tag)
-                {
-                    case not null:
-                        var prevWeightCancel = tag.CachedWeight;
-                        tag.CachedWeight += deltaCancel;
-                        context.TagWeightLedgers!.Add(new TagWeightLedger
-                        {
-                            TagId = tag.Id,
-                            TagNameSnapshot = tag.Name,
-                            SourceType = "TagRelationDelete",
-                            SourceId = existingRelation.Id,
-                            PreviousWeight = prevWeightCancel,
-                            NewWeight = tag.CachedWeight,
-                            Delta = deltaCancel,
-                            IsOwnerAction = true,
-                            Reason = "Vote取り消し",
-                            OwnerId = CurrentUserId
-                        });
-                        break;
-                }
-
-                context.TimelineEvents!.Add(new TimelineEvent
-                {
-                    OwnerId = CurrentUserId,
-                    Target = new SRNSMudApp.Models.Unions.ItemTarget(Item.Id),
-                    FollowedTagId = goodTagId,
-                    EventType = "Delete",
-                    PreviousWeight = existingRelation.Weight
-                });
-
-                context.TagRelations.Remove(existingRelation);
-                var localTargetCancel = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+            case ItemVoteAction.Removed:
+            {
+                TagRelation? localTargetCancel = Item.TagRelations.FirstOrDefault(tr => tr.Id == result.RelationId);
                 switch (localTargetCancel)
                 {
                     case not null:
                         Item.TagRelations.Remove(localTargetCancel);
                         break;
                 }
+
                 break;
-            case false:
-                var deltaUpdate = targetWeight - existingRelation.Weight;
-                existingRelation.Weight = targetWeight;
-                existingRelation.UpdatedDate = DateTime.UtcNow;
-
-                switch (tag)
-                {
-                    case not null:
-                        var prevWeightUpdate = tag.CachedWeight;
-                        tag.CachedWeight += deltaUpdate;
-                        context.TagWeightLedgers!.Add(new TagWeightLedger
-                        {
-                            TagId = tag.Id,
-                            TagNameSnapshot = tag.Name,
-                            SourceType = "TagRelationUpdate",
-                            SourceId = existingRelation.Id,
-                            PreviousWeight = prevWeightUpdate,
-                            NewWeight = tag.CachedWeight,
-                            Delta = deltaUpdate,
-                            IsOwnerAction = true,
-                            Reason = "Vote変更",
-                            OwnerId = CurrentUserId
-                        });
-                        break;
-                }
-
-                context.TimelineEvents!.Add(new TimelineEvent
-                {
-                    OwnerId = CurrentUserId,
-                    Target = new SRNSMudApp.Models.Unions.ItemTarget(Item.Id),
-                    FollowedTagId = goodTagId,
-                    EventType = "Update",
-                    PreviousWeight = existingRelation.Weight - deltaUpdate,
-                    NewWeight = existingRelation.Weight
-                });
-
-                var localTargetUpdate = Item.TagRelations.FirstOrDefault(tr => tr.Id == existingRelation.Id);
+            }
+            case ItemVoteAction.Updated:
+            {
+                TagRelation? localTargetUpdate = Item.TagRelations.FirstOrDefault(tr => tr.Id == result.RelationId);
                 switch (localTargetUpdate)
                 {
                     case not null:
-                        localTargetUpdate.Weight = targetWeight;
+                        localTargetUpdate.Weight = result.Weight;
                         break;
                 }
-                break;
-        }
-    }
 
-    private Task HandleNewVoteAsync(ApplicationDbContext context, int targetWeight, int goodTagId)
-    {
-        var newRelation = new TagRelation
+                break;
+            }
+            case ItemVoteAction.Added:
+            {
+                Item.TagRelations ??= new List<TagRelation>();
+                Item.TagRelations.Add(new TagRelation
+                {
+                    Id = result.RelationId,
+                    ItemId = Item.Id,
+                    TagId = goodTagId,
+                    OwnerId = CurrentUserId,
+                    Weight = result.Weight
+                });
+                break;
+            }
+        }
+
+        await (OnDataChanged.HasDelegate switch
         {
-            ItemId = Item.Id,
-            TagId = goodTagId,
-            OwnerId = CurrentUserId,
-            Weight = targetWeight,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
-        };
-        context.TagRelations.Add(newRelation);
-        Item.TagRelations.Add(newRelation);
-        return Task.CompletedTask;
+            true => OnDataChanged.InvokeAsync(),
+            false => Task.CompletedTask
+        });
     }
 
     // --- Edit/Delete Logic ---
@@ -664,9 +584,7 @@
                 return;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        context.Items.Remove(Item);
-        await context.SaveChangesAsync();
+        await ItemCardData.DeleteItemAsync(Item.Id);
         await (OnDataChanged.HasDelegate switch
         {
             true => OnDataChanged.InvokeAsync(),
@@ -693,8 +611,7 @@
 
     private async Task AddTagToItemAsync(Tag selectedTag)
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var tagFromDb = await context.Tags.Include(t => t.Owner).FirstOrDefaultAsync(t => t.Id == selectedTag.Id);
+        Tag? tagFromDb = await ItemCardData.GetTagWithOwnerAsync(selectedTag.Id);
         switch (tagFromDb)
         {
             case null:
@@ -716,7 +633,7 @@
                 return;
         }
 
-        await ExecuteAddTagToItemAsync(context, selectedTag, tagFromDb);
+        await ExecuteAddTagToItemAsync(selectedTag, tagFromDb);
     }
 
     private async Task ProposeTaggingContractAsync(Tag tagFromDb)
@@ -745,21 +662,10 @@
         }
     }
 
-    private async Task ExecuteAddTagToItemAsync(ApplicationDbContext context, Tag selectedTag, Tag tagFromDb)
+    private async Task ExecuteAddTagToItemAsync(Tag selectedTag, Tag tagFromDb)
     {
-        // DbContext の CreateFreeTagRelationAsync を使用:
-        // - RightAsset の自動発行・消費
-        // - TagRelation の作成
-        // - TagWeightLedger への記帳 (ConsumedRightAssetId を含む)
-        // - TimelineEvent の追加
-        // をトランザクション内で一括処理する
-        await context.CreateFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);
-
-        // ローカルのItem.TagRelationsを更新してUIに即時反映
-        var newRelation = await context.Set<TagRelation>()
-            .Include(tr => tr.Tag)
-            .OrderByDescending(tr => tr.Id)
-            .FirstOrDefaultAsync(tr => tr.ItemId == Item.Id && tr.TagId == selectedTag.Id && tr.OwnerId == CurrentUserId);
+        TagRelation? newRelation =
+            await ItemCardData.AddFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);
         switch (newRelation)
         {
             case not null:
