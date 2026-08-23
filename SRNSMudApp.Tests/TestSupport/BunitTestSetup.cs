@@ -43,7 +43,8 @@ public static class BunitTestSetup
         return services
             .AddScoped<IDialogLauncher, DialogLauncher>()
             .AddScoped<ITagCardDataProvider, TagCardDataProvider>()
-            .AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
+            .AddScoped<IItemCardDataProvider, ItemCardDataProvider>()
+            .AddScoped<IItemListDataProvider, ItemListDataProvider>();
     }
 
     /// <summary>

@@ -52,6 +52,9 @@ builder.Services.AddScoped<ITagCardDataProvider, TagCardDataProvider>();
 // ItemCard のデータアクセス分離
 builder.Services.AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
 
+// ItemList のデータアクセス分離
+builder.Services.AddScoped<IItemListDataProvider, ItemListDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 

@@ -1,5 +1,4 @@
 @page "/Item/ItemList"
-@using System.Numerics.Tensors
 @using System.Text.Encodings.Web
 @using System.Text.Json
 @using System.Text.RegularExpressions
@@ -8,8 +7,7 @@
 @using SRNSMudApp.Services
 @using SRNSMudApp.Models
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject ITagEmbeddingService TagEmbeddingService
+@inject IItemListDataProvider ListData
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @inject LinkPreviewService LinkPreviewService
@@ -129,30 +127,11 @@
     private IEnumerable<Tag> _foundTags = [];
 
     // ===== タグ検索フィルタ用ステート =====
-    public class TagFilter
-    {
-        public Tag Tag { get; set; } = null!;
-        public string? UserName { get; set; }
-        public string DisplayText => string.IsNullOrWhiteSpace(UserName) ? Tag.Name : $"{Tag.Name} ({UserName})";
-    }
-
     private readonly List<TagFilter> _selectedFilters = [];
     private string _tagSearchText = "";
     private MudAutocomplete<string>? _autocomplete;
 
     // ===== ソート用ステート =====
-    public enum SortOrder
-    {
-        Desc,
-        Asc
-    }
-
-    public class SortCondition
-    {
-        public Tag Tag { get; set; } = null!;
-        public SortOrder Order { get; set; } = SortOrder.Desc;
-    }
-
     private readonly List<SortCondition> _sortConditions = [];
 
     protected override async Task OnInitializedAsync()
@@ -160,8 +139,8 @@
         var uri = new Uri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-
+        // クエリパラメータ内のタグ ID をすべて収集して一括取得する
+        var lookupTagIds = new List<int>();
         switch (query.TryGetValue("tags", out var tagsValues))
         {
             case true:
@@ -172,16 +151,12 @@
                         case true: continue;
                     }
                     var parts = val.Split(':');
-                    int tagId;
-                    switch (int.TryParse(parts[0], out tagId))
+                    switch (int.TryParse(parts[0], out int filterTagId))
                     {
                         case true:
-                            var tag = await context.Tags.FindAsync(tagId);
-                            switch (tag)
+                            if (!lookupTagIds.Contains(filterTagId))
                             {
-                                case not null:
-                                    _selectedFilters.Add(new TagFilter { Tag = tag, UserName = parts.Length > 1 ? parts[1] : null });
-                                    break;
+                                lookupTagIds.Add(filterTagId);
                             }
                             break;
                     }
@@ -192,23 +167,56 @@
         switch (query.TryGetValue("sort", out var sortStr))
         {
             case true:
-                var parts = sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var part in parts)
+                foreach (var part in sortStr.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries))
                 {
                     var kvp = part.Split(':');
-                    int tagId = 0;
-                    switch (kvp.Length == 2 && int.TryParse(kvp[0], out tagId))
+                    if (kvp.Length == 2 && int.TryParse(kvp[0], out int sortTagId))
                     {
-                        case true:
-                            var order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc;
-                            var tag = await context.Tags.FindAsync(tagId);
-                            switch (tag)
-                            {
-                                case not null:
-                                    _sortConditions.Add(new SortCondition { Tag = tag, Order = order });
-                                    break;
-                            }
-                            break;
+                        if (!lookupTagIds.Contains(sortTagId))
+                        {
+                            lookupTagIds.Add(sortTagId);
+                        }
+                    }
+                }
+                break;
+        }
+
+        Dictionary<int, Tag> tagsById = await ListData.GetTagsByIdsAsync(lookupTagIds);
+
+        // フィルタを復元
+        switch (query.TryGetValue("tags", out var tagsValues2))
+        {
+            case true:
+                foreach (var val in tagsValues2)
+                {
+                    if (string.IsNullOrWhiteSpace(val))
+                    {
+                        continue;
+                    }
+                    var parts = val.Split(':');
+                    if (int.TryParse(parts[0], out int tagId) && tagsById.TryGetValue(tagId, out Tag? tag))
+                    {
+                        _selectedFilters.Add(new TagFilter { Tag = tag, UserName = parts.Length > 1 ? parts[1] : null });
+                    }
+                }
+                break;
+        }
+
+        // ソート条件を復元
+        switch (query.TryGetValue("sort", out var sortStr2))
+        {
+            case true:
+                foreach (var part in sortStr2.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var kvp = part.Split(':');
+                    if (kvp.Length == 2 && int.TryParse(kvp[0], out int sortTagId) &&
+                        tagsById.TryGetValue(sortTagId, out Tag? sortTag))
+                    {
+                        _sortConditions.Add(new SortCondition
+                        {
+                            Tag = sortTag,
+                            Order = kvp[1] == "asc" ? SortOrder.Asc : SortOrder.Desc
+                        });
                     }
                 }
                 break;
@@ -226,73 +234,18 @@
             case true: return Array.Empty<string>();
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync(token);
-
         switch (value.Contains(" @"))
         {
             case false:
-                var searchText = value;
-                try
-                {
-                    var queryVector = await TagEmbeddingService.GenerateEmbeddingAsync(searchText);
-                    var queryArray = queryVector.ToArray();
-
-                    var textMatches = await context.Tags
-                        .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
-                        .AsNoTracking()
-                        .ToListAsync(token);
-
-                    var vectorTags = await context.Tags
-                        .Where(t => t.Embedding != null)
-                        .AsNoTracking()
-                        .ToListAsync(token);
-
-                    var vectorMatches = vectorTags
-                        .Where(t => t.Embedding.Length == queryArray.Length)
-                        .OrderByDescending(t => TensorPrimitives.CosineSimilarity(t.Embedding, queryArray))
-                        .Take(10)
-                        .ToList();
-
-                    return textMatches.Concat(vectorMatches)
-                        .Select(t => t.Name + " @") // 末尾に " @" を付与
-                        .Distinct()
-                        .Take(10);
-                }
-                catch
-                {
-                    var textMatches = await context.Tags
-                        .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
-                        .AsNoTracking()
-                        .Select(t => t.Name + " @")
-                        .Distinct()
-                        .Take(10)
-                        .ToListAsync(token);
-                    return textMatches;
-                }
+                return await ListData.SearchTagNameSuggestionsAsync(value, token);
             case true:
+            {
                 var parts = value.Split(" @", 2);
                 var tagName = parts[0];
                 var userSearch = parts[1];
 
-                var usersQuery = context.TagRelations
-                    .AsNoTracking()
-                    .Where(tr => tr.Tag.Name == tagName)
-                    .Select(tr => tr.Owner.UserName)
-                    .Where(u => u != null);
-
-                usersQuery = string.IsNullOrWhiteSpace(userSearch) switch
-                {
-                    false => usersQuery.Where(u => u!.Contains(userSearch)),
-                    true => usersQuery
-                };
-
-                var users = await usersQuery.Distinct().Take(10).ToListAsync(token);
-
-                return (!users.Any() && string.IsNullOrWhiteSpace(userSearch)) switch
-                {
-                    true => new[] { tagName + " @" },
-                    false => users.Select(u => tagName + " @" + u)
-                };
+                return await ListData.SearchTagUserNamesAsync(tagName, userSearch, token);
+            }
         }
     }
 
@@ -364,8 +317,7 @@
 
     private async Task ExecuteSearch(string tagName, string? userName)
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var tag = await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
+        Tag? tag = await ListData.FindTagByNameAsync(tagName);
 
         switch (tag)
         {
@@ -414,124 +366,18 @@
         await LoadDataAsync();
     }
 
-    // ===== 既存メソッド =====
-
     private async Task LoadDataAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var query = context.Items
-            .AsNoTracking()
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.TargetItem)
-            .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.RequestedTag)
-            .AsQueryable();
+        List<ItemListFilter> filters =
+        [.. _selectedFilters.Select(f => new ItemListFilter(f.Tag.Id, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))];
+        List<ItemListSort> sorts =
+        [.. _sortConditions.Select(c => new ItemListSort(c.Tag.Id, c.Order == SortOrder.Asc))];
 
-        var tagQuery = context.Tags
-            .AsNoTracking()
-            .Include(t => t.Owner)
-            .Include(t => t.TargetTagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .AsQueryable();
-
-        // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
-        switch (_selectedFilters.Any())
-        {
-            case true:
-                foreach (var filter in _selectedFilters)
-                {
-                    switch (string.IsNullOrWhiteSpace(filter.UserName))
-                    {
-                        case true:
-                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id));
-                            tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id));
-                            break;
-                        case false:
-                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
-                            tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.Tag.Id && tr.Owner.UserName == filter.UserName));
-                            break;
-                    }
-                }
-
-                tagQuery = ApplySortToTagQuery(tagQuery);
-                _foundTags = await tagQuery.ToListAsync();
-                break;
-            case false:
-                _foundTags = new List<Tag>();
-                break;
-        }
-
-        query = ApplySortToItemQuery(query);
-        _items = await query.ToListAsync();
+        ItemListPageData page = await ListData.LoadItemsAndTagsAsync(filters, sorts);
+        _items = page.Items;
+        _foundTags = page.Tags;
 
         StateHasChanged();
-    }
-
-    private IQueryable<Item> ApplySortToItemQuery(IQueryable<Item> query)
-    {
-        switch (!_sortConditions.Any())
-        {
-            case true:
-                return query.OrderByDescending(i => i.UpdatedDate);
-        }
-
-        IOrderedQueryable<Item>? orderedQuery = null;
-
-        foreach (var condition in _sortConditions)
-        {
-            var targetId = condition.Tag.Id;
-            switch (orderedQuery)
-            {
-                case null:
-                    orderedQuery = condition.Order == SortOrder.Desc
-                        ? query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-                case not null:
-                    orderedQuery = condition.Order == SortOrder.Desc
-                        ? orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-            }
-        }
-
-        return orderedQuery ?? query.OrderByDescending(i => i.UpdatedDate);
-    }
-
-    private IQueryable<Tag> ApplySortToTagQuery(IQueryable<Tag> query)
-    {
-        switch (!_sortConditions.Any())
-        {
-            case true:
-                return query.OrderByDescending(t => t.UpdatedDate);
-        }
-
-        IOrderedQueryable<Tag>? orderedQuery = null;
-
-        foreach (var condition in _sortConditions)
-        {
-            var targetId = condition.Tag.Id;
-            switch (orderedQuery)
-            {
-                case null:
-                    orderedQuery = condition.Order == SortOrder.Desc
-                        ? query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-                case not null:
-                    orderedQuery = condition.Order == SortOrder.Desc
-                        ? orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-            }
-        }
-
-        return orderedQuery ?? query.OrderByDescending(t => t.UpdatedDate);
     }
 
     private async Task OnSortTargetTagAdded(Tag? tag)
@@ -574,21 +420,12 @@
 
     private async Task ExportToJsonAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-
         var itemIds = _items.Select(i => i.Id).ToList();
 
-        var allTags = await context.Tags.ToDictionaryAsync(t => t.Id);
-
-        var itemTags = await context.TagRelations
-            .Where(tr => itemIds.Contains(tr.ItemId))
-            .ToListAsync();
-
-        var relatedTagIds = itemTags.Select(t => t.TagId).Distinct().ToList();
-
-        var tagToTags = await context.TagRelationToTags
-            .Where(trt => relatedTagIds.Contains(trt.TargetTagId))
-            .ToListAsync();
+        ItemListExportData exportData = await ListData.LoadExportDataAsync(itemIds);
+        Dictionary<int, Tag> allTags = exportData.AllTags;
+        List<TagRelation> itemTags = exportData.ItemTagRelations;
+        List<TagRelationToTag> tagToTags = exportData.TagToTagRelations;
 
         var exportList = new List<ExportItemDto>();
 
