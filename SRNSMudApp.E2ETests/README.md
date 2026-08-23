@@ -37,13 +37,14 @@ Playwright によるE2Eテストプロジェクト。Phase 1〜4 のテスト移
 | `GlobalPopoverE2ETests.cs` | 6ルート遷移時にBlazor未処理例外UIが出ないことの横断スモーク | 実SignalR接続・実JSでのポップオーバー描画を含む最終防衛線。個別ページのロジックはコンポーネントテスト側でカバー済み（Phase 4-1） |
 | `ItemListFocusE2ETests.cs` | スクロールで画面中央に来たアイテムが自動フォーカスされURL更新されること（1ケースのみに縮小） | IntersectionObserverは実ブラウザJS APIのためbUnitでは再現不可（Phase 4-4-d）。クリックフォーカス・URL復元・タグフィルタ共存・作者リンクは bUnit 側 `ItemListFocusTests` へ移行済み |
 | `LoginAndPostItemE2ETests.cs` | Google/LINE/GitHub各プロバイダのモックコールバック→ログインCookie発行→認証済み到達（3ケース） | 実ネットワークスタック（ASP.NET Core認証ミドルウェア・Cookie発行）の検証のためE2Eに残す。アイテム投稿部分は `AddItemTests` へ移行済み（Phase 4-6） |
-| `DuplicateTaggingRequestCancelE2ETests.cs` | ユーザーAの契約承認後、ユーザーBが自分のリクエストをキャンセルできること | 移行フェーズの対象外として現状維持。複数ユーザー間の実時間相互作用シナリオ |
-| `ItemDetailTagWeightE2ETests.cs` | 投票ボタンクリック後のItemDetailのタグウェイト表示 | 移行フェーズの対象外として現状維持 |
 
 ### 移行済み・削除済み（参考）
 
 | 元ファイル | 移行先 |
 |---|---|
+| `DuplicateTaggingRequestCancelE2ETests.cs` | `Components/Contract/DuplicateTaggingRequestCancelTests.cs`（承認の分離性 + 送信済みからの取り下げを2ケースに分解）（Phase 6） |
+| `ItemDetailTagWeightE2ETests.cs` | `Components/Item/ItemDetailTagWeightTests.cs`（Weight減ボタン→アクション列表示＋DB反映）（Phase 6） |
+| `TagDeletionTrackingE2ETests.cs` | `Components/Tag/TagDeletionTrackingTests.cs`（タグ追加ダイアログ→チップ削除・トラッキング例外回帰。IDialogLauncher モック活用により専用コンテナ起動も解消）（Phase 6） |
 | `VectorSearchE2ETests.cs`（4ケース+無関係コード） | `SRNSMudApp.Tests/TagEmbeddingServiceTests.cs`（実LocalEmbedderでコサイン類似度のコア検証）＋ `Components/Tag/TagSearchTests.cs`（UI配線1ケースのみに集約）（Phase 4-7） |
 | `ItemDetailDeepLinkE2ETests.cs` | `Components/Item/ItemDetailDeepLinkTests.cs`（状態⇔URL双方向）（Phase 4-5） |
 | `ItemListExportE2ETests.cs` | `Components/Item/ItemListExportTests.cs`（JS interop傍受によりブラウザ不要）（Phase 4-3） |
@@ -54,12 +55,12 @@ Playwright によるE2Eテストプロジェクト。Phase 1〜4 のテスト移
 
 ## Before / After サマリー
 
-| 指標 | Before（移行前） | After（移行後） |
+| 指標 | Before（移行前） | After（Phase 6 移行後） |
 |---|---|---|
-| E2Eテストファイル数 | 30+ | 8テストクラス＋基盤3ファイル |
-| E2Eテストケース数 | 37+ | 16 |
+| E2Eテストファイル数 | 30+ | 5テストクラス＋基盤3ファイル |
+| E2Eテストケース数 | 37+ | 13 |
 | E2E実行時間 | 約3〜4分（コンテナ起動×クラス数） | 約50秒（コンテナ起動1回・Phase 5-4後の実測） |
-| bUnit/サービステスト | 120 | 145 |
+| bUnit/サービステスト | 120 | 175 |
 | 単体テスト実行時間 | 数秒 | 約2秒 |
 
 ### カバレッジ（移行対象コンポーネント、Phase 5-6 実測）
