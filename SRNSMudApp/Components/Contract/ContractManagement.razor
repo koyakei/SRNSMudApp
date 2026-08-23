@@ -7,7 +7,8 @@
 
 @attribute [Authorize]
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IContractDataProvider ContractData
 @inject TaggingContractService ContractService
 @inject ISnackbar Snackbar
 
@@ -149,25 +150,9 @@
             _pageState = new Loading();
             StateHasChanged();
             
-            await using var dbContext = await DbFactory.CreateDbContextAsync();
+            ContractManagementPageData page = await ContractData.GetContractsAsync(_currentUserId);
 
-            // Incoming: User is the Tag Owner, and contract is Proposed
-            var incomingContracts = await dbContext.TaggingRequestEntities
-                .Where(c => c.TagOwnerUserId == _currentUserId && c.Status == TradeStatus.Proposed && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
-                .Include(c => c.TargetItem)
-                .Include(c => c.RequestedTag)
-                .OrderByDescending(c => c.CreatedDate)
-                .ToListAsync();
-
-            // Outgoing: User is the Requester
-            var outgoingContracts = await dbContext.TaggingRequestEntities
-                .Where(c => c.RequesterUserId == _currentUserId && (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
-                .Include(c => c.TargetItem)
-                .Include(c => c.RequestedTag)
-                .OrderByDescending(c => c.CreatedDate)
-                .ToListAsync();
-
-            _pageState = new Loaded<ContractManagementData>(new ContractManagementData(incomingContracts, outgoingContracts));
+            _pageState = new Loaded<ContractManagementData>(new ContractManagementData(page.IncomingContracts, page.OutgoingContracts));
         }
         catch (Exception ex)
         {
