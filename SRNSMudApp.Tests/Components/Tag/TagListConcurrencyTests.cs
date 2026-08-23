@@ -39,6 +39,11 @@ public class TagListConcurrencyTests : IAsyncDisposable
         // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
+        // TagDialogDataProvider が依存する埋め込みサービスのモック
+        var embeddingMock = new Moq.Mock<SRNSMudApp.Services.ITagEmbeddingService>();
+        embeddingMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(Array.Empty<float>());
+        _ctx.Services.AddScoped(_ => embeddingMock.Object);
+
         // Setup mock authentication
         var claims = new[] { new Claim(ClaimTypes.Name, "testuser"), new Claim(ClaimTypes.NameIdentifier, "testuser") };
         var identity = new ClaimsIdentity(claims, "TestAuthType");
