@@ -8,6 +8,10 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
+// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
+// 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
+#pragma warning disable IDE0010, IDE0072
+
 namespace SRNSMudApp.Components.UI;
 
 // 兄弟名前空間 SRNSMudApp.Components.Tag が同名型と解決されるため、
@@ -31,12 +35,12 @@ public partial class TagCard : IAsyncDisposable
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
-    [Parameter] public List<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
     [Parameter] public int? CurrentUserBadTagId { get; set; }
     [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
-    [Parameter] public List<TimelineEvent>? HighlightEvents { get; set; }
+    [Parameter] public IReadOnlyList<TimelineEvent>? HighlightEvents { get; set; }
 
     private bool _areTagsExpanded;
     private int _activePopoverTagId = -1;
@@ -47,11 +51,9 @@ public partial class TagCard : IAsyncDisposable
     [JSInvokable]
     public void OnElementFocusedByScroll(string elementId)
     {
-        switch (elementId == $"tag-card-{Tag.Id}")
+        if (elementId == $"tag-card-{Tag.Id}")
         {
-            case true:
-                OnFocus.InvokeAsync(Tag.Id);
-                break;
+            OnFocus.InvokeAsync(Tag.Id);
         }
     }
 
@@ -59,47 +61,44 @@ public partial class TagCard : IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        switch (firstRender)
+        if (firstRender)
         {
-            case true:
-                _dotNetRef = DotNetObjectReference.Create(this);
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.initScrollObserver");
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
+            _dotNetRef = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.initScrollObserver");
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
 
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#tag-card-{Tag.Id}");
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
-                break;
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.observeElements", $"#tag-card-{Tag.Id}");
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        switch (_dotNetRef)
+        GC.SuppressFinalize(this);
+        if (_dotNetRef is not null)
         {
-            case not null:
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
 
-                _dotNetRef.Dispose();
-                break;
+            _dotNetRef.Dispose();
         }
     }
 
@@ -114,35 +113,32 @@ public partial class TagCard : IAsyncDisposable
     /// <summary>親へデータ変更を通知する。</summary>
     private async Task NotifyChangedAsync()
     {
-        switch (OnDataChanged.HasDelegate)
+        if (OnDataChanged.HasDelegate)
         {
-            case true:
-                await OnDataChanged.InvokeAsync();
-                break;
+            await OnDataChanged.InvokeAsync();
         }
     }
 
     private async Task ToggleTagTreePopover(int tagId, string chipKey)
     {
-        switch (_activePopoverTagId == tagId && _activePopoverChipKey == chipKey)
+        if (_activePopoverTagId == tagId && _activePopoverChipKey == chipKey)
         {
-            case true:
-                ClosePopover();
-                break;
-            case false:
-                _activePopoverTagId = tagId;
-                _activePopoverChipKey = chipKey;
-                StateHasChanged();
-                await Task.Yield();
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
-                break;
+            ClosePopover();
+        }
+        else
+        {
+            _activePopoverTagId = tagId;
+            _activePopoverChipKey = chipKey;
+            StateHasChanged();
+            await Task.Yield();
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
         }
     }
 
@@ -153,25 +149,21 @@ public partial class TagCard : IAsyncDisposable
 
     private async Task ToggleTagVoteAsync(bool isUpvote)
     {
-        switch (string.IsNullOrEmpty(CurrentUserId))
+        if (string.IsNullOrEmpty(CurrentUserId))
         {
-            case true:
-                Snackbar.Add("ログインが必要です。", Severity.Warning);
-                return;
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
         }
 
-        switch (OnEnsureSystemTags.HasDelegate)
+        if (OnEnsureSystemTags.HasDelegate)
         {
-            case true:
-                await OnEnsureSystemTags.InvokeAsync();
-                break;
+            await OnEnsureSystemTags.InvokeAsync();
         }
 
-        switch (!CurrentUserGoodTagId.HasValue || !CurrentUserBadTagId.HasValue)
+        if (!CurrentUserGoodTagId.HasValue || !CurrentUserBadTagId.HasValue)
         {
-            case true:
-                Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
-                return;
+            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            return;
         }
 
         var targetSystemTagId = isUpvote ? CurrentUserGoodTagId.Value : CurrentUserBadTagId.Value;
@@ -225,16 +217,18 @@ public partial class TagCard : IAsyncDisposable
                 Snackbar.Add("タグを追加しました。", Severity.Success);
                 await NotifyChangedAsync();
                 break;
+            case TagCardOperationResult.NotFound:
+            case TagCardOperationResult.NotOwner:
+                break;
         }
     }
 
     private async Task RemoveTagToTagRelationAsync(TagRelationToTag relation)
     {
-        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
+        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
         {
-            case false:
-                Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("関連付けた本人ではないため、解除する権限がありません。", Severity.Error);
+            return;
         }
 
         TagCardOperationResult result = await TagCardData.RemoveRelationAsync(relation.Id, CurrentUserId);
@@ -244,16 +238,18 @@ public partial class TagCard : IAsyncDisposable
                 Snackbar.Add("タグの関連付けを解除しました。", Severity.Success);
                 await NotifyChangedAsync();
                 break;
+            case TagCardOperationResult.NotFound:
+            case TagCardOperationResult.NotOwner:
+                break;
         }
     }
 
     private async Task UpdateTagToTagWeightAsync(TagRelationToTag relation, int delta)
     {
-        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
+        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
         {
-            case false:
-                Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            return;
         }
 
         TagCardOperationResult result =
@@ -263,16 +259,18 @@ public partial class TagCard : IAsyncDisposable
             case TagCardOperationResult.Success:
                 await NotifyChangedAsync();
                 break;
+            case TagCardOperationResult.NotFound:
+            case TagCardOperationResult.NotOwner:
+                break;
         }
     }
 
     private async Task EditTagToTagWeightAsync(TagRelationToTag relation)
     {
-        switch (TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId))
+        if (!(TagCardViewModel.IsRelationOwner(relation.OwnerId, CurrentUserId)))
         {
-            case false:
-                Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("関連付けた本人ではないため、Weightを変更する権限がありません。", Severity.Error);
+            return;
         }
 
         var parameters = new DialogParameters { ["Weight"] = relation.Weight };
@@ -296,6 +294,9 @@ public partial class TagCard : IAsyncDisposable
                         case TagCardOperationResult.Success:
                             await NotifyChangedAsync();
                             break;
+                        case TagCardOperationResult.NotFound:
+                        case TagCardOperationResult.NotOwner:
+                            break;
                     }
 
                     break;
@@ -310,11 +311,10 @@ public partial class TagCard : IAsyncDisposable
             case true: return;
         }
 
-        switch (TagCardViewModel.IsRelationOwner(oldRelation.OwnerId, CurrentUserId))
+        if (!(TagCardViewModel.IsRelationOwner(oldRelation.OwnerId, CurrentUserId)))
         {
-            case false:
-                Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("関連付けた本人ではないため、変更する権限がありません。", Severity.Error);
+            return;
         }
 
         TagCardOperationResult result =
@@ -328,6 +328,9 @@ public partial class TagCard : IAsyncDisposable
                 Snackbar.Add("タグを変更しました。", Severity.Success);
                 ClosePopover();
                 await NotifyChangedAsync();
+                break;
+            case TagCardOperationResult.NotFound:
+            case TagCardOperationResult.NotOwner:
                 break;
         }
     }
@@ -343,18 +346,16 @@ public partial class TagCard : IAsyncDisposable
 
     private async Task SetParentTagAsync(Tag parentTag, Tag childTag)
     {
-        switch (TagCardViewModel.IsSelfParent(parentTag, childTag))
+        if (TagCardViewModel.IsSelfParent(parentTag, childTag))
         {
-            case true:
-                Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
-                return;
+            Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
+            return;
         }
 
-        switch (TagCardViewModel.HasParentCycle(parentTag, childTag, AllTags))
+        if (TagCardViewModel.HasParentCycle(parentTag, childTag, AllTags))
         {
-            case true:
-                Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
-                return;
+            Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
+            return;
         }
 
         TagCardOperationResult result =
@@ -367,6 +368,8 @@ public partial class TagCard : IAsyncDisposable
             case TagCardOperationResult.Success:
                 Snackbar.Add("子タグとして設定しました。", Severity.Success);
                 await NotifyChangedAsync();
+                break;
+            case TagCardOperationResult.NotFound:
                 break;
         }
     }

@@ -88,13 +88,27 @@
     private async Task LoginWithLine()
     {
         var redirectUri = NavigationManager.ToAbsoluteUri("/auth/callback?provider=Line").ToString();
-        await JS.InvokeVoidAsync("window.customAuth.redirectToLine", LineClientId, redirectUri);
+        try
+        {
+            await JS.InvokeVoidAsync("window.customAuth.redirectToLine", LineClientId, redirectUri);
+        }
+        catch (JSException)
+        {
+            // ignored
+        }
     }
 
     private async Task LoginWithGithub()
     {
         var redirectUri = NavigationManager.ToAbsoluteUri("/auth/callback?provider=Github").ToString();
-        await JS.InvokeVoidAsync("window.customAuth.redirectToGithub", GithubClientId, redirectUri);
+        try
+        {
+            await JS.InvokeVoidAsync("window.customAuth.redirectToGithub", GithubClientId, redirectUri);
+        }
+        catch (JSException)
+        {
+            // ignored
+        }
     }
 
 }

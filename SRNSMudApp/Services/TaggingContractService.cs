@@ -12,6 +12,10 @@ using SRNSMudApp.Models.Unions;
 // 解析器の誤検知のため、ファイル単位で抑制する。
 #pragma warning disable CA1508
 
+// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
+// 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
+#pragma warning disable IDE0010, IDE0072
+
 namespace SRNSMudApp.Services;
 
 public class TaggingContractService(ApplicationDbContext dbContext)
@@ -164,7 +168,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         }
     }
 
-    private async Task<Result<string>> RollbackAndReturnAsync(IDbContextTransaction transaction, Failure f)
+    private static async Task<Result<string>> RollbackAndReturnAsync(IDbContextTransaction transaction, Failure f)
     {
         await transaction.RollbackAsync();
         return f;
@@ -608,7 +612,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         });
     }
 
-    private Result<RightAsset?> ValidateTriggerAsset(TaggingRequestEntity contract, PublicTradeOffer offer)
+    private static Result<RightAsset?> ValidateTriggerAsset(TaggingRequestEntity contract, PublicTradeOffer offer)
     {
         return (contract.ConsumedRightAsset) switch
         {

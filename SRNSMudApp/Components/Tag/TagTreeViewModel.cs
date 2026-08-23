@@ -17,16 +17,18 @@ using Tag = SRNSMudApp.Data.Tag;
 /// </summary>
 public static class TagTreeViewModel
 {
+    // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする（CA1869: インスタンス生成はキャッシュ）
+    private static readonly JsonSerializerOptions CachedSerializerOptions = new() { MaxDepth = 1024 };
+
     /// <summary>検索語でタグを絞り込む。空の場合は自分のタグを優先して上位 2000 件返す。</summary>
-    public static IEnumerable<Tag> FilterTags(List<Tag> tags, string? searchText, string? currentUserId)
+    public static IEnumerable<Tag> FilterTags(IReadOnlyList<Tag> tags, string? searchText, string? currentUserId)
     {
-        switch (string.IsNullOrWhiteSpace(searchText))
+        if (string.IsNullOrWhiteSpace(searchText))
         {
-            case true:
-                return tags
-                    .OrderByDescending(t => t.OwnerId == currentUserId)
-                    .ThenBy(t => t.Name)
-                    .Take(2000);
+            return tags
+                .OrderByDescending(t => t.OwnerId == currentUserId)
+                .ThenBy(t => t.Name)
+                .Take(2000);
         }
 
         var baseTags = tags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -42,11 +44,9 @@ public static class TagTreeViewModel
             {
                 Tag? parent = tags.FirstOrDefault(t => t.Id == current.ParentTagId);
                 stopAncestors = parent == null || !resultIds.Add(parent.Id);
-                switch (stopAncestors)
+                if (!(stopAncestors))
                 {
-                    case false:
-                        current = parent!;
-                        break;
+                    current = parent!;
                 }
             }
         }
@@ -55,7 +55,7 @@ public static class TagTreeViewModel
     }
 
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
-    public static List<object> BuildTreeData(int? parentId, IEnumerable<Tag> filteredTags)
+    public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Tag> filteredTags)
     {
         IReadOnlyCollection<Tag> tagList = filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags];
         List<object> result = [];
@@ -81,7 +81,7 @@ public static class TagTreeViewModel
 
         foreach (Tag child in children)
         {
-            List<object> nodeChildren = BuildTreeData(child.Id, tagList);
+            IReadOnlyList<object> nodeChildren = BuildTreeData(child.Id, tagList);
             switch (nodeChildren.Count)
             {
                 case 0:
@@ -91,6 +91,8 @@ public static class TagTreeViewModel
                         name = child.Name
                     });
                     continue;
+                default:
+                    break;
             }
 
             result.Add(new
@@ -106,18 +108,16 @@ public static class TagTreeViewModel
 
     public static string SerializeTreeData(IEnumerable<Tag> filteredTags)
     {
-        List<object> treeData = BuildTreeData(null, filteredTags);
-        // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする
-        JsonSerializerOptions options = new() { MaxDepth = 1024 };
-        return JsonSerializer.Serialize(treeData, options);
+        IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags);
+        return JsonSerializer.Serialize(treeData, CachedSerializerOptions);
     }
 
     /// <summary>target が parent 自身またはその子孫かどうかを判定する。</summary>
-    public static bool IsDescendantOrSelf(List<Tag> tags, Tag parent, Tag target)
+    public static bool IsDescendantOrSelf(IReadOnlyList<Tag> tags, Tag parent, Tag target)
     {
-        switch (parent.Id == target.Id)
+        if (parent.Id == target.Id)
         {
-            case true: return true;
+            return true;
         }
 
         IEnumerable<Tag> children = tags.Where(t => t.ParentTagId == parent.Id);
@@ -128,7 +128,7 @@ public static class TagTreeViewModel
     ///     親子関係の循環参照を検出してメモリ上で解除する。
     ///     解除された (ParentTagId が null になった) タグ一覧を返す。
     /// </summary>
-    public static List<Tag> DetectAndBreakCycles(List<Tag> tags)
+    public static IReadOnlyList<Tag> DetectAndBreakCycles(IReadOnlyList<Tag> tags)
     {
         HashSet<int> visited = [];
         HashSet<int> recursionStack = [];
@@ -136,9 +136,9 @@ public static class TagTreeViewModel
 
         foreach (Tag tag in tags)
         {
-            switch (visited.Contains(tag.Id))
+            if (visited.Contains(tag.Id))
             {
-                case true: continue;
+                continue;
             }
 
             Tag? current = tag;
@@ -156,6 +156,8 @@ public static class TagTreeViewModel
                 case not null when recursionStack.Contains(current.Id):
                     current.ParentTagId = null;
                     repaired.Add(current);
+                    break;
+                default:
                     break;
             }
 

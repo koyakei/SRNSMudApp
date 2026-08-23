@@ -14,11 +14,11 @@ namespace SRNSMudApp.Services;
 public sealed record TagDetailPageData(
     Tag? Tag,
     bool IsFollowing,
-    List<Item> RelatedItems,
-    List<Tag> RelatedTags,
-    List<TagWeightLedger> WeightLedgers,
-    List<PublicTradeOffer> PublicOffers,
-    List<TaggingRequestEntity> PendingRequests);
+    IReadOnlyList<Item> RelatedItems,
+    IReadOnlyList<Tag> RelatedTags,
+    IReadOnlyList<TagWeightLedger> WeightLedgers,
+    IReadOnlyList<PublicTradeOffer> PublicOffers,
+    IReadOnlyList<TaggingRequestEntity> PendingRequests);
 
 /// <summary>
 ///     TagDetail コンポーネント用のデータアクセスを分離するインターフェース。
@@ -44,18 +44,17 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
             .FirstOrDefaultAsync(t => t.Id == tagId);
 
         var isFollowing = false;
-        switch (tag)
+        if (tag is not null)
         {
-            case not null:
-                switch (currentUserId)
-                {
-                    case not null:
-                        isFollowing = await context.UserTagFollows!
-                            .AnyAsync(utf => utf.TagId == tagId && utf.OwnerId == currentUserId);
-                        break;
-                }
-
-                break;
+            switch (currentUserId)
+            {
+                case not null:
+                    isFollowing = await context.UserTagFollows!
+                        .AnyAsync(utf => utf.TagId == tagId && utf.OwnerId == currentUserId);
+                    break;
+                default:
+                    break;
+            }
         }
 
         List<Item> relatedItems = await context.Items

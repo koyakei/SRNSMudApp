@@ -27,6 +27,8 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
         {
             case 0:
                 return [];
+            default:
+                break;
         }
 
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();

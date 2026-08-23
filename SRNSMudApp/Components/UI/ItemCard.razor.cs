@@ -12,6 +12,10 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
+// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
+// 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
+#pragma warning disable IDE0010, IDE0072
+
 namespace SRNSMudApp.Components.UI;
 
 using Item = SRNSMudApp.Data.Item;
@@ -37,13 +41,13 @@ public partial class ItemCard : IAsyncDisposable
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
-    [Parameter] public List<Tag> AllTags { get; set; } = [];
-    [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
     [Parameter] public int? CurrentUserBadTagId { get; set; }
     [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
-    [Parameter] public List<TimelineEvent>? HighlightEvents { get; set; }
+    [Parameter] public IReadOnlyList<TimelineEvent>? HighlightEvents { get; set; }
 
     /// <summary>
     ///     リプライ 1 件の描画テンプレート (ネストした ItemCard)。
@@ -128,11 +132,9 @@ public partial class ItemCard : IAsyncDisposable
     [JSInvokable]
     public void OnElementFocusedByScroll(string elementId)
     {
-        switch (elementId == $"item-card-{Item.Id}")
+        if (elementId == $"item-card-{Item.Id}")
         {
-            case true:
-                OnFocus.InvokeAsync(Item.Id);
-                break;
+            OnFocus.InvokeAsync(Item.Id);
         }
     }
 
@@ -142,10 +144,9 @@ public partial class ItemCard : IAsyncDisposable
         Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
     private async Task CancelTaggingRequestAsync()
     {
-        switch (Item.AsRequestOf)
+        if (Item.AsRequestOf is null)
         {
-            case null:
-                return;
+            return;
         }
         try
         {
@@ -164,10 +165,9 @@ public partial class ItemCard : IAsyncDisposable
         Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
     private async Task ApproveTaggingRequestAsync()
     {
-        switch (Item.AsRequestOf)
+        if (Item.AsRequestOf is null)
         {
-            case null:
-                return;
+            return;
         }
         try
         {
@@ -196,22 +196,19 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task SubmitReplyAsync()
     {
-        switch (string.IsNullOrWhiteSpace(_newReplyContent) || string.IsNullOrEmpty(CurrentUserId))
+        if (string.IsNullOrWhiteSpace(_newReplyContent) || string.IsNullOrEmpty(CurrentUserId))
         {
-            case true:
-                return;
+            return;
         }
 
         _isSubmittingReply = true;
         try
         {
             var addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
-            switch (addedReply)
+            if (addedReply is not null)
             {
-                case not null:
-                    _newReplyContent = "";
-                    await LoadRepliesAsync();
-                    break;
+                _newReplyContent = "";
+                await LoadRepliesAsync();
             }
         }
         finally
@@ -233,11 +230,10 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task ToggleItemVoteAsync(bool isUpvote)
     {
-        switch (string.IsNullOrEmpty(CurrentUserId))
+        if (string.IsNullOrEmpty(CurrentUserId))
         {
-            case true:
-                Snackbar.Add("ログインが必要です。", Severity.Warning);
-                return;
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
         }
 
         await (OnEnsureSystemTags.HasDelegate switch
@@ -246,11 +242,10 @@ public partial class ItemCard : IAsyncDisposable
             false => Task.CompletedTask
         });
 
-        switch (CurrentUserGoodTagId.HasValue)
+        if (!(CurrentUserGoodTagId.HasValue))
         {
-            case false:
-                Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
-                return;
+            Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            return;
         }
 
         var targetWeight = isUpvote ? 1 : -1;
@@ -288,11 +283,10 @@ public partial class ItemCard : IAsyncDisposable
     // --- Edit/Delete Logic ---
     private async Task EditItemAsync()
     {
-        switch (Item.OwnerId != CurrentUserId)
+        if (Item.OwnerId != CurrentUserId)
         {
-            case true:
-                Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
+            return;
         }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
@@ -311,11 +305,10 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task DeleteItemAsync()
     {
-        switch (Item.OwnerId != CurrentUserId)
+        if (Item.OwnerId != CurrentUserId)
         {
-            case true:
-                Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
-                return;
+            Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
+            return;
         }
 
         await ItemCardData.DeleteItemAsync(Item.Id);
@@ -342,25 +335,22 @@ public partial class ItemCard : IAsyncDisposable
     private async Task AddTagToItemAsync(Tag selectedTag)
     {
         Tag? tagFromDb = await ItemCardData.GetTagWithOwnerAsync(selectedTag.Id);
-        switch (tagFromDb)
+        if (tagFromDb is null)
         {
-            case null:
-                return;
+            return;
         }
 
-        switch (tagFromDb.OwnerId != CurrentUserId)
+        if (tagFromDb.OwnerId != CurrentUserId)
         {
-            case true:
-                await ProposeTaggingContractAsync(tagFromDb);
-                return;
+            await ProposeTaggingContractAsync(tagFromDb);
+            return;
         }
 
         var alreadyExists = Item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
-        switch (alreadyExists)
+        if (alreadyExists)
         {
-            case true:
-                Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
-                return;
+            Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+            return;
         }
 
         await ExecuteAddTagToItemAsync(selectedTag, tagFromDb);
@@ -393,13 +383,11 @@ public partial class ItemCard : IAsyncDisposable
     {
         TagRelation? newRelation =
             await ItemCardData.AddFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);
-        switch (newRelation)
+        if (newRelation is not null)
         {
-            case not null:
-                Item.TagRelations ??= [];
-                newRelation.Tag = tagFromDb;
-                Item.TagRelations.Add(newRelation);
-                break;
+            Item.TagRelations ??= [];
+            newRelation.Tag = tagFromDb;
+            Item.TagRelations.Add(newRelation);
         }
 
         Snackbar.Add("タグを追加しました。", Severity.Success);
@@ -418,19 +406,18 @@ public partial class ItemCard : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        switch (_dotNetRef)
+        GC.SuppressFinalize(this);
+        if (_dotNetRef is not null)
         {
-            case not null:
-                try
-                {
-                    await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
-                _dotNetRef.Dispose();
-                break;
+            try
+            {
+                await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
+            _dotNetRef.Dispose();
         }
     }
 }

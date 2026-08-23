@@ -16,5 +16,5 @@ public class TimelineFeedGroup
     public Item? Item { get; set; }
     public Tag? Tag { get; set; }
 
-    public List<TimelineEvent> Events { get; set; } = [];
+    public IReadOnlyList<TimelineEvent> Events { get; set; } = [];
 }

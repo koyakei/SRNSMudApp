@@ -130,6 +130,8 @@ public sealed record ItemListQueryState
                     case "desc":
                         yield return new SortEntry(tagId, SortOrder.Desc);
                         break;
+                    default:
+                        break;
                 }
             }
         }

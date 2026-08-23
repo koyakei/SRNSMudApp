@@ -1,3 +1,6 @@
+// CA1508: union 型 (TagSearchQuery) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
+#pragma warning disable CA1508
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -83,16 +86,16 @@ public partial class ItemList
             case TagWithUserSearch tagWithUserSearch:
                 await ExecuteSearch(tagWithUserSearch.TagName, tagWithUserSearch.UserName);
                 break;
+            default:
+                break;
         }
     }
 
     private async Task OnSearchKeyDown(KeyboardEventArgs e)
     {
-        switch (e.Key == "Enter")
+        if (e.Key == "Enter")
         {
-            case true:
-                await ExecuteSearch();
-                break;
+            await ExecuteSearch();
         }
     }
 
@@ -112,6 +115,8 @@ public partial class ItemList
             case TagWithUserSearch tagWithUserSearch:
                 await ExecuteSearch(tagWithUserSearch.TagName, tagWithUserSearch.UserName);
                 break;
+            default:
+                break;
         }
     }
 
@@ -119,16 +124,12 @@ public partial class ItemList
     {
         Tag? tag = await ListData.FindTagByNameAsync(tagName);
 
-        switch (tag)
+        if (tag is not null)
         {
-            case not null:
-                switch (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
-                {
-                    case true:
-                        _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
-                        break;
-                }
-                break;
+            if (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
+            {
+                _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
+            }
         }
 
         _tagSearchText = "";
@@ -182,13 +183,11 @@ public partial class ItemList
 
     private async Task OnSortTargetTagAdded(Tag? tag)
     {
-        switch (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
+        if (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
         {
-            case true:
-                _sortConditions.Add(new SortCondition { Tag = tag, Order = SortOrder.Desc });
-                UpdateUrlQuery();
-                await LoadDataAsync();
-                break;
+            _sortConditions.Add(new SortCondition { Tag = tag, Order = SortOrder.Desc });
+            UpdateUrlQuery();
+            await LoadDataAsync();
         }
     }
 

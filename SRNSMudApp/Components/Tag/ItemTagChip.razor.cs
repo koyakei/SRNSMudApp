@@ -30,13 +30,13 @@ public partial class ItemTagChip
     [Parameter][EditorRequired] public TagRelation TagRelation { get; set; } = null!;
     [Parameter][EditorRequired] public Item Item { get; set; } = null!;
     [Parameter] public string CurrentUserId { get; set; } = "";
-    [Parameter] public List<Tag> AllTags { get; set; } = [];
-    [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public TimelineEvent? HighlightEvent { get; set; }
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public int ChipIndex { get; set; }
-    [Parameter] public string[] ChipBackgrounds { get; set; } = ["#EEEDFE"];
-    [Parameter] public string[] ChipTextColors { get; set; } = ["#26215C"];
+    [Parameter] public IReadOnlyList<string> ChipBackgrounds { get; set; } = ["#EEEDFE"];
+    [Parameter] public IReadOnlyList<string> ChipTextColors { get; set; } = ["#26215C"];
     [Parameter] public bool ShowNameAndOwner { get; set; } = true;
 
     private bool _isTreePopoverOpen;

@@ -1,6 +1,5 @@
-using System.Security.Claims;
-
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -48,12 +47,10 @@ public partial class TagTree : IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        switch (AuthState)
+        if (AuthState is not null)
         {
-            case not null:
-                var authState = await AuthState;
-                _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                break;
+            var authState = await AuthState;
+            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
 
         await LoadDataAsync();
@@ -78,23 +75,21 @@ public partial class TagTree : IAsyncDisposable
     {
         // _dataLoaded が true になるまでツリーを初期化しない
         // （OnInitializedAsync の await 中に firstRender が先に来る場合がある）
-        switch (!_isTreeInitialized && _dataLoaded)
+        if (!_isTreeInitialized && _dataLoaded)
         {
-            case true:
-                _dotNetRef = DotNetObjectReference.Create(this);
-                var treeDataJson = GetSerializedTreeData();
-                var isLoggedIn = !string.IsNullOrEmpty(_currentUserId);
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", TreeContainerId, treeDataJson, _dotNetRef, isLoggedIn, SelectedTagId);
-                }
-                catch (JSException)
-                {
-                    // ignored
-                }
+            _dotNetRef = DotNetObjectReference.Create(this);
+            var treeDataJson = GetSerializedTreeData();
+            var isLoggedIn = !string.IsNullOrEmpty(_currentUserId);
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("jqTreeInterop.init", TreeContainerId, treeDataJson, _dotNetRef, isLoggedIn, SelectedTagId);
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
 
-                _isTreeInitialized = true;
-                break;
+            _isTreeInitialized = true;
         }
     }
 
@@ -105,9 +100,9 @@ public partial class TagTree : IAsyncDisposable
     /// <summary>初期化済みの場合、jqTree 側のデータを現在のフィルタ結果で差し替える。</summary>
     private async Task ReloadTreeDataAsync()
     {
-        switch (_isTreeInitialized)
+        if (!(_isTreeInitialized))
         {
-            case false: return;
+            return;
         }
 
         var treeDataJson = GetSerializedTreeData();
@@ -131,9 +126,9 @@ public partial class TagTree : IAsyncDisposable
         Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
     private async Task DeleteSelectedTags()
     {
-        switch (string.IsNullOrEmpty(_currentUserId))
+        if (string.IsNullOrEmpty(_currentUserId))
         {
-            case true: return;
+            return;
         }
 
         List<int> selectedIds = [];
@@ -152,6 +147,8 @@ public partial class TagTree : IAsyncDisposable
             case { Count: 0 }:
                 Snackbar.Add("削除するタグが選択されていません。", Severity.Info);
                 return;
+            default:
+                break;
         }
 
         var hasDeleted = false;
@@ -160,18 +157,14 @@ public partial class TagTree : IAsyncDisposable
         {
             TagTreeDeleteResult result = await TagTreeData.DeleteTagsAsync(_currentUserId, selectedIds);
 
-            switch (result.UnauthorizedNames.Count > 0)
+            if (result.UnauthorizedNames.Count > 0)
             {
-                case true:
-                    Snackbar.Add($"削除権限がないためスキップしました: {string.Join(", ", result.UnauthorizedNames)}", Severity.Warning);
-                    break;
+                Snackbar.Add($"削除権限がないためスキップしました: {string.Join(", ", result.UnauthorizedNames)}", Severity.Warning);
             }
 
-            switch (result.SystemNames.Count > 0)
+            if (result.SystemNames.Count > 0)
             {
-                case true:
-                    Snackbar.Add($"システムタグは削除できないためスキップしました: {string.Join(", ", result.SystemNames)}", Severity.Warning);
-                    break;
+                Snackbar.Add($"システムタグは削除できないためスキップしました: {string.Join(", ", result.SystemNames)}", Severity.Warning);
             }
 
             if (result.HasDeleted)
@@ -185,13 +178,11 @@ public partial class TagTree : IAsyncDisposable
             Snackbar.Add($"削除中にエラーが発生しました: {ex.Message}", Severity.Error);
         }
 
-        switch (hasDeleted)
+        if (hasDeleted)
         {
-            case true:
-                await LoadDataAsync();
-                StateHasChanged();
-                await ReloadTreeDataAsync();
-                break;
+            await LoadDataAsync();
+            StateHasChanged();
+            await ReloadTreeDataAsync();
         }
     }
 
@@ -200,9 +191,9 @@ public partial class TagTree : IAsyncDisposable
         Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
     public async Task AddChildTagByNodeId(int parentId)
     {
-        switch (string.IsNullOrEmpty(_currentUserId))
+        if (string.IsNullOrEmpty(_currentUserId))
         {
-            case true: return;
+            return;
         }
 
         IDialogReference dialog = await DialogLauncher.ShowAsync<TagCreateChildDialog>("子タグの追加");
@@ -232,7 +223,7 @@ public partial class TagTree : IAsyncDisposable
                     StateHasChanged();
                     await ReloadTreeDataAsync();
                 }
-                catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
+                catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.Ordinal) == true)
                 {
                     Snackbar.Add("同じ名前のタグが既に存在します。", Severity.Error);
                 }
@@ -240,6 +231,8 @@ public partial class TagTree : IAsyncDisposable
                 {
                     Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
                 }
+                break;
+            default:
                 break;
         }
     }
@@ -265,24 +258,24 @@ public partial class TagTree : IAsyncDisposable
             case (null, _):
             case (_, null):
                 return;
+            default:
+                break;
         }
 
         // 権限チェック: 自分のタグ以外は移動不可とする
-        switch (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
+        if (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
         {
-            case true:
-                await RejectTreeMoveAsync("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
-                return;
+            await RejectTreeMoveAsync("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
+            return;
         }
 
         // 自分自身の子孫へのドロップは無効（循環参照を防ぐ）
         // movedItem が targetItem の祖先（または自身）であるかを確認する
-        switch (TagTreeViewModel.IsDescendantOrSelf(_tags, movedItem, targetItem))
+        if (TagTreeViewModel.IsDescendantOrSelf(_tags, movedItem, targetItem))
         {
-            case true:
-                await RejectTreeMoveAsync(
-                    $"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
-                return;
+            await RejectTreeMoveAsync(
+                $"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
+            return;
         }
 
         movedItem.ParentTagId = position switch
@@ -324,21 +317,20 @@ public partial class TagTree : IAsyncDisposable
         Justification = "破棄時の例外は無視する必要がある（テレダウン処理）")]
     public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
         _dotNetRef?.Dispose();
         try
         {
-            switch (_isTreeInitialized)
+            if (_isTreeInitialized)
             {
-                case true:
-                    try
-                    {
-                        await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", TreeContainerId);
-                    }
-                    catch (JSException)
-                    {
-                        // ignored
-                    }
-                    break;
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("jqTreeInterop.destroy", TreeContainerId);
+                }
+                catch (JSException)
+                {
+                    // ignored
+                }
             }
         }
         catch

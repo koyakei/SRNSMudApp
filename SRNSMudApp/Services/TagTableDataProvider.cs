@@ -39,10 +39,9 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == selectedTagId);
-        switch (alreadyExists)
+        if (alreadyExists)
         {
-            case true:
-                return TagCardOperationResult.AlreadyExists;
+            return TagCardOperationResult.AlreadyExists;
         }
 
         var newRelation = new Data.TagRelationToTag
@@ -57,26 +56,24 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await context.SaveChangesAsync();
 
         Data.Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
-        switch (tagFromDb)
+        if (tagFromDb is not null)
         {
-            case not null:
-                var prevWeight = tagFromDb.CachedWeight;
-                tagFromDb.CachedWeight += 1;
-                context.TagWeightLedgers!.Add(new TagWeightLedger
-                {
-                    TagId = tagFromDb.Id,
-                    TagNameSnapshot = tagFromDb.Name,
-                    SourceType = "TagRelationToTagInsert",
-                    SourceId = newRelation.Id,
-                    PreviousWeight = prevWeight,
-                    NewWeight = tagFromDb.CachedWeight,
-                    Delta = 1,
-                    IsOwnerAction = true,
-                    Reason = "タグにタグを追加",
-                    OwnerId = ownerId
-                });
-                await context.SaveChangesAsync();
-                break;
+            var prevWeight = tagFromDb.CachedWeight;
+            tagFromDb.CachedWeight += 1;
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tagFromDb.Id,
+                TagNameSnapshot = tagFromDb.Name,
+                SourceType = "TagRelationToTagInsert",
+                SourceId = newRelation.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tagFromDb.CachedWeight,
+                Delta = 1,
+                IsOwnerAction = true,
+                Reason = "タグにタグを追加",
+                OwnerId = ownerId
+            });
+            await context.SaveChangesAsync();
         }
 
         return TagCardOperationResult.Success;
@@ -87,34 +84,29 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Data.TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
             .FirstOrDefaultAsync(tr => tr.Id == relationId);
-        switch (entity)
+        if (entity is null)
         {
-            case null:
-                return TagCardOperationResult.NotFound;
+            return TagCardOperationResult.NotFound;
         }
 
-        switch (entity.Tag)
+        if (entity.Tag is not null)
         {
-            case not null:
-                {
-                    Data.Tag tag = entity.Tag;
-                    var prevWeight = tag.CachedWeight;
-                    tag.CachedWeight -= entity.Weight;
-                    context.TagWeightLedgers!.Add(new TagWeightLedger
-                    {
-                        TagId = tag.Id,
-                        TagNameSnapshot = tag.Name,
-                        SourceType = "TagRelationToTagDelete",
-                        SourceId = entity.Id,
-                        PreviousWeight = prevWeight,
-                        NewWeight = tag.CachedWeight,
-                        Delta = -entity.Weight,
-                        IsOwnerAction = true,
-                        Reason = "タグの関連付け解除",
-                        OwnerId = entity.OwnerId
-                    });
-                    break;
-                }
+            Data.Tag tag = entity.Tag;
+            var prevWeight = tag.CachedWeight;
+            tag.CachedWeight -= entity.Weight;
+            context.TagWeightLedgers.Add(new TagWeightLedger
+            {
+                TagId = tag.Id,
+                TagNameSnapshot = tag.Name,
+                SourceType = "TagRelationToTagDelete",
+                SourceId = entity.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tag.CachedWeight,
+                Delta = -entity.Weight,
+                IsOwnerAction = true,
+                Reason = "タグの関連付け解除",
+                OwnerId = entity.OwnerId
+            });
         }
 
         context.Remove(entity);

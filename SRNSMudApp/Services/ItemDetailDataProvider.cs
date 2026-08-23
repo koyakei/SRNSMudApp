@@ -11,9 +11,9 @@ namespace SRNSMudApp.Services;
 /// <summary>ItemDetail ページの表示データ。</summary>
 public sealed record ItemDetailPageData(
     Item Item,
-    List<Tag> AllTags,
-    List<TagRelationToTag> AllTagRelationsToTags,
-    List<TagWeightLedger> Ledgers);
+    IReadOnlyList<Tag> AllTags,
+    IReadOnlyList<TagRelationToTag> AllTagRelationsToTags,
+    IReadOnlyList<TagWeightLedger> Ledgers);
 
 /// <summary>
 ///     ItemDetail コンポーネント用のデータアクセスを分離するインターフェース。
@@ -48,10 +48,9 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == itemId);
 
-        switch (item)
+        if (item is null)
         {
-            case null:
-                return null;
+            return null;
         }
 
         List<TagWeightLedger> ledgers = await context.TagWeightLedgers

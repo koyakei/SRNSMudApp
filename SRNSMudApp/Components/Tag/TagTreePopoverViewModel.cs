@@ -48,7 +48,7 @@ public static class TagTreePopoverViewModel
     /// <param name="allTags">全タグ（null 非保証）。</param>
     /// <param name="expandedTagIds">展開中のタグ ID。</param>
     /// <param name="enableExpand">展開操作が有効かどうか。</param>
-    public static List<TagTreeLine> BuildTreeLines(
+    public static IReadOnlyList<TagTreeLine> BuildTreeLines(
         Tag targetTag,
         IReadOnlyList<Tag> allTags,
         HashSet<int> expandedTagIds,

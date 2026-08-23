@@ -69,36 +69,32 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem);
 
         var created = false;
-        switch (goodTag)
+        if (goodTag is null)
         {
-            case null:
-                goodTag = new Data.Tag
-                {
-                    Name = "good",
-                    IsSystem = true,
-                    OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                };
-                context.Tags.Add(goodTag);
-                created = true;
-                break;
+            goodTag = new Data.Tag
+            {
+                Name = "good",
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            context.Tags.Add(goodTag);
+            created = true;
         }
 
-        switch (badTag)
+        if (badTag is null)
         {
-            case null:
-                badTag = new Data.Tag
-                {
-                    Name = "bad",
-                    IsSystem = true,
-                    OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                };
-                context.Tags.Add(badTag);
-                created = true;
-                break;
+            badTag = new Data.Tag
+            {
+                Name = "bad",
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            context.Tags.Add(badTag);
+            created = true;
         }
 
         switch (created)
@@ -152,7 +148,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                     .ToListAsync()
             };
 
-            var target = feedGroup.Events.FirstOrDefault()?.Target;
+            var target = (feedGroup.Events.Count > 0 ? feedGroup.Events[0] : null)?.Target;
             switch (target)
             {
                 case Models.Unions.ItemTarget it:
@@ -173,13 +169,13 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(t => t.Id == tt.TargetTagId);
                     break;
+                default:
+                    break;
             }
 
-            switch (feedGroup.Item != null || feedGroup.Tag != null)
+            if (feedGroup.Item != null || feedGroup.Tag != null)
             {
-                case true:
-                    feedGroups.Add(feedGroup);
-                    break;
+                feedGroups.Add(feedGroup);
             }
         }
 

@@ -59,6 +59,8 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
             case BountyPayload b:
                 writer.WriteNumber(nameof(BountyPayload.OfferedRewardAssetId), b.OfferedRewardAssetId);
                 break;
+            default:
+                break;
         }
 
         writer.WriteEndObject();

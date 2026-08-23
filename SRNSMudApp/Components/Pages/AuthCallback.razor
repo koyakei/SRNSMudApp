@@ -32,12 +32,33 @@
                 // Call the JS function to post the code to our backend
                 try
                 {
-                    await JS.InvokeVoidAsync("customAuth.loginWithToken", provider.ToString(), code.ToString());
-                    await JS.InvokeVoidAsync("console.log", "[AuthCallback] InvokeVoidAsync completed");
+                    try
+                    {
+                        await JS.InvokeVoidAsync("customAuth.loginWithToken", provider.ToString(), code.ToString());
+                    }
+                    catch (JSException)
+                    {
+                        NavigationManager.NavigateTo("/Account/Login");
+                    }
+                    try
+                    {
+                        await JS.InvokeVoidAsync("console.log", "[AuthCallback] InvokeVoidAsync completed");
+                    }
+                    catch (JSException)
+                    {
+                        // ignored
+                    }
                 }
                 catch (Exception ex)
                 {
-                    await JS.InvokeVoidAsync("console.error", $"[AuthCallback] JS interop error: {ex.Message}");
+                    try
+                    {
+                        await JS.InvokeVoidAsync("console.error", $"[AuthCallback] JS interop error: {ex.Message}");
+                    }
+                    catch (JSException)
+                    {
+                        // ignored
+                    }
                     NavigationManager.NavigateTo("/Account/Login");
                 }
             }

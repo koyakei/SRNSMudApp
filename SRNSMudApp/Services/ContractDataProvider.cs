@@ -12,12 +12,12 @@ namespace SRNSMudApp.Services;
 
 /// <summary>コントラクト管理ページの表示データ。</summary>
 public sealed record ContractManagementPageData(
-    List<TaggingRequestEntity> IncomingContracts,
-    List<TaggingRequestEntity> OutgoingContracts);
+    IReadOnlyList<TaggingRequestEntity> IncomingContracts,
+    IReadOnlyList<TaggingRequestEntity> OutgoingContracts);
 
 /// <summary>バウンティボードの表示データ。</summary>
 public sealed record BountyBoardData(
-    List<TaggingRequestEntity> Bounties,
+    IReadOnlyList<TaggingRequestEntity> Bounties,
     Dictionary<int, RightAsset> RewardAssets);
 
 /// <summary>
@@ -188,11 +188,9 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags.Where(t => t.OwnerId == userId);
 
-        switch (!string.IsNullOrEmpty(value))
+        if (!string.IsNullOrEmpty(value))
         {
-            case true:
-                query = query.Where(t => t.Name.Contains(value));
-                break;
+            query = query.Where(t => t.Name.Contains(value));
         }
 
         return await query.Take(10).ToListAsync(token);
@@ -229,18 +227,14 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             .Include(a => a.TargetTag)
             .Where(a => a.OwnerId == userId && !a.IsBurned);
 
-        switch (targetTagId.HasValue)
+        if (targetTagId.HasValue)
         {
-            case true:
-                query = query.Where(a => a.TargetTagId == targetTagId.Value);
-                break;
+            query = query.Where(a => a.TargetTagId == targetTagId.Value);
         }
 
-        switch (minAmount.HasValue)
+        if (minAmount.HasValue)
         {
-            case true:
-                query = query.Where(a => a.Amount >= minAmount.Value);
-                break;
+            query = query.Where(a => a.Amount >= minAmount.Value);
         }
 
         return await query.ToListAsync();

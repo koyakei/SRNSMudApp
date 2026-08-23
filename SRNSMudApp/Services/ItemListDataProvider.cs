@@ -1,8 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
-
-using System.Diagnostics.CodeAnalysis;
 
 using SRNSMudApp.Data;
 
@@ -15,13 +14,13 @@ public sealed record ItemListFilter(int TagId, string? UserName);
 public sealed record ItemListSort(int TagId, bool Ascending);
 
 /// <summary>一覧ページの表示データ。</summary>
-public sealed record ItemListPageData(List<Item> Items, List<Tag> Tags);
+public sealed record ItemListPageData(IReadOnlyList<Item> Items, IReadOnlyList<Tag> Tags);
 
 /// <summary>JSON エクスポート用の生データ。</summary>
 public sealed record ItemListExportData(
     Dictionary<int, Tag> AllTags,
-    List<TagRelation> ItemTagRelations,
-    List<TagRelationToTag> TagToTagRelations);
+    IReadOnlyList<TagRelation> ItemTagRelations,
+    IReadOnlyList<TagRelationToTag> TagToTagRelations);
 
 /// <summary>
 ///     ItemList コンポーネント用のデータアクセスを分離するインターフェース。
@@ -168,33 +167,31 @@ public class ItemListDataProvider(
 
         // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
         List<Tag> foundTags;
-        switch (filters.Count != 0)
+        if (filters.Count != 0)
         {
-            case true:
-                foreach (ItemListFilter filter in filters)
+            foreach (ItemListFilter filter in filters)
+            {
+                if (string.IsNullOrWhiteSpace(filter.UserName))
                 {
-                    switch (string.IsNullOrWhiteSpace(filter.UserName))
-                    {
-                        case true:
-                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.TagId));
-                            tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.TagId));
-                            break;
-                        case false:
-                            query = query.Where(i =>
-                                i.TagRelations.Any(tr =>
-                                    tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
-                            tagQuery = tagQuery.Where(t =>
-                                t.TargetTagRelations.Any(tr =>
-                                    tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
-                            break;
-                    }
+                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.TagId));
+                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.TagId));
                 }
+                else
+                {
+                    query = query.Where(i =>
+                        i.TagRelations.Any(tr =>
+                            tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
+                    tagQuery = tagQuery.Where(t =>
+                        t.TargetTagRelations.Any(tr =>
+                            tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
+                }
+            }
 
-                foundTags = await ApplyTagSort(tagQuery, sorts).ToListAsync();
-                break;
-            case false:
-                foundTags = [];
-                break;
+            foundTags = await ApplyTagSort(tagQuery, sorts).ToListAsync();
+        }
+        else
+        {
+            foundTags = [];
         }
 
         List<Item> items = await ApplyItemSort(query, sorts).ToListAsync();
@@ -222,10 +219,9 @@ public class ItemListDataProvider(
 
     private static IQueryable<Item> ApplyItemSort(IQueryable<Item> query, IReadOnlyList<ItemListSort> sorts)
     {
-        switch (sorts.Count == 0)
+        if (sorts.Count == 0)
         {
-            case true:
-                return query.OrderByDescending(i => i.UpdatedDate);
+            return query.OrderByDescending(i => i.UpdatedDate);
         }
 
         IOrderedQueryable<Item>? orderedQuery = null;
@@ -233,18 +229,17 @@ public class ItemListDataProvider(
         foreach (ItemListSort sort in sorts)
         {
             var targetId = sort.TagId;
-            switch (orderedQuery)
+            if (orderedQuery == null)
             {
-                case null:
-                    orderedQuery = sort.Ascending
-                        ? query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-                case not null:
-                    orderedQuery = sort.Ascending
-                        ? orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
+                orderedQuery = sort.Ascending
+                    ? query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+            else
+            {
+                orderedQuery = sort.Ascending
+                    ? orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
             }
         }
 
@@ -253,10 +248,9 @@ public class ItemListDataProvider(
 
     private static IQueryable<Tag> ApplyTagSort(IQueryable<Tag> query, IReadOnlyList<ItemListSort> sorts)
     {
-        switch (sorts.Count == 0)
+        if (sorts.Count == 0)
         {
-            case true:
-                return query.OrderByDescending(t => t.UpdatedDate);
+            return query.OrderByDescending(t => t.UpdatedDate);
         }
 
         IOrderedQueryable<Tag>? orderedQuery = null;
@@ -264,18 +258,17 @@ public class ItemListDataProvider(
         foreach (ItemListSort sort in sorts)
         {
             var targetId = sort.TagId;
-            switch (orderedQuery)
+            if (orderedQuery == null)
             {
-                case null:
-                    orderedQuery = sort.Ascending
-                        ? query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
-                case not null:
-                    orderedQuery = sort.Ascending
-                        ? orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                        : orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-                    break;
+                orderedQuery = sort.Ascending
+                    ? query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+            }
+            else
+            {
+                orderedQuery = sort.Ascending
+                    ? orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                    : orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
             }
         }
 

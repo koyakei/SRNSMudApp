@@ -129,7 +129,7 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    public record ContractManagementData(List<TaggingRequestEntity> IncomingContracts, List<TaggingRequestEntity> OutgoingContracts);
+    public record ContractManagementData(IReadOnlyList<TaggingRequestEntity> IncomingContracts, IReadOnlyList<TaggingRequestEntity> OutgoingContracts);
 
     private AsyncPageState<ContractManagementData> _pageState = new Loading();
     private string _currentUserId = string.Empty;

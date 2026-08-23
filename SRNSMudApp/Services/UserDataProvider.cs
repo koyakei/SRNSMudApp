@@ -1,5 +1,7 @@
 #region
 
+using System.Globalization;
+
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
@@ -14,8 +16,8 @@ namespace SRNSMudApp.Services;
 /// <summary>ユーザー詳細ページの表示データ。</summary>
 public sealed record UserDetailPageData(
     ApplicationUser? User,
-    List<Tag> UserTags,
-    List<Item> UserItems);
+    IReadOnlyList<Tag> UserTags,
+    IReadOnlyList<Item> UserItems);
 
 /// <summary>
 ///     ユーザー系コンポーネント用のデータアクセスを分離するインターフェース。
@@ -45,10 +47,9 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         ApplicationUser? user =
             await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
-        switch (user)
+        if (user is null)
         {
-            case null:
-                return new UserDetailPageData(null, [], []);
+            return new UserDetailPageData(null, [], []);
         }
 
         List<Tag> userTags = await dbContext.Tags
@@ -97,7 +98,9 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         {
             true => query.AsNoTracking().Take(50).ToListAsync(token),
             false => dbContext.Users
-                .Where(x => x.NormalizedUserName != null && x.NormalizedUserName.Contains(value.ToUpper()))
+#pragma warning disable CA1862
+                .Where(x => x.NormalizedUserName != null && x.NormalizedUserName.Contains(value.ToUpper(CultureInfo.InvariantCulture)))
+#pragma warning restore CA1862
                 .AsNoTracking()
                 .Take(50)
                 .ToListAsync(token)

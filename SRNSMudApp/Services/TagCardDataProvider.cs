@@ -66,28 +66,24 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         TagRelationToTag? targetRelation = relations.FirstOrDefault(tr => tr.TagId == targetSystemTagId);
         TagRelationToTag? oppositeRelation = relations.FirstOrDefault(tr => tr.TagId == oppositeSystemTagId);
 
-        switch (targetRelation)
+        if (targetRelation is not null)
         {
-            case not null:
-                context.TagRelationToTags.Remove(targetRelation);
-                break;
-            case null:
-                context.TagRelationToTags.Add(new TagRelationToTag
-                {
-                    TargetTagId = tagId,
-                    TagId = targetSystemTagId,
-                    OwnerId = userId,
-                    Weight = 1
-                });
+            context.TagRelationToTags.Remove(targetRelation);
+        }
+        else
+        {
+            context.TagRelationToTags.Add(new TagRelationToTag
+            {
+                TargetTagId = tagId,
+                TagId = targetSystemTagId,
+                OwnerId = userId,
+                Weight = 1
+            });
 
-                switch (oppositeRelation)
-                {
-                    case not null:
-                        context.TagRelationToTags.Remove(oppositeRelation);
-                        break;
-                }
-
-                break;
+            if (oppositeRelation is not null)
+            {
+                context.TagRelationToTags.Remove(oppositeRelation);
+            }
         }
 
         await context.SaveChangesAsync();
@@ -102,10 +98,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == selectedTagId);
 
-        switch (alreadyExists)
+        if (alreadyExists)
         {
-            case true:
-                return TagCardOperationResult.AlreadyExists;
+            return TagCardOperationResult.AlreadyExists;
         }
 
         var newRelation = new TagRelationToTag
@@ -128,26 +123,24 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         await context.SaveChangesAsync();
 
         Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
-        switch (tagFromDb)
+        if (tagFromDb is not null)
         {
-            case not null:
-                var prevWeight = tagFromDb.CachedWeight;
-                tagFromDb.CachedWeight += 1;
-                context.TagWeightLedgers!.Add(new TagWeightLedger
-                {
-                    TagId = tagFromDb.Id,
-                    TagNameSnapshot = tagFromDb.Name,
-                    SourceType = "TagRelationToTagInsert",
-                    SourceId = newRelation.Id,
-                    PreviousWeight = prevWeight,
-                    NewWeight = tagFromDb.CachedWeight,
-                    Delta = 1,
-                    IsOwnerAction = true,
-                    Reason = "タグの新規追加",
-                    OwnerId = ownerId
-                });
-                await context.SaveChangesAsync();
-                break;
+            var prevWeight = tagFromDb.CachedWeight;
+            tagFromDb.CachedWeight += 1;
+            context.TagWeightLedgers!.Add(new TagWeightLedger
+            {
+                TagId = tagFromDb.Id,
+                TagNameSnapshot = tagFromDb.Name,
+                SourceType = "TagRelationToTagInsert",
+                SourceId = newRelation.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tagFromDb.CachedWeight,
+                Delta = 1,
+                IsOwnerAction = true,
+                Reason = "タグの新規追加",
+                OwnerId = ownerId
+            });
+            await context.SaveChangesAsync();
         }
 
         return TagCardOperationResult.Success;
@@ -162,25 +155,23 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         {
             case not null:
                 Tag? tag = entity.Tag;
-                switch (tag)
+                if (tag is not null)
                 {
-                    case not null:
-                        var prevWeight = tag.CachedWeight;
-                        tag.CachedWeight -= entity.Weight;
-                        context.TagWeightLedgers!.Add(new TagWeightLedger
-                        {
-                            TagId = tag.Id,
-                            TagNameSnapshot = tag.Name,
-                            SourceType = "TagRelationToTagDelete",
-                            SourceId = entity.Id,
-                            PreviousWeight = prevWeight,
-                            NewWeight = tag.CachedWeight,
-                            Delta = -entity.Weight,
-                            IsOwnerAction = true,
-                            Reason = "タグの関連付け解除",
-                            OwnerId = ownerId
-                        });
-                        break;
+                    var prevWeight = tag.CachedWeight;
+                    tag.CachedWeight -= entity.Weight;
+                    context.TagWeightLedgers!.Add(new TagWeightLedger
+                    {
+                        TagId = tag.Id,
+                        TagNameSnapshot = tag.Name,
+                        SourceType = "TagRelationToTagDelete",
+                        SourceId = entity.Id,
+                        PreviousWeight = prevWeight,
+                        NewWeight = tag.CachedWeight,
+                        Delta = -entity.Weight,
+                        IsOwnerAction = true,
+                        Reason = "タグの関連付け解除",
+                        OwnerId = ownerId
+                    });
                 }
 
                 context.Remove(entity);
@@ -206,10 +197,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
-        switch (entity)
+        if (entity is null)
         {
-            case null:
-                return TagCardOperationResult.NotFound;
+            return TagCardOperationResult.NotFound;
         }
 
         entity.Weight += delta;
@@ -227,10 +217,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
-        switch (entity)
+        if (entity is null)
         {
-            case null:
-                return TagCardOperationResult.NotFound;
+            return TagCardOperationResult.NotFound;
         }
 
         var delta = newWeight - entity.Weight;
@@ -252,10 +241,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == newTagId);
 
-        switch (alreadyExists)
+        if (alreadyExists)
         {
-            case true:
-                return TagCardOperationResult.AlreadyExists;
+            return TagCardOperationResult.AlreadyExists;
         }
 
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(oldRelationId);
@@ -281,10 +269,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         switch (entity)
         {
             case not null:
-                switch (entity.OwnerId != ownerId)
+                if (entity.OwnerId != ownerId)
                 {
-                    case true:
-                        return TagCardOperationResult.NotOwner;
+                    return TagCardOperationResult.NotOwner;
                 }
 
                 entity.ParentTagId = parentTagId;
@@ -304,35 +291,33 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         string reason)
     {
         Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        switch (tag)
+        if (tag is not null)
         {
-            case not null:
-                var prevWeight = tag.CachedWeight;
-                tag.CachedWeight += delta;
-                context.TagWeightLedgers.Add(new TagWeightLedger
-                {
-                    TagId = tag.Id,
-                    TagNameSnapshot = tag.Name,
-                    SourceType = "TagRelationToTagUpdate",
-                    SourceId = entity.Id,
-                    PreviousWeight = prevWeight,
-                    NewWeight = tag.CachedWeight,
-                    Delta = delta,
-                    IsOwnerAction = true,
-                    Reason = reason,
-                    OwnerId = ownerId
-                });
+            var prevWeight = tag.CachedWeight;
+            tag.CachedWeight += delta;
+            context.TagWeightLedgers.Add(new TagWeightLedger
+            {
+                TagId = tag.Id,
+                TagNameSnapshot = tag.Name,
+                SourceType = "TagRelationToTagUpdate",
+                SourceId = entity.Id,
+                PreviousWeight = prevWeight,
+                NewWeight = tag.CachedWeight,
+                Delta = delta,
+                IsOwnerAction = true,
+                Reason = reason,
+                OwnerId = ownerId
+            });
 
-                context.TimelineEvents.Add(new TimelineEvent
-                {
-                    OwnerId = ownerId,
-                    Target = new TagTarget(entity.TargetTagId),
-                    FollowedTagId = entity.TagId,
-                    EventType = "Update",
-                    PreviousWeight = entity.Weight - delta,
-                    NewWeight = entity.Weight
-                });
-                break;
+            context.TimelineEvents.Add(new TimelineEvent
+            {
+                OwnerId = ownerId,
+                Target = new TagTarget(entity.TargetTagId),
+                FollowedTagId = entity.TagId,
+                EventType = "Update",
+                PreviousWeight = entity.Weight - delta,
+                NewWeight = entity.Weight
+            });
         }
     }
 }

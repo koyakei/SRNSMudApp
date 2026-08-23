@@ -101,20 +101,18 @@ public static class ItemCardViewModel
     /// </summary>
     public static IReadOnlyList<string> ExtractUrls(string? text)
     {
-        switch (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(text))
         {
-            case true: return [];
+            return [];
         }
 
         List<string> results = [];
         MatchCollection matches = UrlRegex.Matches(text);
         foreach (Match match in matches)
         {
-            switch (!results.Contains(match.Value))
+            if (!results.Contains(match.Value))
             {
-                case true:
-                    results.Add(match.Value);
-                    break;
+                results.Add(match.Value);
             }
         }
 

@@ -87,25 +87,23 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     case true:
                         {
                             var deltaCancel = -existingRelation.Weight;
-                            switch (tag)
+                            if (tag is not null)
                             {
-                                case not null:
-                                    var prevWeightCancel = tag.CachedWeight;
-                                    tag.CachedWeight += deltaCancel;
-                                    context.TagWeightLedgers!.Add(new TagWeightLedger
-                                    {
-                                        TagId = tag.Id,
-                                        TagNameSnapshot = tag.Name,
-                                        SourceType = "TagRelationDelete",
-                                        SourceId = existingRelation.Id,
-                                        PreviousWeight = prevWeightCancel,
-                                        NewWeight = tag.CachedWeight,
-                                        Delta = deltaCancel,
-                                        IsOwnerAction = true,
-                                        Reason = "Vote取り消し",
-                                        OwnerId = userId
-                                    });
-                                    break;
+                                var prevWeightCancel = tag.CachedWeight;
+                                tag.CachedWeight += deltaCancel;
+                                context.TagWeightLedgers!.Add(new TagWeightLedger
+                                {
+                                    TagId = tag.Id,
+                                    TagNameSnapshot = tag.Name,
+                                    SourceType = "TagRelationDelete",
+                                    SourceId = existingRelation.Id,
+                                    PreviousWeight = prevWeightCancel,
+                                    NewWeight = tag.CachedWeight,
+                                    Delta = deltaCancel,
+                                    IsOwnerAction = true,
+                                    Reason = "Vote取り消し",
+                                    OwnerId = userId
+                                });
                             }
 
                             context.TimelineEvents!.Add(new TimelineEvent
@@ -127,25 +125,23 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                             existingRelation.Weight = targetWeight;
                             existingRelation.UpdatedDate = DateTime.UtcNow;
 
-                            switch (tag)
+                            if (tag is not null)
                             {
-                                case not null:
-                                    var prevWeightUpdate = tag.CachedWeight;
-                                    tag.CachedWeight += deltaUpdate;
-                                    context.TagWeightLedgers!.Add(new TagWeightLedger
-                                    {
-                                        TagId = tag.Id,
-                                        TagNameSnapshot = tag.Name,
-                                        SourceType = "TagRelationUpdate",
-                                        SourceId = existingRelation.Id,
-                                        PreviousWeight = prevWeightUpdate,
-                                        NewWeight = tag.CachedWeight,
-                                        Delta = deltaUpdate,
-                                        IsOwnerAction = true,
-                                        Reason = "Vote変更",
-                                        OwnerId = userId
-                                    });
-                                    break;
+                                var prevWeightUpdate = tag.CachedWeight;
+                                tag.CachedWeight += deltaUpdate;
+                                context.TagWeightLedgers!.Add(new TagWeightLedger
+                                {
+                                    TagId = tag.Id,
+                                    TagNameSnapshot = tag.Name,
+                                    SourceType = "TagRelationUpdate",
+                                    SourceId = existingRelation.Id,
+                                    PreviousWeight = prevWeightUpdate,
+                                    NewWeight = tag.CachedWeight,
+                                    Delta = deltaUpdate,
+                                    IsOwnerAction = true,
+                                    Reason = "Vote変更",
+                                    OwnerId = userId
+                                });
                             }
 
                             context.TimelineEvents!.Add(new TimelineEvent
@@ -169,12 +165,10 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Item? item = await context.Items.FindAsync(itemId);
-        switch (item)
+        if (item is not null)
         {
-            case not null:
-                context.Items.Remove(item);
-                await context.SaveChangesAsync();
-                break;
+            context.Items.Remove(item);
+            await context.SaveChangesAsync();
         }
     }
 
@@ -223,6 +217,8 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     item.TagRelations = tagRelations;
                     break;
                 }
+            default:
+                break;
         }
 
         await context.SaveChangesAsync();
@@ -231,10 +227,9 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Item? itemToUpdate = await context.Items.FindAsync(itemId);
-        switch (itemToUpdate)
+        if (itemToUpdate is null)
         {
-            case null:
-                return false;
+            return false;
         }
 
         itemToUpdate.Content = content;

@@ -1,11 +1,10 @@
 #region
 
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
-
-using System.Diagnostics.CodeAnalysis;
 
 using SRNSMudApp.Data;
 
@@ -47,10 +46,9 @@ public class ImportTagDataProvider(
         await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags.Where(t => t.OwnerId == userId).AsQueryable();
 
-        switch (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value))
         {
-            case true:
-                return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
         }
 
         try
@@ -110,11 +108,9 @@ public class ImportTagDataProvider(
         try
         {
             Tag? baseParentTag = null;
-            switch (existingTags.TryGetValue(selectedParentTagName, out Tag? trackedBaseTag))
+            if (existingTags.TryGetValue(selectedParentTagName, out Tag? trackedBaseTag))
             {
-                case true:
-                    baseParentTag = trackedBaseTag;
-                    break;
+                baseParentTag = trackedBaseTag;
             }
 
             foreach (var line in lines)
@@ -123,6 +119,8 @@ public class ImportTagDataProvider(
                 switch (tagNames.Count)
                 {
                     case 0: continue;
+                    default:
+                        break;
                 }
 
                 Tag? currentParentTag = baseParentTag;
@@ -130,57 +128,50 @@ public class ImportTagDataProvider(
                 foreach (var tagName in tagNames)
                 {
                     // Validate tag name
-                    switch (TagNameRegex.IsMatch(tagName))
+                    if (!(TagNameRegex.IsMatch(tagName)))
                     {
-                        case false:
-                            throw new Exception($"不正なタグ名が含まれています: '{tagName}'");
+                        throw new InvalidOperationException($"不正なタグ名が含まれています: '{tagName}'");
                     }
 
-                    switch (existingTags.TryGetValue(tagName, out Tag? tag))
+                    if (!(existingTags.TryGetValue(tagName, out Tag? tag)))
                     {
-                        case false:
+                        {
+                            // Tag doesn't exist, create it
+                            var newTag = new Tag
                             {
-                                // Tag doesn't exist, create it
-                                var newTag = new Tag
-                                {
-                                    Name = tagName,
-                                    OwnerId = userId,
-                                    ParentTag = currentParentTag,
-                                    CreatedDate = DateTime.UtcNow,
-                                    UpdatedDate = DateTime.UtcNow
-                                };
+                                Name = tagName,
+                                OwnerId = userId,
+                                ParentTag = currentParentTag,
+                                CreatedDate = DateTime.UtcNow,
+                                UpdatedDate = DateTime.UtcNow
+                            };
 
-                                try
-                                {
-                                    var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
-                                    newTag.Embedding = embedding.ToArray();
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Embedding generation failed: {ex.Message}");
-                                }
-
-                                dbContext.Tags.Add(newTag);
-
-                                existingTags[tagName] = newTag;
-                                currentParentTag = newTag;
-                                createdCount++;
-                                continue;
+                            try
+                            {
+                                var embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                                newTag.Embedding = embedding.ToArray();
                             }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Embedding generation failed: {ex.Message}");
+                            }
+
+                            dbContext.Tags.Add(newTag);
+
+                            existingTags[tagName] = newTag;
+                            currentParentTag = newTag;
+                            createdCount++;
+                            continue;
+                        }
                     }
 
-                    switch (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
+                    if (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
                     {
-                        case true:
-                            // Avoid circular reference
-                            switch (!IsDescendantOrSelf(tag, currentParentTag!))
-                            {
-                                case true:
-                                    tag.ParentTag = currentParentTag;
-                                    break;
-                            }
-
-                            break;
+                        // Avoid circular reference
+                        if (!IsDescendantOrSelf(tag, currentParentTag!))
+                        {
+                            tag.ParentTag = currentParentTag;
+                        }
                     }
 
                     currentParentTag = tag;
@@ -201,17 +192,17 @@ public class ImportTagDataProvider(
 
     private static bool IsDescendantOrSelf(Tag parent, Tag target)
     {
-        switch (ReferenceEquals(parent, target))
+        if (ReferenceEquals(parent, target))
         {
-            case true: return true;
+            return true;
         }
 
         Tag? current = target;
         while (current?.ParentTag != null)
         {
-            switch (ReferenceEquals(current.ParentTag, parent))
+            if (ReferenceEquals(current.ParentTag, parent))
             {
-                case true: return true;
+                return true;
             }
 
             current = current.ParentTag;

@@ -33,7 +33,7 @@ public record TagCardChipDisplayInfo
 ///     タグチップ一覧の表示計算結果。
 /// </summary>
 public record TagCardDisplayList(
-    List<TagRelationToTag> TagsToDisplay,
+    IReadOnlyList<TagRelationToTag> TagsToDisplay,
     bool HasManyTags,
     int HiddenCount);
 
@@ -77,7 +77,7 @@ public static class TagCardViewModel
     ///     表示対象のタグリレーション一覧を構築する。
     ///     システムタグを除外し、削除イベントがあれば仮想的なリレーションとして追加する。
     /// </summary>
-    public static TagCardDisplayList BuildDisplayList(Tag tag, List<TimelineEvent>? highlightEvents, bool areTagsExpanded)
+    public static TagCardDisplayList BuildDisplayList(Tag tag, IReadOnlyList<TimelineEvent>? highlightEvents, bool areTagsExpanded)
     {
         List<TagRelationToTag> allTags = tag.TargetTagRelations?
             .Where(tr => tr.Tag is { IsSystem: false })
@@ -85,26 +85,21 @@ public static class TagCardViewModel
             .ToList() ?? [];
 
         // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelationToTag としてリストに追加して表示する
-        switch (highlightEvents)
+        if (highlightEvents is not null)
         {
-            case not null:
-                foreach (TimelineEvent ev in highlightEvents.Where(e => e.EventType == "Delete"))
+            foreach (TimelineEvent ev in highlightEvents.Where(e => e.EventType == "Delete"))
+            {
+                if (ev.FollowedTag is not null && allTags.All(t => t.TagId != ev.FollowedTagId))
                 {
-                    switch (ev.FollowedTag is not null && allTags.All(t => t.TagId != ev.FollowedTagId))
+                    allTags.Add(new TagRelationToTag
                     {
-                        case true:
-                            allTags.Add(new TagRelationToTag
-                            {
-                                TagId = ev.FollowedTagId,
-                                Tag = ev.FollowedTag,
-                                Weight = ev.PreviousWeight,
-                                OwnerId = ev.OwnerId // fake owner
-                            });
-                            break;
-                    }
+                        TagId = ev.FollowedTagId,
+                        Tag = ev.FollowedTag,
+                        Weight = ev.PreviousWeight,
+                        OwnerId = ev.OwnerId // fake owner
+                    });
                 }
-
-                break;
+            }
         }
 
         var hasManyTags = allTags.Count >= HasManyThreshold;
@@ -162,7 +157,7 @@ public static class TagCardViewModel
     }
 
     /// <summary>親タグを設定した際に循環参照が発生するかどうかを判定する。</summary>
-    public static bool HasParentCycle(Tag parentTag, Tag childTag, List<Tag> allTags)
+    public static bool HasParentCycle(Tag parentTag, Tag childTag, IReadOnlyList<Tag> allTags)
     {
         // 循環参照の簡易チェック
         var currentParent = parentTag.ParentTagId;

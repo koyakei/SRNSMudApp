@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -5,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace SRNSMudApp.Migrations;
 
 /// <inheritdoc />
+[SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores", Justification = "EF Migrations の既定のクラス命名規約（タイムスタンププレフィックス）に従うため、リネームしない")]
 public partial class _20260819065808_RevertItemNullableForeignKeys : Migration
 {
     /// <inheritdoc />

@@ -39,6 +39,8 @@ public sealed class TimelineTargetConverter : JsonConverter<TimelineTarget>
             case TagTarget t:
                 writer.WriteNumber(nameof(TagTarget.TargetTagId), t.TargetTagId);
                 break;
+            default:
+                break;
         }
 
         writer.WriteEndObject();

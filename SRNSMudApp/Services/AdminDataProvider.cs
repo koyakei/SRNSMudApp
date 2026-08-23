@@ -52,11 +52,9 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 existingTags[tagName] = newTag;
             }
 
-            switch (newTags.Count != 0)
+            if (newTags.Count != 0)
             {
-                case true:
-                    context.Tags.AddRange(newTags);
-                    break;
+                context.Tags.AddRange(newTags);
             }
 
             var importedItemCount = 0;
@@ -75,9 +73,9 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                     values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
                 foreach (var tagName in tagNamesInLine)
                 {
-                    switch (!existingTags.TryGetValue(tagName, out Tag? tag))
+                    if (!existingTags.TryGetValue(tagName, out Tag? tag))
                     {
-                        case true: continue;
+                        continue;
                     }
 
                     var newRelation = new TagRelation

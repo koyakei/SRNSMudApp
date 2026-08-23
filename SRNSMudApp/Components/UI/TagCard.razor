@@ -55,7 +55,7 @@
                 @{
                     TagCardDisplayList display =
                         TagCardViewModel.BuildDisplayList(Tag, HighlightEvents, _areTagsExpanded);
-                    List<TagRelationToTag> tagsToDisplay = display.TagsToDisplay;
+                    IReadOnlyList<TagRelationToTag> tagsToDisplay = display.TagsToDisplay;
                 }
 
                 <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="align-items-center">

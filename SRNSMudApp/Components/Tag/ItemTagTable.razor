@@ -51,8 +51,8 @@
     [Parameter] public IEnumerable<TagRelation> TagRelations { get; set; } = [];
     [Parameter] public Item Item { get; set; } = null!;
     [Parameter] public string CurrentUserId { get; set; } = "";
-    [Parameter] public List<Tag> AllTags { get; set; } = [];
-    [Parameter] public List<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public EventCallback OnDataChanged { get; set; }
 
     private string _searchString = "";

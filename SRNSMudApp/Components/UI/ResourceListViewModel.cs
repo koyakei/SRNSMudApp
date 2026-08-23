@@ -28,9 +28,11 @@ public static class ResourceListViewModel
             return default;
         }
 
-        var goodTag = tags.FirstOrDefault(
+        // CA1851: 複数回の列挙を避けるため一度材料化する
+        List<Tag> tagList = [.. tags];
+        var goodTag = tagList.FirstOrDefault(
             t => t.OwnerId == currentUserId && t.Name == "good" && t.IsSystem);
-        var badTag = tags.FirstOrDefault(
+        var badTag = tagList.FirstOrDefault(
             t => t.OwnerId == currentUserId && t.Name == "bad" && t.IsSystem);
 
         return new SystemTagIds(goodTag?.Id, badTag?.Id);

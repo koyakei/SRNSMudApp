@@ -94,7 +94,7 @@
 
     private bool _isLoading = true;
     private string _currentUserId = string.Empty;
-    private List<TaggingRequestEntity> _bounties = [];
+    private IReadOnlyList<TaggingRequestEntity> _bounties = [];
     private Dictionary<int, RightAsset> _rewardAssets = new();
 
     protected override async Task OnInitializedAsync()

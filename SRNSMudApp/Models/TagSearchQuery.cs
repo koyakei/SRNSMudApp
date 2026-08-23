@@ -18,7 +18,7 @@ public union TagSearchQuery(TagNameSearch, TagWithUserSearch, IncompleteSearch, 
         }
 
         var text = query.Trim();
-        if (text.EndsWith(" @"))
+        if (text.EndsWith(" @", StringComparison.Ordinal))
         {
             var parts = text.Split(" @", 2, StringSplitOptions.RemoveEmptyEntries);
             return parts.Length > 0 ? new IncompleteSearch(parts[0]) : new EmptySearch();

@@ -49,7 +49,7 @@ public static class NotificationsViewModel
     /// <summary>
     ///     通知のハイライト対象タグに対する TimelineEvent を生成する。対象がなければ空リスト。
     /// </summary>
-    public static List<TimelineEvent> CreateHighlightEvents(NotificationDto notification, string? userId)
+    public static IReadOnlyList<TimelineEvent> CreateHighlightEvents(NotificationDto notification, string? userId)
     {
         List<TimelineEvent> highlightEvents = [];
         if (notification.HighlightTagId.HasValue)

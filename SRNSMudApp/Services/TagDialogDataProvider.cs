@@ -1,10 +1,9 @@
 #region
 
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
-
-using System.Diagnostics.CodeAnalysis;
 
 using SRNSMudApp.Data;
 
@@ -110,10 +109,9 @@ public class TagDialogDataProvider(
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
-        switch (tagToUpdate)
+        if (tagToUpdate is null)
         {
-            case null:
-                return false;
+            return false;
         }
 
         tagToUpdate.Name = name;
@@ -141,10 +139,9 @@ public class TagDialogDataProvider(
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags.AsQueryable();
 
-        switch (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value))
         {
-            case true:
-                return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.AsNoTracking().Take(50).ToListAsync(token);
         }
 
         try

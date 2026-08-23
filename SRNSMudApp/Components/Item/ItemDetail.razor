@@ -108,7 +108,7 @@
 </MudContainer>
 
 @code {
-    public record ItemDetailData(Item Item, List<TaggingRequestEntity> Requests, List<TagWeightLedger> Ledgers);
+    public record ItemDetailData(Item Item, List<TaggingRequestEntity> Requests, IReadOnlyList<TagWeightLedger> Ledgers);
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -117,8 +117,8 @@
     private AsyncPageState<ItemDetailData> _pageState = new Loading();
 
     private string _currentUserId = "";
-    private List<Tag> _allTags = [];
-    private List<TagRelationToTag> _allTagRelationsToTags = [];
+    private IReadOnlyList<Tag> _allTags = [];
+    private IReadOnlyList<TagRelationToTag> _allTagRelationsToTags = [];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? ActiveTabQuery { get; set; }
@@ -157,7 +157,10 @@
         try
         {
             _pageState = new Loading();
+#pragma warning disable BL0012
+            // ローディングスピナーを即座に描画させるため意図的に呼び出す
             StateHasChanged();
+#pragma warning restore BL0012
 
             ItemDetailPageData? data = await DetailData.GetItemDetailAsync(ItemId);
 
