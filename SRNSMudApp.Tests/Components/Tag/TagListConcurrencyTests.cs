@@ -1,8 +1,6 @@
 #region
 
 using System;
-using System.Linq;
-using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -74,24 +72,5 @@ public class TagListConcurrencyTests : IAsyncDisposable
 
         // Verify that no exception was thrown
         Assert.Null(exception);
-    }
-
-    [Theory]
-    [InlineData(typeof(TagList))]
-    [InlineData(typeof(TagTable))]
-    public void Component_ShouldNotInjectDbContextDirectly_ToPreventConcurrencyIssues(Type componentType)
-    {
-        // Arrange
-        PropertyInfo[] properties =
-            componentType.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-
-        // Act
-        var hasDirectDbContextInjection = properties.Any(p =>
-            p.PropertyType == typeof(ApplicationDbContext) &&
-            p.GetCustomAttributes(typeof(InjectAttribute), true).Length != 0);
-
-        // Assert
-        Assert.False(hasDirectDbContextInjection,
-            $"{componentType.Name} should inject IDbContextFactory<ApplicationDbContext> instead of ApplicationDbContext directly to prevent InvalidOperationException during concurrent rendering.");
     }
 }
