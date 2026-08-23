@@ -54,7 +54,8 @@ public static class BunitTestSetup
             .AddScoped<ITagDialogDataProvider, TagDialogDataProvider>()
             .AddScoped<ITagDetailDataProvider, TagDetailDataProvider>()
             .AddScoped<IContractDataProvider, ContractDataProvider>()
-            .AddScoped<IUserDataProvider, UserDataProvider>();
+            .AddScoped<IUserDataProvider, UserDataProvider>()
+            .AddScoped<IAdminDataProvider, AdminDataProvider>();
     }
 
     /// <summary>

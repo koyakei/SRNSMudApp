@@ -1,7 +1,8 @@
 @using System.Security.Claims
 @rendermode InteractiveServer
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IAdminDataProvider AdminData
 @inject ISnackbar Snackbar
 
 <MudPaper Outlined="true" Class="pa-4 rounded-xl mb-4">
@@ -78,7 +79,6 @@
 
     private async Task ProcessCsvFile(IBrowserFile file)
     {
-        var importedItemCount = 0;
         var linesToProcess = new List<string[]>();
         using (var reader = new StreamReader(file.OpenReadStream()))
         {
@@ -105,75 +105,16 @@
                 return;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        await using var transaction = await context.Database.BeginTransactionAsync();
         try
         {
-            var allTagNames = linesToProcess.SelectMany(values => values.Skip(1))
-                .Where(tagName => !string.IsNullOrWhiteSpace(tagName))
-                .Distinct()
-                .ToList();
-
-            var existingTags = await context.Tags
-                .Where(t => t.OwnerId == _currentUserId && allTagNames.Contains(t.Name))
-                .ToDictionaryAsync(t => t.Name, t => t);
-
-            var newTagNames = allTagNames.Where(name => !existingTags.ContainsKey(name));
-            var newTags = new List<Tag>();
-            foreach (var tagName in newTagNames)
-            {
-                var newTag = new Tag { Name = tagName, OwnerId = _currentUserId };
-                newTags.Add(newTag);
-                existingTags[tagName] = newTag;
-            }
-
-            switch (newTags.Any())
-            {
-                case true:
-                    context.Tags.AddRange(newTags);
-                    break;
-            }
-
-            foreach (var values in linesToProcess)
-            {
-                var content = values[0];
-                var newItem = new Item
-                {
-                    Content = content,
-                    OwnerId = _currentUserId,
-                    TagRelations = new List<TagRelation>()
-                };
-                context.Items.Add(newItem);
-
-                var tagNamesInLine = values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
-                foreach (var tagName in tagNamesInLine)
-                {
-                    switch (!existingTags.TryGetValue(tagName, out var tag))
-                    {
-                        case true: continue;
-                    }
-                    var newRelation = new TagRelation
-                    {
-                        Item = newItem,
-                        Tag = tag!,
-                        Weight = 1,
-                        OwnerId = _currentUserId
-                    };
-                    newItem.TagRelations.Add(newRelation);
-                }
-
-                importedItemCount++;
-            }
-
-            await context.SaveChangesAsync();
-            await transaction.CommitAsync();
+            int importedItemCount =
+                await AdminData.ImportItemsWithTagsAsync(_currentUserId, linesToProcess);
 
             Snackbar.Add($"{importedItemCount}件のアイテムをインポートしました。", Severity.Success);
             await OnImportCompleted.InvokeAsync();
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
             Snackbar.Add($"インポート中にエラーが発生しました: {ex.Message}", Severity.Error);
         }
     }

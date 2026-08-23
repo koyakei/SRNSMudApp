@@ -3,7 +3,8 @@
 @using System.Security.Cryptography
 
 @attribute [Authorize(Roles = "Admin")]
-@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@using SRNSMudApp.Services
+@inject IAdminDataProvider AdminData
 @inject ISnackbar Snackbar
 
 <PageTitle>Invitation Management</PageTitle>
@@ -81,10 +82,7 @@
 
     private async Task LoadInvitations()
     {
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        _invitations = await context.Invitations!
-            .OrderByDescending(i => i.CreatedDate)
-            .ToListAsync();
+        _invitations = await AdminData.GetInvitationsAsync();
     }
 
     private async Task CreateInvitation()
@@ -106,9 +104,7 @@
             OwnerId = _currentUserId ?? "system"
         };
 
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        context.Invitations!.Add(invitation);
-        await context.SaveChangesAsync();
+        await AdminData.CreateInvitationAsync(invitation);
 
         Snackbar.Add("Invitation created successfully.", Severity.Success);
         _newEmail = "";
@@ -117,9 +113,7 @@
 
     private async Task DeleteInvitation(Invitation invitation)
     {
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        context.Invitations!.Remove(invitation);
-        await context.SaveChangesAsync();
+        await AdminData.DeleteInvitationAsync(invitation);
         Snackbar.Add("Invitation deleted.", Severity.Info);
         await LoadInvitations();
     }
