@@ -82,6 +82,9 @@ builder.Services.AddScoped<ITagDetailDataProvider, TagDetailDataProvider>();
 // Contract 系のデータアクセス分離
 builder.Services.AddScoped<IContractDataProvider, ContractDataProvider>();
 
+// User 系のデータアクセス分離
+builder.Services.AddScoped<IUserDataProvider, UserDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 

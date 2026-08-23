@@ -3,7 +3,8 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
 @inject UserManager<ApplicationUser> UserManager
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IUserDataProvider UserData
 @inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-10">
@@ -54,8 +55,7 @@
 
     private async Task LoadUsersAsync()
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync();
-        var users = await dbContext.Users.AsNoTracking().ToListAsync();
+        List<ApplicationUser> users = await UserData.GetAllUsersAsync();
 
         var vms = new List<UserViewModel>();
         foreach (var u in users)

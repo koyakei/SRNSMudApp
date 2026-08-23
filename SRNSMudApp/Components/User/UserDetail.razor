@@ -3,7 +3,8 @@
 @using System.Text.Json
 @implements IAsyncDisposable
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IUserDataProvider UserData
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
@@ -78,31 +79,14 @@
     {
         try
         {
-            await using var dbContext = await DbFactory.CreateDbContextAsync();
-            user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+            UserDetailPageData page = await UserData.GetUserDetailAsync(UserId);
+            user = page.User;
 
             switch (user)
             {
                 case not null:
-                    userTags = await dbContext.Tags
-                        .Include(t => t.Owner)
-                        .Include(t => t.TargetTagRelations)
-                        .ThenInclude(tr => tr.Tag)
-                        .ThenInclude(t => t.Owner)
-                        .AsNoTracking()
-                        .Where(t => t.OwnerId == UserId)
-                        .OrderByDescending(t => t.UpdatedDate)
-                        .ToListAsync();
-
-                    userItems = await dbContext.Items
-                        .Include(i => i.Owner)
-                        .Include(i => i.TagRelations)
-                        .ThenInclude(tr => tr.Tag)
-                        .ThenInclude(t => t.Owner)
-                        .AsNoTracking()
-                        .Where(i => i.OwnerId == UserId)
-                        .OrderByDescending(i => i.UpdatedDate)
-                        .ToListAsync();
+                    userTags = page.UserTags;
+                    userItems = page.UserItems;
                     break;
             }
         }

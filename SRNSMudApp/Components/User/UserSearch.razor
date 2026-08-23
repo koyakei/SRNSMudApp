@@ -1,7 +1,8 @@
 @page "/User/UserSearch"
 @rendermode InteractiveServer
 @attribute [AllowAnonymous]
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IUserDataProvider UserData
 
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
@@ -52,20 +53,6 @@
 
     private async Task<IEnumerable<ApplicationUser>> SearchUsersAsync(string? value, CancellationToken token)
     {
-        await using var dbContext = await DbFactory.CreateDbContextAsync(token);
-        var query = dbContext.Users.AsQueryable();
-
-        return await (string.IsNullOrEmpty(value) switch
-        {
-            true => query.AsNoTracking().Take(50).ToListAsync(token).ContinueWith(t => (IEnumerable<ApplicationUser>)t.Result, token),
-            false => ExecuteSearchAsync(query, value, token)
-        });
-    }
-
-    private async Task<IEnumerable<ApplicationUser>> ExecuteSearchAsync(IQueryable<ApplicationUser> query, string value, CancellationToken token)
-    {
-        var upperValue = value.ToUpper();
-        query = query.Where(x => x.NormalizedUserName != null && x.NormalizedUserName.Contains(upperValue));
-        return await query.AsNoTracking().Take(50).ToListAsync(token);
+        return await UserData.SearchUsersByNormalizedNameAsync(value, token);
     }
 }
