@@ -39,6 +39,9 @@ public interface IItemCardDataProvider
     ///     RightAsset を消費して無償でタグ付けし、作成されたリレーション (Tag 込み) を返す。
     /// </summary>
     Task<TagRelation?> AddFreeTagRelationAsync(int itemId, int tagId, string userId);
+
+    /// <summary>アイテムを初期タグ付きで作成する。</summary>
+    Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds);
 }
 
 public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemCardDataProvider
@@ -194,5 +197,31 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             .Include(tr => tr.Tag)
             .OrderByDescending(tr => tr.Id)
             .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.TagId == tagId && tr.OwnerId == userId);
+    }
+
+    public async Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        context.Items.Add(item);
+
+        switch (initialTagIds is { Count: > 0 })
+        {
+            case true:
+            {
+                List<TagRelation> tagRelations = initialTagIds
+                    .Select(tagId => new TagRelation
+                    {
+                        TagId = tagId,
+                        Weight = 1,
+                        OwnerId = item.OwnerId
+                    })
+                    .ToList();
+
+                item.TagRelations = tagRelations;
+                break;
+            }
+        }
+
+        await context.SaveChangesAsync();
     }
 }

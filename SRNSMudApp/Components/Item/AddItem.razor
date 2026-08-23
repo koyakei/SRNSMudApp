@@ -5,7 +5,8 @@
 
 @namespace SRNSMudApp.Components.Item
 
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject IItemCardDataProvider ItemCardData
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject UserManager<ApplicationUser> UserManager
@@ -111,30 +112,8 @@
             case false:
                 try
                 {
-                    await using (var context = await DbFactory.CreateDbContextAsync())
-                    {
-                        context.Items.Add(_newItem);
-
-                        switch (InitialTags != null && InitialTags.Any())
-                        {
-                            case true:
-                                var tagRelations = new List<TagRelation>();
-                                foreach (var tag in InitialTags!)
-                                {
-                                    tagRelations.Add(new TagRelation
-                                    {
-                                        TagId = tag.Id,
-                                        Weight = 1,
-                                        OwnerId = _newItem.OwnerId
-                                    });
-                                }
-
-                                _newItem.TagRelations = tagRelations;
-                                break;
-                        }
-
-                        await context.SaveChangesAsync();
-                    }
+                    await ItemCardData.CreateItemAsync(
+                        _newItem, InitialTags?.Select(t => t.Id).ToList());
 
                     _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
 
