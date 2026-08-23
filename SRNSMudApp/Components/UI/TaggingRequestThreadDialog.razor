@@ -1,7 +1,7 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
 @inject IItemTagService ItemTagService
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IHomeDataProvider HomeData
 @inject TaggingContractService TaggingContractService
 @inject ITaggingService TaggingService
 @inject ISnackbar Snackbar
@@ -146,9 +146,9 @@
                 break;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _allTags = await context.Tags.Include(t => t.Owner).ToListAsync();
-        _allTagRelationsToTags = await context.TagRelationToTags.Include(trt => trt.Tag).ToListAsync();
+        (List<Tag> allTags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
+        _allTags = allTags;
+        _allTagRelationsToTags = relations;
     }
 
     private async Task SubmitReplyAsync()

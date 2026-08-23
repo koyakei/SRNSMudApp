@@ -1,7 +1,8 @@
 @page "/TagDetail/{TagId:int}"
 @using System.Security.Claims
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using SRNSMudApp.Services
+@inject ITagDetailDataProvider TagDetailData
 @inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 
@@ -113,73 +114,14 @@
 
     private async Task LoadDataAsync()
     {
-        await using var context = await DbFactory.CreateDbContextAsync();
-        _tag = await context.Tags
-            .Include(t => t.Owner)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == TagId);
-
-        switch (_tag)
-        {
-            case not null:
-                switch (_currentUserId)
-                {
-                    case not null:
-                        _isFollowing = await context.UserTagFollows!
-                            .AnyAsync(utf => utf.TagId == TagId && utf.OwnerId == _currentUserId);
-                        break;
-                }
-
-                _relatedItems = await context.Items
-                    .Include(i => i.Owner)
-                    .Include(i => i.TagRelations)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .Include(i => i.AsRequestOf)
-                    .ThenInclude(r => r.TargetItem)
-                    .Include(i => i.AsRequestOf)
-                    .ThenInclude(r => r.RequestedTag)
-                    .Where(i => i.TagRelations.Any(tr => tr.TagId == TagId))
-                    .OrderByDescending(i => i.UpdatedDate)
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                _relatedTags = await context.Tags
-                    .Include(t => t.Owner)
-                    .Include(t => t.TargetTagRelations)
-                    .ThenInclude(tr => tr.Tag)
-                    .ThenInclude(t => t.Owner)
-                    .Where(t => t.TargetTagRelations.Any(tr => tr.TagId == TagId))
-                    .OrderByDescending(t => t.UpdatedDate)
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                _weightLedgers = await context.TagWeightLedgers!
-                    .Include(l => l.Owner)
-                    .Where(l => l.TagId == TagId)
-                    .OrderByDescending(l => l.CreatedDate)
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                _publicOffers = await context.PublicTradeOffers!
-                    .Include(o => o.Owner)
-                    .Include(o => o.OfferedTag)
-                    .Where(o => o.OfferedTagId == TagId)
-                    .OrderByDescending(o => o.CreatedDate)
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                _pendingRequests = await context.TaggingRequestEntities!
-                    .Include(r => r.TargetItem)
-                    .Include(r => r.Owner)
-                    .Include(r => r.RequestedTag)
-                    .Include(r => r.Replies)
-                    .Where(r => r.RequestedTagId == TagId && r.Status == TradeStatus.Proposed)
-                    .OrderByDescending(r => r.CreatedDate)
-                    .AsNoTracking()
-                    .ToListAsync();
-                break;
-        }
+        TagDetailPageData data = await TagDetailData.GetTagDetailAsync(TagId, _currentUserId);
+        _tag = data.Tag;
+        _isFollowing = data.IsFollowing;
+        _relatedItems = data.RelatedItems;
+        _relatedTags = data.RelatedTags;
+        _weightLedgers = data.WeightLedgers;
+        _publicOffers = data.PublicOffers;
+        _pendingRequests = data.PendingRequests;
     }
 
     private async Task OpenEditDialog()
@@ -214,28 +156,7 @@
                 return;
         }
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        var followRecord = await context.UserTagFollows!
-            .FirstOrDefaultAsync(utf => utf.TagId == TagId && utf.OwnerId == _currentUserId);
-
-        switch (followRecord)
-        {
-            case not null:
-                context.UserTagFollows!.Remove(followRecord);
-                _isFollowing = false;
-                break;
-            case null:
-                var newFollow = new UserTagFollow
-                {
-                    TagId = TagId,
-                    OwnerId = _currentUserId
-                };
-                context.UserTagFollows!.Add(newFollow);
-                _isFollowing = true;
-                break;
-        }
-
-        await context.SaveChangesAsync();
+        _isFollowing = await TagDetailData.ToggleFollowAsync(TagId, _currentUserId!);
     }
 
 }

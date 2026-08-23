@@ -47,6 +47,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         List<Data.Tag> tags = await context.Tags
+            .Include(t => t.Owner)
             .AsNoTracking()
             .ToListAsync();
 

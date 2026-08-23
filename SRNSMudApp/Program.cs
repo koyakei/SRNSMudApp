@@ -76,6 +76,9 @@ builder.Services.AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>();
 // TagAddDialog のデータアクセス分離
 builder.Services.AddScoped<ITagDialogDataProvider, TagDialogDataProvider>();
 
+// TagDetail のデータアクセス分離
+builder.Services.AddScoped<ITagDetailDataProvider, TagDetailDataProvider>();
+
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
