@@ -64,12 +64,7 @@ public partial class ItemDetail
 
     protected override async Task OnInitializedAsync()
     {
-        _activeTabIndex = ActiveTabQuery switch
-        {
-            "requests" => 1,
-            "history" => 2,
-            _ => 0
-        };
+        _activeTabIndex = ItemDetailQueryState.ToTabIndex(ActiveTabQuery);
 
         await LoadDataAsync();
     }
@@ -189,22 +184,21 @@ public partial class ItemDetail
     private void OnTabChanged(int index)
     {
         _activeTabIndex = index;
-        ActiveTabQuery = index switch
-        {
-            1 => "requests",
-            2 => "history",
-            _ => "details"
-        };
+        ActiveTabQuery = ItemDetailQueryState.FromTabIndex(index);
         UpdateUrlQuery();
     }
 
     private void UpdateUrlQuery()
     {
-        var uri = NavigationManager.GetUriWithQueryParameters(new Dictionary<string, object?>
-        {
-            { "tab", ActiveTabQuery },
-            { "requestId", SelectedRequestIdQuery }
-        });
+        // URL 形式の知識は ItemDetailQueryState に一元化
+        Dictionary<string, object?> parameters =
+            new ItemDetailQueryState
+            {
+                ActiveTab = ActiveTabQuery,
+                SelectedRequestId = SelectedRequestIdQuery
+            }
+                .BuildParameters();
+        var uri = NavigationManager.GetUriWithQueryParameters(parameters);
         NavigationManager.NavigateTo(uri, replace: false);
     }
 }
