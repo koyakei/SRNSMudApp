@@ -5,7 +5,7 @@
             "name": "Debug SRNSMudApp (Server)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "kill-existing-server",
             "program": "${workspaceFolder}/SRNSMudApp/bin/Debug/net11.0/SRNSMudApp.dll",
             "args": [],
             "cwd": "${workspaceFolder}/SRNSMudApp",
