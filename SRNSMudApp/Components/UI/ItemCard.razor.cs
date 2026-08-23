@@ -71,10 +71,10 @@ public partial class ItemCard : IAsyncDisposable
     };
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
-    private List<TaggingRequestEntity> _taggingRequests = [];
+    private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
 
     private bool _isRepliesExpanded;
-    private List<Item> _replies = [];
+    private IReadOnlyList<Item> _replies = [];
     private string _newReplyContent = "";
     private bool _isSubmittingReply;
 

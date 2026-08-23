@@ -548,7 +548,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return null;
     }
 
-    public async Task<List<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)
+    public async Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.TaggingRequestEntities!
@@ -590,7 +590,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             .FirstOrDefaultAsync(r => r.Id == reply.Id);
     }
 
-    public async Task<List<Item>> GetItemRepliesAsync(int parentItemId)
+    public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.Items!

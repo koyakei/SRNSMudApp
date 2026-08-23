@@ -34,10 +34,10 @@ public interface IItemListDataProvider
     Task<Tag?> FindTagByNameAsync(string tagName);
 
     /// <summary>タグ名候補をテキスト + ベクトル類似度で検索する (末尾に " @" を付けて返す)。</summary>
-    Task<List<string>> SearchTagNameSuggestionsAsync(string searchText, CancellationToken token = default);
+    Task<IReadOnlyList<string>> SearchTagNameSuggestionsAsync(string searchText, CancellationToken token = default);
 
     /// <summary>タグに付けられたユーザー名候補を検索する ("タグ名 @ユーザー名" 形式で返す)。</summary>
-    Task<List<string>> SearchTagUserNamesAsync(string tagName, string userSearch, CancellationToken token = default);
+    Task<IReadOnlyList<string>> SearchTagUserNamesAsync(string tagName, string userSearch, CancellationToken token = default);
 
     /// <summary>フィルタ・ソート条件を適用したアイテム / タグ一覧を取得する。</summary>
     Task<ItemListPageData> LoadItemsAndTagsAsync(
@@ -69,7 +69,7 @@ public class ItemListDataProvider(
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
-    public async Task<List<string>> SearchTagNameSuggestionsAsync(
+    public async Task<IReadOnlyList<string>> SearchTagNameSuggestionsAsync(
         string searchText,
         CancellationToken token = default)
     {
@@ -111,7 +111,7 @@ public class ItemListDataProvider(
         }
     }
 
-    public async Task<List<string>> SearchTagUserNamesAsync(
+    public async Task<IReadOnlyList<string>> SearchTagUserNamesAsync(
         string tagName,
         string userSearch,
         CancellationToken token = default)
@@ -223,19 +223,10 @@ public class ItemListDataProvider(
             return query.OrderByDescending(i => i.UpdatedDate);
         }
 
-        IOrderedQueryable<Item>? orderedQuery = null;
-
-        foreach (ItemListSort sort in sorts)
-        {
-            var targetId = sort.TagId;
-            orderedQuery = orderedQuery == null
-                ? sort.Ascending
-                    ? query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                : sort.Ascending
-                    ? orderedQuery.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : orderedQuery.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-        }
+        // ソート条件の畳み込みは Aggregate で宣言的に表現する (mainRules: 再代入撲滅)
+        IOrderedQueryable<Item>? orderedQuery = sorts.Aggregate(
+            (IOrderedQueryable<Item>?)null,
+            (current, sort) => ApplyItemSortStep(query, current, sort));
 
         return orderedQuery ?? query.OrderByDescending(i => i.UpdatedDate);
     }
@@ -247,20 +238,37 @@ public class ItemListDataProvider(
             return query.OrderByDescending(t => t.UpdatedDate);
         }
 
-        IOrderedQueryable<Tag>? orderedQuery = null;
-
-        foreach (ItemListSort sort in sorts)
-        {
-            var targetId = sort.TagId;
-            orderedQuery = orderedQuery == null
-                ? sort.Ascending
-                    ? query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                : sort.Ascending
-                    ? orderedQuery.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
-                    : orderedQuery.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
-        }
+        // ソート条件の畳み込みは Aggregate で宣言的に表現する (mainRules: 再代入撲滅)
+        IOrderedQueryable<Tag>? orderedQuery = sorts.Aggregate(
+            (IOrderedQueryable<Tag>?)null,
+            (current, sort) => ApplyTagSortStep(query, current, sort));
 
         return orderedQuery ?? query.OrderByDescending(t => t.UpdatedDate);
+    }
+
+    private static IOrderedQueryable<Item> ApplyItemSortStep(
+        IQueryable<Item> query, IOrderedQueryable<Item>? current, ItemListSort sort)
+    {
+        var targetId = sort.TagId;
+        return current == null
+            ? sort.Ascending
+                ? query.OrderBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : query.OrderByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+            : sort.Ascending
+                ? current.ThenBy(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : current.ThenByDescending(i => i.TagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+    }
+
+    private static IOrderedQueryable<Tag> ApplyTagSortStep(
+        IQueryable<Tag> query, IOrderedQueryable<Tag>? current, ItemListSort sort)
+    {
+        var targetId = sort.TagId;
+        return current == null
+            ? sort.Ascending
+                ? query.OrderBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : query.OrderByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+            : sort.Ascending
+                ? current.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
+                : current.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
     }
 }

@@ -45,7 +45,7 @@ public partial class NotificationsPage
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
 
     private string? _userId;
-    private List<NotificationDto> _notifications = [];
+    private IReadOnlyList<NotificationDto> _notifications = [];
     private bool _isLoading = true;
 
     private List<Tag> _allTags = [];
@@ -133,18 +133,15 @@ public partial class NotificationsPage
             return;
         }
 
-        // UIを更新
+        // UIを更新 (IReadOnlyList のため関数型に置換)
         if (notification.Kind is TagRequestNotification reqNote)
         {
-            var index = _notifications.IndexOf(notification);
-            if (index != -1)
+            var updated = notification with
             {
-                _notifications[index] = notification with
-                {
-                    Kind = reqNote with { Status = TradeStatus.Executed },
-                    IsRead = true
-                };
-            }
+                Kind = reqNote with { Status = TradeStatus.Executed },
+                IsRead = true
+            };
+            _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
         }
         StateHasChanged();
     }
@@ -170,18 +167,15 @@ public partial class NotificationsPage
                 _ = await TaggingContractService.CancelContractAsync(notification.SourceId, _userId);
                 _ = Snackbar.Add("リクエストを却下しました。", Severity.Success);
 
-                // UIを更新
+                // UIを更新 (IReadOnlyList のため関数型に置換)
                 if (notification.Kind is TagRequestNotification reqNote)
                 {
-                    var index = _notifications.IndexOf(notification);
-                    if (index != -1)
+                    var updated = notification with
                     {
-                        _notifications[index] = notification with
-                        {
-                            Kind = reqNote with { Status = TradeStatus.Rejected },
-                            IsRead = true
-                        };
-                    }
+                        Kind = reqNote with { Status = TradeStatus.Rejected },
+                        IsRead = true
+                    };
+                    _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
                 }
                 StateHasChanged();
             }

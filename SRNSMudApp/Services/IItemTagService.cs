@@ -58,9 +58,9 @@ public interface IItemTagService
     Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId,
         IReadOnlyList<Tag> allTagsForCycleCheck);
 
-    Task<List<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId);
+    Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId);
     Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message);
-    Task<List<Item>> GetItemRepliesAsync(int parentItemId);
+    Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId);
     Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId);
 }
 

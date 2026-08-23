@@ -17,7 +17,7 @@ namespace SRNSMudApp.Services;
 
 public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFactory) : INotificationService
 {
-    public async Task<List<NotificationDto>> GetUserNotificationsAsync(string userId)
+    public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(string userId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
@@ -63,163 +63,20 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
             .Where(n => n.UserId == userId)
             .ToListAsync();
 
-        var notifications = new List<NotificationDto>();
-
-        foreach (TaggingRequestEntity req in tagRequests)
-        {
-            var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "TagRequest");
-            var typeStr = req.RequestType switch
-            {
-                TaggingRequestType.Add => "追加",
-                TaggingRequestType.DecreaseWeight => "削除",
-                _ => "不明"
-            };
-            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
-            var msg = $"{tagName}の{typeStr}リクエストが届いています。";
-
-            notifications.Add(new NotificationDto
-            {
-                SourceId = req.Id,
-                Kind = new TagRequestNotification(
-                    RequestId: req.Id,
-                    RequestType: req.RequestType,
-                    TargetItemId: req.TargetItemId,
-                    TargetTagName: req.RequestedTag?.Name,
-                    TargetTagId: req.RequestedTagId,
-                    ProposedWeight: req.ProposedWeight,
-                    Status: req.Status
-                ),
-                Message = msg,
-                CreatedAt = new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
-                IsRead = isRead,
-                ActorName = "システム",
-                AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
-            });
-        }
-
-        foreach (TaggingRequestEntity req in rejectedRequests)
-        {
-            var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestRejected");
-            var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
-            {
-                true => "",
-                false => $"\n理由: {(req.Rejection is RejectionReason rr ? rr.Reason : "")}"
-            };
-            var typeStr = req.RequestType switch
-            {
-                TaggingRequestType.Add => "追加",
-                TaggingRequestType.DecreaseWeight => "削除",
-                _ => "不明"
-            };
-            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
-            var msg = $"あなたの{tagName}の{typeStr}リクエストが却下されました。{commentMsg}";
-
-            notifications.Add(new NotificationDto
-            {
-                SourceId = req.Id,
-                Kind = new RequestRejectedNotification(
-                    RequestId: req.Id,
-                    TagName: req.RequestedTag?.Name,
-                    RequestType: req.RequestType,
-                    RejectComment: req.Rejection is RejectionReason rr2 ? rr2.Reason : "",
-                    TargetItemId: req.TargetItemId,
-                    TargetTagId: req.RequestedTagId
-                ),
-                Message = msg,
-                CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
-                IsRead = isRead,
-                ActorName = "システム",
-                AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
-            });
-        }
-
-        foreach (TaggingRequestEntity req in approvedRequests)
-        {
-            var isRead = readStates.Any(rs => rs.SourceId == req.Id && rs.SourceType == "RequestApproved");
-            var typeStr = req.RequestType switch
-            {
-                TaggingRequestType.Add => "追加",
-                TaggingRequestType.DecreaseWeight => "削除",
-                _ => "不明"
-            };
-            var tagName = req.RequestedTag?.Name ?? "不明なタグ";
-            var msg = $"あなたの{tagName}の{typeStr}リクエストが承認されました。";
-
-            notifications.Add(new NotificationDto
-            {
-                SourceId = req.Id,
-                Kind = new RequestApprovedNotification(
-                    RequestId: req.Id,
-                    TagName: req.RequestedTag?.Name,
-                    RequestType: req.RequestType,
-                    TargetItemId: req.TargetItemId,
-                    TargetTagId: req.RequestedTagId
-                ),
-                Message = msg,
-                // Using UpdatedDate as an approximation of when it was executed
-                CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
-                IsRead = isRead,
-                ActorName = "システム",
-                AssociatedItemId = req.TargetItemId,
-                HighlightTagId = req.RequestedTagId
-            });
-        }
-
-        foreach (Item reply in itemReplies)
-        {
-            var isRead = readStates.Any(rs => rs.SourceId == reply.Id && rs.SourceType == "ItemReply");
-            var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
-
-            notifications.Add(new NotificationDto
-            {
-                SourceId = reply.Id,
-                Kind = new ItemReplyNotification(
-                    ReplyItemId: reply.Id,
-                    ParentItemId: reply.ParentItemId!.Value,
-                    ActorName: ownerName
-                ),
-                Message = $"{ownerName}さんがあなたのアイテムにリプライしました。",
-                CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.ParentItemId.Value}"),
-                IsRead = isRead,
-                ActorName = ownerName,
-                AssociatedItemId = reply.Id
-            });
-        }
-
-        foreach (Item reply in requestReplies)
-        {
-            var isRead = readStates.Any(rs => rs.SourceId == reply.Id && rs.SourceType == "RequestReply");
-            var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
-
-            notifications.Add(new NotificationDto
-            {
-                SourceId = reply.Id,
-                Kind = new RequestReplyNotification(
-                    ReplyItemId: reply.Id,
-                    RequestId: reply.TaggingRequestEntityId!.Value,
-                    ActorName: ownerName
-                ),
-                Message = $"{ownerName}さんがあなたのリクエストに返信しました。",
-                CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{reply.TaggingRequestEntityId.Value}"), // Adjust according to your routing for request detail
-                IsRead = isRead,
-                ActorName = ownerName,
-                AssociatedItemId = reply.Id
-            });
-        }
+        // 純粋な変換は宣言的に構築し、最後にソートする (mainRules: 再代入撲滅 / modern-csharp: Prefer LINQ)
+        IEnumerable<NotificationDto> notifications =
+            BuildTagRequestNotifications(tagRequests, readStates)
+                .Concat(BuildRejectedRequestNotifications(rejectedRequests, readStates))
+                .Concat(BuildApprovedRequestNotifications(approvedRequests, readStates))
+                .Concat(BuildReplyNotifications(itemReplies, readStates, "ItemReply"))
+                .Concat(BuildReplyNotifications(requestReplies, readStates, "RequestReply"));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
 
     public async Task<int> GetUnreadCountAsync(string userId)
     {
-        List<NotificationDto> notifications = await GetUserNotificationsAsync(userId);
+        IReadOnlyList<NotificationDto> notifications = await GetUserNotificationsAsync(userId);
         return notifications.Count(n => !n.IsRead);
     }
 
@@ -250,4 +107,129 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         });
         _ = await context.SaveChangesAsync();
     }
+
+    private static string GetRequestTypeLabel(TaggingRequestType? type) => type switch
+    {
+        TaggingRequestType.Add => "追加",
+        TaggingRequestType.DecreaseWeight => "削除",
+        _ => "不明"
+    };
+
+    private static bool IsRead(List<NotificationReadState> readStates, int sourceId, string sourceType) =>
+        readStates.Any(rs => rs.SourceId == sourceId && rs.SourceType == sourceType);
+
+    /// <summary>自分宛てのタグ付けリクエストから通知 DTO を生成する。</summary>
+    private static IEnumerable<NotificationDto> BuildTagRequestNotifications(
+        IEnumerable<TaggingRequestEntity> requests,
+        List<NotificationReadState> readStates) =>
+        requests.Select(req => new NotificationDto
+        {
+            SourceId = req.Id,
+            Kind = new TagRequestNotification(
+                RequestId: req.Id,
+                RequestType: req.RequestType,
+                TargetItemId: req.TargetItemId,
+                TargetTagName: req.RequestedTag?.Name,
+                TargetTagId: req.RequestedTagId,
+                ProposedWeight: req.ProposedWeight,
+                Status: req.Status
+            ),
+            Message = $"{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが届いています。",
+            CreatedAt = new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
+            TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+            IsRead = IsRead(readStates, req.Id, "TagRequest"),
+            ActorName = "システム",
+            AssociatedItemId = req.TargetItemId,
+            HighlightTagId = req.RequestedTagId
+        });
+
+    /// <summary>リクエスタ自身の却下済みリクエストから通知 DTO を生成する。</summary>
+    private static IEnumerable<NotificationDto> BuildRejectedRequestNotifications(
+        IEnumerable<TaggingRequestEntity> requests,
+        List<NotificationReadState> readStates) =>
+        requests.Select(req =>
+        {
+            var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
+            {
+                true => "",
+                false => $"\n理由: {(req.Rejection is RejectionReason rr ? rr.Reason : "")}"
+            };
+            return new NotificationDto
+            {
+                SourceId = req.Id,
+                Kind = new RequestRejectedNotification(
+                    RequestId: req.Id,
+                    TagName: req.RequestedTag?.Name,
+                    RequestType: req.RequestType,
+                    RejectComment: req.Rejection is RejectionReason rr2 ? rr2.Reason : "",
+                    TargetItemId: req.TargetItemId,
+                    TargetTagId: req.RequestedTagId
+                ),
+                Message = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが却下されました。{commentMsg}",
+                CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+                IsRead = IsRead(readStates, req.Id, "RequestRejected"),
+                ActorName = "システム",
+                AssociatedItemId = req.TargetItemId,
+                HighlightTagId = req.RequestedTagId
+            };
+        });
+
+    /// <summary>リクエスタ自身の承認済みリクエストから通知 DTO を生成する。</summary>
+    private static IEnumerable<NotificationDto> BuildApprovedRequestNotifications(
+        IEnumerable<TaggingRequestEntity> requests,
+        List<NotificationReadState> readStates) =>
+        requests.Select(req => new NotificationDto
+        {
+            SourceId = req.Id,
+            Kind = new RequestApprovedNotification(
+                RequestId: req.Id,
+                TagName: req.RequestedTag?.Name,
+                RequestType: req.RequestType,
+                TargetItemId: req.TargetItemId,
+                TargetTagId: req.RequestedTagId
+            ),
+            // UpdatedDate を実行時刻の近似として使用する
+            Message = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが承認されました。",
+            CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
+            TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+            IsRead = IsRead(readStates, req.Id, "RequestApproved"),
+            ActorName = "システム",
+            AssociatedItemId = req.TargetItemId,
+            HighlightTagId = req.RequestedTagId
+        });
+
+    /// <summary>リプライ / リクエスト返信から通知 DTO を生成する。</summary>
+    private static IEnumerable<NotificationDto> BuildReplyNotifications(
+        IEnumerable<Item> replies, List<NotificationReadState> readStates, string sourceType) =>
+        replies.Select(reply =>
+        {
+            var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
+            var isRequestReply = sourceType == "RequestReply";
+            // 対応するクエリで ID != 0 が保証されているため既定値は使用されない (CS8629 回避)
+            var relatedItemId = isRequestReply
+                ? reply.TaggingRequestEntityId.GetValueOrDefault()
+                : reply.ParentItemId.GetValueOrDefault();
+            return new NotificationDto
+            {
+                SourceId = reply.Id,
+                Kind = isRequestReply
+                    ? new RequestReplyNotification(
+                        ReplyItemId: reply.Id,
+                        RequestId: relatedItemId,
+                        ActorName: ownerName
+                    )
+                    : new ItemReplyNotification(
+                        ReplyItemId: reply.Id,
+                        ParentItemId: relatedItemId,
+                        ActorName: ownerName
+                    ),
+                Message = $"{ownerName}さんがあなたの{(isRequestReply ? "リクエスト" : "アイテム")}に{(isRequestReply ? "返信" : "リプライ")}しました。",
+                CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/ItemDetail/{relatedItemId}"),
+                IsRead = IsRead(readStates, reply.Id, sourceType),
+                ActorName = ownerName,
+                AssociatedItemId = reply.Id
+            };
+        });
 }

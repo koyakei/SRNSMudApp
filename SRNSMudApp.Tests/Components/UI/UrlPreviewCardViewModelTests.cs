@@ -65,3 +65,4 @@ public class UrlPreviewCardViewModelTests
         Assert.Null(UrlPreviewCardViewModel.ExtractTextFragment(url));
     }
 }
+

@@ -21,7 +21,7 @@ namespace SRNSMudApp.Services;
 public interface IImportTagDataProvider
 {
     /// <summary>ログインユーザー所有のタグを、テキスト + ベクトル類似度で検索する。</summary>
-    Task<List<Tag>> SearchUserTagsAsync(string userId, string? value, CancellationToken token = default);
+    Task<IReadOnlyList<Tag>> SearchUserTagsAsync(string userId, string? value, CancellationToken token = default);
 
     /// <summary>
     ///     CSV の各行 (カンマ区切りのタグ名階層) を親タグ配下にインポートする。
@@ -38,7 +38,7 @@ public class ImportTagDataProvider(
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
-    public async Task<List<Tag>> SearchUserTagsAsync(
+    public async Task<IReadOnlyList<Tag>> SearchUserTagsAsync(
         string userId,
         string? value,
         CancellationToken token = default)
