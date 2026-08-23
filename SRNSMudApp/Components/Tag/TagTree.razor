@@ -1,13 +1,13 @@
 @page "/tag-tree"
 @rendermode InteractiveServer
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject AuthenticationStateProvider AuthStateProvider
+@inject ITagTreeDataProvider TagTreeData
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
 @inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 @using System.Security.Claims
 @using System.Text.Json
+@using SRNSMudApp.Services
 @implements IAsyncDisposable
 
 <MudText Typo="Typo.h4" GutterBottom="true">タグ階層管理</MudText>
@@ -66,59 +66,7 @@
     {
         try
         {
-            await using var context = await DbFactory.CreateDbContextAsync();
-            _tags = await context.Tags.Where(t => !t.IsSystem).ToListAsync();
-
-            // 循環参照を検出して解除する（DB上のデータも修復する）
-            HashSet<int> visited = [];
-            HashSet<int> recursionStack = [];
-            var hasCycles = false;
-
-            foreach (var tag in _tags)
-            {
-                switch (visited.Contains(tag.Id))
-                {
-                    case true: continue;
-                }
-
-                var current = tag;
-                List<Tag> path = [];
-
-                while (current != null && !recursionStack.Contains(current.Id) && !visited.Contains(current.Id))
-                {
-                    recursionStack.Add(current.Id);
-                    path.Add(current);
-                    current = current.ParentTagId != null ? _tags.FirstOrDefault(t => t.Id == current.ParentTagId) : null;
-                }
-
-                switch (current)
-                {
-                    case not null when recursionStack.Contains(current.Id):
-                        current.ParentTagId = null;
-                        var dbTag = await context.Tags.FindAsync(current.Id);
-                        switch (dbTag)
-                        {
-                            case not null:
-                                dbTag.ParentTagId = null;
-                                break;
-                        }
-                        hasCycles = true;
-                        break;
-                }
-
-                foreach (var p in path)
-                {
-                    recursionStack.Remove(p.Id);
-                    visited.Add(p.Id);
-                }
-            }
-
-            switch (hasCycles)
-            {
-                case true:
-                    await context.SaveChangesAsync();
-                    break;
-            }
+            _tags = await TagTreeData.LoadTagsAsync();
         }
         catch (Exception ex)
         {
@@ -152,94 +100,12 @@
 
     private IEnumerable<Tag> GetFilteredTags()
     {
-        switch (string.IsNullOrWhiteSpace(_searchText))
-        {
-            case true:
-                return _tags
-                    .OrderByDescending(t => t.OwnerId == _currentUserId)
-                    .ThenBy(t => t.Name)
-                    .Take(2000);
-        }
-
-        var baseTags = _tags.Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
-        HashSet<int> resultIds = [];
-
-        foreach (var tag in baseTags)
-        {
-            resultIds.Add(tag.Id);
-
-            var current = tag;
-            bool stopAncestors = false;
-            while (current.ParentTagId != null && !stopAncestors)
-            {
-                var parent = _tags.FirstOrDefault(t => t.Id == current.ParentTagId);
-                stopAncestors = parent == null || !resultIds.Add(parent.Id);
-                switch (stopAncestors)
-                {
-                    case false:
-                        current = parent!;
-                        break;
-                }
-            }
-        }
-
-        return _tags.Where(t => resultIds.Contains(t.Id));
-    }
-
-    private static List<object> BuildTreeDataForJqTree(int? parentId, IEnumerable<Tag> filteredTags)
-    {
-        var tagList = filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags];
-        List<object> result = [];
-        List<Tag> children;
-
-        switch (parentId)
-        {
-            case null:
-                var allFilteredIds = tagList.Select(t => t.Id).ToHashSet();
-                children =
-                [
-                    .. tagList
-                        .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
-                        .OrderBy(t => t.Name)
-                ];
-                break;
-            default:
-                children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
-                break;
-        }
-
-        foreach (var child in children)
-        {
-            var nodeChildren = BuildTreeDataForJqTree(child.Id, tagList);
-            switch (nodeChildren.Count)
-            {
-                case 0:
-                    result.Add(new
-                    {
-                        id = child.Id,
-                        name = child.Name
-                    });
-                    continue;
-            }
-
-            result.Add(new
-            {
-                id = child.Id,
-                name = child.Name,
-                children = nodeChildren
-            });
-        }
-
-        return result;
+        return TagTreeViewModel.FilterTags(_tags, _searchText, _currentUserId);
     }
 
     private string GetSerializedTreeData()
     {
-        var filteredTags = GetFilteredTags();
-        var treeData = BuildTreeDataForJqTree(null, filteredTags);
-        // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする
-        var options = new JsonSerializerOptions { MaxDepth = 1024 };
-        return JsonSerializer.Serialize(treeData, options);
+        return TagTreeViewModel.SerializeTreeData(GetFilteredTags());
     }
 
     private async Task OnSearchTextChanged(string? text)
@@ -288,83 +154,28 @@
 
         var hasDeleted = false;
 
-        await using var context = await DbFactory.CreateDbContextAsync();
-        await using var transaction = await context.Database.BeginTransactionAsync();
         try
         {
-            var selectedTagsFromDb = await context.Tags.Where(t => selectedIds.Contains(t.Id)).ToListAsync();
+            TagTreeDeleteResult result = await TagTreeData.DeleteTagsAsync(_currentUserId!, selectedIds);
 
-            var unauthorizedTags = selectedTagsFromDb.Where(t => t.OwnerId != _currentUserId).ToList();
-            var systemTags = selectedTagsFromDb.Where(t => t.IsSystem).ToList();
-            var authorizedIds = selectedTagsFromDb.Where(t => t.OwnerId == _currentUserId && !t.IsSystem).Select(t => t.Id).ToList();
-
-            switch (unauthorizedTags.Count > 0)
+            switch (result.UnauthorizedNames.Count > 0)
             {
                 case true:
-                    var skippedNames = string.Join(", ", unauthorizedTags.Select(t => t.Name));
-                    Snackbar.Add($"削除権限がないためスキップしました: {skippedNames}", Severity.Warning);
+                    Snackbar.Add($"削除権限がないためスキップしました: {string.Join(", ", result.UnauthorizedNames)}", Severity.Warning);
                     break;
             }
 
-            switch (systemTags.Count > 0)
+            switch (result.SystemNames.Count > 0)
             {
                 case true:
-                    var skippedNames = string.Join(", ", systemTags.Select(t => t.Name));
-                    Snackbar.Add($"システムタグは削除できないためスキップしました: {skippedNames}", Severity.Warning);
+                    Snackbar.Add($"システムタグは削除できないためスキップしました: {string.Join(", ", result.SystemNames)}", Severity.Warning);
                     break;
             }
 
-            switch (authorizedIds.Count > 0)
+            if (result.HasDeleted)
             {
-                case true:
-                    var tagsToDelete = await context.Tags
-                        .Where(t => authorizedIds.Contains(t.Id) && t.OwnerId == _currentUserId)
-                        .ToListAsync();
-
-                    switch (tagsToDelete.Count > 0)
-                    {
-                        case true:
-                            // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
-                            var relationsToDelete = await context.TagRelationToTags
-                                .Where(tr => authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
-                                .ToListAsync();
-
-                            switch (relationsToDelete.Count > 0)
-                            {
-                                case true:
-                                    context.TagRelationToTags.RemoveRange(relationsToDelete);
-                                    break;
-                            }
-
-                            // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
-                            var orphanedChildren = await context.Tags
-                                .Where(t => t.ParentTagId != null && authorizedIds.Contains(t.ParentTagId.Value) && !authorizedIds.Contains(t.Id))
-                                .ToListAsync();
-
-                            foreach (var child in orphanedChildren)
-                            {
-                                child.ParentTagId = null;
-                            }
-
-                            // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
-                            foreach (var tag in tagsToDelete)
-                            {
-                                tag.ParentTagId = null;
-                            }
-
-                            await context.SaveChangesAsync();
-
-                            // タグ本体の削除
-                            context.Tags.RemoveRange(tagsToDelete);
-                            await context.SaveChangesAsync();
-
-                            hasDeleted = true;
-                            Snackbar.Add($"{tagsToDelete.Count}個のタグを削除しました。", Severity.Success);
-                            break;
-                    }
-
-                    await transaction.CommitAsync();
-                    break;
+                hasDeleted = true;
+                Snackbar.Add($"{result.DeletedCount}個のタグを削除しました。", Severity.Success);
             }
         }
         catch (Exception ex)
@@ -412,7 +223,7 @@
             case { Canceled: false, Data: TagCreateChildDialog.Result data }:
                 try
                 {
-                    var newTag = new Tag
+                    Tag newTag = new()
                     {
                         Name = data.Name,
                         Content = data.Content,
@@ -423,9 +234,7 @@
                         UpdatedDate = DateTime.UtcNow
                     };
 
-                    await using var context = await DbFactory.CreateDbContextAsync();
-                    context.Tags.Add(newTag);
-                    await context.SaveChangesAsync();
+                    await TagTreeData.AddTagAsync(newTag);
 
                     Snackbar.Add($"'{data.Name}' を追加しました。", Severity.Success);
 
@@ -496,7 +305,7 @@
 
         // 自分自身の子孫へのドロップは無効（循環参照を防ぐ）
         // movedItem が targetItem の祖先（または自身）であるかを確認する
-        switch (IsDescendantOrSelf(movedItem, targetItem))
+        switch (TagTreeViewModel.IsDescendantOrSelf(_tags, movedItem, targetItem))
         {
             case true:
                 Snackbar.Add($"'{movedItem.Name}' を自身の配下 '{targetItem.Name}' に移動することはできません。", Severity.Warning);
@@ -527,16 +336,9 @@
 
         try
         {
-            await using var context = await DbFactory.CreateDbContextAsync();
-            var tagToUpdate = await context.Tags.FindAsync(movedItem.Id);
-            switch (tagToUpdate)
+            if (await TagTreeData.UpdateParentAsync(movedItem.Id, movedItem.ParentTagId))
             {
-                case not null:
-                    tagToUpdate.ParentTagId = movedItem.ParentTagId;
-                    tagToUpdate.UpdatedDate = DateTime.UtcNow;
-                    await context.SaveChangesAsync();
-                    Snackbar.Add("タグ構造を更新しました。", Severity.Success);
-                    break;
+                Snackbar.Add("タグ構造を更新しました。", Severity.Success);
             }
         }
         catch (Exception ex)
@@ -562,18 +364,6 @@
                 break;
         }
     }
-
-    private bool IsDescendantOrSelf(Tag parent, Tag target)
-    {
-        switch (parent.Id == target.Id)
-        {
-            case true: return true;
-        }
-
-        var children = _tags.Where(t => t.ParentTagId == parent.Id);
-        return children.Any(child => IsDescendantOrSelf(child, target));
-    }
-
 
     [JSInvokable]
     public void NavigateToTagDetail(int tagId)
