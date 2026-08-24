@@ -1,17 +1,37 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
 
 namespace SRNSMudApp.Tests.Data;
 
-public class FreeTagRelationScenarioTests
+[Collection(MsSqlCollection.Name)]
+public class FreeTagRelationScenarioTests : IAsyncLifetime
 {
-    private static ApplicationDbContext CreateDbContext()
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+
+    public FreeTagRelationScenarioTests(MsSqlContainerFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(FreeTagRelationScenarioTests));
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _testDb.DisposeAsync();
+    }
+
+    private ApplicationDbContext CreateDbContext()
     {
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
         return new ApplicationDbContext(options);

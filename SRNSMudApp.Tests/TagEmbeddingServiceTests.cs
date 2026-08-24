@@ -1,9 +1,4 @@
-#region
-
-using System;
-using System.Linq;
 using System.Numerics.Tensors;
-using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +6,9 @@ using SmartComponents.LocalEmbeddings;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
-
-#endregion
 
 namespace SRNSMudApp.Tests;
 
@@ -24,21 +18,37 @@ namespace SRNSMudApp.Tests;
 ///     （VectorSearchE2ETests 4ケースの共通核心部分の移行テスト。
 ///     UI側の描画は TagSearchTests が担当する）
 /// </summary>
-public class TagEmbeddingServiceTests : IDisposable
+[Collection(MsSqlCollection.Name)]
+public class TagEmbeddingServiceTests : IAsyncLifetime
 {
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private ApplicationDbContext _db = null!;
     private readonly TagEmbeddingService _embeddingService = new(new LocalEmbedder());
 
-    private readonly ApplicationDbContext _db;
-
-    public TagEmbeddingServiceTests()
+    public TagEmbeddingServiceTests(MsSqlContainerFixture fixture)
     {
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase($"embedding-test-{Guid.NewGuid():N}")
-            .Options;
-        _db = new ApplicationDbContext(options);
+        _fixture = fixture;
     }
 
-    public void Dispose() => _db.Dispose();
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagEmbeddingServiceTests));
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(_testDb.ConnectionString)
+            .Options;
+        _db = new ApplicationDbContext(options);
+
+        var user = new ApplicationUser { Id = "embedding-test-user", UserName = "embedding-test-user" };
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _db.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     「反社会的勢力」で検索すると、意味的に近い「ヤクザ」タグが

@@ -3,17 +3,39 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Data;
 
-public class TagWeightLimitTests
+[Collection(MsSqlCollection.Name)]
+public class TagWeightLimitTests : IAsyncLifetime
 {
-    private static ApplicationDbContext CreateDbContext()
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+
+    public TagWeightLimitTests(MsSqlContainerFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagWeightLimitTests));
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _testDb.DisposeAsync();
+    }
+
+    private ApplicationDbContext CreateDbContext()
     {
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString()) // Unique DB for each test
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
         return new ApplicationDbContext(options);

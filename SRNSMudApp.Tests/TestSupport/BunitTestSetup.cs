@@ -1,6 +1,5 @@
-#region
-
 using System;
+using System.Linq;
 using System.Security.Claims;
 
 using Bunit;
@@ -14,31 +13,33 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
-using Microsoft.Extensions.Http;
-
 using MudBlazor.Services;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
-#endregion
 
 namespace SRNSMudApp.Tests.TestSupport;
 
 /// <summary>
 ///     bUnit テスト用の共通セットアップ。
 ///     これまで各テストクラスに重複していた BunitContext 初期化
-///     (MudServices / 認証状態モック / InMemory DbContextFactory) を集約する。
+///     (MudServices / 認証状態モック / MSSQL DbContextFactory) を集約する。
 /// </summary>
 public static class BunitTestSetup
 {
     public const string DefaultUserId = "test-user-id";
 
+    static BunitTestSetup()
+    {
+        // 実DB (SQL Server) を使うため InMemory 比で待ち時間が伸びる。
+        // 既定の 1 秒ではタイムアウトするため延長する。
+        BunitContext.DefaultWaitTimeout = TimeSpan.FromSeconds(30);
+    }
+
     /// <summary>
     ///     コンポーネントが依存するアプリ側サービスを登録する
     ///     (<see cref="IDialogLauncher" /> 実装と Tag/Item Card データプロバイダ実装)。
-    ///     委譲先の MudBlazor サービスは AddMudServices() が、
-    ///     データプロバイダの依存は AddInMemoryDbFactory() が登録するものを利用する。
     /// </summary>
     public static IServiceCollection AddSrnsComponentServices(this IServiceCollection services)
     {
@@ -105,14 +106,20 @@ public static class BunitTestSetup
     }
 
     /// <summary>
-    ///     テストごとに独立した EF Core InMemory データベースを持つ
-    ///     <see cref="IDbContextFactory{ApplicationDbContext}" /> を登録する。
+    ///     テストごとに作成済みのMSSQLデータベース（<see cref="MsSqlTestDatabase"/> で用意したもの）に
+    ///     接続する <see cref="IDbContextFactory{ApplicationDbContext}" /> および <see cref="ApplicationDbContext"/> を登録する。
     /// </summary>
-    public static IServiceCollection AddInMemoryDbFactory(this IServiceCollection services, string? dbName = null)
+    public static IServiceCollection AddMsSqlDbFactory(this IServiceCollection services, string connectionString)
     {
+        _ = services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseSqlServer(connectionString)
+                   .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)),
+            ServiceLifetime.Scoped,
+            ServiceLifetime.Singleton);
+
         return services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName ?? Guid.NewGuid().ToString())
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+            options.UseSqlServer(connectionString)
+                   .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
     }
 }
 

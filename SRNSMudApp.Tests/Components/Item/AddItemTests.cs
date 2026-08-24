@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -22,20 +20,20 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
-public class AddItemTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class AddItemTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string ExistingUserId = "test-user-id";
     private const string TestContent = "Test Item Content";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public AddItemTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(AddItemTests));
 
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
@@ -52,16 +50,16 @@ public class AddItemTests : IAsyncDisposable
             null!, null!, null!, null!);
         _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     既存の ApplicationUser を OwnerId に持つ Item を保存しても、

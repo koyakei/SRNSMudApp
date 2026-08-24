@@ -1,24 +1,34 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using Moq;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
 
 namespace SRNSMudApp.Tests.Services;
 
-public class ItemTagServiceTests : IDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemTagServiceTests : IAsyncLifetime
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly ItemTagService _service;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private ApplicationDbContext _dbContext = null!;
+    private ItemTagService _service = null!;
 
-    public ItemTagServiceTests()
+    public ItemTagServiceTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ItemTagServiceTests));
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
         _dbContext = new ApplicationDbContext(options);
@@ -30,11 +40,10 @@ public class ItemTagServiceTests : IDisposable
         _service = new ItemTagService(mockDbFactory.Object);
     }
 
-    public void Dispose()
+    public async Task DisposeAsync()
     {
-        _dbContext.Database.EnsureDeleted();
-        _dbContext.Dispose();
-        GC.SuppressFinalize(this);
+        await _dbContext.DisposeAsync();
+        await _testDb.DisposeAsync();
     }
 
     [Fact]
@@ -45,12 +54,18 @@ public class ItemTagServiceTests : IDisposable
         var user = new ApplicationUser { Id = userId, UserName = "TestUser" };
         _dbContext.Users.Add(user);
 
+        var targetItem = new Item { Content = "TargetItem", OwnerId = userId };
+        var tag = new Tag { Name = "Tag", OwnerId = userId };
+        _dbContext.Items.Add(targetItem);
+        _dbContext.Tags.Add(tag);
+        await _dbContext.SaveChangesAsync();
+
         var request = new TaggingRequestEntity
         {
             ContractType = "Gratis",
             OwnerId = userId,
-            TargetItemId = 1,
-            RequestedTagId = 1,
+            TargetItemId = targetItem.Id,
+            RequestedTagId = tag.Id,
             RequesterUserId = userId,
             TagOwnerUserId = userId
         };
@@ -109,9 +124,11 @@ public class ItemTagServiceTests : IDisposable
         var userId = "TestUser";
         _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
         var item = new Item { Content = "TestItem", OwnerId = userId };
-        _dbContext.Items.Add(item);
         var tag = new Tag { Name = "TestTag", OwnerId = userId, CachedWeight = 5 };
+        _dbContext.Items.Add(item);
         _dbContext.Tags.Add(tag);
+        await _dbContext.SaveChangesAsync();
+
         var relation = new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = userId, Weight = 2 };
         _dbContext.TagRelations.Add(relation);
         await _dbContext.SaveChangesAsync();
@@ -164,6 +181,8 @@ public class ItemTagServiceTests : IDisposable
         var targetTag = new Tag { Name = "TargetTag", OwnerId = userId };
         var childTag = new Tag { Name = "ChildTag", OwnerId = userId, CachedWeight = 10 };
         _dbContext.Tags.AddRange(targetTag, childTag);
+        await _dbContext.SaveChangesAsync();
+
         var relation = new TagRelationToTag
         {
             TargetTagId = targetTag.Id,

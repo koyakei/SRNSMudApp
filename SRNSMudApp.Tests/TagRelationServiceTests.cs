@@ -1,33 +1,42 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
 
 namespace SRNSMudApp.Tests.Services;
 
-public class TagRelationServiceTests : IDisposable
+[Collection(MsSqlCollection.Name)]
+public class TagRelationServiceTests : IAsyncLifetime
 {
-    private readonly ApplicationDbContext _context;
-    private readonly TagRelationService _service;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private ApplicationDbContext _context = null!;
+    private TagRelationService _service = null!;
 
-    public TagRelationServiceTests()
+    public TagRelationServiceTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagRelationServiceTests));
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
         _context = new ApplicationDbContext(options);
         _service = new TagRelationService(_context);
     }
 
-    public void Dispose()
+    public async Task DisposeAsync()
     {
-        _context.Database.EnsureDeleted();
-        _context.Dispose();
-        GC.SuppressFinalize(this);
+        await _context.DisposeAsync();
+        await _testDb.DisposeAsync();
     }
 
     [Fact]
@@ -35,8 +44,8 @@ public class TagRelationServiceTests : IDisposable
     {
         // Arrange
         var user = new ApplicationUser { Id = "user1", UserName = "test" };
-        var item = new Item { Id = 1, OwnerId = "user1", Content = "Test Content" };
-        var tag = new Tag { Id = 1, Name = "TestTag", OwnerId = "user1", CachedWeight = 10 };
+        var item = new Item { OwnerId = "user1", Content = "Test Content" };
+        var tag = new Tag { Name = "TestTag", OwnerId = "user1", CachedWeight = 10 };
 
         _context.Users.Add(user);
         _context.Items.Add(item);
@@ -44,16 +53,16 @@ public class TagRelationServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Act
-        Result<bool> result = await _service.LinkTagToItemAsync(1, 1, "user1", 5);
+        Result<bool> result = await _service.LinkTagToItemAsync(item.Id, tag.Id, "user1", 5);
 
         // Assert
         Assert.True(result is Success<bool>);
 
-        TagRelation? relation = await _context.TagRelations!.FirstOrDefaultAsync(r => r.ItemId == 1 && r.TagId == 1);
+        TagRelation? relation = await _context.TagRelations!.FirstOrDefaultAsync(r => r.ItemId == item.Id && r.TagId == tag.Id);
         Assert.NotNull(relation);
         Assert.Equal(5, relation.Weight);
 
-        Tag? updatedTag = await _context.Tags!.FindAsync(1);
+        Tag? updatedTag = await _context.Tags!.FindAsync(tag.Id);
         Assert.NotNull(updatedTag);
         Assert.Equal(15, updatedTag.CachedWeight); // 10 + 5
 
@@ -64,7 +73,6 @@ public class TagRelationServiceTests : IDisposable
         Assert.Equal(15, ledger.NewWeight);
         Assert.True(ledger.IsOwnerAction);
         Assert.Equal(relation.Id, ledger.SourceId);
-        // Assert.NotNull(ledger.ConsumedRightAssetId);
 
         RightAsset? asset = await _context.RightAssets!.IgnoreQueryFilters()
             .FirstOrDefaultAsync(a => a.Id == ledger.ConsumedRightAssetId);
@@ -72,30 +80,27 @@ public class TagRelationServiceTests : IDisposable
         Assert.True(asset.IsBurned);
     }
 
-
     [Fact]
     public async Task AllocateWeightAsync_ShouldConsumeRightAssetAndAllocateToTagRelations()
     {
         // Arrange
-        // RightAsset weight 5 は ItemA.TagRelation.weight を 3 操作すると RightAsset weight 2 に
-        // ItemB.TagRelation.weight を 2 操作すると RightAsset weight 0になる
         var user = new ApplicationUser { Id = "user1", UserName = "test" };
-        var itemA = new Item { Id = 1, OwnerId = "user1", Content = "Item A" };
-        var itemB = new Item { Id = 2, OwnerId = "user1", Content = "Item B" };
-        var tag = new Tag { Id = 1, Name = "TestTag", OwnerId = "user1", CachedWeight = 0 };
-
-        var rightAsset = new RightAsset
-        {
-            Id = 1,
-            OwnerId = "user1",
-            TargetTagId = 1,
-            Amount = 5,
-            IsBurned = false
-        };
+        var itemA = new Item { OwnerId = "user1", Content = "Item A" };
+        var itemB = new Item { OwnerId = "user1", Content = "Item B" };
+        var tag = new Tag { Name = "TestTag", OwnerId = "user1", CachedWeight = 0 };
 
         _context.Users.Add(user);
         _context.Items.AddRange(itemA, itemB);
         _context.Tags.Add(tag);
+        await _context.SaveChangesAsync();
+
+        var rightAsset = new RightAsset
+        {
+            OwnerId = "user1",
+            TargetTagId = tag.Id,
+            Amount = 5,
+            IsBurned = false
+        };
         _context.RightAssets.Add(rightAsset);
         await _context.SaveChangesAsync();
 
@@ -105,7 +110,7 @@ public class TagRelationServiceTests : IDisposable
         // Assert 1
         Assert.True(result1 is Success<bool>);
 
-        RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(1);
+        RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(rightAsset.Id);
         Assert.NotNull(updatedAsset1);
         Assert.Equal(2, updatedAsset1.Amount); // RightAsset weight 2 に
         Assert.False(updatedAsset1.IsBurned);
@@ -121,7 +126,7 @@ public class TagRelationServiceTests : IDisposable
         // Assert 2
         Assert.True(result2 is Success<bool>);
 
-        RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(1);
+        RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(rightAsset.Id);
         Assert.NotNull(updatedAsset2);
         Assert.Equal(0, updatedAsset2.Amount); // RightAsset weight 0 になる
         Assert.True(updatedAsset2.IsBurned); // 0になったのでBurnされること
@@ -137,30 +142,25 @@ public class TagRelationServiceTests : IDisposable
         AllocateWeightAsync_NegativeDelta_ShouldConsumeAbsoluteValueFromRightAssetAndDecreaseTagRelationWeight()
     {
         // Arrange
-        // ItemAに TagX が weight 1 でタグ付けされている
-        // RightAsset (Weight 5) を用いて、ItemA の TagX を -3 操作する。
-        // 結果: ItemAのTagRelationのWeightが -2になり、RightAssetのWeightは残りの 2 になる。
-        // そのまま同じ RightAsset を用いて、ItemB に 2 操作する。
-        // 結果: ItemBのTagRelationのWeightが 2 になり、RightAssetのWeightは 0 になり、完全にBurnされる。
         var user = new ApplicationUser { Id = "user2", UserName = "test2" };
-        var itemA = new Item { Id = 3, OwnerId = "user2", Content = "Item A" };
-        var itemB = new Item { Id = 4, OwnerId = "user2", Content = "Item B" };
-        var tagX = new Tag { Id = 2, Name = "TagX", OwnerId = "user2", CachedWeight = 1 };
-
-        var existingRelationA = new TagRelation { ItemId = 3, TagId = 2, OwnerId = "user2", Weight = 1 };
-
-        var rightAsset = new RightAsset
-        {
-            Id = 2,
-            OwnerId = "user2",
-            TargetTagId = 2,
-            Amount = 5,
-            IsBurned = false
-        };
+        var itemA = new Item { OwnerId = "user2", Content = "Item A" };
+        var itemB = new Item { OwnerId = "user2", Content = "Item B" };
+        var tagX = new Tag { Name = "TagX", OwnerId = "user2", CachedWeight = 1 };
 
         _context.Users.Add(user);
         _context.Items.AddRange(itemA, itemB);
         _context.Tags.Add(tagX);
+        await _context.SaveChangesAsync();
+
+        var existingRelationA = new TagRelation { ItemId = itemA.Id, TagId = tagX.Id, OwnerId = "user2", Weight = 1 };
+        var rightAsset = new RightAsset
+        {
+            OwnerId = "user2",
+            TargetTagId = tagX.Id,
+            Amount = 5,
+            IsBurned = false
+        };
+
         _context.TagRelations.Add(existingRelationA);
         _context.RightAssets.Add(rightAsset);
         await _context.SaveChangesAsync();
@@ -171,7 +171,7 @@ public class TagRelationServiceTests : IDisposable
         // Assert 1
         Assert.True(result1 is Success<bool>);
 
-        RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(2);
+        RightAsset? updatedAsset1 = await _context.RightAssets.FindAsync(rightAsset.Id);
         Assert.NotNull(updatedAsset1);
         Assert.Equal(2, updatedAsset1.Amount); // 5 - |-3| = 2
         Assert.False(updatedAsset1.IsBurned);
@@ -187,7 +187,7 @@ public class TagRelationServiceTests : IDisposable
         // Assert 2
         Assert.True(result2 is Success<bool>);
 
-        RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(2);
+        RightAsset? updatedAsset2 = await _context.RightAssets.FindAsync(rightAsset.Id);
         Assert.NotNull(updatedAsset2);
         Assert.Equal(0, updatedAsset2.Amount); // 2 - |2| = 0
         Assert.True(updatedAsset2.IsBurned); // 0になったのでBurnされること
@@ -201,10 +201,8 @@ public class TagRelationServiceTests : IDisposable
     [Fact]
     public async Task AddTagToItemAsync_WithUntrackedItem_ShouldNotThrowPrimaryKeyException()
     {
-        var dbName = Guid.NewGuid().ToString();
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(dbName)
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
         var testUserId = Guid.NewGuid().ToString();
@@ -215,7 +213,7 @@ public class TagRelationServiceTests : IDisposable
         int tagId;
 
         // 1. Arrange: 別のDbContextでデータを作成して保存する
-        using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(options))
         {
             var user = new ApplicationUser
             {
@@ -238,7 +236,7 @@ public class TagRelationServiceTests : IDisposable
         } // ここでDbContextがDisposeされ、itemとtagは追跡されなくなる
 
         // 2. Act: 新しいDbContextを持つTagRelationServiceで操作する
-        using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(options))
         {
             var service = new TagRelationService(db);
             var result = await service.LinkTagToItemAsync(itemId, tagId, testUserId);
@@ -246,7 +244,7 @@ public class TagRelationServiceTests : IDisposable
         }
 
         // 3. Assert: 正しくTagRelationが作成されているか確認する
-        using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(options))
         {
             var relations = await db.TagRelations
                 .Where(tr => tr.ItemId == itemId && tr.TagId == tagId)

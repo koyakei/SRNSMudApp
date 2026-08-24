@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -26,21 +24,22 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
-public class ItemListAutocompleteTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemListAutocompleteTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "user1-id";
     private const string TagName = "Item1_Tag";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemListAutocompleteTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemListAutocompleteTests));
 
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // ItemList 配下の AddItem / ResourceList / AuthorizeView が認証カスケードを必要とする。
@@ -64,16 +63,14 @@ public class ItemListAutocompleteTests : IAsyncDisposable
         // LinkPreviewService は HttpClient を要求するのみのため素のインスタンスを登録
         _ = _ctx.Services.AddSingleton(new LinkPreviewService(new HttpClient()));
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
-
-        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     検索語に対するサジェスト候補が「タグ名 @」形式で返ること、および

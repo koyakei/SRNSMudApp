@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -28,8 +26,6 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
@@ -38,15 +34,18 @@ namespace SRNSMudApp.Tests.Components.Item;
 ///     ItemListFocusE2ETests に残す。
 ///     （ItemListFocusE2ETests のうちクリックフォーカス・URL直接遷移・作者リンクの移行テスト）
 /// </summary>
-public class ItemListFocusTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemListFocusTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "focus-user-id";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemListFocusTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemListFocusTests));
+
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
@@ -64,12 +63,14 @@ public class ItemListFocusTests : IAsyncDisposable
             .ReturnsAsync([]);
         _ctx.Services.AddScoped(_ => itemTagMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     アイテムカードをクリックすると、該当カードのスタイルにフォーカス用の
@@ -96,7 +97,7 @@ public class ItemListFocusTests : IAsyncDisposable
 
         // Assert: URLが更新される
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains($"focus={firstItemId}", navigationManager.Uri);
+        cut.WaitForAssertion(() => Assert.Contains($"focus={firstItemId}", navigationManager.Uri));
     }
 
     /// <summary>
@@ -144,7 +145,7 @@ public class ItemListFocusTests : IAsyncDisposable
         // フォーカス状態にする
         cut.Find($"#item-card-{itemId}").Click();
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains($"focus={itemId}", navigationManager.Uri);
+        cut.WaitForAssertion(() => Assert.Contains($"focus={itemId}", navigationManager.Uri));
 
         // Act & Assert: 作者リンクの遷移先を検証
         // （bUnit ではアンカーの実際のナビゲーションが発生しないため、リンク先URLを直接検証する。
@@ -156,7 +157,7 @@ public class ItemListFocusTests : IAsyncDisposable
 
     private async Task<(int, int)> SeedItemsAsync()
     {
-        await using ApplicationDbContext db = CreateDbContext();
+        await using ApplicationDbContext db = await CreateDbContextAsync();
         _ = db.Users.Add(new ApplicationUser { Id = UserId, UserName = "focus_user" });
         SRNSMudApp.Data.Item item1 = new() { Content = "First focus item", OwnerId = UserId };
         SRNSMudApp.Data.Item item2 = new() { Content = "Second focus item", OwnerId = UserId };
@@ -173,23 +174,26 @@ public class ItemListFocusTests : IAsyncDisposable
         return db.Items.OrderBy(i => i.Id).AsNoTracking().ToList();
     }
 
-    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+    private Task<ApplicationDbContext> CreateDbContextAsync() =>
+        _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
 }
 
 /// <summary>
 ///     タグ検索フィルタ適用後も URL に tags= と focus= が共存することを検証する。
 ///     （ItemListFocusE2ETests.ItemFocus_WithTagFilterAndScroll の前半部分の移行テスト）
 /// </summary>
-public class ItemListFocusWithTagFilterTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemListFocusWithTagFilterTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "tagfocus-user-id";
     private const string TagName = "CoexistTag";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemListFocusWithTagFilterTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemListFocusWithTagFilterTests));
 
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
@@ -218,16 +222,16 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
 
         _ = _ctx.Services.AddSingleton(new LinkPreviewService(new HttpClient()));
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     アイテムをフォーカスした状態でタグ検索を実行しても、フォーカス状態はリセットされず、
@@ -238,7 +242,7 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
     {
         // Arrange: タグ・アイテム3件・タグ関係を投入
         int tagId;
-        await using (ApplicationDbContext dbContext = CreateDbContext())
+        await using (ApplicationDbContext dbContext = await CreateDbContextAsync())
         {
             _ = dbContext.Users.Add(new ApplicationUser { Id = UserId, UserName = "tagfocus_user" });
             SRNSMudApp.Data.Tag tag = new() { Name = TagName, OwnerId = UserId };
@@ -290,7 +294,14 @@ public class ItemListFocusWithTagFilterTests : IAsyncDisposable
         });
     }
 
-    private System.Collections.Generic.List<SRNSMudApp.Data.Item> LoadItems() => CreateDbContext().Items.OrderBy(i => i.Id).ToList();
+    private System.Collections.Generic.List<SRNSMudApp.Data.Item> LoadItems()
+    {
+        IDbContextFactory<ApplicationDbContext> factory =
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        using ApplicationDbContext db = factory.CreateDbContext();
+        return db.Items.OrderBy(i => i.Id).AsNoTracking().ToList();
+    }
 
-    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+    private Task<ApplicationDbContext> CreateDbContextAsync() =>
+        _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
 }

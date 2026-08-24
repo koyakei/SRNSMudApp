@@ -1,9 +1,4 @@
-#region
-
-using System;
-using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 using AngleSharp.Dom;
 
@@ -20,39 +15,44 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.User;
 
-public class UserDetailTreeTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class UserDetailTreeTests : IAsyncLifetime
 {
     private const string TreeTabText = "作成したタグツリー";
     private const string TestTagName = "MyUniqueTestTag_12345";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private readonly BunitContext _ctx = new();
 
-    public UserDetailTreeTests()
+    public UserDetailTreeTests(MsSqlContainerFixture fixture)
     {
-        _ctx = new BunitContext();
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(UserDetailTreeTests));
 
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
-        // 子コンポーネント ResourceList が認証カスケードを要求するため bUnit の認可テストダブルを登録する
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized("treetestuser");
         authorization.SetClaims(new System.Security.Claims.Claim(
             System.Security.Claims.ClaimTypes.NameIdentifier, "treetest-user-id"));
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     ユーザー詳細ページの「作成したタグツリー」タブを開くと、そのユーザーが作成した
@@ -148,7 +148,7 @@ public class UserDetailTreeTests : IAsyncDisposable
     ///     UserDetail をレンダリングし、「作成したタグツリー」タブをクリックして
     ///     jqTreeInterop.init に渡されたツリーJSON文字列を返す
     /// </summary>
-    private Task<string?> ActivateTreeTabAndGetJson(string userId)
+    private async Task<string?> ActivateTreeTabAndGetJson(string userId)
     {
         var jsInteropInvocations = new List<Bunit.JSRuntimeInvocation>();
         _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
@@ -164,25 +164,23 @@ public class UserDetailTreeTests : IAsyncDisposable
         component.WaitForState(() => !component.Markup.Contains("mud-progress-circular"));
 
         // 「作成したタグツリー」ラベルをクリック（最も深い要素＝ラベル本体をクリックしバブリングさせる）
-        System.Collections.Generic.IEnumerable<IElement> candidates = component.FindAll("*")
-            .Where(e => e.TextContent.Trim() == TreeTabText);
-        IElement? tabLabel = candidates.LastOrDefault();
-        switch (tabLabel)
+        await component.InvokeAsync(() =>
         {
-            case null:
-                System.IO.File.WriteAllText("/tmp/opencode/userdetail_markup.html", component.Markup);
-                Assert.Fail($"タブ「{TreeTabText}」が見つかりません。マークアップをダンプしました。");
-                break;
-            default:
-                tabLabel.Click();
-                break;
-        }
+            System.Collections.Generic.IEnumerable<IElement> candidates = component.FindAll("*")
+                .Where(e => e.TextContent.Trim() == TreeTabText);
+            IElement? tabLabel = candidates.LastOrDefault();
+            if (tabLabel == null)
+            {
+                Assert.Fail($"タブ「{TreeTabText}」が見つかりません。");
+            }
+            tabLabel!.Click();
+        });
 
         // タブ切替後、OnAfterRenderAsync 経由で jqTreeInterop.init が呼ばれるまで待つ
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
 
         Bunit.JSRuntimeInvocation invocation =
             jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init");
-        return Task.FromResult(invocation.Arguments[1] as string);
+        return invocation.Arguments[1] as string;
     }
 }

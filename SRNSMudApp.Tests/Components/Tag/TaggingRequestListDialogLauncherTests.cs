@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,8 +23,6 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
 /// <summary>
@@ -49,11 +45,8 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
         // IDialogService ではなく IDialogLauncher のモックを注入して起動を検証する
         _ctx.Services.RemoveAll<IDialogLauncher>();
         _ctx.Services.AddSingleton(_ => _launcherMock.Object);
-        _ = _ctx.Services.AddInMemoryDbFactory();
-        _ctx.Services.AddScoped<TaggingContractService>();
-        _ctx.Services.AddScoped<ITaggingService, TaggingService>();
-        // 却下ダイアログの起動は ITaggingRequestActions 経由で行われる
-        _ = _ctx.Services.AddScoped<ITaggingRequestActions, TaggingRequestActions>();
+        _ctx.Services.AddSingleton<ITaggingRequestActions>(
+            new TaggingRequestActions(null!, new Mock<ITaggingService>().Object, _launcherMock.Object, new Mock<ISnackbar>().Object));
     }
 
     [Fact]

@@ -1,18 +1,11 @@
-#region
-
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
-using Bunit.TestDoubles;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-
-using Moq;
 
 using MudBlazor.Services;
 
@@ -23,36 +16,44 @@ using SRNSMudApp.Tests.TestSupport;
 using Xunit;
 using Xunit.Abstractions;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// BunitContextの継承をやめ、IAsyncDisposableを実装します
-public class TagTreeTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class TagTreeTests(MsSqlContainerFixture fixture, ITestOutputHelper output) : IAsyncLifetime
 {
-    private readonly ITestOutputHelper _output;
-    private readonly BunitContext _ctx;
+    private readonly ITestOutputHelper _output = output;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public TagTreeTests(ITestOutputHelper output)
+    public async Task InitializeAsync()
     {
-        _output = output;
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(TagTreeTests));
 
-        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
         _ = _ctx.Services.AddAuth("test-user-id");
         _ = _ctx.Services.AddSrnsComponentServices();
-
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        BunitContext.DefaultWaitTimeout = TimeSpan.FromSeconds(15);
+
+        IDbContextFactory<ApplicationDbContext> dbFactory =
+            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        dbContext.Users.AddRange(
+            new ApplicationUser { Id = "test-user-id", UserName = "test-user-id" },
+            new ApplicationUser { Id = "system", UserName = "system" },
+            new ApplicationUser { Id = "other-user-id", UserName = "other-user-id" },
+            new ApplicationUser { Id = "other-user", UserName = "other-user" },
+            new ApplicationUser { Id = "someone-else", UserName = "someone-else" }
+        );
+        await dbContext.SaveChangesAsync();
     }
 
-    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task JqTree_InitializesWithCorrectJson_WhenSingleRootNodeHasMultipleChildren()
@@ -60,22 +61,23 @@ public class TagTreeTests : IAsyncDisposable
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag rootTag;
+        SRNSMudApp.Data.Tag child1;
+        SRNSMudApp.Data.Tag child2;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
-            var child1 = new SRNSMudApp.Data.Tag
+            rootTag = new SRNSMudApp.Data.Tag { Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
+            child1 = new SRNSMudApp.Data.Tag
             {
-                Id = 2,
                 Name = "Child1",
-                ParentTagId = 1,
+                ParentTag = rootTag,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
-            var child2 = new SRNSMudApp.Data.Tag
+            child2 = new SRNSMudApp.Data.Tag
             {
-                Id = 3,
                 Name = "Child2",
-                ParentTagId = 1,
+                ParentTag = rootTag,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
@@ -103,10 +105,10 @@ public class TagTreeTests : IAsyncDisposable
 
         // Verify the JSON structure
         Assert.NotNull(treeDataJson);
-        Assert.Contains("\"id\":1", treeDataJson);
+        Assert.Contains($"\"id\":{rootTag.Id}", treeDataJson);
         Assert.Contains("\"children\":", treeDataJson);
-        Assert.Contains("\"id\":2", treeDataJson);
-        Assert.Contains("\"id\":3", treeDataJson);
+        Assert.Contains($"\"id\":{child1.Id}", treeDataJson);
+        Assert.Contains($"\"id\":{child2.Id}", treeDataJson);
     }
 
     [Fact]
@@ -115,24 +117,24 @@ public class TagTreeTests : IAsyncDisposable
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag child1;
+        SRNSMudApp.Data.Tag child2;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // System tag should be filtered out
-            var rootTag = new SRNSMudApp.Data.Tag { Id = 10, Name = "SystemRoot", IsSystem = true, OwnerId = "system" };
+            var rootTag = new SRNSMudApp.Data.Tag { Name = "SystemRoot", IsSystem = true, OwnerId = "system" };
             // Children are not system tags, so they should be displayed as root nodes
-            var child1 = new SRNSMudApp.Data.Tag
+            child1 = new SRNSMudApp.Data.Tag
             {
-                Id = 11,
                 Name = "UserChild1",
-                ParentTagId = 10,
+                ParentTag = rootTag,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
-            var child2 = new SRNSMudApp.Data.Tag
+            child2 = new SRNSMudApp.Data.Tag
             {
-                Id = 12,
                 Name = "UserChild2",
-                ParentTagId = 10,
+                ParentTag = rootTag,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
@@ -159,8 +161,8 @@ public class TagTreeTests : IAsyncDisposable
 
         // Verify that the children are displayed as root nodes
         Assert.NotNull(treeDataJson);
-        Assert.Contains("\"id\":11", treeDataJson);
-        Assert.Contains("\"id\":12", treeDataJson);
+        Assert.Contains($"\"id\":{child1.Id}", treeDataJson);
+        Assert.Contains($"\"id\":{child2.Id}", treeDataJson);
     }
 
     [Fact]
@@ -169,24 +171,25 @@ public class TagTreeTests : IAsyncDisposable
         // Arrange
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag rootTag;
+        SRNSMudApp.Data.Tag childTag;
+        SRNSMudApp.Data.Tag otherUserTag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             // Seed a tree structure for the current user
-            var rootTag =
-                new SRNSMudApp.Data.Tag { Id = 20, Name = "MyRoot", IsSystem = false, OwnerId = "test-user-id" };
-            var childTag = new SRNSMudApp.Data.Tag
+            rootTag =
+                new SRNSMudApp.Data.Tag { Name = "MyRoot", IsSystem = false, OwnerId = "test-user-id" };
+            childTag = new SRNSMudApp.Data.Tag
             {
-                Id = 21,
                 Name = "MyChild",
-                ParentTagId = 20,
+                ParentTag = rootTag,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
 
             // Seed a tag for another user to ensure sorting/prioritization works (though we won't hit the 2000 limit)
-            var otherUserTag = new SRNSMudApp.Data.Tag
+            otherUserTag = new SRNSMudApp.Data.Tag
             {
-                Id = 22,
                 Name = "OtherRoot",
                 IsSystem = false,
                 OwnerId = "other-user-id"
@@ -214,14 +217,14 @@ public class TagTreeTests : IAsyncDisposable
 
         // Verify that the created tag tree (MyRoot and MyChild) is displayed correctly in the JSON
         Assert.NotNull(treeDataJson);
-        Assert.Contains("\"id\":20", treeDataJson);
+        Assert.Contains($"\"id\":{rootTag.Id}", treeDataJson);
         Assert.Contains("\"name\":\"MyRoot\"", treeDataJson);
         Assert.Contains("\"children\":", treeDataJson);
-        Assert.Contains("\"id\":21", treeDataJson);
+        Assert.Contains($"\"id\":{childTag.Id}", treeDataJson);
         Assert.Contains("\"name\":\"MyChild\"", treeDataJson);
 
         // Also verify the other user's tag is included since we are under the 2000 limit
-        Assert.Contains("\"id\":22", treeDataJson);
+        Assert.Contains($"\"id\":{otherUserTag.Id}", treeDataJson);
     }
 
     [Fact]
@@ -232,34 +235,31 @@ public class TagTreeTests : IAsyncDisposable
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            // Seed a circular reference tree structure
             var tag1 = new SRNSMudApp.Data.Tag
             {
-                Id = 30,
                 Name = "Tag1",
-                ParentTagId = 32,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
             var tag2 = new SRNSMudApp.Data.Tag
             {
-                Id = 31,
                 Name = "Tag2",
-                ParentTagId = 30,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
             var tag3 = new SRNSMudApp.Data.Tag
             {
-                Id = 32,
                 Name = "Tag3",
-                ParentTagId = 31,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
 
-            // Tag1's parent is Tag3. Tag3's parent is Tag2. Tag2's parent is Tag1. Circular!
             dbContext.Tags.AddRange(tag1, tag2, tag3);
+            _ = await dbContext.SaveChangesAsync();
+
+            tag1.ParentTagId = tag3.Id;
+            tag2.ParentTagId = tag1.Id;
+            tag3.ParentTagId = tag2.Id;
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -274,7 +274,6 @@ public class TagTreeTests : IAsyncDisposable
         // If there's a stack overflow, this test will crash the runner.
         IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
 
-        // Assert
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
 
         JSRuntimeInvocation invocation = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init");
@@ -297,7 +296,6 @@ public class TagTreeTests : IAsyncDisposable
             {
                 tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 10000 + i,
                     Name = $"Tag {i}",
                     IsSystem = false,
                     OwnerId = "test-user-id"
@@ -336,17 +334,24 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag childTag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            var tag = new SRNSMudApp.Data.Tag
+            // System parent tag is filtered out from TagTree in memory
+            var systemParent = new SRNSMudApp.Data.Tag
             {
-                Id = 40,
+                Name = "SystemParent",
+                IsSystem = true,
+                OwnerId = "system"
+            };
+            childTag = new SRNSMudApp.Data.Tag
+            {
                 Name = "Orphan",
-                ParentTagId = 9999,
+                ParentTag = systemParent,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
-            _ = dbContext.Tags.Add(tag);
+            dbContext.Tags.AddRange(systemParent, childTag);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -361,7 +366,7 @@ public class TagTreeTests : IAsyncDisposable
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
         // Should be treated as root node
-        Assert.Contains("\"id\":40", treeDataJson);
+        Assert.Contains($"\"id\":{childTag.Id}", treeDataJson);
     }
 
     [Fact]
@@ -369,17 +374,19 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag tag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            var tag = new SRNSMudApp.Data.Tag
+            tag = new SRNSMudApp.Data.Tag
             {
-                Id = 50,
                 Name = "SelfRef",
-                ParentTagId = 50,
                 IsSystem = false,
                 OwnerId = "test-user-id"
             };
             _ = dbContext.Tags.Add(tag);
+            _ = await dbContext.SaveChangesAsync();
+
+            tag.ParentTagId = tag.Id;
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -394,7 +401,7 @@ public class TagTreeTests : IAsyncDisposable
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
         // This will FAIL if the tree builder skips self-referencing tags
-        Assert.Contains("\"id\":50", treeDataJson);
+        Assert.Contains($"\"id\":{tag.Id}", treeDataJson);
     }
 
     [Fact]
@@ -402,22 +409,26 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag? deepestTag = null;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
             var tags = new List<SRNSMudApp.Data.Tag>();
+            SRNSMudApp.Data.Tag? prev = null;
             // Max depth in JsonSerializer is 64 by default, we set it to 128. Let's try 130 to see if it fails.
             for (var i = 1; i <= 130; i++)
             {
-                tags.Add(new SRNSMudApp.Data.Tag
+                var tag = new SRNSMudApp.Data.Tag
                 {
-                    Id = 1000 + i,
                     Name = $"Deep{i}",
-                    ParentTagId = i == 1 ? null : 1000 + i - 1,
+                    ParentTag = prev,
                     IsSystem = false,
                     OwnerId = "test-user-id"
-                });
+                };
+                tags.Add(tag);
+                prev = tag;
             }
 
+            deepestTag = prev;
             dbContext.Tags.AddRange(tags);
             _ = await dbContext.SaveChangesAsync();
         }
@@ -434,7 +445,7 @@ public class TagTreeTests : IAsyncDisposable
         component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
         var treeDataJson = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init").Arguments[1] as string;
 
-        Assert.Contains("\"id\":1130", treeDataJson);
+        Assert.Contains($"\"id\":{deepestTag!.Id}", treeDataJson);
     }
 
     // ============================================================
@@ -449,15 +460,16 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag tag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
+            tag = new SRNSMudApp.Data.Tag
             {
-                Id = 100,
                 Name = "SoloTag",
                 IsSystem = false,
                 OwnerId = "test-user-id"
-            });
+            };
+            _ = dbContext.Tags.Add(tag);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -465,7 +477,7 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":100", json);
+        Assert.Contains($"\"id\":{tag.Id}", json);
         Assert.Contains("\"name\":\"SoloTag\"", json);
     }
 
@@ -477,13 +489,15 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag tagA;
+        SRNSMudApp.Data.Tag tagB;
+        SRNSMudApp.Data.Tag tagC;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 200, Name = "FlatA", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag { Id = 201, Name = "FlatB", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag { Id = 202, Name = "FlatC", IsSystem = false, OwnerId = "test-user-id" }
-            );
+            tagA = new SRNSMudApp.Data.Tag { Name = "FlatA", IsSystem = false, OwnerId = "test-user-id" };
+            tagB = new SRNSMudApp.Data.Tag { Name = "FlatB", IsSystem = false, OwnerId = "test-user-id" };
+            tagC = new SRNSMudApp.Data.Tag { Name = "FlatC", IsSystem = false, OwnerId = "test-user-id" };
+            dbContext.Tags.AddRange(tagA, tagB, tagC);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -491,9 +505,9 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":200", json);
-        Assert.Contains("\"id\":201", json);
-        Assert.Contains("\"id\":202", json);
+        Assert.Contains($"\"id\":{tagA.Id}", json);
+        Assert.Contains($"\"id\":{tagB.Id}", json);
+        Assert.Contains($"\"id\":{tagC.Id}", json);
     }
 
     /// <summary>
@@ -504,20 +518,21 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag flatTag;
+        SRNSMudApp.Data.Tag treeRoot;
+        SRNSMudApp.Data.Tag treeChild;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 300, Name = "FlatOnly", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag { Id = 301, Name = "TreeRoot", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 302,
-                    Name = "TreeChild",
-                    ParentTagId = 301,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                }
-            );
+            flatTag = new SRNSMudApp.Data.Tag { Name = "FlatOnly", IsSystem = false, OwnerId = "test-user-id" };
+            treeRoot = new SRNSMudApp.Data.Tag { Name = "TreeRoot", IsSystem = false, OwnerId = "test-user-id" };
+            treeChild = new SRNSMudApp.Data.Tag
+            {
+                Name = "TreeChild",
+                ParentTag = treeRoot,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            dbContext.Tags.AddRange(flatTag, treeRoot, treeChild);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -525,9 +540,9 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":300", json);
-        Assert.Contains("\"id\":301", json);
-        Assert.Contains("\"id\":302", json);
+        Assert.Contains($"\"id\":{flatTag.Id}", json);
+        Assert.Contains($"\"id\":{treeRoot.Id}", json);
+        Assert.Contains($"\"id\":{treeChild.Id}", json);
     }
 
     /// <summary>
@@ -538,12 +553,13 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag tag1;
+        SRNSMudApp.Data.Tag tag2;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 400, Name = "OtherUserTag1", IsSystem = false, OwnerId = "other-user" },
-                new SRNSMudApp.Data.Tag { Id = 401, Name = "OtherUserTag2", IsSystem = false, OwnerId = "other-user" }
-            );
+            tag1 = new SRNSMudApp.Data.Tag { Name = "OtherUserTag1", IsSystem = false, OwnerId = "other-user" };
+            tag2 = new SRNSMudApp.Data.Tag { Name = "OtherUserTag2", IsSystem = false, OwnerId = "other-user" };
+            dbContext.Tags.AddRange(tag1, tag2);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -551,8 +567,8 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":400", json);
-        Assert.Contains("\"id\":401", json);
+        Assert.Contains($"\"id\":{tag1.Id}", json);
+        Assert.Contains($"\"id\":{tag2.Id}", json);
     }
 
     /// <summary>
@@ -563,12 +579,13 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag myTag;
+        SRNSMudApp.Data.Tag theirTag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 500, Name = "MyTag", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag { Id = 501, Name = "TheirTag", IsSystem = false, OwnerId = "someone-else" }
-            );
+            myTag = new SRNSMudApp.Data.Tag { Name = "MyTag", IsSystem = false, OwnerId = "test-user-id" };
+            theirTag = new SRNSMudApp.Data.Tag { Name = "TheirTag", IsSystem = false, OwnerId = "someone-else" };
+            dbContext.Tags.AddRange(myTag, theirTag);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -576,8 +593,8 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":500", json);
-        Assert.Contains("\"id\":501", json);
+        Assert.Contains($"\"id\":{myTag.Id}", json);
+        Assert.Contains($"\"id\":{theirTag.Id}", json);
     }
 
     /// <summary>
@@ -592,7 +609,6 @@ public class TagTreeTests : IAsyncDisposable
         {
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
             {
-                Id = 600,
                 Name = "LonelyRoot",
                 IsSystem = false,
                 OwnerId = "test-user-id"
@@ -615,36 +631,37 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag rootA;
+        SRNSMudApp.Data.Tag childA1;
+        SRNSMudApp.Data.Tag childA2;
+        SRNSMudApp.Data.Tag rootB;
+        SRNSMudApp.Data.Tag childB1;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 700, Name = "RootA", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 701,
-                    Name = "ChildA1",
-                    ParentTagId = 700,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 702,
-                    Name = "ChildA2",
-                    ParentTagId = 700,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                },
-                new SRNSMudApp.Data.Tag { Id = 710, Name = "RootB", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 711,
-                    Name = "ChildB1",
-                    ParentTagId = 710,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                }
-            );
+            rootA = new SRNSMudApp.Data.Tag { Name = "RootA", IsSystem = false, OwnerId = "test-user-id" };
+            childA1 = new SRNSMudApp.Data.Tag
+            {
+                Name = "ChildA1",
+                ParentTag = rootA,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            childA2 = new SRNSMudApp.Data.Tag
+            {
+                Name = "ChildA2",
+                ParentTag = rootA,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            rootB = new SRNSMudApp.Data.Tag { Name = "RootB", IsSystem = false, OwnerId = "test-user-id" };
+            childB1 = new SRNSMudApp.Data.Tag
+            {
+                Name = "ChildB1",
+                ParentTag = rootB,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            dbContext.Tags.AddRange(rootA, childA1, childA2, rootB, childB1);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -653,11 +670,11 @@ public class TagTreeTests : IAsyncDisposable
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
         // すべてのタグが出力に含まれている
-        Assert.Contains("\"id\":700", json);
-        Assert.Contains("\"id\":701", json);
-        Assert.Contains("\"id\":702", json);
-        Assert.Contains("\"id\":710", json);
-        Assert.Contains("\"id\":711", json);
+        Assert.Contains($"\"id\":{rootA.Id}", json);
+        Assert.Contains($"\"id\":{childA1.Id}", json);
+        Assert.Contains($"\"id\":{childA2.Id}", json);
+        Assert.Contains($"\"id\":{rootB.Id}", json);
+        Assert.Contains($"\"id\":{childB1.Id}", json);
     }
 
     /// <summary>
@@ -674,7 +691,6 @@ public class TagTreeTests : IAsyncDisposable
             {
                 _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 800 + i,
                     Name = $"CountTag{i}",
                     IsSystem = false,
                     OwnerId = "test-user-id"
@@ -702,27 +718,27 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag grandparent;
+        SRNSMudApp.Data.Tag parent;
+        SRNSMudApp.Data.Tag child;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 900, Name = "Grandparent", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 901,
-                    Name = "Parent",
-                    ParentTagId = 900,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 902,
-                    Name = "Child",
-                    ParentTagId = 901,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                }
-            );
+            grandparent = new SRNSMudApp.Data.Tag { Name = "Grandparent", IsSystem = false, OwnerId = "test-user-id" };
+            parent = new SRNSMudApp.Data.Tag
+            {
+                Name = "Parent",
+                ParentTag = grandparent,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            child = new SRNSMudApp.Data.Tag
+            {
+                Name = "Child",
+                ParentTag = parent,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            dbContext.Tags.AddRange(grandparent, parent, child);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -730,9 +746,9 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":900", json);
-        Assert.Contains("\"id\":901", json);
-        Assert.Contains("\"id\":902", json);
+        Assert.Contains($"\"id\":{grandparent.Id}", json);
+        Assert.Contains($"\"id\":{parent.Id}", json);
+        Assert.Contains($"\"id\":{child.Id}", json);
         // ネスト構造が保持されていることを確認
         Assert.Contains("\"children\":", json);
     }
@@ -745,12 +761,13 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag userTag;
+        SRNSMudApp.Data.Tag systemTag;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 950, Name = "SystemOnly", IsSystem = true, OwnerId = "system" },
-                new SRNSMudApp.Data.Tag { Id = 951, Name = "UserVisible", IsSystem = false, OwnerId = "test-user-id" }
-            );
+            systemTag = new SRNSMudApp.Data.Tag { Name = "SystemOnly", IsSystem = true, OwnerId = "system" };
+            userTag = new SRNSMudApp.Data.Tag { Name = "UserVisible", IsSystem = false, OwnerId = "test-user-id" };
+            dbContext.Tags.AddRange(systemTag, userTag);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -758,8 +775,8 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.NotEqual("[]", json);
-        Assert.Contains("\"id\":951", json);
-        Assert.DoesNotContain("\"id\":950", json);
+        Assert.Contains($"\"id\":{userTag.Id}", json);
+        Assert.DoesNotContain($"\"id\":{systemTag.Id}", json);
     }
 
     // ============================================================
@@ -774,35 +791,35 @@ public class TagTreeTests : IAsyncDisposable
     {
         IDbContextFactory<ApplicationDbContext> dbFactory =
             _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        SRNSMudApp.Data.Tag root;
+        SRNSMudApp.Data.Tag child1;
+        SRNSMudApp.Data.Tag child2;
+        SRNSMudApp.Data.Tag child3;
         await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
         {
-            dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Id = 2100, Name = "BugRoot", IsSystem = false, OwnerId = "test-user-id" },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 2101,
-                    Name = "Child1",
-                    ParentTagId = 2100,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 2102,
-                    Name = "Child2",
-                    ParentTagId = 2100,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                },
-                new SRNSMudApp.Data.Tag
-                {
-                    Id = 2103,
-                    Name = "Child3",
-                    ParentTagId = 2100,
-                    IsSystem = false,
-                    OwnerId = "test-user-id"
-                }
-            );
+            root = new SRNSMudApp.Data.Tag { Name = "BugRoot", IsSystem = false, OwnerId = "test-user-id" };
+            child1 = new SRNSMudApp.Data.Tag
+            {
+                Name = "Child1",
+                ParentTag = root,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            child2 = new SRNSMudApp.Data.Tag
+            {
+                Name = "Child2",
+                ParentTag = root,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            child3 = new SRNSMudApp.Data.Tag
+            {
+                Name = "Child3",
+                ParentTag = root,
+                IsSystem = false,
+                OwnerId = "test-user-id"
+            };
+            dbContext.Tags.AddRange(root, child1, child2, child3);
             _ = await dbContext.SaveChangesAsync();
         }
 
@@ -810,10 +827,10 @@ public class TagTreeTests : IAsyncDisposable
 
         Assert.NotNull(json);
         Assert.Contains("\"name\":\"BugRoot\"", json);
-        Assert.Contains("\"id\":2100", json);
-        Assert.Contains("\"id\":2101", json);
-        Assert.Contains("\"id\":2102", json);
-        Assert.Contains("\"id\":2103", json);
+        Assert.Contains($"\"id\":{root.Id}", json);
+        Assert.Contains($"\"id\":{child1.Id}", json);
+        Assert.Contains($"\"id\":{child2.Id}", json);
+        Assert.Contains($"\"id\":{child3.Id}", json);
         // 親子構造（ネスト）が保持されている
         Assert.Contains("\"children\":", json);
     }
@@ -833,7 +850,6 @@ public class TagTreeTests : IAsyncDisposable
             {
                 tags.Add(new SRNSMudApp.Data.Tag
                 {
-                    Id = 2200 + i,
                     Name = $"EmptySearchTag_{i}",
                     IsSystem = false,
                     OwnerId = "test-user-id"

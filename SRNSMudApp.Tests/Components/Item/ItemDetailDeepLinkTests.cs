@@ -1,8 +1,5 @@
-#region
-
 using System;
 using System.Linq;
-using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -17,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
@@ -26,8 +24,6 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
@@ -35,16 +31,19 @@ namespace SRNSMudApp.Tests.Components.Item;
 ///     （?tab=requests&amp;requestId=...）の双方向同期を検証する。
 ///     （ItemDetailDeepLinkE2ETests の移行テスト）
 /// </summary>
-public class ItemDetailDeepLinkTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemDetailDeepLinkTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "deeplink-user-id";
     private const string UserName = "deeplink_user";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemDetailDeepLinkTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemDetailDeepLinkTests));
+
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
@@ -69,14 +68,14 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
             .ReturnsAsync([]);
         _ctx.Services.AddScoped(_ => itemTagMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     「関連リクエスト」タブのクリックで URL に tab=requests が反映され、
@@ -93,19 +92,18 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
         IRenderedComponent<ItemDetail> cut =
             _ctx.Render<ItemDetail>(parameters => parameters.Add(p => p.ItemId, itemId));
 
+        // Act 1: 関連リクエストタブをアクティブ化
         cut.WaitForState(() => !cut.Markup.Contains("mud-progress-circular"));
-
-        // Act 1: 関連リクエストタブをクリック
-        IElement requestsTab = cut.FindAll(".mud-tab")
-            .First(t => t.TextContent.Contains("関連リクエスト"));
-        requestsTab.Click();
+        IRenderedComponent<MudTabs> tabs = cut.FindComponent<MudTabs>();
+        await cut.InvokeAsync(() => tabs.Instance.ActivatePanelAsync(1));
 
         // Assert 1: URL に tab=requests が反映される
-        Assert.Contains("tab=requests", navigationManager.Uri);
+        cut.WaitForAssertion(() => Assert.Contains("tab=requests", navigationManager.Uri));
 
-        // Act 2: リクエスト行（投稿者名セル）をクリック
-        IElement requestCell = cut.FindAll("td").First(td => td.TextContent.Contains(UserName));
-        requestCell.Click();
+        // Act 2: 関連リクエスト一覧のテーブル描画を待ってから行をクリック
+        cut.WaitForState(() => cut.FindAll("td").Any(td => td.TextContent.Contains(UserName)));
+        await cut.InvokeAsync(() =>
+            cut.FindAll("td").First(td => td.TextContent.Contains(UserName)).Click());
 
         // Assert 2: URL に requestId が反映される
         cut.WaitForAssertion(() =>
@@ -143,7 +141,7 @@ public class ItemDetailDeepLinkTests : IAsyncDisposable
     private async Task<(int ItemId, int RequestId)> SeedDataAsync()
     {
         await using ApplicationDbContext db =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+            await _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
 
         ApplicationUser user = new() { Id = UserId, UserName = UserName };
         _ = db.Users.Add(user);

@@ -1,17 +1,8 @@
-#region
-
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
 using AngleSharp.Dom;
 
 using Bunit;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-
-using Moq;
 
 using MudBlazor;
 using MudBlazor.Services;
@@ -22,48 +13,45 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.User;
 
-// BunitContextの継承をやめ、IAsyncDisposableを実装します
-public class UserSearchTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class UserSearchTests : IAsyncLifetime
 {
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private readonly BunitContext _ctx = new();
 
-    public UserSearchTests()
+    public UserSearchTests(MsSqlContainerFixture fixture)
     {
-        _ctx = new BunitContext();
+        _fixture = fixture;
+    }
 
-        // 継承元のプロパティではなく、_ctx のプロパティを使用するように変更
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(UserSearchTests));
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
-        // Since MudBlazor Popover requires JS, we need to mock it in bUnit or use Bunit.Web.JSInterop
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase("UserSearchTestDb")
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
 
-        var dbContext = new ApplicationDbContext(options);
-        _ = dbContext.Database.EnsureDeleted();
-        _ = dbContext.Database.EnsureCreated();
-
+        await using var dbContext = new ApplicationDbContext(options);
         dbContext.Users.AddRange(
             new ApplicationUser { Id = "1", UserName = "TestUser1", NormalizedUserName = "TESTUSER1" },
             new ApplicationUser { Id = "2", UserName = "AdminUser", NormalizedUserName = "ADMINUSER" },
             new ApplicationUser { Id = "3", UserName = "GuestUser", NormalizedUserName = "GUESTUSER" }
         );
-        _ = dbContext.SaveChanges();
-
-        var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
-        _ = mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => new ApplicationDbContext(options));
-
-        _ = _ctx.Services.AddSingleton(mockDbFactory.Object);
+        await dbContext.SaveChangesAsync();
     }
 
-    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public void UserSearch_Renders_Initially()

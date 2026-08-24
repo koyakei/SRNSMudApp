@@ -1,20 +1,12 @@
-#region
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Security.Claims;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+
+using AngleSharp.Dom;
 
 using Bunit;
 using Bunit.TestDoubles;
 
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -29,43 +21,48 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// BunitContextの継承をやめ、IAsyncDisposableを実装します
-public class ImportTagTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ImportTagTests : IAsyncLifetime
 {
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private readonly BunitContext _ctx = new();
 
-    public ImportTagTests()
+    public ImportTagTests(MsSqlContainerFixture fixture)
     {
-        _ctx = new BunitContext();
+        _fixture = fixture;
+    }
 
-        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ImportTagTests));
+
         _ = _ctx.Services.AddAuth("testuser");
         _ = _ctx.Services.AddSrnsComponentServices();
-        // ImportTag は [CascadingParameter] Task<AuthenticationState> で認証情報を受けるためカスケード値も登録する
         _ = _ctx.Services.AddCascadingValue(_ => System.Threading.Tasks.Task.FromResult(BunitTestSetup.CreateAuthState("testuser")));
 
-        var dbName = Guid.NewGuid().ToString();
-        // ImportTag.ImportData が BeginTransactionAsync を呼ぶため InMemory のトランザクション警告を無視する
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)),
-            ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         var tagEmbeddingServiceMock = new Mock<ITagEmbeddingService>();
         _ = _ctx.Services.AddScoped(sp => tagEmbeddingServiceMock.Object);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(_testDb.ConnectionString)
+            .Options;
+        await using var dbContext = new ApplicationDbContext(options);
+        dbContext.Users.Add(new ApplicationUser { Id = "testuser", UserName = "testuser" });
+        await dbContext.SaveChangesAsync();
     }
 
-    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task ImportButton_ShouldBeDisabled_WhenParentTagIsNotSelected_AndEnabled_WhenSelected()

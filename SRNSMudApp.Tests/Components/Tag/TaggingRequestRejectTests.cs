@@ -32,16 +32,26 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class TaggingRequestRejectTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class TaggingRequestRejectTests : IAsyncLifetime
 {
     private const string ItemOwnerId = "item-owner";
     private const string TagOwnerId = "tag-owner";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
     private int _onRequestChangedCount;
 
-    public TaggingRequestRejectTests()
+    public TaggingRequestRejectTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingRequestRejectTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -52,17 +62,18 @@ public class TaggingRequestRejectTests : IAsyncDisposable
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.Services.AddScoped<TaggingContractService>();
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
         _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task Submit_ShouldCloseDialogWithEnteredReason()

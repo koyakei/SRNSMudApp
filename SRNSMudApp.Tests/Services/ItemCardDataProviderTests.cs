@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -12,50 +13,64 @@ using Xunit;
 namespace SRNSMudApp.Tests.Services;
 
 /// <summary>
-///     <see cref="ItemCardDataProvider" /> の投票トグルロジックの単体テスト (InMemory DB)。
+///     <see cref="ItemCardDataProvider" /> の投票トグルロジックの単体テスト (MSSQL Testcontainers)。
 /// </summary>
-public class ItemCardDataProviderTests
+[Collection(MsSqlCollection.Name)]
+public class ItemCardDataProviderTests : IAsyncLifetime
 {
     private const string UserId = "voter";
-    private const int GoodTagId = 100;
+    private int _goodTagId;
+    private int _itemId;
 
-    private readonly ApplicationDbContext _db;
-    private readonly ItemCardDataProvider _sut;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private ApplicationDbContext _db = null!;
+    private ItemCardDataProvider _sut = null!;
 
-    public ItemCardDataProviderTests()
+    public ItemCardDataProviderTests(MsSqlContainerFixture fixture)
     {
-        DbContextOptions<ApplicationDbContext> options =
-            new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString())
-                .Options;
-        _db = new ApplicationDbContext(options);
-        _sut = new ItemCardDataProvider(
-            new DbContextFactoryStub(options));
+        _fixture = fixture;
+    }
 
-        _db.Users.Add(new ApplicationUser { Id = UserId, UserName = UserId });
-        _db.Tags.Add(new Tag { Id = GoodTagId, Name = "good", IsSystem = true, OwnerId = "system", CachedWeight = 0 });
-        _db.Items.Add(new SRNSMudApp.Data.Item { Id = 1, Content = "target", OwnerId = "author" });
-        _ = _db.SaveChanges();
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ItemCardDataProviderTests));
+        _db = new ApplicationDbContext(_testDb.Options);
+        _sut = new ItemCardDataProvider(new DbContextFactoryStub(_testDb.Options));
+
+        var tag = new Tag { Name = "good", IsSystem = true, OwnerId = "system", CachedWeight = 0 };
+        var item = new SRNSMudApp.Data.Item { Content = "target", OwnerId = "author" };
+
+        _db.Users.AddRange(
+            new ApplicationUser { Id = UserId, UserName = UserId },
+            new ApplicationUser { Id = "system", UserName = "system" },
+            new ApplicationUser { Id = "author", UserName = "author" });
+        _db.Tags.Add(tag);
+        _db.Items.Add(item);
+        _ = await _db.SaveChangesAsync();
+
+        _goodTagId = tag.Id;
+        _itemId = item.Id;
     }
 
     [Fact]
     public async Task ToggleItemVote_FirstClick_AddsRelationWithTargetWeight()
     {
-        ItemVoteResult result = await _sut.ToggleItemVoteAsync(1, UserId, GoodTagId, 1);
+        ItemVoteResult result = await _sut.ToggleItemVoteAsync(_itemId, UserId, _goodTagId, 1);
 
         Assert.Equal(ItemVoteAction.Added, result.Action);
         Assert.Equal(1, result.Weight);
-        TagRelation? relation = await _db.TagRelations.SingleAsync(tr => tr.ItemId == 1 && tr.OwnerId == UserId);
-        Assert.Equal(GoodTagId, relation.TagId);
+        TagRelation? relation = await _db.TagRelations.SingleAsync(tr => tr.ItemId == _itemId && tr.OwnerId == UserId);
+        Assert.Equal(_goodTagId, relation.TagId);
         Assert.Equal(1, relation.Weight);
     }
 
     [Fact]
     public async Task ToggleItemVote_SecondDifferentWeight_UpdatesAndWritesLedger()
     {
-        _ = await _sut.ToggleItemVoteAsync(1, UserId, GoodTagId, 1);
+        _ = await _sut.ToggleItemVoteAsync(_itemId, UserId, _goodTagId, 1);
 
-        ItemVoteResult result = await _sut.ToggleItemVoteAsync(1, UserId, GoodTagId, -1);
+        ItemVoteResult result = await _sut.ToggleItemVoteAsync(_itemId, UserId, _goodTagId, -1);
 
         Assert.Equal(ItemVoteAction.Updated, result.Action);
         TagRelation relation = await _db.TagRelations.SingleAsync(tr => tr.Id == result.RelationId);
@@ -71,20 +86,24 @@ public class ItemCardDataProviderTests
     [Fact]
     public async Task ToggleItemVote_SameWeightTwice_CancelsVoteAndRemovesRelation()
     {
-        _ = await _sut.ToggleItemVoteAsync(1, UserId, GoodTagId, 1);
-        var cachedAfterAdd = (await _db.Tags.FindAsync(GoodTagId))!.CachedWeight;
+        _ = await _sut.ToggleItemVoteAsync(_itemId, UserId, _goodTagId, 1);
+        var cachedAfterAdd = (await _db.Tags.FindAsync(_goodTagId))!.CachedWeight;
 
-        ItemVoteResult result = await _sut.ToggleItemVoteAsync(1, UserId, GoodTagId, 1);
+        ItemVoteResult result = await _sut.ToggleItemVoteAsync(_itemId, UserId, _goodTagId, 1);
 
         Assert.Equal(ItemVoteAction.Removed, result.Action);
         Assert.False(await _db.TagRelations.AnyAsync(tr => tr.OwnerId == UserId));
         // 取り消しで CachedWeight が追加直後の値に戻ること
-        Assert.Equal(cachedAfterAdd, (await _db.Tags.FindAsync(GoodTagId))!.CachedWeight);
+        Assert.Equal(cachedAfterAdd, (await _db.Tags.FindAsync(_goodTagId))!.CachedWeight);
         TimelineEvent timeline = await _db.TimelineEvents!.SingleAsync(e => e.EventType == "Delete");
         Assert.Equal(1, timeline.PreviousWeight);
     }
 
-    public async ValueTask DisposeAsync() => await _db.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _db.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>テスト用のシンプルなファクトリ。</summary>
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)

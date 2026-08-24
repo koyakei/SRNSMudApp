@@ -40,26 +40,33 @@ namespace SRNSMudApp.Tests.Components.Contract;
 ///     （DuplicateTaggingRequestCancelE2ETests の移行テスト。マルチログイン部分は
 ///     「承認側」と「取り下げ側」の2つのコンポーネントテストに分解している）
 /// </summary>
-public class DuplicateTaggingRequestCancelTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class DuplicateTaggingRequestCancelTests : IAsyncLifetime
 {
     private const string TagOwnerId = "dup-tag-owner";
     private const string UserAId = "dup-user-a";
     private const string UserBId = "dup-user-b";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
     private readonly Mock<IContractDataProvider> _contractDataMock = new();
 
-    public DuplicateTaggingRequestCancelTests()
+    public DuplicateTaggingRequestCancelTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(DuplicateTaggingRequestCancelTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.Services.AddAuthorizationCore();
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         AuthenticationState authState = BunitTestSetup.CreateAuthState(UserBId);
         Mock<AuthenticationStateProvider> authMock = new();
@@ -75,7 +82,11 @@ public class DuplicateTaggingRequestCancelTests : IAsyncDisposable
         _ctx.Services.AddSingleton(_ => _contractDataMock.Object);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     タグオーナーがユーザーAの重複リクエストを承認しても、ユーザーBの
@@ -98,10 +109,13 @@ public class DuplicateTaggingRequestCancelTests : IAsyncDisposable
         rowA.QuerySelector("[data-testid='tagging-request-approve']")!.Click();
 
         // Assert: A は Executed、B は Proposed のまま (実アプリでは OnRequestChanged で再読込される)
-        await using ApplicationDbContext db =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-        Assert.Equal(TradeStatus.Executed, db.TaggingRequestEntities.Find(contractA.Id)!.Status);
-        Assert.Equal(TradeStatus.Proposed, db.TaggingRequestEntities.Find(contractB.Id)!.Status);
+        cut.WaitForAssertion(() =>
+        {
+            using ApplicationDbContext db =
+                _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+            Assert.Equal(TradeStatus.Executed, db.TaggingRequestEntities.Find(contractA.Id)!.Status);
+            Assert.Equal(TradeStatus.Proposed, db.TaggingRequestEntities.Find(contractB.Id)!.Status);
+        });
     }
 
     /// <summary>

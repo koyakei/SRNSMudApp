@@ -1,6 +1,5 @@
-#region
-
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -11,13 +10,13 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
@@ -27,8 +26,6 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
@@ -36,15 +33,19 @@ namespace SRNSMudApp.Tests.Components.Item;
 ///     JS interop（window.downloadFileFromText）に渡されるJSON文字列の中身を検証する。
 ///     （ItemListExportE2ETests.ExportToJson_ShouldIncludeLinkPreview の移行テスト）
 /// </summary>
-public class ItemListExportTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemListExportTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "export-user-id";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemListExportTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemListExportTests));
+
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         // ItemList 配下の AddItem / ResourceList / AuthorizeView が認証カスケードを必要とする
@@ -72,18 +73,21 @@ public class ItemListExportTests : IAsyncDisposable
         _ctx.Services.AddScoped(_ => itemTagMock.Object);
 
         // LinkPreviewService が実際にHTTPフェッチしても固定HTMLを返すハンドラ経由にする
+        ServiceDescriptor? descriptor = _ctx.Services.FirstOrDefault(d => d.ServiceType == typeof(LinkPreviewService));
+        if (descriptor != null)
+        {
+            _ = _ctx.Services.Remove(descriptor);
+        }
         _ = _ctx.Services.AddSingleton(new LinkPreviewService(new HttpClient(new FakeLinkPreviewHandler())));
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
-
-        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     URL を含むアイテムを JSON エクスポートすると、出力に LinkPreview（タイトル付き）が
@@ -106,15 +110,17 @@ public class ItemListExportTests : IAsyncDisposable
             _ = await dbContext.SaveChangesAsync();
         }
 
+        var downloadJs = _ctx.JSInterop.SetupVoid("window.downloadFileFromText", _ => true);
+        downloadJs.SetVoidResult();
+
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
         cut.WaitForState(() => cut.Markup.Contains("item-card-"));
 
-        // JS ダウンロード呼び出しを記録対象にする
-        var downloadJs = _ctx.JSInterop.SetupVoid("window.downloadFileFromText", _ => true);
-
         // Act: 「JSONエクスポート」ボタン押下
-        cut.FindAll("button").First(b => b.TextContent.Contains("JSONエクスポート")).Click();
+        IRenderedComponent<MudButton> exportButton = cut.FindComponents<MudButton>()
+            .First(b => b.Markup.Contains("JSONエクスポート"));
+        exportButton.Find("button").Click();
 
         cut.WaitForAssertion(() => Assert.NotEmpty(downloadJs.Invocations));
 

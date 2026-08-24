@@ -65,7 +65,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
                 SourceType = "TagRelationToTagInsert",
-                SourceId = newRelation.Id,
+                SourceId = null,
                 PreviousWeight = prevWeight,
                 NewWeight = tagFromDb.CachedWeight,
                 Delta = 1,

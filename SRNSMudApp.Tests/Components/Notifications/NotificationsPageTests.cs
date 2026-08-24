@@ -32,15 +32,25 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Notifications;
 
-public class NotificationsPageTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class NotificationsPageTests : IAsyncLifetime
 {
     private const string OwnerUserId = "notif-owner-id";
     private const string RequesterUserId = "notif-requester-id";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
 
-    public NotificationsPageTests()
+    public NotificationsPageTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(NotificationsPageTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -51,10 +61,7 @@ public class NotificationsPageTests : IAsyncDisposable
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         // ページが依存する実際のサービスとモックを登録
         _ = _ctx.Services.AddScoped<INotificationService, NotificationService>();
@@ -68,7 +75,11 @@ public class NotificationsPageTests : IAsyncDisposable
         _ctx.Services.AddScoped(_ => itemTagMock.Object);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     2件のGratis契約リクエスト通知について、1件目を承認すると「処理済み」チップが表示され

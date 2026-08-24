@@ -27,15 +27,25 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-public class TaggingRequestCancelTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class TaggingRequestCancelTests : IAsyncLifetime
 {
     private const string UserId = "user-1";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
     private int _onDataChangedCount;
 
-    public TaggingRequestCancelTests()
+    public TaggingRequestCancelTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingRequestCancelTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -46,17 +56,18 @@ public class TaggingRequestCancelTests : IAsyncDisposable
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
         _ctx.Services.AddScoped<TaggingContractService>();
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task CancelButton_ShouldCancelRequestAndShowCanceledIconInteractively()

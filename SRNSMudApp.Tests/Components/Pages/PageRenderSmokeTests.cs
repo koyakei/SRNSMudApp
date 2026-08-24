@@ -34,14 +34,24 @@ namespace SRNSMudApp.Tests.Components.Pages;
 ///     GlobalPopoverE2ETests（実ブラウザで全ルート遷移時の未処理例外UIを確認する横断スモークテスト）の
 ///     bUnit 側補完。各トップレベルページが単体で例外なく初期レンダリングできることを検証する。
 /// </summary>
-public class PageRenderSmokeTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class PageRenderSmokeTests : IAsyncLifetime
 {
     private const string UserId = "smoke-user-id";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
 
-    public PageRenderSmokeTests()
+    public PageRenderSmokeTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(PageRenderSmokeTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -51,10 +61,7 @@ public class PageRenderSmokeTests : IAsyncDisposable
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         // Home が TagCard を描画するため、その依存も登録する
         _ = _ctx.Services.AddSrnsComponentServices();
@@ -65,7 +72,11 @@ public class PageRenderSmokeTests : IAsyncDisposable
         _ctx.Services.AddScoped(_ => embeddingMock.Object);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     ホームページ（/）がログイン済み状態で例外なくレンダリングできること。

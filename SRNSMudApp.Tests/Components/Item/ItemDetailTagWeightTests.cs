@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -25,24 +23,25 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>
 ///     ItemDetail のタグチップで Weight を減らした際に、アクション列へ反映されることを検証する。
 ///     （ItemDetailTagWeightE2ETests の移行テスト）
 /// </summary>
-public class ItemDetailTagWeightTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemDetailTagWeightTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
     private const string UserId = "weight-user-id";
     private const string UserName = "weight_user";
 
-    private readonly BunitContext _ctx;
+    private readonly BunitContext _ctx = new();
+    private MsSqlTestDatabase _testDb = null!;
 
-    public ItemDetailTagWeightTests()
+    public async Task InitializeAsync()
     {
-        _ctx = new BunitContext();
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemDetailTagWeightTests));
+
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
@@ -57,18 +56,18 @@ public class ItemDetailTagWeightTests : IAsyncDisposable
 
         _ctx.Services.AddScoped<TaggingContractService>();
 
-        // Weight 更新・リプライ取得は実サービス (InMemory DB) を使用する
+        // Weight 更新・リプライ取得は実サービスを使用する
         _ctx.Services.AddScoped<ITaggingService, TaggingService>();
         _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task ClickingDecreaseWeightButton_ShowsUpdatedWeightInActionsColumn()
@@ -98,7 +97,7 @@ public class ItemDetailTagWeightTests : IAsyncDisposable
 
         // DB 側も更新されていること
         await using ApplicationDbContext db =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+            await _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
         TagRelation relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId);
         Assert.Equal(-1, relation.Weight);
     }
@@ -106,7 +105,7 @@ public class ItemDetailTagWeightTests : IAsyncDisposable
     private async Task<(int ItemId, string TagName)> SeedDataAsync()
     {
         await using ApplicationDbContext db =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+            await _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
 
         ApplicationUser user = new() { Id = UserId, UserName = UserName };
         _ = db.Users.Add(user);

@@ -1,32 +1,49 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
 
 namespace SRNSMudApp.Tests;
 
-public class TaggingContractServiceTests : IDisposable
+[Collection(MsSqlCollection.Name)]
+public class TaggingContractServiceTests : IAsyncLifetime
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly TaggingContractService _service;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private ApplicationDbContext _dbContext = null!;
+    private TaggingContractService _service = null!;
 
-    public TaggingContractServiceTests()
+    public TaggingContractServiceTests(MsSqlContainerFixture fixture)
     {
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingContractServiceTests));
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(_testDb.ConnectionString)
             .Options;
         _dbContext = new ApplicationDbContext(options);
         _service = new TaggingContractService(_dbContext);
+
+        string[] standardUsers = ["Requester", "TagOwner", "UserA", "UserB", "UserC", "System", "Alice", "Bob", "Charlie", "user1", "user2", "tag-owner", "item-owner"];
+        foreach (var u in standardUsers)
+        {
+            _dbContext.Users.Add(new ApplicationUser { Id = u, UserName = u });
+        }
+        await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
     }
 
-    public void Dispose()
+    public async Task DisposeAsync()
     {
-        _dbContext.Database.EnsureDeleted();
-        _dbContext.Dispose();
-        GC.SuppressFinalize(this);
+        await _dbContext.DisposeAsync();
+        await _testDb.DisposeAsync();
     }
 
     // =====================================================================================
@@ -41,9 +58,15 @@ public class TaggingContractServiceTests : IDisposable
         var tagOwnerId = "TagOwner";
         var message = "Please give me this tag!";
 
+        var targetItem = new Item { Content = "TargetItem", OwnerId = requesterId };
+        var tag = new Tag { Name = "Tag", OwnerId = tagOwnerId };
+        _dbContext.Items.Add(targetItem);
+        _dbContext.Tags.Add(tag);
+        await _dbContext.SaveChangesAsync();
+
         // Act
         var result = await _service.ProposeGratisContractAsync(
-            requesterId, tagOwnerId, 1, 2, message: message);
+            requesterId, tagOwnerId, targetItem.Id, tag.Id, message: message);
         Assert.True(result is Success<TaggingRequestEntity>);
         var contract = (result switch { Success<TaggingRequestEntity> s => s.Value, _ => throw new Exception("Expected Success") });
 
@@ -52,8 +75,8 @@ public class TaggingContractServiceTests : IDisposable
         Assert.Equal(requesterId, contract.RequesterUserId);
         Assert.Equal(requesterId, contract.OwnerId);
         Assert.Equal(tagOwnerId, contract.TagOwnerUserId);
-        Assert.Equal(1, contract.TargetItemId);
-        Assert.Equal(2, contract.RequestedTagId);
+        Assert.Equal(targetItem.Id, contract.TargetItemId);
+        Assert.Equal(tag.Id, contract.RequestedTagId);
         Assert.Equal(TradeStatus.Proposed, contract.Status);
         Assert.True(contract.Payload is GratisPayload p && p.RequesterMessage == message);
 
@@ -69,9 +92,21 @@ public class TaggingContractServiceTests : IDisposable
         var requesterId = "Requester";
         var tagOwnerId = "TagOwner";
 
+        var targetItem1 = new Item { Content = "TargetItem1", OwnerId = requesterId };
+        var targetItem2 = new Item { Content = "TargetItem2", OwnerId = tagOwnerId };
+        var tag1 = new Tag { Name = "Tag1", OwnerId = tagOwnerId };
+        var tag2 = new Tag { Name = "Tag2", OwnerId = requesterId };
+        _dbContext.Items.AddRange(targetItem1, targetItem2);
+        _dbContext.Tags.AddRange(tag1, tag2);
+        await _dbContext.SaveChangesAsync();
+
+        var rightAsset = new RightAsset { Amount = 1, OwnerId = requesterId, TargetTagId = tag1.Id };
+        _dbContext.RightAssets.Add(rightAsset);
+        await _dbContext.SaveChangesAsync();
+
         // Act
         var result = await _service.ProposeMutualContractAsync(
-            requesterId, tagOwnerId, 1, 2, 3, 4, 5);
+            requesterId, tagOwnerId, targetItem1.Id, tag1.Id, targetItem2.Id, tag2.Id, rightAsset.Id);
         Assert.True(result is Success<TaggingRequestEntity>);
         var contract = (result switch { Success<TaggingRequestEntity> s => s.Value, _ => throw new Exception("Expected Success") });
 
@@ -79,11 +114,11 @@ public class TaggingContractServiceTests : IDisposable
         Assert.NotNull(contract);
         Assert.Equal(requesterId, contract.RequesterUserId);
         Assert.Equal(tagOwnerId, contract.TagOwnerUserId);
-        Assert.Equal(1, contract.TargetItemId);
-        Assert.Equal(2, contract.RequestedTagId);
-        Assert.True(contract.Payload is MutualPayload pm && pm.OfferedTargetItemId == 3);
-        Assert.True(contract.Payload is MutualPayload pm2 && pm2.OfferedTagId == 4);
-        Assert.Equal(5, contract.ConsumedRightAssetId);
+        Assert.Equal(targetItem1.Id, contract.TargetItemId);
+        Assert.Equal(tag1.Id, contract.RequestedTagId);
+        Assert.True(contract.Payload is MutualPayload pm && pm.OfferedTargetItemId == targetItem2.Id);
+        Assert.True(contract.Payload is MutualPayload pm2 && pm2.OfferedTagId == tag2.Id);
+        Assert.Equal(rightAsset.Id, contract.ConsumedRightAssetId);
         Assert.Equal(TradeStatus.Proposed, contract.Status);
 
         TaggingRequestEntity? saved = await _dbContext.TaggingRequestEntities
@@ -178,7 +213,7 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItem.Id,
             RequestedTagId = tag.Id,
-            ConsumedRightAssetId = 0, // アセットなし
+            ConsumedRightAssetId = null, // アセットなし
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -200,7 +235,7 @@ public class TaggingContractServiceTests : IDisposable
         TagWeightLedger? ledger =
             await _dbContext.TagWeightLedgers!.FirstOrDefaultAsync(l => l.SourceId == relation.Id);
         Assert.NotNull(ledger);
-        Assert.NotEqual(0, ledger.ConsumedRightAssetId);
+        Assert.NotNull(ledger.ConsumedRightAssetId);
 
         RightAsset? mintedAsset = await _dbContext.RightAssets!.IgnoreQueryFilters()
             .FirstOrDefaultAsync(a => a.Id == ledger.ConsumedRightAssetId);
@@ -217,8 +252,9 @@ public class TaggingContractServiceTests : IDisposable
     public async Task ScenarioC_MutualTagging_ShouldSwapTagsAndMintComplementaryAsset()
     {
         // Arrange
-        // Motivation: ユーザーAとBがアイテムを評価し合い、タグを交換することに合意。
-        // ユーザーAはBのタグを取得するための対価アセットを提供して Mutual 契約を提案。
+        // Motivation: ユーザーAとユーザーBが、お互いのアイテムにお互いのタグを付け合いたい（相互タグ付け）。
+        // ユーザーAは自分の「TargetItemA」にユーザーBの「TagB」を、
+        // ユーザーBは自分の「TargetItemB」にユーザーAの「TagA」を付ける。
         var userA = "UserA";
         var userB = "UserB";
 
@@ -226,10 +262,12 @@ public class TaggingContractServiceTests : IDisposable
         var targetItemB = new Item { Content = "TargetItemB", OwnerId = userB };
         var tagA = new Tag { Name = "TagA", OwnerId = userA, CachedWeight = 50 };
         var tagB = new Tag { Name = "TagB", OwnerId = userB, CachedWeight = 100 };
-        var rightAssetA = new RightAsset { Amount = 1, OwnerId = userA }; // User A が Bのタグのために提供するアセット
 
         _dbContext.Items!.AddRange(targetItemA, targetItemB);
         _dbContext.Tags!.AddRange(tagA, tagB);
+        await _dbContext.SaveChangesAsync();
+
+        var rightAssetA = new RightAsset { Amount = 1, OwnerId = userA, TargetTagId = tagB.Id }; // User A が Bのタグのために提供するアセット
         _dbContext.RightAssets!.Add(rightAssetA);
         await _dbContext.SaveChangesAsync();
 
@@ -311,7 +349,7 @@ public class TaggingContractServiceTests : IDisposable
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             Payload = new MutualPayload(targetItemB.Id, tagA.Id),
-            ConsumedRightAssetId = 0, // アセットなし
+            ConsumedRightAssetId = null, // アセットなし
             Status = TradeStatus.Proposed,
             OwnerId = userA
         };
@@ -349,6 +387,7 @@ public class TaggingContractServiceTests : IDisposable
 
         var rightAsset = new RightAsset { Amount = 10, OwnerId = userA, TargetTagId = tagB.Id };
         _dbContext.RightAssets!.Add(rightAsset);
+        await _dbContext.SaveChangesAsync();
 
         var publicOffer = new PublicTradeOffer
         {
@@ -423,7 +462,7 @@ public class TaggingContractServiceTests : IDisposable
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            ConsumedRightAssetId = 0, // アセット提供なし
+            ConsumedRightAssetId = null, // アセット提供なし
             Payload = new PublicOfferPayload(publicOffer.Id),
             Status = TradeStatus.Proposed,
             OwnerId = userA

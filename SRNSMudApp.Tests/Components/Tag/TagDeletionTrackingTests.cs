@@ -37,18 +37,28 @@ namespace SRNSMudApp.Tests.Components.Tag;
 ///     （TagDeletionTrackingE2ETests の移行テスト。ダイアログの新規作成タブ操作は
 ///     IDialogLauncher のモックが新規作成済みタグを返す形で置き換えている）
 /// </summary>
-public class TagDeletionTrackingTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class TagDeletionTrackingTests : IAsyncLifetime
 {
     private const string UserId = "tracking-user-id";
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
     private readonly Mock<IDialogLauncher> _launcherMock = new();
     private readonly Mock<IDialogReference> _addTagDialogMock = new();
     private int _onDataChangedCount;
     private SRNSMudApp.Data.Tag? _ownedTag;
 
-    public TagDeletionTrackingTests()
+    public TagDeletionTrackingTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagDeletionTrackingTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
@@ -59,10 +69,7 @@ public class TagDeletionTrackingTests : IAsyncDisposable
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
         _ctx.Services.AddScoped<TaggingContractService>();
@@ -73,7 +80,11 @@ public class TagDeletionTrackingTests : IAsyncDisposable
         _ctx.Services.AddSingleton(_ => _launcherMock.Object);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public async Task AddTagViaDialog_ThenCloseChip_RemovesRelationWithoutTrackingException()

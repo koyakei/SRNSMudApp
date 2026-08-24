@@ -1,13 +1,7 @@
-#region
-
-using System;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
-using Bunit.TestDoubles;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -21,28 +15,28 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// BunitContextの継承をやめ、IAsyncDisposableを実装します
-public class ItemTagChipTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class ItemTagChipTests : IAsyncLifetime
 {
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private readonly BunitContext _ctx = new();
 
-    public ItemTagChipTests()
+    public ItemTagChipTests(MsSqlContainerFixture fixture)
     {
-        _ctx = new BunitContext();
+        _fixture = fixture;
+    }
 
-        // 認証モック・MudServices・アプリ側サービスは BunitTestSetup に集約
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ItemTagChipTests));
+
         _ = _ctx.Services.AddAuth("test-user-id");
         _ = _ctx.Services.AddSrnsComponentServices();
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         var itemTagServiceMock = new Mock<IItemTagService>();
         _ = _ctx.Services.AddScoped(sp => itemTagServiceMock.Object);
@@ -50,8 +44,11 @@ public class ItemTagChipTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    // 非同期でBunitContextを破棄し、MudBlazorの非同期サービスの例外を防ぐ
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     [Fact]
     public void ItemTagChip_ShouldRenderTagNameAndWeight_ForTagRelation()

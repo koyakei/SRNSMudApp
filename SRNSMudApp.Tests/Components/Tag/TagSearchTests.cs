@@ -33,7 +33,8 @@ namespace SRNSMudApp.Tests.Components.Tag;
 ///     （VectorSearchE2ETests.VectorSearch_TagSearchPage の移行テスト。
 ///     ItemList/ImportTag/TagAddDialog は同一の検索ロジックを呼ぶため重複検証はしない）
 /// </summary>
-public class TagSearchTests : IAsyncDisposable
+[Collection(MsSqlCollection.Name)]
+public class TagSearchTests : IAsyncLifetime
 {
     /// <summary>
     ///     類義語グループごとに同じベクトルを返すフェイク embedding サービス用の辞書。
@@ -44,22 +45,33 @@ public class TagSearchTests : IAsyncDisposable
         ["猫", "ねこ", "ネコ"]
     ];
 
-    private readonly BunitContext _ctx;
+    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _testDb = null!;
+    private BunitContext _ctx = null!;
 
-    public TagSearchTests()
+    public TagSearchTests(MsSqlContainerFixture fixture)
     {
+        _fixture = fixture;
+    }
+
+    public async Task InitializeAsync()
+    {
+        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagSearchTests));
+
         _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
 
         _ctx.Services.AddScoped<ITagEmbeddingService>(_ => new FakeEmbeddingService());
 
-        var dbName = Guid.NewGuid().ToString();
-        _ = _ctx.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        await _testDb.DisposeAsync();
+    }
 
     /// <summary>
     ///     「反社会的勢力」と入力すると、意味的に近い「ヤクザ」タグが候補に表示されること。
@@ -70,6 +82,11 @@ public class TagSearchTests : IAsyncDisposable
         // Arrange: ヤクザ（類似ベクトル）と無関係タグを投入
         await using (ApplicationDbContext dbContext = CreateDbContext())
         {
+            _ = dbContext.Users.Add(new ApplicationUser
+            {
+                Id = "vector-user",
+                UserName = "vector-user"
+            });
             _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag
             {
                 Name = "ヤクザ",
