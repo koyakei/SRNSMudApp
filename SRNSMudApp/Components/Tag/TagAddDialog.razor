@@ -56,11 +56,17 @@
                                                                Class="ml-2"/>
 
                                                 @* タグツリーポップオーバー *@
+                                                <MudOverlay Visible="@isActive"
+                                                            OnClick="@(() => _activeTreeTagId = null)"
+                                                            AutoClose="true"
+                                                            DarkBackground="false"
+                                                            ZIndex="1450" />
                                                 <MudPopover Open="@isActive"
                                                             AnchorOrigin="Origin.TopRight"
                                                             TransformOrigin="Origin.TopLeft"
                                                             OverflowBehavior="OverflowBehavior.FlipAlways"
-                                                            Class="tree-popover" Paper="false">
+                                                            Class="tree-popover" Paper="false"
+                                                            Style="z-index: 1500;">
                                                     <TagTreePopoverContent TargetTag="@tag"
                                                                            AllTags="@_allTags"
                                                                            EnableSwap="false"

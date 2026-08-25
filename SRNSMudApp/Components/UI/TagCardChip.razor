@@ -60,6 +60,10 @@
     </MudChip>
 
     @* tags tree UI if any *@
+    <MudOverlay Visible="@(IsActive && Relation.Tag != null)"
+                OnClick="OnCloseTree"
+                AutoClose="true"
+                DarkBackground="false" />
     <MudPopover Open="@(IsActive && Relation.Tag != null)"
                 AnchorOrigin="Origin.TopCenter"
                 TransformOrigin="Origin.BottomCenter"
@@ -94,6 +98,7 @@
     [Parameter] public EventCallback OnIncreaseWeight { get; set; }
     [Parameter] public EventCallback OnEditWeight { get; set; }
     [Parameter] public EventCallback OnToggleTree { get; set; }
+    [Parameter] public EventCallback OnCloseTree { get; set; }
     [Parameter] public EventCallback<int> OnSwapTag { get; set; }
     [Parameter] public EventCallback<Tag?> OnAddChildTag { get; set; }
 }

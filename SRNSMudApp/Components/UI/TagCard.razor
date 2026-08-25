@@ -84,6 +84,7 @@
                                      OnIncreaseWeight="@(() => UpdateTagToTagWeightAsync(tr, 1))"
                                      OnEditWeight="@(() => EditTagToTagWeightAsync(tr))"
                                      OnToggleTree="@(() => ToggleTagTreePopover(tagId, chipId))"
+                                     OnCloseTree="ClosePopover"
                                      OnSwapTag="@(newTagId => ChangeTagTagAsync(tr, newTagId))"
                                      OnAddChildTag="OnAddChildTagFromTree"/>
                     }

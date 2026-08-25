@@ -44,6 +44,10 @@
                           OnNavigate="@(tagId => NavigationManager.NavigateTo($"/TagDetail/{tagId}"))"/>
 
         @* タグツリーポップオーバー *@
+        <MudOverlay Visible="@(_isTreePopoverOpen && TagRelation.Tag != null)"
+                    OnClick="@ToggleTagTreePopover"
+                    AutoClose="true"
+                    DarkBackground="false" />
         <MudPopover Open="@(_isTreePopoverOpen && TagRelation.Tag != null)"
                     AnchorOrigin="Origin.TopCenter"
                     TransformOrigin="Origin.BottomCenter"

@@ -91,6 +91,10 @@
                     </div>
                 </ActionContent>
                 <PopoverContent>
+                    <MudOverlay Visible="@(_activeTreeTagId == context.Id)"
+                                OnClick="@(() => _activeTreeTagId = null)"
+                                AutoClose="true"
+                                DarkBackground="false" />
                     <MudPopover Open="@(_activeTreeTagId == context.Id)"
                                 AnchorOrigin="Origin.TopRight"
                                 TransformOrigin="Origin.TopLeft"
