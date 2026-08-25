@@ -104,7 +104,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return new Success<TaggingRequestEntity>(contract);
     }
 
-    public async Task<List<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
+    public virtual async Task<List<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
     {
         return await dbContext.TaggingRequestEntities!
             .Include(r => r.TargetItem)
@@ -182,7 +182,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return s;
     }
 
-    public async Task<Result<string>> CancelContractAsync(int contractId, string currentUserId)
+    public virtual async Task<Result<string>> CancelContractAsync(int contractId, string currentUserId)
     {
         TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities!
                                           .FirstOrDefaultAsync(c => c.Id == contractId);

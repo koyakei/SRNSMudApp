@@ -70,6 +70,44 @@ public static class BunitTestSetup
     }
 
     /// <summary>
+    ///     コンポーネントテスト用に、全 DataProvider および Service の Mock インスタンスを登録する。
+    ///     DB 接続やマイグレーションなしにミリ秒単位で bUnit コンポーネントテストを実行できる。
+    /// </summary>
+    public static IServiceCollection AddMockSrnsServices(this IServiceCollection services)
+    {
+        _ = services.AddHttpClient();
+
+        var dummyOptions = new DbContextOptions<ApplicationDbContext>();
+        var dummyContext = new ApplicationDbContext(dummyOptions);
+
+        return services
+            .AddSingleton<LinkPreviewService>()
+            .AddScoped(_ => new Mock<IItemTagService>().Object)
+            .AddScoped(_ => new Mock<ITaggingService>().Object)
+            .AddScoped(_ => new Mock<ITagEmbeddingService>().Object)
+            .AddScoped(_ => new Mock<INotificationService>().Object)
+            .AddScoped(_ => new Mock<TaggingContractService>(dummyContext).Object)
+            .AddScoped(_ => new Mock<ITaggingRequestActions>().Object)
+            .AddScoped(_ => new Mock<ISystemTagEnsurer>().Object)
+            .AddScoped(_ => new Mock<IDialogLauncher>().Object)
+            .AddScoped(_ => new Mock<ITagCardDataProvider>().Object)
+            .AddScoped(_ => new Mock<IItemCardDataProvider>().Object)
+            .AddScoped(_ => new Mock<IItemListDataProvider>().Object)
+            .AddScoped(_ => new Mock<IItemListExportService>().Object)
+            .AddScoped(_ => new Mock<ITagTreeDataProvider>().Object)
+            .AddScoped(_ => new Mock<ITagTableDataProvider>().Object)
+            .AddScoped(_ => new Mock<IHomeDataProvider>().Object)
+            .AddScoped(_ => new Mock<INotificationsDataProvider>().Object)
+            .AddScoped(_ => new Mock<IImportTagDataProvider>().Object)
+            .AddScoped(_ => new Mock<IItemDetailDataProvider>().Object)
+            .AddScoped(_ => new Mock<ITagDialogDataProvider>().Object)
+            .AddScoped(_ => new Mock<ITagDetailDataProvider>().Object)
+            .AddScoped(_ => new Mock<IContractDataProvider>().Object)
+            .AddScoped(_ => new Mock<IUserDataProvider>().Object)
+            .AddScoped(_ => new Mock<IAdminDataProvider>().Object);
+    }
+
+    /// <summary>
     ///     認証テスト用の <see cref="AuthenticationState" /> を生成する。
     /// </summary>
     public static AuthenticationState CreateAuthState(string userId, params string[] roles)

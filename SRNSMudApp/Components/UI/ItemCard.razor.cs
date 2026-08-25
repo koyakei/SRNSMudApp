@@ -81,7 +81,7 @@ public partial class ItemCard : IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
-        _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+        _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
         await (_isRepliesExpanded switch
         {
             true => LoadRepliesAsync(),

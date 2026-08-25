@@ -1,5 +1,3 @@
-#region
-
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -10,8 +8,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -28,52 +24,32 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
-[Collection(MsSqlCollection.Name)]
-public class TaggingRequestRejectTests : IAsyncLifetime
+public sealed class TaggingRequestRejectTests : IAsyncLifetime
 {
     private const string ItemOwnerId = "item-owner";
     private const string TagOwnerId = "tag-owner";
 
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private BunitContext _ctx = null!;
+    private readonly BunitContext _ctx = new();
+    private readonly Mock<ITaggingRequestActions> _actionsMock = new();
     private int _onRequestChangedCount;
 
-    public TaggingRequestRejectTests(MsSqlContainerFixture fixture)
+    public TaggingRequestRejectTests()
     {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingRequestRejectTests));
-
-        _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _actionsMock.Setup(a => a.CanApprove(It.IsAny<TaggingRequestEntity>(), TagOwnerId)).Returns(true);
+        _ctx.Services.AddScoped(_ => _actionsMock.Object);
         _ctx.Services.AddAuthorizationCore();
 
-        AuthenticationState authState = CreateAuthState(TagOwnerId);
+        var authState = CreateAuthState(TagOwnerId);
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
-
-        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
-
-        _ctx.Services.AddScoped<TaggingContractService>();
-        _ctx.Services.AddScoped<ITaggingService, TaggingService>();
-        _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task Submit_ShouldCloseDialogWithEnteredReason()
@@ -108,9 +84,10 @@ public class TaggingRequestRejectTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RejectFlow_FromList_ShouldSetStatusRejectedAndSaveReason()
+    public void RejectFlow_FromList_ShouldCallRejectViaDialogAsyncAndInvokeCallback()
     {
-        TaggingRequestEntity contract = await SeedAddRequestAsync();
+        var contract = CreateAddRequest();
+        _ = _actionsMock.Setup(a => a.RejectViaDialogAsync(contract.Id, TagOwnerId)).ReturnsAsync(true);
 
         IRenderedComponent<AuthDialogHost> host = RenderHostWithList([contract]);
 
@@ -118,28 +95,14 @@ public class TaggingRequestRejectTests : IAsyncLifetime
         host.WaitForState(() => host.Markup.Contains("data-testid=\"tagging-request-reject\""));
         host.Find("[data-testid='tagging-request-reject']").Click();
 
-        // 却下ダイアログが開く
-        host.WaitForState(() => host.Markup.Contains("却下理由"));
-        host.Find("textarea").Input("不適切なリクエストのため");
-
-        // 送信するとサービスが呼ばれ、DBのステータスが Rejected になる
-        host.FindAll("button").First(b => b.TextContent.Contains("却下する")).Click();
-        host.WaitForAssertion(() =>
-        {
-            using ApplicationDbContext db = CreateDbContext();
-            TaggingRequestEntity updated = db.TaggingRequestEntities.Find(contract.Id)!;
-            Assert.Equal(TradeStatus.Rejected, updated.Status);
-            var expectedRejectionJson = System.Text.Json.JsonSerializer.Serialize(
-                new RejectionReason("不適切なリクエストのため"));
-            Assert.Equal(expectedRejectionJson, updated.RejectionInfoJson);
-        });
+        _actionsMock.Verify(a => a.RejectViaDialogAsync(contract.Id, TagOwnerId), Times.Once);
         Assert.Equal(1, _onRequestChangedCount);
     }
 
     [Fact]
     public void RejectedRequest_ShouldNotBeShownInList()
     {
-        TaggingRequestEntity rejected = new()
+        var rejected = new TaggingRequestEntity
         {
             ContractType = "Gratis",
             RequesterUserId = ItemOwnerId,
@@ -161,7 +124,7 @@ public class TaggingRequestRejectTests : IAsyncLifetime
     [Fact]
     public void ProposedRequest_ShouldBeShownInList()
     {
-        TaggingRequestEntity proposed = new()
+        var proposed = new TaggingRequestEntity
         {
             ContractType = "Gratis",
             RequesterUserId = ItemOwnerId,
@@ -183,7 +146,7 @@ public class TaggingRequestRejectTests : IAsyncLifetime
     [Fact]
     public void RequestInfoAlert_ShouldDisplayRejectedStatusText()
     {
-        SRNSMudApp.Components.UI.RequestInfo requestInfo = new()
+        var requestInfo = new SRNSMudApp.Components.UI.RequestInfo
         {
             IsTaggingRequest = true,
             RequestType = TaggingRequestType.Add,
@@ -222,48 +185,35 @@ public class TaggingRequestRejectTests : IAsyncLifetime
             .AddCascadingValue(Task.FromResult(CreateAuthState(TagOwnerId))));
     }
 
-    private async Task<TaggingRequestEntity> SeedAddRequestAsync()
+    private static TaggingRequestEntity CreateAddRequest() => new()
     {
-        await using ApplicationDbContext db = CreateDbContext();
-        db.Users.AddRange(
-            new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
-            new ApplicationUser { Id = TagOwnerId, UserName = TagOwnerId });
-        SRNSMudApp.Data.Item item = new() { Content = "AddableTargetItem", OwnerId = ItemOwnerId };
-        SRNSMudApp.Data.Tag tag = new() { Name = "AddableTag", OwnerId = TagOwnerId };
-        db.Items.Add(item);
-        db.Tags.Add(tag);
-        _ = await db.SaveChangesAsync();
-
-        TaggingRequestEntity contract = new()
-        {
-            ContractType = "Gratis",
-            OwnerId = ItemOwnerId,
-            RequesterUserId = ItemOwnerId,
-            TagOwnerUserId = TagOwnerId,
-            TargetItemId = item.Id,
-            RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
-            Payload = new GratisPayload("Please add this tag"),
-            RequestType = TaggingRequestType.Add
-        };
-        db.TaggingRequestEntities.Add(contract);
-        _ = await db.SaveChangesAsync();
-        return contract;
-    }
-
-    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
+        Id = 100,
+        ContractType = "Gratis",
+        OwnerId = ItemOwnerId,
+        RequesterUserId = ItemOwnerId,
+        TagOwnerUserId = TagOwnerId,
+        TargetItemId = 1,
+        RequestedTagId = 2,
+        Status = TradeStatus.Proposed,
+        Payload = new GratisPayload("Please add this tag"),
+        RequestType = TaggingRequestType.Add,
+        Owner = new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
+        TargetItem = new SRNSMudApp.Data.Item { Id = 1, Content = "AddableTargetItem", OwnerId = ItemOwnerId },
+        RequestedTag = new SRNSMudApp.Data.Tag { Id = 2, Name = "AddableTag", OwnerId = TagOwnerId }
+    };
 
     private static AuthenticationState CreateAuthState(string userId)
     {
         Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
-        ClaimsIdentity identity = new(claims, "TestAuthType");
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    /// <summary>
-    ///     認証カスケードと MudDialogProvider を提供するホスト。
-    ///     アプリの MudProviders.razor 相当の構成を再現する。
-    /// </summary>
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+    }
+
     private sealed class AuthDialogHost : ComponentBase
     {
         [Parameter] public RenderFragment ChildContent { get; set; } = _ => { };

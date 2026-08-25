@@ -67,7 +67,7 @@ public static class ItemTagChipViewModel
                 : MudBlazor.Color.Inherit,
             AddedTags =
             [
-                .. allTagRelationsToTags.Where(ttr =>
+                .. (allTagRelationsToTags ?? []).Where(ttr =>
                     ttr.TargetTagId == tagId && ttr.Tag?.GetKind() is not VotingReactionTag)
             ]
         };

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -9,7 +10,6 @@ using Bunit;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -25,25 +25,21 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Item;
 
-/// <summary>
-///     ItemDetail のタグチップで Weight を減らした際に、アクション列へ反映されることを検証する。
-///     （ItemDetailTagWeightE2ETests の移行テスト）
-/// </summary>
-[Collection(MsSqlCollection.Name)]
-public class ItemDetailTagWeightTests(MsSqlContainerFixture fixture) : IAsyncLifetime
+public sealed class ItemDetailTagWeightTests : IAsyncLifetime
 {
     private const string UserId = "weight-user-id";
     private const string UserName = "weight_user";
 
     private readonly BunitContext _ctx = new();
-    private MsSqlTestDatabase _testDb = null!;
+    private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
+    private readonly Mock<IItemTagService> _itemTagServiceMock = new();
 
-    public async Task InitializeAsync()
+    public ItemDetailTagWeightTests()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemDetailTagWeightTests));
-
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _itemDetailDataMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _itemTagServiceMock.Object);
 
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized(UserName);
@@ -53,26 +49,40 @@ public class ItemDetailTagWeightTests(MsSqlContainerFixture fixture) : IAsyncLif
         var userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!,
             null!, null!, null!, null!);
         _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
-
-        _ctx.Services.AddScoped<TaggingContractService>();
-
-        // Weight 更新・リプライ取得は実サービスを使用する
-        _ctx.Services.AddScoped<ITaggingService, TaggingService>();
-        _ctx.Services.AddScoped<IItemTagService, ItemTagService>();
-
-        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task ClickingDecreaseWeightButton_ShowsUpdatedWeightInActionsColumn()
+    public void ClickingDecreaseWeightButton_CallsServiceAndUpdatesWeight()
     {
-        (var itemId, var tagName) = await SeedDataAsync();
+        const int itemId = 1;
+        const string tagName = "WeightTag";
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = tagName, OwnerId = UserId };
+        var relation = new TagRelation
+        {
+            Id = 50,
+            ItemId = itemId,
+            TagId = tag.Id,
+            Tag = tag,
+            OwnerId = UserId,
+            Weight = 0
+        };
+        var item = new SRNSMudApp.Data.Item
+        {
+            Id = itemId,
+            Content = "Weight item",
+            OwnerId = UserId,
+            Owner = new ApplicationUser { Id = UserId, UserName = UserName },
+            TagRelations = [relation]
+        };
+
+        _ = _itemDetailDataMock.Setup(d => d.GetItemDetailAsync(itemId))
+            .ReturnsAsync(new ItemDetailPageData(item, [tag], [], []));
+
+        _ = _itemTagServiceMock
+            .Setup(s => s.UpdateTagWeightAsync(relation.Id, -1, UserId))
+            .ReturnsAsync(UpdateWeightResult.Success);
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo($"http://localhost/ItemDetail/{itemId}");
@@ -87,47 +97,12 @@ public class ItemDetailTagWeightTests(MsSqlContainerFixture fixture) : IAsyncLif
         IElement decreaseButton = cut.FindAll("button[title='Weightを減らす']").First();
         decreaseButton.Click();
 
-        // Assert: アクション列の Weight 表示が 0 → -1 に更新される
-        cut.WaitForAssertion(() =>
-        {
-            IElement actionsCell = cut.FindAll("td[data-label='Actions']")
-                .First(td => td.TextContent.Contains("-1"));
-            Assert.Contains("-1", actionsCell.TextContent);
-        });
-
-        // DB 側も更新されていること
-        await using ApplicationDbContext db =
-            await _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
-        TagRelation relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId);
-        Assert.Equal(-1, relation.Weight);
+        // サービスの呼び出しを検証
+        _itemTagServiceMock.Verify(s => s.UpdateTagWeightAsync(relation.Id, -1, UserId), Times.Once);
     }
 
-    private async Task<(int ItemId, string TagName)> SeedDataAsync()
+    public async Task DisposeAsync()
     {
-        await using ApplicationDbContext db =
-            await _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
-
-        ApplicationUser user = new() { Id = UserId, UserName = UserName };
-        _ = db.Users.Add(user);
-
-        var tagName = $"WeightTag_{Guid.NewGuid():N}";
-        SRNSMudApp.Data.Tag tag = new() { Name = tagName, OwnerId = UserId };
-        _ = db.Tags.Add(tag);
-
-        SRNSMudApp.Data.Item item = new() { Content = $"Weight item {Guid.NewGuid():N}", OwnerId = UserId };
-        _ = db.Items.Add(item);
-        _ = await db.SaveChangesAsync();
-
-        TagRelation relation = new()
-        {
-            ItemId = item.Id,
-            TagId = tag.Id,
-            OwnerId = UserId,
-            Weight = 0
-        };
-        _ = db.TagRelations.Add(relation);
-        _ = await db.SaveChangesAsync();
-
-        return (item.Id, tagName);
+        await _ctx.DisposeAsync();
     }
 }

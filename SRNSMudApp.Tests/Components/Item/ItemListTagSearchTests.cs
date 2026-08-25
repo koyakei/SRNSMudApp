@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -10,7 +10,6 @@ using Bunit;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -27,68 +26,48 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Item;
 
-[Collection(MsSqlCollection.Name)]
-public class ItemListTagSearchTests(MsSqlContainerFixture fixture) : IAsyncLifetime
+public sealed class ItemListTagSearchTests : IAsyncLifetime
 {
     private const string UserId = "tagtest-user-id";
     private const string TagName = "SearchTestTag";
 
     private readonly BunitContext _ctx = new();
-    private MsSqlTestDatabase _testDb = null!;
+    private readonly Mock<IItemListDataProvider> _itemListDataMock = new();
 
-    public async Task InitializeAsync()
+    public ItemListTagSearchTests()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(ItemListTagSearchTests));
-
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _itemListDataMock.Object);
 
-        // ItemList 配下の AddItem / ResourceList / AuthorizeView が認証カスケードを必要とする。
-        // AuthorizeView のため bUnit の認可テストダブルを使用し、AddItem 用に NameIdentifier クレームを付与する
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized("tagtest_user");
         authorization.SetClaims(new Claim(ClaimTypes.NameIdentifier, UserId));
 
-        // AddItem が DI 解決する UserManager をモックで差し込む
         var storeMock = new Mock<IUserStore<ApplicationUser>>();
         var userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!,
             null!, null!, null!, null!);
         _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
-
-        var embeddingMock = new Mock<ITagEmbeddingService>();
-        _ = _ctx.Services.AddScoped(_ => embeddingMock.Object);
-
-        // LinkPreviewService は HttpClient を要求するのみのため素のインスタンスを登録
-        _ = _ctx.Services.AddSingleton(new LinkPreviewService(new HttpClient()));
-
-        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
-    /// <summary>
-    ///     タグ候補選択後に検索を実行すると、選択タグのチップが表示され、
-    ///     URL のクエリへ f= パラメータが反映されることを検証する。
-    ///     （ItemListTagSearchE2ETests/ClickingSuggestion_AddsTagChip の移行テスト。
-    ///     URL からのフィルタ復元は ItemListQueryStateTests が担保済みのため、
-    ///     本テストはチップ表示と URL クエリ生成を担当する）
-    /// </summary>
     [Fact]
     public async Task ExecutingTagSearch_ShowsTagChip_AndReflectsFilterQueryParameter()
     {
-        // Arrange: ユーザーとタグを事前投入
-        IDbContextFactory<ApplicationDbContext> dbFactory =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-        await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
-        {
-            _ = dbContext.Users.Add(new ApplicationUser { Id = UserId, UserName = "tagtest_user" });
-            _ = dbContext.Tags.Add(new SRNSMudApp.Data.Tag { Name = TagName, OwnerId = UserId });
-            _ = await dbContext.SaveChangesAsync();
-        }
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByIdsAsync(It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
+
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
+            .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.FindTagByNameAsync(TagName))
+            .ReturnsAsync(tag);
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
@@ -96,11 +75,10 @@ public class ItemListTagSearchTests(MsSqlContainerFixture fixture) : IAsyncLifet
         IRenderedComponent<MudAutocomplete<string>> autocomplete =
             cut.FindComponents<MudAutocomplete<string>>().First();
 
-        // Act 1: 候補「SearchTestTag @」の選択を再現（検索欄へ反映される）
-        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName + " @"));
-
-        // Act 2: 虫眼鏡アイコンの装飾ボタン押下で検索実行（OnAdornmentClick="ExecuteSearch"）
-        autocomplete.Find(".mud-input-adornment button").Click();
+        // Act 1: 候補「SearchTestTag」の選択を再現
+        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName));
+        IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
+        await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));
 
         // Assert 1: 選択タグのチップが表示される
         cut.WaitForAssertion(() =>
@@ -111,6 +89,11 @@ public class ItemListTagSearchTests(MsSqlContainerFixture fixture) : IAsyncLifet
 
         // Assert 2: URL クエリに f= (タグフィルタ) が含まれる
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains("f=", navigationManager.Uri);
+        Assert.Contains("f=10", navigationManager.Uri);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 }

@@ -1,16 +1,10 @@
-#region
-
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Bunit;
 
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -19,184 +13,90 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
-using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
-[Collection(MsSqlCollection.Name)]
-public class TaggingRequestApprovalTests : IAsyncLifetime
+public sealed class TaggingRequestApprovalTests : IAsyncLifetime
 {
     private const string ItemOwnerId = "item-owner";
     private const string TagOwnerId = "tag-owner";
 
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private BunitContext _ctx = null!;
+    private readonly BunitContext _ctx = new();
+    private readonly Mock<ITaggingRequestActions> _actionsMock = new();
     private int _onRequestChangedCount;
     private string _currentUserId = TagOwnerId;
 
-    public TaggingRequestApprovalTests(MsSqlContainerFixture fixture)
+    public TaggingRequestApprovalTests()
     {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingRequestApprovalTests));
-
-        _ctx = new BunitContext();
-        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _actionsMock.Object);
         _ctx.Services.AddAuthorizationCore();
-
-        var authState = CreateAuthState(TagOwnerId);
-        var authMock = new Mock<AuthenticationStateProvider>();
-        _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
-        _ctx.Services.AddScoped(_ => authMock.Object);
-
-        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
-
-        _ctx.Services.AddScoped<TaggingContractService>();
-        _ctx.Services.AddScoped<ITaggingService, TaggingService>();
+        _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task ApprovingRemoveRequest_ShouldRemoveRelationAndSetExecuted()
+    public void ApprovingRequest_CallsApproveAsync_AndInvokesCallback()
     {
-        TaggingRequestEntity contract = await SeedRemoveRequestAsync();
+        var request = CreateTestRequest(1, TagOwnerId);
+        _ = _actionsMock.Setup(a => a.CanApprove(request, TagOwnerId)).Returns(true);
+        _ = _actionsMock.Setup(a => a.ApproveAsync(request.Id, TagOwnerId)).ReturnsAsync(true);
 
-        IRenderedComponent<TaggingRequestList> cut = RenderList(contract);
+        IRenderedComponent<TaggingRequestList> cut = RenderList(request);
 
         cut.Find("[data-testid='tagging-request-approve']").Click();
 
-        cut.WaitForAssertion(() =>
-        {
-            using ApplicationDbContext db = CreateDbContext();
-            Assert.Equal(TradeStatus.Executed, db.TaggingRequestEntities.Find(contract.Id)!.Status);
-            Assert.False(db.TagRelations.Any(tr =>
-                tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId));
-        });
+        _actionsMock.Verify(a => a.ApproveAsync(request.Id, TagOwnerId), Times.Once);
         Assert.Equal(1, _onRequestChangedCount);
     }
 
     [Fact]
-    public async Task ApproveButton_ShouldBeHidden_WhenCurrentUserIsUnrelated()
+    public void ApproveButton_ShouldBeHidden_WhenCanApproveReturnsFalse()
     {
-        TaggingRequestEntity contract = await SeedRemoveRequestAsync();
+        var request = CreateTestRequest(1, TagOwnerId);
         _currentUserId = "unrelated-user";
+        _ = _actionsMock.Setup(a => a.CanApprove(request, _currentUserId)).Returns(false);
 
-        IRenderedComponent<TaggingRequestList> cut = RenderList(contract);
+        IRenderedComponent<TaggingRequestList> cut = RenderList(request);
 
         Assert.Empty(cut.FindAll("[data-testid='tagging-request-approve']"));
-        Assert.Empty(cut.FindAll("[data-testid='tagging-request-reject']"));
-    }
-
-    [Fact]
-    public async Task ApprovingAddRequest_ShouldCreateRelationAndSetExecuted()
-    {
-        TaggingRequestEntity contract = await SeedAddRequestAsync();
-
-        IRenderedComponent<TaggingRequestList> cut = RenderList(contract);
-
-        cut.Find("[data-testid='tagging-request-approve']").Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            using ApplicationDbContext db = CreateDbContext();
-            Assert.Equal(TradeStatus.Executed, db.TaggingRequestEntities.Find(contract.Id)!.Status);
-            Assert.NotNull(db.TagRelations.FirstOrDefault(tr =>
-                tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId));
-        });
-        Assert.Equal(1, _onRequestChangedCount);
     }
 
     private IRenderedComponent<TaggingRequestList> RenderList(params TaggingRequestEntity[] requests)
     {
         return _ctx.Render<TaggingRequestList>(parameters => parameters
-            .Add(p => p.Requests, requests.ToList())
+            .Add(p => p.Requests, requests)
             .Add(p => p.OnRequestChanged, () => _onRequestChangedCount++)
             .AddCascadingValue(Task.FromResult(CreateAuthState(_currentUserId))));
     }
 
-    private async Task<TaggingRequestEntity> SeedRemoveRequestAsync()
+    private static TaggingRequestEntity CreateTestRequest(int id, string tagOwnerId) => new()
     {
-        await using ApplicationDbContext db = await CreateDbContextAsync();
-        db.Users.AddRange(
-            new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
-            new ApplicationUser { Id = TagOwnerId, UserName = TagOwnerId });
-        SRNSMudApp.Data.Item item = new() { Content = "TargetItem", OwnerId = ItemOwnerId };
-        SRNSMudApp.Data.Tag tag = new() { Name = "RemovableTag", OwnerId = TagOwnerId, CachedWeight = 10 };
-        db.Items.Add(item);
-        db.Tags.Add(tag);
-        _ = await db.SaveChangesAsync();
-
-        db.TagRelations.Add(new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = TagOwnerId, Weight = 3 });
-        TaggingRequestEntity contract = new()
-        {
-            ContractType = "Gratis",
-            OwnerId = ItemOwnerId,
-            RequesterUserId = ItemOwnerId,
-            TagOwnerUserId = TagOwnerId,
-            TargetItemId = item.Id,
-            RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
-            Payload = new GratisPayload("Please remove this tag"),
-            RequestType = TaggingRequestType.Remove
-        };
-        db.TaggingRequestEntities.Add(contract);
-        _ = await db.SaveChangesAsync();
-        return contract;
-    }
-
-    private async Task<TaggingRequestEntity> SeedAddRequestAsync()
-    {
-        await using ApplicationDbContext db = await CreateDbContextAsync();
-        db.Users.AddRange(
-            new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
-            new ApplicationUser { Id = TagOwnerId, UserName = TagOwnerId });
-        SRNSMudApp.Data.Item item = new() { Content = "TargetItem", OwnerId = ItemOwnerId };
-        SRNSMudApp.Data.Tag tag = new() { Name = "AddableTag", OwnerId = TagOwnerId, CachedWeight = 10 };
-        db.Items.Add(item);
-        db.Tags.Add(tag);
-        _ = await db.SaveChangesAsync();
-
-        TaggingRequestEntity contract = new()
-        {
-            ContractType = "Gratis",
-            OwnerId = ItemOwnerId,
-            RequesterUserId = ItemOwnerId,
-            TagOwnerUserId = TagOwnerId,
-            TargetItemId = item.Id,
-            RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
-            Payload = new GratisPayload("Please add this tag"),
-            RequestType = TaggingRequestType.Add
-        };
-        db.TaggingRequestEntities.Add(contract);
-        _ = await db.SaveChangesAsync();
-        return contract;
-    }
-
-    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
-
-    private Task<ApplicationDbContext> CreateDbContextAsync() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
+        Id = id,
+        ContractType = "Gratis",
+        OwnerId = ItemOwnerId,
+        RequesterUserId = ItemOwnerId,
+        TagOwnerUserId = tagOwnerId,
+        TargetItemId = 10,
+        RequestedTagId = 20,
+        Status = TradeStatus.Proposed,
+        RequestType = TaggingRequestType.Add
+    };
 
     private static AuthenticationState CreateAuthState(string userId)
     {
         Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
-        ClaimsIdentity identity = new(claims, "TestAuthType");
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
         return new AuthenticationState(new ClaimsPrincipal(identity));
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 }

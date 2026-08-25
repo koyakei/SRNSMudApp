@@ -5,11 +5,15 @@ using System.Threading.Tasks;
 
 using Bunit;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
+
+using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
@@ -17,87 +21,49 @@ using Xunit.Abstractions;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-/// <summary>
-///     TagTree コンポーネントのテスト。
-/// </summary>
-/// <remarks>
-///     このクラスは元々20件のテストを持っていたが、純粋ロジック部分は
-///     <see cref="SRNSMudApp.Tests.Components.Tag.TagTreeViewModelTests" /> に、
-///     IsSystem除外のDB依存部分は
-///     <see cref="SRNSMudApp.Tests.Services.TagTreeDataProviderTests" /> に移行した。
-///     ここにはコンポーネントの実際の描画配線（OnAfterRenderAsync → jqTreeInterop.init 呼び出し）を
-///     検証するスモークテストのみを残す。
-/// </remarks>
-[Collection(MsSqlCollection.Name)]
-public class TagTreeTests(MsSqlContainerFixture fixture, ITestOutputHelper output) : IAsyncLifetime
+public sealed class TagTreeTests : IAsyncLifetime
 {
-    private readonly ITestOutputHelper _output = output;
+    private readonly ITestOutputHelper _output;
     private readonly BunitContext _ctx = new();
-    private MsSqlTestDatabase _testDb = null!;
+    private readonly Mock<ITagTreeDataProvider> _treeDataMock = new();
 
-    public async Task InitializeAsync()
+    public TagTreeTests(ITestOutputHelper output)
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(TagTreeTests));
-
+        _output = output;
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _treeDataMock.Object);
         _ = _ctx.Services.AddAuth("test-user-id");
-        _ = _ctx.Services.AddSrnsComponentServices();
-        _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        BunitContext.DefaultWaitTimeout = TimeSpan.FromSeconds(15);
-
-        IDbContextFactory<ApplicationDbContext> dbFactory =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
-        dbContext.Users.AddRange(
-            new ApplicationUser { Id = "test-user-id", UserName = "test-user-id" },
-            new ApplicationUser { Id = "system", UserName = "system" },
-            new ApplicationUser { Id = "other-user-id", UserName = "other-user-id" },
-            new ApplicationUser { Id = "other-user", UserName = "other-user" },
-            new ApplicationUser { Id = "someone-else", UserName = "someone-else" }
-        );
-        _ = await dbContext.SaveChangesAsync();
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task JqTree_InitializesWithCorrectJson_WhenSingleRootNodeHasMultipleChildren()
+    public void JqTree_InitializesWithCorrectJson_WhenSingleRootNodeHasMultipleChildren()
     {
         // Arrange
-        IDbContextFactory<ApplicationDbContext> dbFactory =
-            _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-        SRNSMudApp.Data.Tag rootTag;
-        SRNSMudApp.Data.Tag child1;
-        SRNSMudApp.Data.Tag child2;
-        await using (ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync())
+        var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
+        var child1 = new SRNSMudApp.Data.Tag
         {
-            rootTag = new SRNSMudApp.Data.Tag { Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
-            _ = dbContext.Tags.Add(rootTag);
-            _ = await dbContext.SaveChangesAsync();
+            Id = 2,
+            Name = "Child1",
+            ParentTagId = 1,
+            IsSystem = false,
+            OwnerId = "test-user-id"
+        };
+        var child2 = new SRNSMudApp.Data.Tag
+        {
+            Id = 3,
+            Name = "Child2",
+            ParentTagId = 1,
+            IsSystem = false,
+            OwnerId = "test-user-id"
+        };
 
-            child1 = new SRNSMudApp.Data.Tag
-            {
-                Name = "Child1",
-                ParentTagId = rootTag.Id,
-                IsSystem = false,
-                OwnerId = "test-user-id"
-            };
-            child2 = new SRNSMudApp.Data.Tag
-            {
-                Name = "Child2",
-                ParentTagId = rootTag.Id,
-                IsSystem = false,
-                OwnerId = "test-user-id"
-            };
-
-            dbContext.Tags.AddRange(child1, child2);
-            _ = await dbContext.SaveChangesAsync();
-        }
+        _ = _treeDataMock
+            .Setup(d => d.LoadTagsAsync())
+            .ReturnsAsync([rootTag, child1, child2]);
 
         var jsInteropInvocations = new List<JSRuntimeInvocation>();
         _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
@@ -122,5 +88,10 @@ public class TagTreeTests(MsSqlContainerFixture fixture, ITestOutputHelper outpu
         Assert.Contains("\"children\":", treeDataJson);
         Assert.Contains($"\"id\":{child1.Id}", treeDataJson);
         Assert.Contains($"\"id\":{child2.Id}", treeDataJson);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 }

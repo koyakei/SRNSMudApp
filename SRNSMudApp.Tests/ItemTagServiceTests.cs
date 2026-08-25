@@ -1,287 +1,300 @@
 using Microsoft.EntityFrameworkCore;
-
 using Moq;
-
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
-
 using Xunit;
 
 namespace SRNSMudApp.Tests.Services;
 
-[Collection(MsSqlCollection.Name)]
 public class ItemTagServiceTests : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private ApplicationDbContext _dbContext = null!;
-    private ItemTagService _service = null!;
-
-    public ItemTagServiceTests(MsSqlContainerFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private MsSqlTestDatabase _sharedDb = null!;
 
     public async Task InitializeAsync()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ItemTagServiceTests));
-        _dbContext = new ApplicationDbContext(_testDb.Options);
-
-        var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
-        mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => new ApplicationDbContext(_testDb.Options));
-
-        _service = new ItemTagService(mockDbFactory.Object);
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    private (ApplicationDbContext dbContext, ItemTagService service, string tid) CreateScope()
     {
-        await _dbContext.DisposeAsync();
-        await _testDb.DisposeAsync();
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var dbContext = new ApplicationDbContext(_sharedDb.Options);
+        var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
+        mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new ApplicationDbContext(_sharedDb.Options));
+
+        var service = new ItemTagService(mockDbFactory.Object);
+        return (dbContext, service, tid);
     }
 
     [Fact]
     public async Task AddReplyToRequestAsync_ShouldCreateItemAndReturnItWithRelations()
     {
         // Arrange
-        var userId = "TestUser";
-        var user = new ApplicationUser { Id = userId, UserName = "TestUser" };
-        _dbContext.Users.Add(user);
-
-        var targetItem = new Item { Content = "TargetItem", OwnerId = userId };
-        var tag = new Tag { Name = "Tag", OwnerId = userId };
-        _dbContext.Items.Add(targetItem);
-        _dbContext.Tags.Add(tag);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new TaggingRequestEntity
+        await using var scope = CreateScope().dbContext;
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
         {
-            ContractType = "Gratis",
-            OwnerId = userId,
-            TargetItemId = targetItem.Id,
-            RequestedTagId = tag.Id,
-            RequesterUserId = userId,
-            TagOwnerUserId = userId
-        };
-        _dbContext.TaggingRequestEntities.Add(request);
-        await _dbContext.SaveChangesAsync();
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var message = "This is a test reply";
+            var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = userId };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Items.Add(targetItem);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
 
-        // Act
-        Item? replyItem = await _service.AddReplyToRequestAsync(request.Id, userId, message);
+            var request = new TaggingRequestEntity
+            {
+                ContractType = "Gratis",
+                OwnerId = userId,
+                TargetItemId = targetItem.Id,
+                RequestedTagId = tag.Id,
+                RequesterUserId = userId,
+                TagOwnerUserId = userId
+            };
+            dbContext.TaggingRequestEntities.Add(request);
+            await dbContext.SaveChangesAsync();
 
-        // Assert
-        Assert.NotNull(replyItem);
-        Assert.Equal(request.Id, replyItem.TaggingRequestEntityId);
-        Assert.Equal(userId, replyItem.OwnerId);
-        Assert.Equal(message, replyItem.Content);
-        Assert.NotNull(replyItem.Owner);
-        Assert.Equal(userId, replyItem.Owner.Id);
+            var message = $"This is a test reply_{tid}";
 
-        // Ensure it's saved in the DB
-        Item? savedItem = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == replyItem.Id);
-        Assert.NotNull(savedItem);
-        Assert.Equal(request.Id, savedItem.TaggingRequestEntityId);
-        Assert.Equal(message, savedItem.Content);
+            // Act
+            Item? replyItem = await service.AddReplyToRequestAsync(request.Id, userId, message);
+
+            // Assert
+            Assert.NotNull(replyItem);
+            Assert.Equal(request.Id, replyItem.TaggingRequestEntityId);
+            Assert.Equal(userId, replyItem.OwnerId);
+            Assert.Equal(message, replyItem.Content);
+            Assert.NotNull(replyItem.Owner);
+            Assert.Equal(userId, replyItem.Owner.Id);
+
+            // Ensure it's saved in the DB
+            Item? savedItem = await dbContext.Items.FirstOrDefaultAsync(i => i.Id == replyItem.Id);
+            Assert.NotNull(savedItem);
+            Assert.Equal(request.Id, savedItem.TaggingRequestEntityId);
+            Assert.Equal(message, savedItem.Content);
+        }
     }
 
     [Fact]
     public async Task AddTagToItemAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
-        var userId = "TestUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
-        var item = new Item { Content = "TestItem", OwnerId = userId };
-        _dbContext.Items.Add(item);
-        var tag = new Tag { Name = "TestTag", OwnerId = userId, CachedWeight = 5 };
-        _dbContext.Tags.Add(tag);
-        await _dbContext.SaveChangesAsync();
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var result = await _service.AddTagToItemAsync(item.Id, tag.Id, userId);
+            var item = new Item { Content = $"TestItem_{tid}", OwnerId = userId };
+            dbContext.Items.Add(item);
+            var tag = new Tag { Name = $"TestTag_{tid}", OwnerId = userId, CachedWeight = 5 };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Null(result);
-        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
-        Assert.Equal(6, updatedTag!.CachedWeight);
+            var result = await service.AddTagToItemAsync(item.Id, tag.Id, userId);
 
-        TagWeightLedger? ledger =
-            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationInsert");
-        Assert.NotNull(ledger);
-        Assert.Equal(tag.Id, ledger.TagId);
-        Assert.Equal(5, ledger.PreviousWeight);
-        Assert.Equal(6, ledger.NewWeight);
-        Assert.Equal(1, ledger.Delta);
+            Assert.Null(result);
+            Tag? updatedTag = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
+            Assert.Equal(6, updatedTag!.CachedWeight);
+
+            TagWeightLedger? ledger =
+                await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == tag.Id && l.SourceType == "TagRelationInsert");
+            Assert.NotNull(ledger);
+            Assert.Equal(tag.Id, ledger.TagId);
+            Assert.Equal(5, ledger.PreviousWeight);
+            Assert.Equal(6, ledger.NewWeight);
+            Assert.Equal(1, ledger.Delta);
+        }
     }
 
     [Fact]
     public async Task AddTagToItemAsync_ShouldSucceed_WhenTagIsOwnedBySystem()
     {
-        var systemUserId = "system";
-        var normalUserId = "UserB";
-        _dbContext.Users.AddRange(
-            new ApplicationUser { Id = systemUserId, UserName = "system" },
-            new ApplicationUser { Id = normalUserId, UserName = "UserB" });
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var systemUserId = $"sys_{tid}";
+            var normalUserId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(systemUserId, normalUserId);
 
-        var item = new Item { Content = "UserItem", OwnerId = normalUserId };
-        _dbContext.Items.Add(item);
-        var systemTag = new Tag { Name = "SystemTag", OwnerId = systemUserId, CachedWeight = 10, IsSystem = true };
-        _dbContext.Tags.Add(systemTag);
-        await _dbContext.SaveChangesAsync();
+            var item = new Item { Content = $"UserItem_{tid}", OwnerId = normalUserId };
+            dbContext.Items.Add(item);
+            var systemTag = new Tag { Name = $"SystemTag_{tid}", OwnerId = systemUserId, CachedWeight = 10, IsSystem = true };
+            dbContext.Tags.Add(systemTag);
+            await dbContext.SaveChangesAsync();
 
-        var result = await _service.AddTagToItemAsync(item.Id, systemTag.Id, normalUserId);
+            var result = await service.AddTagToItemAsync(item.Id, systemTag.Id, normalUserId);
 
-        Assert.Null(result);
-        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == systemTag.Id);
-        Assert.Equal(11, updatedTag!.CachedWeight);
+            Assert.Null(result);
+            Tag? updatedTag = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == systemTag.Id);
+            Assert.Equal(11, updatedTag!.CachedWeight);
 
-        TagRelation? relation = await _dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
-        Assert.NotNull(relation);
-        Assert.Equal(normalUserId, relation.OwnerId);
+            TagRelation? relation = await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
+            Assert.NotNull(relation);
+            Assert.Equal(normalUserId, relation.OwnerId);
+        }
     }
 
     [Fact]
     public async Task RemoveTagRelationAsync_ShouldDecreaseCachedWeightAndAddLedger()
     {
-        var userId = "TestUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
-        var item = new Item { Content = "TestItem", OwnerId = userId };
-        var tag = new Tag { Name = "TestTag", OwnerId = userId, CachedWeight = 5 };
-        _dbContext.Items.Add(item);
-        _dbContext.Tags.Add(tag);
-        await _dbContext.SaveChangesAsync();
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var relation = new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = userId, Weight = 2 };
-        _dbContext.TagRelations.Add(relation);
-        await _dbContext.SaveChangesAsync();
+            var item = new Item { Content = $"TestItem_{tid}", OwnerId = userId };
+            var tag = new Tag { Name = $"TestTag_{tid}", OwnerId = userId, CachedWeight = 5 };
+            dbContext.Items.Add(item);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
 
-        var result = await _service.RemoveTagRelationAsync(relation.Id, userId);
+            var relation = new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = userId, Weight = 2 };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Null(result);
-        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
-        Assert.Equal(3, updatedTag!.CachedWeight);
+            var result = await service.RemoveTagRelationAsync(relation.Id, userId);
 
-        TagWeightLedger? ledger =
-            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationDelete");
-        Assert.NotNull(ledger);
-        Assert.Equal(tag.Id, ledger.TagId);
-        Assert.Equal(5, ledger.PreviousWeight);
-        Assert.Equal(3, ledger.NewWeight);
-        Assert.Equal(-2, ledger.Delta);
+            Assert.Null(result);
+            Tag? updatedTag = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
+            Assert.Equal(3, updatedTag!.CachedWeight);
+
+            TagWeightLedger? ledger =
+                await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == tag.Id && l.SourceType == "TagRelationDelete");
+            Assert.NotNull(ledger);
+            Assert.Equal(tag.Id, ledger.TagId);
+            Assert.Equal(5, ledger.PreviousWeight);
+            Assert.Equal(3, ledger.NewWeight);
+            Assert.Equal(-2, ledger.Delta);
+        }
     }
 
     [Fact]
     public async Task AddTagToTagAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
-        var userId = "TestUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
-        var targetTag = new Tag { Name = "TargetTag", OwnerId = userId };
-        var childTag = new Tag { Name = "ChildTag", OwnerId = userId, CachedWeight = 10 };
-        _dbContext.Tags.AddRange(targetTag, childTag);
-        await _dbContext.SaveChangesAsync();
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var result = await _service.AddTagToTagAsync(targetTag.Id, childTag.Id, userId);
+            var targetTag = new Tag { Name = $"TargetTag_{tid}", OwnerId = userId };
+            var childTag = new Tag { Name = $"ChildTag_{tid}", OwnerId = userId, CachedWeight = 10 };
+            dbContext.Tags.AddRange(targetTag, childTag);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Null(result);
-        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
-        Assert.Equal(11, updatedTag!.CachedWeight);
+            var result = await service.AddTagToTagAsync(targetTag.Id, childTag.Id, userId);
 
-        TagWeightLedger? ledger =
-            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagInsert");
-        Assert.NotNull(ledger);
-        Assert.Equal(childTag.Id, ledger.TagId);
-        Assert.Equal(10, ledger.PreviousWeight);
-        Assert.Equal(11, ledger.NewWeight);
-        Assert.Equal(1, ledger.Delta);
+            Assert.Null(result);
+            Tag? updatedTag = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
+            Assert.Equal(11, updatedTag!.CachedWeight);
+
+            TagWeightLedger? ledger =
+                await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == childTag.Id && l.SourceType == "TagRelationToTagInsert");
+            Assert.NotNull(ledger);
+            Assert.Equal(childTag.Id, ledger.TagId);
+            Assert.Equal(10, ledger.PreviousWeight);
+            Assert.Equal(11, ledger.NewWeight);
+            Assert.Equal(1, ledger.Delta);
+        }
     }
 
     [Fact]
     public async Task RemoveTagToTagRelationAsync_ShouldDecreaseCachedWeightAndAddLedger()
     {
-        var userId = "TestUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
-        var targetTag = new Tag { Name = "TargetTag", OwnerId = userId };
-        var childTag = new Tag { Name = "ChildTag", OwnerId = userId, CachedWeight = 10 };
-        _dbContext.Tags.AddRange(targetTag, childTag);
-        await _dbContext.SaveChangesAsync();
-
-        var relation = new TagRelationToTag
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
         {
-            TargetTagId = targetTag.Id,
-            TagId = childTag.Id,
-            OwnerId = userId,
-            Weight = 3
-        };
-        _dbContext.TagRelationToTags.Add(relation);
-        await _dbContext.SaveChangesAsync();
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var result = await _service.RemoveTagToTagRelationAsync(relation.Id, userId);
+            var targetTag = new Tag { Name = $"TargetTag_{tid}", OwnerId = userId };
+            var childTag = new Tag { Name = $"ChildTag_{tid}", OwnerId = userId, CachedWeight = 10 };
+            dbContext.Tags.AddRange(targetTag, childTag);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Null(result);
-        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
-        Assert.Equal(7, updatedTag!.CachedWeight);
+            var relation = new TagRelationToTag
+            {
+                TargetTagId = targetTag.Id,
+                TagId = childTag.Id,
+                OwnerId = userId,
+                Weight = 3
+            };
+            dbContext.TagRelationToTags.Add(relation);
+            await dbContext.SaveChangesAsync();
 
-        TagWeightLedger? ledger =
-            await _dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.SourceType == "TagRelationToTagDelete");
-        Assert.NotNull(ledger);
-        Assert.Equal(childTag.Id, ledger.TagId);
-        Assert.Equal(10, ledger.PreviousWeight);
-        Assert.Equal(7, ledger.NewWeight);
-        Assert.Equal(-3, ledger.Delta);
+            var result = await service.RemoveTagToTagRelationAsync(relation.Id, userId);
+
+            Assert.Null(result);
+            Tag? updatedTag = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == childTag.Id);
+            Assert.Equal(7, updatedTag!.CachedWeight);
+
+            TagWeightLedger? ledger =
+                await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == childTag.Id && l.SourceType == "TagRelationToTagDelete");
+            Assert.NotNull(ledger);
+            Assert.Equal(childTag.Id, ledger.TagId);
+            Assert.Equal(10, ledger.PreviousWeight);
+            Assert.Equal(7, ledger.NewWeight);
+            Assert.Equal(-3, ledger.Delta);
+        }
     }
 
     [Fact]
     public async Task AddTagToItemAsync_ShouldReturnErrorIfTagNotOwnedByUser()
     {
-        var ownerId = "OwnerUser";
-        var otherUserId = "OtherUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = ownerId, UserName = "Owner" });
-        _dbContext.Users.Add(new ApplicationUser { Id = otherUserId, UserName = "Other" });
-        var item = new Item { Content = "TestItem", OwnerId = ownerId };
-        _dbContext.Items.Add(item);
-        var tag = new Tag { Name = "TestTag", OwnerId = ownerId };
-        _dbContext.Tags.Add(tag);
-        await _dbContext.SaveChangesAsync();
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var otherUserId = $"other_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, otherUserId);
 
-        var result = await _service.AddTagToItemAsync(item.Id, tag.Id, otherUserId);
+            var item = new Item { Content = $"TestItem_{tid}", OwnerId = ownerId };
+            dbContext.Items.Add(item);
+            var tag = new Tag { Name = $"TestTag_{tid}", OwnerId = ownerId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
 
-        Assert.Equal("タグの作成者ではないため、追加する権限がありません。", result);
+            var result = await service.AddTagToItemAsync(item.Id, tag.Id, otherUserId);
+
+            Assert.Equal("タグの作成者ではないため、追加する権限がありません。", result);
+        }
     }
 
-    /// <summary>
-    ///     既存の Item に対してタグを追加しても、Item が新規エンティティとして
-    ///     再追加され主キー重複例外が起きないことを検証する。
-    ///     （ItemTaggingE2ETests/AddTagToItem_FailsIfItemIsAddedAsNewEntity の移行テスト。
-    ///     ダイアログUI経由ではなくサービス層で直接検証する）
-    /// </summary>
     [Fact]
     public async Task AddTagToItemAsync_WithExistingItem_DoesNotDuplicateItemEntity()
     {
-        // Arrange: 既存ユーザー・既存アイテム・既存タグを事前投入
-        var userId = "TestUser";
-        _dbContext.Users.Add(new ApplicationUser { Id = userId, UserName = "TestUser" });
-        var item = new Item { Content = "Existing Item", OwnerId = userId };
-        _dbContext.Items.Add(item);
-        await _dbContext.SaveChangesAsync();
-        var savedItemId = item.Id;
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
-        var tag = new Tag { Name = "TestTag", Content = "Test content", OwnerId = userId, CachedWeight = 0 };
-        _dbContext.Tags.Add(tag);
-        await _dbContext.SaveChangesAsync();
+            var item = new Item { Content = $"Existing Item_{tid}", OwnerId = userId };
+            dbContext.Items.Add(item);
+            await dbContext.SaveChangesAsync();
+            var savedItemId = item.Id;
 
-        // Act: 既存アイテムへタグ追加（Item を Attach/Add し直すとここで主キー重複例外が発生する）
-        var result = await _service.AddTagToItemAsync(savedItemId, tag.Id, userId);
+            var tag = new Tag { Name = $"TestTag_{tid}", Content = "Test content", OwnerId = userId, CachedWeight = 0 };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
 
-        // Assert: 成功（エラーメッセージなし）
-        Assert.Null(result);
+            var result = await service.AddTagToItemAsync(savedItemId, tag.Id, userId);
 
-        // アイテムは重複していない（1件のまま）
-        Assert.Equal(1, await _dbContext.Items.CountAsync(i => i.Id == savedItemId));
+            Assert.Null(result);
 
-        // タグリレーションが作成されている
-        TagRelation? relation =
-            await _dbContext.TagRelations.SingleOrDefaultAsync(tr => tr.ItemId == savedItemId && tr.TagId == tag.Id);
-        Assert.NotNull(relation);
-        Assert.Equal(userId, relation!.OwnerId);
+            Assert.Equal(1, await dbContext.Items.CountAsync(i => i.Id == savedItemId));
+
+            TagRelation? relation =
+                await dbContext.TagRelations.SingleOrDefaultAsync(tr => tr.ItemId == savedItemId && tr.TagId == tag.Id);
+            Assert.NotNull(relation);
+            Assert.Equal(userId, relation!.OwnerId);
+        }
     }
 }

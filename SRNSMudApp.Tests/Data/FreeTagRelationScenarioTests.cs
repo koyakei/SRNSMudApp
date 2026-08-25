@@ -7,45 +7,33 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Data;
 
-[Collection(MsSqlCollection.Name)]
 public class FreeTagRelationScenarioTests : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-
-    public FreeTagRelationScenarioTests(MsSqlContainerFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private MsSqlTestDatabase _sharedDb = null!;
 
     public async Task InitializeAsync()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(FreeTagRelationScenarioTests));
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
     }
 
-    public async Task DisposeAsync()
-    {
-        await _testDb.DisposeAsync();
-    }
+    public Task DisposeAsync() => Task.CompletedTask;
 
-    private ApplicationDbContext CreateDbContext()
-    {
-        return new ApplicationDbContext(_testDb.Options);
-    }
+    private ApplicationDbContext CreateDbContext() => new(_sharedDb.Options);
 
     [Fact]
     public async Task CreateFreeTagRelationAsync_ShouldCreateRelationAndLedgerWithoutAsset_WhenUserIsTagOwner()
     {
         // Arrange
+        var tid = Guid.NewGuid().ToString("N")[..8];
         await using ApplicationDbContext context = CreateDbContext();
 
-        var userA = new ApplicationUser { Id = "userA", UserName = "testUserA" };
+        var userA = new ApplicationUser { Id = $"userA_{tid}", UserName = $"testUserA_{tid}" };
         context.Users.Add(userA);
 
-        var item = new Item { Content = "Test Item", OwnerId = "userA", Owner = userA };
+        var item = new Item { Content = $"Test Item_{tid}", OwnerId = userA.Id, Owner = userA };
         context.Items.Add(item);
 
-        var tag = new Tag { Name = "MyTag", OwnerId = "userA", Owner = userA, CachedWeight = 100 };
+        var tag = new Tag { Name = $"MyTag_{tid}", OwnerId = userA.Id, Owner = userA, CachedWeight = 100 };
         context.Tags.Add(tag);
 
         await context.SaveChangesAsync();
@@ -60,22 +48,21 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
 
         Assert.NotNull(relation);
         Assert.Equal(1, relation.Weight);
-        Assert.Equal("userA", relation.OwnerId);
+        Assert.Equal(userA.Id, relation.OwnerId);
 
         // 2. 元帳への記帳確認
         TagWeightLedger? ledger = await context.TagWeightLedgers!
             .FirstOrDefaultAsync(l => l.TagId == tag.Id);
 
         Assert.NotNull(ledger);
-        Assert.Equal("userA", ledger.OwnerId);
+        Assert.Equal(userA.Id, ledger.OwnerId);
         Assert.Equal(1, ledger.Delta);
         Assert.Equal("TagRelation", ledger.SourceType);
         Assert.Equal(relation.Id, ledger.SourceId);
-        // Assert.NotNull(ledger.ConsumedRightAssetId); // Now required
         Assert.Equal(100, ledger.PreviousWeight);
         Assert.Equal(101, ledger.NewWeight);
         Assert.True(ledger.IsOwnerAction);
-        Assert.Equal("MyTag", ledger.TagNameSnapshot);
+        Assert.Equal($"MyTag_{tid}", ledger.TagNameSnapshot);
         Assert.Equal("Owner Self-Tagging", ledger.Reason);
 
         // RightAsset が消費されていることの確認
@@ -83,7 +70,7 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
             .FirstOrDefaultAsync(a => a.Id == ledger.ConsumedRightAssetId);
         Assert.NotNull(asset);
         Assert.True(asset.IsBurned);
-        Assert.Equal("userA", asset.OwnerId);
+        Assert.Equal(userA.Id, asset.OwnerId);
 
         // 3. キャッシュの更新確認
         Tag? updatedTag = await context.Tags!.FindAsync(tag.Id);
@@ -95,22 +82,22 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
     public async Task CreateFreeTagRelationAsync_ShouldThrowException_WhenUserIsNotTagOwner()
     {
         // Arrange
+        var tid = Guid.NewGuid().ToString("N")[..8];
         await using ApplicationDbContext context = CreateDbContext();
 
-        var ownerA = new ApplicationUser { Id = "userA", UserName = "owner" };
-        var otherUserB = new ApplicationUser { Id = "userB", UserName = "other" };
+        var ownerA = new ApplicationUser { Id = $"userA_{tid}", UserName = $"owner_{tid}" };
+        var otherUserB = new ApplicationUser { Id = $"userB_{tid}", UserName = $"other_{tid}" };
         context.Users.AddRange(ownerA, otherUserB);
 
-        var item = new Item { Content = "Test Item", OwnerId = "userA", Owner = ownerA };
+        var item = new Item { Content = $"Test Item_{tid}", OwnerId = ownerA.Id, Owner = ownerA };
         context.Items.Add(item);
 
-        var tag = new Tag { Name = "MyTag", OwnerId = "userA", Owner = ownerA, CachedWeight = 100 };
+        var tag = new Tag { Name = $"MyTag_{tid}", OwnerId = ownerA.Id, Owner = ownerA, CachedWeight = 100 };
         context.Tags.Add(tag);
 
         await context.SaveChangesAsync();
 
         // Act & Assert
-        // ユーザーB（タグのオーナーではない）が実行しようとすると例外が発生すること
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             context.CreateFreeTagRelationAsync(item.Id, tag.Id, otherUserB.Id));
     }
@@ -119,16 +106,17 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
     public async Task CreateFreeTagRelationAsync_ShouldSucceed_WhenTagOwnerIsSystem()
     {
         // Arrange
+        var tid = Guid.NewGuid().ToString("N")[..8];
         await using ApplicationDbContext context = CreateDbContext();
 
-        var systemUser = new ApplicationUser { Id = "system", UserName = "system" };
-        var userB = new ApplicationUser { Id = "userB", UserName = "userB" };
+        var systemUser = new ApplicationUser { Id = $"system_{tid}", UserName = $"system_{tid}" };
+        var userB = new ApplicationUser { Id = $"userB_{tid}", UserName = $"userB_{tid}" };
         context.Users.AddRange(systemUser, userB);
 
-        var item = new Item { Content = "User Item", OwnerId = "userB", Owner = userB };
+        var item = new Item { Content = $"User Item_{tid}", OwnerId = userB.Id, Owner = userB };
         context.Items.Add(item);
 
-        var systemTag = new Tag { Name = "SystemTag", OwnerId = "system", Owner = systemUser, CachedWeight = 50, IsSystem = true };
+        var systemTag = new Tag { Name = $"SystemTag_{tid}", OwnerId = systemUser.Id, Owner = systemUser, CachedWeight = 50, IsSystem = true };
         context.Tags.Add(systemTag);
 
         await context.SaveChangesAsync();
@@ -142,13 +130,13 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
 
         Assert.NotNull(relation);
         Assert.Equal(1, relation.Weight);
-        Assert.Equal("userB", relation.OwnerId);
+        Assert.Equal(userB.Id, relation.OwnerId);
 
         TagWeightLedger? ledger = await context.TagWeightLedgers!
             .FirstOrDefaultAsync(l => l.TagId == systemTag.Id && l.SourceId == relation.Id);
 
         Assert.NotNull(ledger);
-        Assert.Equal("userB", ledger.OwnerId);
+        Assert.Equal(userB.Id, ledger.OwnerId);
         Assert.Equal(1, ledger.Delta);
         Assert.Equal(50, ledger.PreviousWeight);
         Assert.Equal(51, ledger.NewWeight);

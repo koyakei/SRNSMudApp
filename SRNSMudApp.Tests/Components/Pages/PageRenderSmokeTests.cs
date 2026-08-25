@@ -1,8 +1,5 @@
-#region
-
 using System;
 using System.Security.Claims;
-using System.Threading;
 using System.Threading.Tasks;
 
 using Bunit;
@@ -10,8 +7,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -26,64 +21,41 @@ using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.Pages;
 
-/// <summary>
-///     GlobalPopoverE2ETests（実ブラウザで全ルート遷移時の未処理例外UIを確認する横断スモークテスト）の
-///     bUnit 側補完。各トップレベルページが単体で例外なく初期レンダリングできることを検証する。
-/// </summary>
-[Collection(MsSqlCollection.Name)]
-public class PageRenderSmokeTests : IAsyncLifetime
+public sealed class PageRenderSmokeTests : IAsyncLifetime
 {
     private const string UserId = "smoke-user-id";
 
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private BunitContext _ctx = null!;
+    private readonly BunitContext _ctx = new();
+    private readonly Mock<IHomeDataProvider> _homeDataMock = new();
 
-    public PageRenderSmokeTests(MsSqlContainerFixture fixture)
+    public PageRenderSmokeTests()
     {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(PageRenderSmokeTests));
-
-        _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _homeDataMock.Object);
 
-        AuthenticationState authState = CreateAuthState(UserId);
+        var authState = CreateAuthState(UserId);
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
-
-        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
-
-        // Home が TagCard を描画するため、その依存も登録する
-        _ = _ctx.Services.AddSrnsComponentServices();
-
-        Mock<ITagEmbeddingService> embeddingMock = new();
-        _ = embeddingMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("embedding unavailable in smoke test"));
-        _ctx.Services.AddScoped(_ => embeddingMock.Object);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
-    /// <summary>
-    ///     ホームページ（/）がログイン済み状態で例外なくレンダリングできること。
-    /// </summary>
     [Fact]
     public void Home_Renders_WithoutException()
     {
+        _ = _homeDataMock.Setup(d => d.GetFollowedTagIdsAsync(UserId))
+            .ReturnsAsync([]);
+        _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+        _ = _homeDataMock.Setup(d => d.EnsureSystemTagsAsync(UserId))
+            .ReturnsAsync(new SystemTagsResult(1, 2, false));
+        _ = _homeDataMock.Setup(d => d.LoadTimelineAsync(It.IsAny<System.Collections.Generic.IReadOnlyList<int>>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new HomeTimelinePage([], 0));
+
         RenderFragment home = builder =>
         {
             builder.OpenComponent<Home>(0);
@@ -98,9 +70,6 @@ public class PageRenderSmokeTests : IAsyncLifetime
         Assert.Contains("タイムライン", host.Markup);
     }
 
-    /// <summary>
-    ///     タグ検索ページ（/Tag/TagSearch）が例外なくレンダリングできること。
-    /// </summary>
     [Fact]
     public void TagSearch_Renders_WithoutException()
     {
@@ -113,13 +82,15 @@ public class PageRenderSmokeTests : IAsyncLifetime
     private static AuthenticationState CreateAuthState(string userId)
     {
         Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
-        ClaimsIdentity identity = new(claims, "TestAuthType");
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    /// <summary>
-    ///     認証カスケードを提供するホスト。
-    /// </summary>
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+    }
+
     private sealed class AuthHost : ComponentBase
     {
         [Parameter] public RenderFragment ChildContent { get; set; } = _ => { };

@@ -15,37 +15,18 @@ namespace SRNSMudApp.Tests;
 /// <summary>
 ///     実際の ITagEmbeddingService（SmartComponents LocalEmbedder）を使い、
 ///     embedding ベースのコサイン類似度検索コアロジックを検証する。
-///     （VectorSearchE2ETests 4ケースの共通核心部分の移行テスト。
-///     UI側の描画は TagSearchTests が担当する）
 /// </summary>
-[Collection(MsSqlCollection.Name)]
 public class TagEmbeddingServiceTests : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private ApplicationDbContext _db = null!;
+    private MsSqlTestDatabase _sharedDb = null!;
     private readonly TagEmbeddingService _embeddingService = new(new LocalEmbedder());
-
-    public TagEmbeddingServiceTests(MsSqlContainerFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     public async Task InitializeAsync()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagEmbeddingServiceTests));
-        _db = new ApplicationDbContext(_testDb.Options);
-
-        var user = new ApplicationUser { Id = "embedding-test-user", UserName = "embedding-test-user" };
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
     }
 
-    public async Task DisposeAsync()
-    {
-        await _db.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task DisposeAsync() => Task.CompletedTask;
 
     /// <summary>
     ///     「反社会的勢力」で検索すると、意味的に近い「ヤクザ」タグが
@@ -54,25 +35,31 @@ public class TagEmbeddingServiceTests : IAsyncLifetime
     [Fact]
     public async Task CosineSimilaritySearch_Yakuza_RanksAboveDummyTarget()
     {
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var userId = $"emb_{tid}";
+        await using var db = new ApplicationDbContext(_sharedDb.Options);
+
+        await db.SeedUsersAsync(userId);
+
         // Arrange: 実サービスで embedding を生成してDB保存
-        const string tagName = "ヤクザ";
-        var yakuzaEmbedding = (await _embeddingService.GenerateEmbeddingAsync(tagName)).ToArray();
+        var tagName = $"ヤクザ_{tid}";
+        var yakuzaEmbedding = (await _embeddingService.GenerateEmbeddingAsync("ヤクザ")).ToArray();
         var dummyTag = new Tag
         {
-            Name = $"Target_{Guid.NewGuid():N}",
-            OwnerId = "embedding-test-user",
+            Name = $"Target_{tid}",
+            OwnerId = userId,
             Embedding = (await _embeddingService.GenerateEmbeddingAsync($"Target_{Guid.NewGuid():N}")).ToArray()
         };
-        var yakuzaTag = new Tag { Name = tagName, Content = "", OwnerId = "embedding-test-user", Embedding = yakuzaEmbedding };
-        _ = _db.Tags.Add(dummyTag);
-        _ = _db.Tags.Add(yakuzaTag);
-        _ = await _db.SaveChangesAsync();
+        var yakuzaTag = new Tag { Name = tagName, Content = "", OwnerId = userId, Embedding = yakuzaEmbedding };
+        _ = db.Tags.Add(dummyTag);
+        _ = db.Tags.Add(yakuzaTag);
+        _ = await db.SaveChangesAsync();
 
         // Act: クエリ文字列の embedding を生成し、コサイン類似度でランク付けする
         var queryEmbedding = (await _embeddingService.GenerateEmbeddingAsync("反社会的勢力")).ToArray();
 
-        System.Collections.Generic.List<(Tag Tag, float Similarity)> ranked = _db.Tags.AsEnumerable()
-            .Where(t => t.Embedding != null && t.Embedding.Length == queryEmbedding.Length)
+        System.Collections.Generic.List<(Tag Tag, float Similarity)> ranked = db.Tags.AsEnumerable()
+            .Where(t => t.OwnerId == userId && t.Embedding != null && t.Embedding.Length == queryEmbedding.Length)
             .Select(t => (t, TensorPrimitives.CosineSimilarity(t.Embedding!, queryEmbedding)))
             .OrderByDescending(x => x.Item2)
             .ToList();

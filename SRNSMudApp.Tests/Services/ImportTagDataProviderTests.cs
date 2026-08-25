@@ -1,0 +1,143 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
+
+using SRNSMudApp.Data;
+using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
+
+using Xunit;
+
+namespace SRNSMudApp.Tests.Services;
+
+public class ImportTagDataProviderTests : IAsyncLifetime
+{
+    private MsSqlTestDatabase _sharedDb = null!;
+    private IDbContextFactory<ApplicationDbContext> _dbFactory = null!;
+    private ImportTagDataProvider _provider = null!;
+
+    public async Task InitializeAsync()
+    {
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
+        var services = new ServiceCollection();
+        _ = services.AddMsSqlDbFactory(_sharedDb.ConnectionString);
+        _ = services.AddScoped<IImportTagDataProvider, ImportTagDataProvider>();
+        _ = services.AddScoped(_ => new Mock<ITagEmbeddingService>().Object);
+
+        var sp = services.BuildServiceProvider();
+        _dbFactory = sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        _provider = (ImportTagDataProvider)sp.GetRequiredService<IImportTagDataProvider>();
+
+        await using var dbContext = await _dbFactory.CreateDbContextAsync();
+        await dbContext.SeedUsersAsync("system");
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    [Fact]
+    public async Task ImportCsvTagsAsync_UnderSelectedParent_CreatesTwoLevelHierarchy()
+    {
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var testUser = $"testuser_{tid}";
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            await dbContext.SeedUsersAsync(testUser);
+        }
+
+        SRNSMudApp.Data.Tag rootTag;
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            rootTag = new SRNSMudApp.Data.Tag { Name = $"RootTag_{tid}", OwnerId = testUser };
+            _ = dbContext.Tags.Add(rootTag);
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        var csvContent = $"Animal_{tid},Dog_{tid}\nAnimal_{tid},Cat_{tid}";
+
+        _ = await _provider.ImportCsvTagsAsync(testUser, rootTag.Name, csvContent, false);
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            List<SRNSMudApp.Data.Tag> tags = await dbContext.Tags.Where(t => t.OwnerId == testUser).ToListAsync();
+
+            SRNSMudApp.Data.Tag animal = tags.Single(t => t.Name == $"Animal_{tid}");
+            Assert.Equal(rootTag.Id, animal.ParentTagId);
+
+            SRNSMudApp.Data.Tag dog = tags.Single(t => t.Name == $"Dog_{tid}");
+            Assert.Equal(animal.Id, dog.ParentTagId);
+
+            SRNSMudApp.Data.Tag cat = tags.Single(t => t.Name == $"Cat_{tid}");
+            Assert.Equal(animal.Id, cat.ParentTagId);
+        }
+    }
+
+    [Fact]
+    public async Task SearchUserTagsAsync_ShouldIncludeSystemTags()
+    {
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var testUser = $"testuser_{tid}";
+        var otherUser = $"otheruser_{tid}";
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            await dbContext.SeedUsersAsync(testUser, otherUser);
+            dbContext.Tags.AddRange(
+                new SRNSMudApp.Data.Tag { Name = $"UserTag1_{tid}", OwnerId = testUser },
+                new SRNSMudApp.Data.Tag { Name = $"SystemRootTag_{tid}", IsSystem = true, OwnerId = "system" },
+                new SRNSMudApp.Data.Tag { Name = $"OtherUserTag_{tid}", OwnerId = otherUser }
+            );
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        IReadOnlyList<SRNSMudApp.Data.Tag> results = await _provider.SearchUserTagsAsync(testUser, "");
+
+        Assert.Contains(results, t => t.Name == $"UserTag1_{tid}");
+        Assert.Contains(results, t => t.Name == $"SystemRootTag_{tid}");
+        Assert.DoesNotContain(results, t => t.Name == $"OtherUserTag_{tid}");
+    }
+
+    [Fact]
+    public async Task ImportCsvTagsAsync_AsSystem_CreatesHierarchyUnderSystemOwner()
+    {
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var adminUser = $"admin_{tid}";
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            await dbContext.SeedUsersAsync(adminUser);
+        }
+
+        SRNSMudApp.Data.Tag systemRootTag;
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            systemRootTag = new SRNSMudApp.Data.Tag { Name = $"SystemCategory_{tid}", IsSystem = true, OwnerId = "system" };
+            _ = dbContext.Tags.Add(systemRootTag);
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        var csvContent = $"Science_{tid},Physics_{tid}";
+
+        _ = await _provider.ImportCsvTagsAsync(adminUser, systemRootTag.Name, csvContent, true);
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            List<SRNSMudApp.Data.Tag> systemTags = await dbContext.Tags.Where(t => t.OwnerId == "system" && t.Name.EndsWith(tid)).ToListAsync();
+
+            SRNSMudApp.Data.Tag science = systemTags.Single(t => t.Name == $"Science_{tid}");
+            Assert.True(science.IsSystem);
+            Assert.Equal("system", science.OwnerId);
+            Assert.Equal(systemRootTag.Id, science.ParentTagId);
+
+            SRNSMudApp.Data.Tag physics = systemTags.Single(t => t.Name == $"Physics_{tid}");
+            Assert.True(physics.IsSystem);
+            Assert.Equal("system", physics.OwnerId);
+            Assert.Equal(science.Id, physics.ParentTagId);
+        }
+    }
+}

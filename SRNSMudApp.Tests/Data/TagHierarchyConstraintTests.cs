@@ -5,20 +5,21 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Data;
 
-public class TagHierarchyConstraintTests : IClassFixture<MsSqlContainerFixture>
+public class TagHierarchyConstraintTests : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
+    private MsSqlTestDatabase _sharedDb = null!;
 
-    public TagHierarchyConstraintTests(MsSqlContainerFixture fixture)
+    public async Task InitializeAsync()
     {
-        _fixture = fixture;
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
     }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task RootTag_CanBeCreated_WithUniversalName()
     {
-        await using var db = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString);
-        await using var context = new ApplicationDbContext(db.Options);
+        await using var context = new ApplicationDbContext(_sharedDb.Options);
 
         var rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
         Assert.NotNull(rootTag);
@@ -28,12 +29,12 @@ public class TagHierarchyConstraintTests : IClassFixture<MsSqlContainerFixture>
     [Fact]
     public async Task NonRootTag_CannotBeCreated_WithGetRootNode()
     {
-        await using var db = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString);
-        await using var context = new ApplicationDbContext(db.Options);
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        await using var context = new ApplicationDbContext(_sharedDb.Options);
 
         var invalidTag = new Tag
         {
-            Name = "InvalidRootTag",
+            Name = $"InvalidRootTag_{tid}",
             OwnerId = "system_root",
             Node = HierarchyId.GetRoot(),
             CreatedDate = DateTime.UtcNow,
@@ -49,14 +50,14 @@ public class TagHierarchyConstraintTests : IClassFixture<MsSqlContainerFixture>
     [Fact]
     public async Task ChildTag_CanBeCreated_UnderRootTag()
     {
-        await using var db = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString);
-        await using var context = new ApplicationDbContext(db.Options);
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        await using var context = new ApplicationDbContext(_sharedDb.Options);
 
         var rootTag = await context.Tags.FirstAsync(t => t.Name == Tag.RootTagName);
 
         var childTag = new Tag
         {
-            Name = "ValidChildTag",
+            Name = $"ValidChildTag_{tid}",
             OwnerId = "system_root",
             ParentTagId = rootTag.Id,
             Node = rootTag.Node.GetDescendant(null, null),
@@ -67,7 +68,7 @@ public class TagHierarchyConstraintTests : IClassFixture<MsSqlContainerFixture>
         context.Tags.Add(childTag);
         await context.SaveChangesAsync();
 
-        var savedTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == "ValidChildTag");
+        var savedTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == $"ValidChildTag_{tid}");
         Assert.NotNull(savedTag);
         Assert.True(savedTag.Node.IsDescendantOf(rootTag.Node));
         Assert.NotEqual(HierarchyId.GetRoot(), savedTag.Node);

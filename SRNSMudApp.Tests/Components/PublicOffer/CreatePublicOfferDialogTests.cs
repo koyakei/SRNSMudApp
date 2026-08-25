@@ -1,8 +1,8 @@
-#region
-
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 
 using AngleSharp.Dom;
@@ -12,8 +12,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -23,62 +21,44 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
+using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Components.PublicOffer;
 
-[Collection(MsSqlCollection.Name)]
-public class CreatePublicOfferDialogTests : IAsyncLifetime
+public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
 {
     private const string AliceUserId = "alice-id";
 
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
-    private BunitContext _ctx = null!;
+    private readonly BunitContext _ctx = new();
+    private readonly Mock<IContractDataProvider> _contractDataMock = new();
 
-    public CreatePublicOfferDialogTests(MsSqlContainerFixture fixture)
+    public CreatePublicOfferDialogTests()
     {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(CreatePublicOfferDialogTests));
-
-        _ctx = new BunitContext();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
+        _ = _ctx.Services.AddScoped(_ => _contractDataMock.Object);
         _ctx.Services.AddAuthorizationCore();
 
-        AuthenticationState authState = CreateAuthState(AliceUserId);
+        var authState = CreateAuthState(AliceUserId);
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
-
-        _ = _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
-    /// <summary>
-    ///     自分が所有するタグを選んで「公開する」を押すと、Gratisタイプ（要求アセット量0・アクティブ）の
-    ///     PublicTradeOffer がDBに作成され、ダイアログが正常終了することを検証する。
-    ///     （ContractAndOfferScenarioE2ETests の「Alice creates a Public Offer」および
-    ///     PublicOfferE2ETests/PublicOffer_CreateAndTrigger 前半の移行テスト）
-    /// </summary>
     [Fact]
-    public async Task Publish_WithOwnedTag_CreatesActiveFreeOffer()
+    public async Task Publish_WithOwnedTag_CallsCreatePublicOfferAsync()
     {
-        // Arrange: alice とその所有タグを投入
-        var tagId = await SeedUserWithTagAsync("AliceTag");
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = "AliceTag", Content = "Alice's Tag", OwnerId = AliceUserId };
+
+        _ = _contractDataMock.Setup(d => d.SearchMyTagsAsync(AliceUserId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([tag]);
+        _ = _contractDataMock.Setup(d => d.CreatePublicOfferAsync(It.IsAny<PublicTradeOffer>()))
+            .Returns(Task.CompletedTask);
 
         IRenderedComponent<AuthDialogHost> host = _ctx.Render<AuthDialogHost>();
 
@@ -87,63 +67,36 @@ public class CreatePublicOfferDialogTests : IAsyncLifetime
 
         host.WaitForState(() => host.Markup.Contains("提供するタグ"));
 
-        // タグ選択オートコンプリートで自分のタグを選択（候補選択時に ValueChanged へ候補が流れる）
         IRenderedComponent<MudAutocomplete<SRNSMudApp.Data.Tag>> autocomplete =
             host.FindComponents<MudAutocomplete<SRNSMudApp.Data.Tag>>().First();
-        SRNSMudApp.Data.Tag selectedTag =
-            (await autocomplete.Instance.SearchFunc!("AliceTag", System.Threading.CancellationToken.None))
-            .Single(t => t.Id == tagId);
-        await host.InvokeAsync(() => autocomplete.Instance.ValueChanged!.InvokeAsync(selectedTag));
+        await host.InvokeAsync(() => autocomplete.Instance.ValueChanged!.InvokeAsync(tag));
 
-        // ValueChanged の直接呼び出しではフォーム検証が走らないため、明示的に検証して _isValid を更新する
         IRenderedComponent<MudForm> form = host.FindComponents<MudForm>().First();
         await host.InvokeAsync(() => form.Instance.ValidateAsync());
 
-        // Act: 「公開する」ボタン押下
         IElement publishButton =
             host.FindAll("button").First(b => b.TextContent.Contains("公開する"));
-        Assert.False(publishButton.HasAttribute("disabled"),
-            $"公開するボタンが無効のままです。マークアップ: {host.Markup}");
         publishButton.Click();
 
-        // タイムアウト付きで待機し、ダイアログが閉じない場合にテスト全体が停止しないようにする
-        DialogResult? result = await dialog.Result.WaitAsync(TimeSpan.FromSeconds(15));
+        DialogResult? result = await dialog.Result.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // Assert: ダイアログが正常終了し、オファーがDBに作成されている
-        Assert.False(result.Canceled);
+        Assert.False(result!.Canceled);
         Assert.Equal(true, result.Data);
-
-        await using ApplicationDbContext db = CreateDbContext();
-        PublicTradeOffer offer = await db.PublicTradeOffers!.SingleAsync();
-        Assert.Equal(AliceUserId, offer.OwnerId);
-        Assert.Equal(tagId, offer.OfferedTagId);
-        Assert.Equal(0, offer.RequiredAssetAmount);
-        Assert.True(offer.IsActive);
+        _contractDataMock.Verify(d => d.CreatePublicOfferAsync(It.Is<PublicTradeOffer>(o => o.OfferedTagId == tag.Id && o.OwnerId == AliceUserId)), Times.Once);
     }
-
-    private async Task<int> SeedUserWithTagAsync(string tagName)
-    {
-        await using ApplicationDbContext db = CreateDbContext();
-        _ = db.Users.Add(new ApplicationUser { Id = AliceUserId, UserName = "alice", Email = "alice@example.com" });
-        SRNSMudApp.Data.Tag tag = new() { Name = tagName, Content = "Alice's Tag", OwnerId = AliceUserId };
-        _ = db.Tags.Add(tag);
-        _ = await db.SaveChangesAsync();
-        return tag.Id;
-    }
-
-    private ApplicationDbContext CreateDbContext() => _ctx.Services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext();
 
     private static AuthenticationState CreateAuthState(string userId)
     {
         Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
-        ClaimsIdentity identity = new(claims, "TestAuthType");
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    /// <summary>
-    ///     認証カスケードと MudDialogProvider を提供するホスト。
-    ///     アプリの MudProviders.razor 相当の構成を再現する。
-    /// </summary>
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+    }
+
     private sealed class AuthDialogHost : ComponentBase
     {
         [Parameter] public RenderFragment ChildContent { get; set; } = _ => { };

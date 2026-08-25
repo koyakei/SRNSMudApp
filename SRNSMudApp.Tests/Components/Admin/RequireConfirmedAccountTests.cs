@@ -1,11 +1,13 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 using Bunit;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -15,38 +17,29 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Account;
 using SRNSMudApp.Components.Account.Pages.Debug;
 using SRNSMudApp.Data;
+using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Admin;
 
-[Collection(MsSqlCollection.Name)]
-public class RequireConfirmedAccountTests : IAsyncLifetime
+public sealed class RequireConfirmedAccountTests : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
-    private MsSqlTestDatabase _testDb = null!;
     private readonly BunitContext _ctx = new();
+    private readonly Mock<IUserDataProvider> _userDataMock = new();
+    private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
 
-    public RequireConfirmedAccountTests(MsSqlContainerFixture fixture)
+    public RequireConfirmedAccountTests()
     {
-        _fixture = fixture;
-    }
-
-    public async Task InitializeAsync()
-    {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(RequireConfirmedAccountTests));
-
         _ = _ctx.Services.AddAuth("test-admin-id", "Admin");
-        _ = _ctx.Services.AddSrnsComponentServices();
+        _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddLogging();
+        _ = _ctx.Services.AddScoped(_ => _userDataMock.Object);
 
-        _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(_testDb.ConnectionString, sqlOptions => sqlOptions.UseHierarchyId()), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-
-        _ = _ctx.Services.AddIdentityCore<ApplicationUser>()
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ApplicationDbContext>();
+        var storeMock = new Mock<IUserStore<ApplicationUser>>();
+        _userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        _ = _ctx.Services.AddScoped(_ => _userManagerMock.Object);
 
         _ = _ctx.Services.AddScoped<IdentityRedirectManager>();
 
@@ -57,35 +50,35 @@ public class RequireConfirmedAccountTests : IAsyncLifetime
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async Task DisposeAsync()
-    {
-        await _ctx.DisposeAsync();
-        await _testDb.DisposeAsync();
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task RendersUsersAndTogglesConfirmation()
+    public void RendersUsersAndTogglesConfirmation()
     {
-        // Arrange
-        UserManager<ApplicationUser> userManager = _ctx.Services.GetRequiredService<UserManager<ApplicationUser>>();
-        _ = await userManager.CreateAsync(new ApplicationUser
+        var testUser = new ApplicationUser
         {
             Id = "user1",
             UserName = "testuser@example.com",
             Email = "testuser@example.com",
             EmailConfirmed = false
-        });
+        };
+
+        _ = _userDataMock.Setup(d => d.GetAllUsersAsync())
+            .ReturnsAsync([testUser]);
 
         var httpContext = new DefaultHttpContext();
 
-        // Act
         IRenderedComponent<RequireConfirmedAccount> component =
             _ctx.Render<RequireConfirmedAccount>(parameters => parameters.AddCascadingValue(httpContext));
 
         component.WaitForState(() => component.Markup.Contains("testuser@example.com"));
 
-        // Assert: Check if user is rendered
         Assert.Contains("testuser@example.com", component.Markup);
         Assert.Contains("Unconfirmed", component.Markup);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
     }
 }
