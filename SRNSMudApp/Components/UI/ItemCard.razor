@@ -68,6 +68,17 @@
                          OnDataChanged="OnDataChanged"
                          OnAddTagClicked="OnAddTagClicked"/>
 
+        <ReactionBar ShinjiScore="@GetReactionScore("真実")"
+                     ZenScore="@GetReactionScore("善")"
+                     BiScore="@GetReactionScore("美")"
+                     IsShinjiUpvoted="@IsItemReactionUpvoted("真実")"
+                     IsShinjiDownvoted="@IsItemReactionDownvoted("真実")"
+                     IsZenUpvoted="@IsItemReactionUpvoted("善")"
+                     IsZenDownvoted="@IsItemReactionDownvoted("善")"
+                     IsBiUpvoted="@IsItemReactionUpvoted("美")"
+                     IsBiDownvoted="@IsItemReactionDownvoted("美")"
+                     OnReactionVoteClicked="VoteReactionAsync"/>
+
         @* リプライスレッド (表示専用子コンポーネント。リプライの描画はテンプレートで委譲) *@
         <ItemReplyThread IsExpanded="_isRepliesExpanded"
                          Replies="_replies"

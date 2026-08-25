@@ -117,6 +117,46 @@ public class ItemCardViewModelTests
         Assert.False(ItemCardViewModel.IsItemDownvoted([], "user-1", null));
 
     // ────────────────────────────────────────────────────────────
+    // GetReactionCount / IsItemReacted
+    // ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetReactionCount_WithMatchingReactionTag_ReturnsCount()
+    {
+        var relations = new List<TagRelation>
+        {
+            new() { Tag = new SRNSMudApp.Data.Tag { Name = "真実", IsSystem = true, OwnerId = "sys-1" }, Weight = 1, OwnerId = "u1" },
+            new() { Tag = new SRNSMudApp.Data.Tag { Name = "真実", IsSystem = true, OwnerId = "sys-1" }, Weight = 1, OwnerId = "u2" },
+            new() { Tag = new SRNSMudApp.Data.Tag { Name = "善", IsSystem = true, OwnerId = "sys-1" }, Weight = 1, OwnerId = "u1" },
+            new() { Tag = new SRNSMudApp.Data.Tag { Name = "good", IsSystem = true, OwnerId = "sys-1" }, Weight = 1, OwnerId = "u1" }
+        };
+
+        Assert.Equal(2, ItemCardViewModel.GetReactionCount(relations, "真実"));
+        Assert.Equal(1, ItemCardViewModel.GetReactionCount(relations, "善"));
+        Assert.Equal(0, ItemCardViewModel.GetReactionCount(relations, "美"));
+    }
+
+    [Fact]
+    public void IsItemReacted_WhenUserHasReactionTag_ReturnsTrue()
+    {
+        const string userId = "user-1";
+        const int shinjiTagId = 100;
+        var relations = new List<TagRelation> { new() { TagId = shinjiTagId, OwnerId = userId, Weight = 1 } };
+
+        Assert.True(ItemCardViewModel.IsItemReacted(relations, userId, shinjiTagId));
+    }
+
+    [Fact]
+    public void IsItemReacted_WhenUserDoesNotHaveReactionTag_ReturnsFalse()
+    {
+        const string userId = "user-1";
+        const int shinjiTagId = 100;
+        var relations = new List<TagRelation> { new() { TagId = shinjiTagId, OwnerId = "other-user", Weight = 1 } };
+
+        Assert.False(ItemCardViewModel.IsItemReacted(relations, userId, shinjiTagId));
+    }
+
+    // ────────────────────────────────────────────────────────────
     // CanModifyRelation
     // ────────────────────────────────────────────────────────────
 

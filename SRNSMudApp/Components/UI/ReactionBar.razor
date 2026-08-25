@@ -1,0 +1,113 @@
+@using MudBlazor
+
+<div class="d-flex align-center flex-wrap gap-3 mt-2 mb-1 reaction-bar">
+    @* --- 真実 --- *@
+    <div class="d-flex align-center reaction-group">
+        <span id="reaction-chip-shinji"
+              data-testid="reaction-shinji"
+              aria-label="真実リアクション"
+              class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
+            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" Color="Color.Info" Class="mr-1" />
+            <MudText Typo="Typo.body2" Class="font-weight-medium">
+                真実@(ShinjiScore != 0 ? $" ({ShinjiScore})" : "")
+            </MudText>
+        </span>
+        <MudIconButton id="reaction-up-shinji"
+                       data-testid="reaction-shinji-upvote"
+                       aria-label="真実をアップボート"
+                       Icon="@(IsShinjiUpvoted ? Icons.Material.Filled.ArrowUpward : Icons.Material.Outlined.ArrowUpward)"
+                       Color="@(IsShinjiUpvoted ? Color.Info : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1 ml-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("真実", 1)))"
+                       title="真実をUpvote" />
+        <MudIconButton id="reaction-down-shinji"
+                       data-testid="reaction-shinji-downvote"
+                       aria-label="真実をダウンボート"
+                       Icon="@(IsShinjiDownvoted ? Icons.Material.Filled.ArrowDownward : Icons.Material.Outlined.ArrowDownward)"
+                       Color="@(IsShinjiDownvoted ? Color.Error : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("真実", -1)))"
+                       title="真実をDownvote" />
+    </div>
+
+    @* --- 善 --- *@
+    <div class="d-flex align-center reaction-group">
+        <span id="reaction-chip-zen"
+              data-testid="reaction-zen"
+              aria-label="善リアクション"
+              class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
+            <MudIcon Icon="@Icons.Material.Filled.Favorite" Size="Size.Small" Color="Color.Success" Class="mr-1" />
+            <MudText Typo="Typo.body2" Class="font-weight-medium">
+                善@(ZenScore != 0 ? $" ({ZenScore})" : "")
+            </MudText>
+        </span>
+        <MudIconButton id="reaction-up-zen"
+                       data-testid="reaction-zen-upvote"
+                       aria-label="善をアップボート"
+                       Icon="@(IsZenUpvoted ? Icons.Material.Filled.ArrowUpward : Icons.Material.Outlined.ArrowUpward)"
+                       Color="@(IsZenUpvoted ? Color.Success : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1 ml-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("善", 1)))"
+                       title="善をUpvote" />
+        <MudIconButton id="reaction-down-zen"
+                       data-testid="reaction-zen-downvote"
+                       aria-label="善をダウンボート"
+                       Icon="@(IsZenDownvoted ? Icons.Material.Filled.ArrowDownward : Icons.Material.Outlined.ArrowDownward)"
+                       Color="@(IsZenDownvoted ? Color.Error : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("善", -1)))"
+                       title="善をDownvote" />
+    </div>
+
+    @* --- 美 --- *@
+    <div class="d-flex align-center reaction-group">
+        <span id="reaction-chip-bi"
+              data-testid="reaction-bi"
+              aria-label="美リアクション"
+              class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
+            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" Color="Color.Secondary" Class="mr-1" />
+            <MudText Typo="Typo.body2" Class="font-weight-medium">
+                美@(BiScore != 0 ? $" ({BiScore})" : "")
+            </MudText>
+        </span>
+        <MudIconButton id="reaction-up-bi"
+                       data-testid="reaction-bi-upvote"
+                       aria-label="美をアップボート"
+                       Icon="@(IsBiUpvoted ? Icons.Material.Filled.ArrowUpward : Icons.Material.Outlined.ArrowUpward)"
+                       Color="@(IsBiUpvoted ? Color.Secondary : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1 ml-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("美", 1)))"
+                       title="美をUpvote" />
+        <MudIconButton id="reaction-down-bi"
+                       data-testid="reaction-bi-downvote"
+                       aria-label="美をダウンボート"
+                       Icon="@(IsBiDownvoted ? Icons.Material.Filled.ArrowDownward : Icons.Material.Outlined.ArrowDownward)"
+                       Color="@(IsBiDownvoted ? Color.Error : Color.Default)"
+                       Size="Size.Small"
+                       Class="pa-1"
+                       OnClick="@(() => OnReactionVoteClicked.InvokeAsync(("美", -1)))"
+                       title="美をDownvote" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public int ShinjiScore { get; set; }
+    [Parameter] public int ZenScore { get; set; }
+    [Parameter] public int BiScore { get; set; }
+
+    [Parameter] public bool IsShinjiUpvoted { get; set; }
+    [Parameter] public bool IsShinjiDownvoted { get; set; }
+
+    [Parameter] public bool IsZenUpvoted { get; set; }
+    [Parameter] public bool IsZenDownvoted { get; set; }
+
+    [Parameter] public bool IsBiUpvoted { get; set; }
+    [Parameter] public bool IsBiDownvoted { get; set; }
+
+    [Parameter] public EventCallback<(string ReactionTagName, int TargetWeight)> OnReactionVoteClicked { get; set; }
+}

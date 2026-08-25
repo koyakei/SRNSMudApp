@@ -48,6 +48,9 @@ public partial class ItemCard : IAsyncDisposable
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
     [Parameter] public int? CurrentUserBadTagId { get; set; }
+    [Parameter] public int? CurrentUserShinjiTagId { get; set; }
+    [Parameter] public int? CurrentUserZenTagId { get; set; }
+    [Parameter] public int? CurrentUserBiTagId { get; set; }
     [Parameter] public EventCallback OnEnsureSystemTags { get; set; }
     [Parameter] public IReadOnlyList<TimelineEvent>? HighlightEvents { get; set; }
 
@@ -62,12 +65,15 @@ public partial class ItemCard : IAsyncDisposable
         builder.AddAttribute(2, nameof(CurrentUserId), CurrentUserId);
         builder.AddAttribute(3, nameof(CurrentUserGoodTagId), CurrentUserGoodTagId);
         builder.AddAttribute(4, nameof(CurrentUserBadTagId), CurrentUserBadTagId);
-        builder.AddAttribute(5, nameof(OnDataChanged),
+        builder.AddAttribute(5, nameof(CurrentUserShinjiTagId), CurrentUserShinjiTagId);
+        builder.AddAttribute(6, nameof(CurrentUserZenTagId), CurrentUserZenTagId);
+        builder.AddAttribute(7, nameof(CurrentUserBiTagId), CurrentUserBiTagId);
+        builder.AddAttribute(8, nameof(OnDataChanged),
             EventCallback.Factory.Create(this, LoadRepliesAsync));
-        builder.AddAttribute(6, nameof(AllTags), AllTags);
-        builder.AddAttribute(7, nameof(AllTagRelationsToTags), AllTagRelationsToTags);
-        builder.AddAttribute(8, nameof(HighlightEvents), HighlightEvents);
-        builder.AddAttribute(9, nameof(OnEnsureSystemTags), OnEnsureSystemTags);
+        builder.AddAttribute(9, nameof(AllTags), AllTags);
+        builder.AddAttribute(10, nameof(AllTagRelationsToTags), AllTagRelationsToTags);
+        builder.AddAttribute(11, nameof(HighlightEvents), HighlightEvents);
+        builder.AddAttribute(12, nameof(OnEnsureSystemTags), OnEnsureSystemTags);
         builder.CloseComponent();
     };
 
@@ -282,6 +288,96 @@ public partial class ItemCard : IAsyncDisposable
         await NotifyDataChangedAsync();
     }
 
+    // --- Reaction Logic ---
+    private int GetReactionScore(string reactionTagName)
+        => ItemCardViewModel.GetReactionScore(Item.TagRelations, reactionTagName);
+
+    private bool IsItemReactionUpvoted(string reactionTagName) => reactionTagName switch
+    {
+        "真実" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, "真実"),
+        "善" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, "善"),
+        "美" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, "美"),
+        _ => false
+    };
+
+    private bool IsItemReactionDownvoted(string reactionTagName) => reactionTagName switch
+    {
+        "真実" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, "真実"),
+        "善" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, "善"),
+        "美" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, "美"),
+        _ => false
+    };
+
+    private async Task VoteReactionAsync((string ReactionTagName, int TargetWeight) args)
+    {
+        var (reactionTagName, targetWeight) = args;
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        await (OnEnsureSystemTags.HasDelegate switch
+        {
+            true => OnEnsureSystemTags.InvokeAsync(),
+            false => Task.CompletedTask
+        });
+
+        var reactionTagId = reactionTagName switch
+        {
+            "真実" => CurrentUserShinjiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "真実" && t.IsSystem)?.Id,
+            "善" => CurrentUserZenTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "善" && t.IsSystem)?.Id,
+            "美" => CurrentUserBiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "美" && t.IsSystem)?.Id,
+            _ => (int?)null
+        };
+
+        Tag reactionTag;
+        if (!reactionTagId.HasValue)
+        {
+            reactionTag = await ItemCardData.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
+            reactionTagId = reactionTag.Id;
+        }
+        else
+        {
+            reactionTag = AllTags.FirstOrDefault(t => t.Id == reactionTagId.Value)
+                ?? await ItemCardData.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
+        }
+
+        var tagId = reactionTagId.Value;
+        ItemVoteResult result = await ItemCardData.ToggleItemReactionAsync(Item.Id, CurrentUserId, tagId, targetWeight);
+
+        TagRelation? existingRelation = Item.TagRelations.FirstOrDefault(tr =>
+            tr.Id == result.RelationId || (tr.TagId == tagId && tr.OwnerId == CurrentUserId));
+
+        switch (result.Action)
+        {
+            case ItemVoteAction.Removed when existingRelation != null:
+                _ = Item.TagRelations.Remove(existingRelation);
+                break;
+            case ItemVoteAction.Updated when existingRelation != null:
+                existingRelation.Weight = result.Weight;
+                break;
+            case ItemVoteAction.Added:
+                {
+                    Item.TagRelations ??= [];
+                    Item.TagRelations.Add(new TagRelation
+                    {
+                        Id = result.RelationId,
+                        ItemId = Item.Id,
+                        TagId = tagId,
+                        Tag = reactionTag,
+                        OwnerId = CurrentUserId,
+                        Weight = result.Weight
+                    });
+                    break;
+                }
+            default:
+                break;
+        }
+
+        await NotifyDataChangedAsync();
+    }
+
     // --- Edit/Delete Logic ---
     private async Task EditItemAsync()
     {
@@ -345,7 +441,7 @@ public partial class ItemCard : IAsyncDisposable
         var requiresContract = tagFromDb.GetKind() switch
         {
             UserCustomTag custom => custom.OwnerId != CurrentUserId,
-            SystemClassificationTag or VotingReactionTag => false
+            SystemClassificationTag or VoteTag or ReactionTag => false
         };
 
         if (requiresContract)

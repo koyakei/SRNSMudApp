@@ -3,13 +3,19 @@ using System.Diagnostics.CodeAnalysis;
 namespace SRNSMudApp.Models.Unions;
 
 /// <summary>
-///     各ユーザーが各自で発行する投票・リアクション用タグ（good, bad など）。
-///     ItemCard のスコア集計やリアクション機能で使用され、通常のタグチップ一覧には表示しない。
+///     各ユーザーが各自で発行する投票用タグ（good, bad など）。
+///     ItemCard のスコア集計（Upvote / Downvote）で使用され、通常のタグチップ一覧には表示しない。
 /// </summary>
-public record VotingReactionTag(string Name, string OwnerId);
+public record VoteTag(string Name, string OwnerId);
 
 /// <summary>
-///     システムが共通分類のために保持するタグ（OwnerId == "system" かつ投票用ではないタグ）。
+///     各ユーザーが各自で発行するリアクション用タグ（真実、善、美 など）。
+///     ItemCard のリアクション機能で使用され、通常のタグチップ一覧には表示しない。
+/// </summary>
+public record ReactionTag(string Name, string OwnerId);
+
+/// <summary>
+///     システムが共通分類のために保持するタグ（OwnerId == "system" かつ投票・リアクション用ではないタグ）。
 ///     ItemCard にタグチップとして表示され、どのユーザーも無制限に TagRelation を使ってタグ付け可能。
 /// </summary>
 public record SystemClassificationTag(string Name);
@@ -24,4 +30,4 @@ public record UserCustomTag(string Name, string OwnerId);
 ///     タグの種別を表す Union 型。
 /// </summary>
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagKind(VotingReactionTag, SystemClassificationTag, UserCustomTag);
+public union TagKind(VoteTag, ReactionTag, SystemClassificationTag, UserCustomTag);

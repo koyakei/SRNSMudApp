@@ -36,12 +36,12 @@ public static class TagTreePopoverViewModel
     public static HashSet<int> GetAutoExpandIds(Tag targetTag, IReadOnlyList<Tag> allTags)
     {
         HashSet<int> expanded = [];
-        if (targetTag == null || targetTag.GetKind() is VotingReactionTag)
+        if (targetTag == null || targetTag.GetKind() is VoteTag or ReactionTag)
         {
             return expanded;
         }
 
-        var filteredTags = allTags.Where(t => t.GetKind() is not VotingReactionTag).ToList();
+        var filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
         var current = filteredTags.FirstOrDefault(t => t.Id == targetTag.Id);
         while (current != null)
         {
@@ -66,12 +66,12 @@ public static class TagTreePopoverViewModel
         bool enableExpand)
     {
         var lines = new List<TagTreeLine>();
-        if (targetTag == null || allTags.Count == 0 || targetTag.GetKind() is VotingReactionTag)
+        if (targetTag == null || allTags.Count == 0 || targetTag.GetKind() is VoteTag or ReactionTag)
         {
             return lines;
         }
 
-        var filteredTags = allTags.Where(t => t.GetKind() is not VotingReactionTag).ToList();
+        var filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
         if (filteredTags.Count == 0)
         {
             return lines;

@@ -37,6 +37,9 @@
                                                                                    CurrentUserId="@_currentUserId"
                                                                                    CurrentUserGoodTagId="@_currentUserGoodTagId"
                                                                                    CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                   CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                   CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                                   CurrentUserBiTagId="@_currentUserBiTagId"
                                                                                    OnEnsureSystemTags="EnsureSystemTagsExistAsync"
                                                                                    HighlightEvents="@group.Events"
                                                                                    IsFocused="false"/>
@@ -96,6 +99,9 @@
     private List<TagRelationToTag> _allTagRelationsToTags = [];
     private int? _currentUserGoodTagId;
     private int? _currentUserBadTagId;
+    private int? _currentUserShinjiTagId;
+    private int? _currentUserZenTagId;
+    private int? _currentUserBiTagId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,15 +153,26 @@
         var badTag = _allTags.FirstOrDefault(t => t.OwnerId == _currentUserId && t.Name == "bad" && t.IsSystem);
         _currentUserGoodTagId = goodTag?.Id;
         _currentUserBadTagId = badTag?.Id;
+
+        ReactionTagIds reactionIds = ResourceListViewModel.FindReactionTags(_allTags, _currentUserId);
+        _currentUserShinjiTagId = reactionIds.ShinjiTagId;
+        _currentUserZenTagId = reactionIds.ZenTagId;
+        _currentUserBiTagId = reactionIds.BiTagId;
         return true;
     }
 
     public async Task EnsureSystemTagsExistAsync()
     {
-        (SystemTagIds ids, bool refetch) = await SystemTagEnsurer.EnsureAsync(
-            _currentUserId, new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId));
-        _currentUserGoodTagId = ids.GoodTagId;
-        _currentUserBadTagId = ids.BadTagId;
+        (SystemTagIds voteIds, ReactionTagIds reactionIds, bool refetch) = await SystemTagEnsurer.EnsureAllAsync(
+            _currentUserId,
+            new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId),
+            new ReactionTagIds(_currentUserShinjiTagId, _currentUserZenTagId, _currentUserBiTagId));
+
+        _currentUserGoodTagId = voteIds.GoodTagId;
+        _currentUserBadTagId = voteIds.BadTagId;
+        _currentUserShinjiTagId = reactionIds.ShinjiTagId;
+        _currentUserZenTagId = reactionIds.ZenTagId;
+        _currentUserBiTagId = reactionIds.BiTagId;
 
         if (refetch)
         {

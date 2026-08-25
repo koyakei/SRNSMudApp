@@ -472,7 +472,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             {
                 UserCustomTag custom => custom.OwnerId == currentUserId,
                 SystemClassificationTag => true,
-                VotingReactionTag => false
+                VoteTag or ReactionTag => false
             };
 #pragma warning restore CA1508
 

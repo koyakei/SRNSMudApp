@@ -105,7 +105,7 @@ public class ImportTagDataProvider(
 
         // Load existing tags for this user / system
         Dictionary<string, Tag> existingTags = await dbContext.Tags
-            .Where(t => asSystem ? (t.OwnerId == "system" || t.IsSystem) : t.OwnerId == userId)
+            .Where(t => t.OwnerId == effectiveOwnerId)
             .ToDictionaryAsync(t => t.Name, t => t);
 
         var createdCount = 0;

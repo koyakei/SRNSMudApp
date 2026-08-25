@@ -30,6 +30,12 @@ public interface IItemCardDataProvider
     /// <summary>good タグへの投票を追加 / 変更 / 取り消しする。</summary>
     Task<ItemVoteResult> ToggleItemVoteAsync(int itemId, string userId, int goodTagId, int targetWeight);
 
+    /// <summary>リアクションタグ（真実・善・美）への投票（Upvote=+1 / Downvote=-1）を追加 / 変更 / 取り消しする。</summary>
+    Task<ItemVoteResult> ToggleItemReactionAsync(int itemId, string userId, int reactionTagId, int targetWeight);
+
+    /// <summary>指定した名前のシステムリアクションタグを確実に取得または作成する。</summary>
+    Task<Tag> EnsureReactionTagAsync(string userId, string reactionTagName);
+
     Task DeleteItemAsync(int itemId);
 
     /// <summary>オーナー込みでタグを取得する。存在しない場合は null。</summary>
@@ -159,6 +165,80 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         }
                 }
         }
+    }
+
+    public async Task<ItemVoteResult> ToggleItemReactionAsync(
+        int itemId,
+        string userId,
+        int reactionTagId,
+        int targetWeight)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        TagRelation? existingRelation = await context.TagRelations
+            .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == reactionTagId);
+
+        switch (existingRelation)
+        {
+            case null:
+                {
+                    var newRelation = new TagRelation
+                    {
+                        ItemId = itemId,
+                        TagId = reactionTagId,
+                        OwnerId = userId,
+                        Weight = targetWeight,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    };
+                    _ = context.TagRelations.Add(newRelation);
+                    _ = await context.SaveChangesAsync();
+                    return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
+                }
+            default:
+                switch (existingRelation.Weight == targetWeight)
+                {
+                    // 同じ Weight の場合はトグル解除 (Removed)
+                    case true:
+                        {
+                            var prevWeight = existingRelation.Weight;
+                            _ = context.TagRelations.Remove(existingRelation);
+                            _ = await context.SaveChangesAsync();
+                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, prevWeight);
+                        }
+                    // 異なる Weight (+1 -> -1 など) の場合は更新 (Updated)
+                    default:
+                        {
+                            existingRelation.Weight = targetWeight;
+                            existingRelation.UpdatedDate = DateTime.UtcNow;
+                            _ = await context.SaveChangesAsync();
+                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
+                        }
+                }
+        }
+    }
+
+    public async Task<Tag> EnsureReactionTagAsync(string userId, string reactionTagName)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        Tag? tag = await context.Tags.FirstOrDefaultAsync(t =>
+            t.OwnerId == userId && t.Name == reactionTagName && t.IsSystem);
+
+        if (tag is not null)
+        {
+            return tag;
+        }
+
+        tag = new Tag
+        {
+            Name = reactionTagName,
+            IsSystem = true,
+            OwnerId = userId,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+        _ = context.Tags.Add(tag);
+        _ = await context.SaveChangesAsync();
+        return tag;
     }
 
     public async Task DeleteItemAsync(int itemId)

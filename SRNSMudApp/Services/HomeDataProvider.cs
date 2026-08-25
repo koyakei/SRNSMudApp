@@ -10,8 +10,14 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
 
-/// <summary>システムタグ (good/bad) の取得または作成結果。</summary>
-public sealed record SystemTagsResult(int? GoodTagId, int? BadTagId, bool Created);
+/// <summary>システムタグ (good/bad/真実/善/美) の取得または作成結果。</summary>
+public sealed record SystemTagsResult(
+    int? GoodTagId,
+    int? BadTagId,
+    int? ShinjiTagId = null,
+    int? ZenTagId = null,
+    int? BiTagId = null,
+    bool Created = false);
 
 /// <summary>タイムライン 1 ページ分。</summary>
 public sealed record HomeTimelinePage(IReadOnlyList<TimelineFeedGroup> Groups, int TotalCount);
@@ -68,6 +74,12 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "good" && t.IsSystem);
         Tag? badTag =
             await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem);
+        Tag? shinjiTag =
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
+        Tag? zenTag =
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "善" && t.IsSystem);
+        Tag? biTag =
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "美" && t.IsSystem);
 
         var created = false;
         if (goodTag is null)
@@ -98,13 +110,55 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             created = true;
         }
 
+        if (shinjiTag is null)
+        {
+            shinjiTag = new Tag
+            {
+                Name = "真実",
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            _ = context.Tags.Add(shinjiTag);
+            created = true;
+        }
+
+        if (zenTag is null)
+        {
+            zenTag = new Tag
+            {
+                Name = "善",
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            _ = context.Tags.Add(zenTag);
+            created = true;
+        }
+
+        if (biTag is null)
+        {
+            biTag = new Tag
+            {
+                Name = "美",
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            _ = context.Tags.Add(biTag);
+            created = true;
+        }
+
         switch (created)
         {
             case true:
                 _ = await context.SaveChangesAsync();
-                return new SystemTagsResult(null, null, true);
+                return new SystemTagsResult(goodTag.Id, badTag.Id, shinjiTag.Id, zenTag.Id, biTag.Id, true);
             default:
-                return new SystemTagsResult(goodTag!.Id, badTag!.Id, false);
+                return new SystemTagsResult(goodTag!.Id, badTag!.Id, shinjiTag!.Id, zenTag!.Id, biTag!.Id, false);
         }
     }
 

@@ -24,20 +24,25 @@ public class Tag : BaseEntity
     // DataType(DataType.Date) を削除
     public int CachedWeight { get; set; }
 
-    public static readonly IReadOnlySet<string> VotingTagNames =
+    public static readonly IReadOnlySet<string> VoteTagNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "good", "bad" };
+
+    public static readonly IReadOnlySet<string> ReactionTagNames =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "真実", "善", "美" };
 
     public bool IsSystem { get; set; }
 
     /// <summary>
-    ///     タグの種別（VotingReactionTag / SystemClassificationTag / UserCustomTag）を取得する。
+    ///     タグの種別（VoteTag / ReactionTag / SystemClassificationTag / UserCustomTag）を取得する。
     /// </summary>
     public TagKind GetKind() =>
-        VotingTagNames.Contains(Name)
-            ? new VotingReactionTag(Name, OwnerId)
-            : (OwnerId == "system" || IsSystem)
-                ? new SystemClassificationTag(Name)
-                : new UserCustomTag(Name, OwnerId);
+        VoteTagNames.Contains(Name)
+            ? new VoteTag(Name, OwnerId)
+            : ReactionTagNames.Contains(Name)
+                ? new ReactionTag(Name, OwnerId)
+                : (OwnerId == "system" || IsSystem)
+                    ? new SystemClassificationTag(Name)
+                    : new UserCustomTag(Name, OwnerId);
 
     // ReSharper disable once EntityFramework.ModelValidation.UnlimitedStringLength
     public string Content { get; set; } = "";

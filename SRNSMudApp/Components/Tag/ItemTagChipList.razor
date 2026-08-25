@@ -5,7 +5,7 @@
 
 @{
     var allTags = Item.TagRelations?
-        .Where(tr => tr.Tag != null && tr.Tag.GetKind() is not VotingReactionTag)
+        .Where(tr => tr.Tag != null && tr.Tag.GetKind() is not (VoteTag or ReactionTag))
         .OrderByDescending(tr => tr.Weight)
         .ToList() ?? [];
 

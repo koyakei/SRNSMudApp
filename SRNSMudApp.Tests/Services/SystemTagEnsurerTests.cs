@@ -71,5 +71,29 @@ public class SystemTagEnsurerTests
         Assert.Equal(new SystemTagIds(11, 22), ids);
         Assert.False(refetch);
     }
+
+    [Fact]
+    public async Task EnsureAllAsync_WhenReactionTagsMissing_CallsService()
+    {
+        _ = _homeDataMock
+            .Setup(h => h.EnsureSystemTagsAsync(UserId))
+            .ReturnsAsync(new SystemTagsResult(
+                GoodTagId: 1,
+                BadTagId: 2,
+                ShinjiTagId: 3,
+                ZenTagId: 4,
+                BiTagId: 5,
+                Created: false));
+
+        var currentVote = new SystemTagIds(1, 2);
+        var currentReaction = new ReactionTagIds(null, null, null);
+
+        var (voteIds, reactionIds, refetch) = await _ensurer.EnsureAllAsync(UserId, currentVote, currentReaction);
+
+        Assert.Equal(new SystemTagIds(1, 2), voteIds);
+        Assert.Equal(new ReactionTagIds(3, 4, 5), reactionIds);
+        Assert.False(refetch);
+        _homeDataMock.Verify(h => h.EnsureSystemTagsAsync(UserId), Times.Once);
+    }
 }
 

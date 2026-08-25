@@ -91,6 +91,62 @@ public static class ItemCardViewModel
     }
 
     /// <summary>
+    ///     指定したリアクション名（真実 / 善 / 美）のリレーション総スコア（Weight の合計）を計算する。
+    /// </summary>
+    public static int GetReactionScore(IEnumerable<TagRelation>? tagRelations, string reactionTagName)
+    {
+        return tagRelations?
+            .Where(tr => tr.Tag?.Name == reactionTagName)
+            .Sum(tr => tr.Weight) ?? 0;
+    }
+
+    /// <summary>
+    ///     指定したリアクション名（真実 / 善 / 美）のリレーション総数を計算する。
+    /// </summary>
+    public static int GetReactionCount(IEnumerable<TagRelation>? tagRelations, string reactionTagName)
+        => GetReactionScore(tagRelations, reactionTagName);
+
+    /// <summary>
+    ///     現在のユーザーがアイテムに指定リアクションをアップボート済み（Weight > 0）かどうかを返す。
+    /// </summary>
+    public static bool IsItemReactionUpvoted(
+        IEnumerable<TagRelation>? tagRelations,
+        string? currentUserId,
+        int? reactionTagId,
+        string? reactionTagName = null)
+        => !string.IsNullOrEmpty(currentUserId) && tagRelations != null &&
+           tagRelations.Any(tr =>
+               tr.OwnerId == currentUserId &&
+               tr.Weight > 0 &&
+               ((reactionTagId is { } tagId && tr.TagId == tagId) ||
+                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName)));
+
+    /// <summary>
+    ///     現在のユーザーがアイテムに指定リアクションをダウンボート済み（Weight &lt; 0）かどうかを返す。
+    /// </summary>
+    public static bool IsItemReactionDownvoted(
+        IEnumerable<TagRelation>? tagRelations,
+        string? currentUserId,
+        int? reactionTagId,
+        string? reactionTagName = null)
+        => !string.IsNullOrEmpty(currentUserId) && tagRelations != null &&
+           tagRelations.Any(tr =>
+               tr.OwnerId == currentUserId &&
+               tr.Weight < 0 &&
+               ((reactionTagId is { } tagId && tr.TagId == tagId) ||
+                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName)));
+
+    /// <summary>
+    ///     現在のユーザーがアイテムに指定リアクションを付与済みかどうかを返す。
+    /// </summary>
+    public static bool IsItemReacted(
+        IEnumerable<TagRelation>? tagRelations,
+        string? currentUserId,
+        int? reactionTagId,
+        string? reactionTagName = null)
+        => IsItemReactionUpvoted(tagRelations, currentUserId, reactionTagId, reactionTagName);
+
+    /// <summary>
     ///     指定したリレーションを現在のユーザーが変更できるかどうかを返す。
     /// </summary>
     public static bool CanModifyRelation(string? relationOwnerId, string? currentUserId)

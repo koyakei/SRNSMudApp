@@ -56,6 +56,9 @@ public partial class ResourceList : IAsyncDisposable
     // ===== Voting用システムタグ =====
     private int? _currentUserGoodTagId;
     private int? _currentUserBadTagId;
+    private int? _currentUserShinjiTagId;
+    private int? _currentUserZenTagId;
+    private int? _currentUserBiTagId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -78,6 +81,11 @@ public partial class ResourceList : IAsyncDisposable
         SystemTagIds systemTags = ResourceListViewModel.FindSystemTags(_allTags, _currentUserId);
         _currentUserGoodTagId = systemTags.GoodTagId;
         _currentUserBadTagId = systemTags.BadTagId;
+
+        ReactionTagIds reactionTags = ResourceListViewModel.FindReactionTags(_allTags, _currentUserId);
+        _currentUserShinjiTagId = reactionTags.ShinjiTagId;
+        _currentUserZenTagId = reactionTags.ZenTagId;
+        _currentUserBiTagId = reactionTags.BiTagId;
     }
 
     private async Task NotifyChangedAsync()
@@ -171,10 +179,16 @@ public partial class ResourceList : IAsyncDisposable
 
     public async Task EnsureSystemTagsExistAsync()
     {
-        (SystemTagIds ids, var refetch) = await SystemTagEnsurer.EnsureAsync(
-            _currentUserId, new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId));
-        _currentUserGoodTagId = ids.GoodTagId;
-        _currentUserBadTagId = ids.BadTagId;
+        (SystemTagIds voteIds, ReactionTagIds reactionIds, var refetch) = await SystemTagEnsurer.EnsureAllAsync(
+            _currentUserId,
+            new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId),
+            new ReactionTagIds(_currentUserShinjiTagId, _currentUserZenTagId, _currentUserBiTagId));
+
+        _currentUserGoodTagId = voteIds.GoodTagId;
+        _currentUserBadTagId = voteIds.BadTagId;
+        _currentUserShinjiTagId = reactionIds.ShinjiTagId;
+        _currentUserZenTagId = reactionIds.ZenTagId;
+        _currentUserBiTagId = reactionIds.BiTagId;
 
         if (refetch)
         {

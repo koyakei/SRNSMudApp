@@ -52,7 +52,7 @@ public sealed class PageRenderSmokeTests : IAsyncLifetime
         _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
             .ReturnsAsync(([], []));
         _ = _homeDataMock.Setup(d => d.EnsureSystemTagsAsync(UserId))
-            .ReturnsAsync(new SystemTagsResult(1, 2, false));
+            .ReturnsAsync(new SystemTagsResult(GoodTagId: 1, BadTagId: 2, Created: false));
         _ = _homeDataMock.Setup(d => d.LoadTimelineAsync(It.IsAny<System.Collections.Generic.IReadOnlyList<int>>(), It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new HomeTimelinePage([], 0));
 

@@ -104,6 +104,51 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ToggleItemReaction_FirstClick_AddsRelationWithTargetWeight()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+
+            Assert.Equal(ItemVoteAction.Added, result.Action);
+            Assert.Equal(1, result.Weight);
+            TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
+            Assert.Equal(1, relation.Weight);
+        }
+    }
+
+    [Fact]
+    public async Task ToggleItemReaction_OppositeWeight_UpdatesRelation()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
+
+            Assert.Equal(ItemVoteAction.Updated, result.Action);
+            Assert.Equal(-1, result.Weight);
+            TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
+            Assert.Equal(-1, relation.Weight);
+        }
+    }
+
+    [Fact]
+    public async Task ToggleItemReaction_SecondClickSameWeight_RemovesRelation()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+
+            Assert.Equal(ItemVoteAction.Removed, result.Action);
+            Assert.False(await db.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId));
+        }
+    }
+
+    [Fact]
     public async Task CreateItemAsync_WithExistingOwner_DoesNotDuplicateUserAndStoresItem()
     {
         var (db, sut, userId, goodTagId, itemId, tid) = await CreateScopeAsync();

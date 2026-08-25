@@ -107,14 +107,17 @@ public class TagTreePopoverViewModelTests
     }
 
     [Fact]
-    public void BuildTreeLines_WhenVotingReactionTagIncluded_ExcludesVotingReactionTagFromTree()
+    public void BuildTreeLines_WhenVoteTagOrReactionTagIncluded_ExcludesFromTree()
     {
         var tags = new List<Tag>
         {
             CreateTag(1, "root"),
             CreateTag(2, "child", 1),
-            CreateTag(3, "good", 1), // VotingReactionTag
-            CreateTag(4, "bad", 2)   // VotingReactionTag
+            CreateTag(3, "good", 1), // VoteTag
+            CreateTag(4, "bad", 2),  // VoteTag
+            CreateTag(5, "真実", 1),  // ReactionTag
+            CreateTag(6, "善", 2),   // ReactionTag
+            CreateTag(7, "美", 2)    // ReactionTag
         };
         var target = tags[0];
         HashSet<int> expanded = [1, 2];
@@ -122,36 +125,37 @@ public class TagTreePopoverViewModelTests
         var lines = TagTreePopoverViewModel.BuildTreeLines(target, tags, expanded, enableExpand: true);
 
         Assert.Equal([1, 2], lines.Select(l => l.TagId));
-        Assert.DoesNotContain(lines, l => l.Name is "good" or "bad");
+        Assert.DoesNotContain(lines, l => l.Name is "good" or "bad" or "真実" or "善" or "美");
     }
 
     [Fact]
-    public void BuildTreeLines_WhenTargetIsVotingReactionTag_ReturnsEmpty()
+    public void BuildTreeLines_WhenTargetIsVoteTagOrReactionTag_ReturnsEmpty()
     {
         var tags = new List<Tag>
         {
             CreateTag(1, "root"),
-            CreateTag(2, "good", 1) // VotingReactionTag
+            CreateTag(2, "good", 1), // VoteTag
+            CreateTag(3, "真実", 1)   // ReactionTag
         };
-        var target = tags[1];
 
-        var lines = TagTreePopoverViewModel.BuildTreeLines(target, tags, [1, 2], enableExpand: true);
+        var linesVote = TagTreePopoverViewModel.BuildTreeLines(tags[1], tags, [1, 2], enableExpand: true);
+        var linesReaction = TagTreePopoverViewModel.BuildTreeLines(tags[2], tags, [1, 3], enableExpand: true);
 
-        Assert.Empty(lines);
+        Assert.Empty(linesVote);
+        Assert.Empty(linesReaction);
     }
 
     [Fact]
-    public void GetAutoExpandIds_WhenTargetIsVotingReactionTag_ReturnsEmpty()
+    public void GetAutoExpandIds_WhenTargetIsVoteTagOrReactionTag_ReturnsEmpty()
     {
         var tags = new List<Tag>
         {
             CreateTag(1, "root"),
-            CreateTag(2, "good", 1)
+            CreateTag(2, "good", 1),
+            CreateTag(3, "美", 1)
         };
-        var target = tags[1];
 
-        var ids = TagTreePopoverViewModel.GetAutoExpandIds(target, tags);
-
-        Assert.Empty(ids);
+        Assert.Empty(TagTreePopoverViewModel.GetAutoExpandIds(tags[1], tags));
+        Assert.Empty(TagTreePopoverViewModel.GetAutoExpandIds(tags[2], tags));
     }
 }

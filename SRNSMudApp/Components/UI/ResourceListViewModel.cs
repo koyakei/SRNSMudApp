@@ -12,6 +12,13 @@ public readonly record struct SystemTagIds(int? GoodTagId, int? BadTagId)
     public bool IsComplete => GoodTagId.HasValue && BadTagId.HasValue;
 }
 
+/// <summary>現在ユーザーのリアクション用システムタグ ID（真実・善・美）。</summary>
+public readonly record struct ReactionTagIds(int? ShinjiTagId, int? ZenTagId, int? BiTagId)
+{
+    /// <summary>真実・善・美すべてのタグが揃っているかどうか。</summary>
+    public bool IsComplete => ShinjiTagId.HasValue && ZenTagId.HasValue && BiTagId.HasValue;
+}
+
 /// <summary>
 ///     ResourceList コンポーネントに含まれる純粋なロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
@@ -36,6 +43,27 @@ public static class ResourceListViewModel
             t => t.OwnerId == currentUserId && t.Name == "bad" && t.IsSystem);
 
         return new SystemTagIds(goodTag?.Id, badTag?.Id);
+    }
+
+    /// <summary>
+    ///     現在ユーザー所有のリアクション用システムタグ (真実 / 善 / 美) の ID を返す。
+    /// </summary>
+    public static ReactionTagIds FindReactionTags(IEnumerable<Tag>? tags, string? currentUserId)
+    {
+        if (tags == null || string.IsNullOrEmpty(currentUserId))
+        {
+            return default;
+        }
+
+        List<Tag> tagList = [.. tags];
+        var shinjiTag = tagList.FirstOrDefault(
+            t => t.OwnerId == currentUserId && t.Name == "真実" && t.IsSystem);
+        var zenTag = tagList.FirstOrDefault(
+            t => t.OwnerId == currentUserId && t.Name == "善" && t.IsSystem);
+        var biTag = tagList.FirstOrDefault(
+            t => t.OwnerId == currentUserId && t.Name == "美" && t.IsSystem);
+
+        return new ReactionTagIds(shinjiTag?.Id, zenTag?.Id, biTag?.Id);
     }
 
     /// <summary>

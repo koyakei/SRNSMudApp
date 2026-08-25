@@ -1,0 +1,21 @@
+.reaction-bar {
+    flex-wrap: wrap;
+}
+
+.reaction-group {
+    background-color: var(--mud-palette-background-grey, rgba(0, 0, 0, 0.04));
+    border-radius: 9999px;
+    padding: 2px 4px 2px 2px;
+    border: 1px solid var(--mud-palette-lines-default, rgba(0, 0, 0, 0.08));
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reaction-group:hover {
+    border-color: var(--mud-palette-lines-inputs, rgba(0, 0, 0, 0.16));
+}
+
+.reaction-chip {
+    cursor: default;
+    user-select: none;
+    font-size: 0.8rem;
+}

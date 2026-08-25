@@ -68,7 +68,7 @@ public static class ItemTagChipViewModel
             AddedTags =
             [
                 .. (allTagRelationsToTags ?? []).Where(ttr =>
-                    ttr.TargetTagId == tagId && ttr.Tag?.GetKind() is not VotingReactionTag)
+                    ttr.TargetTagId == tagId && ttr.Tag?.GetKind() is not (VoteTag or ReactionTag))
             ]
         };
     }
