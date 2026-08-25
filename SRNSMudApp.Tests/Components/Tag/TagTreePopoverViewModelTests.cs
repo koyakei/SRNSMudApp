@@ -105,4 +105,53 @@ public class TagTreePopoverViewModelTests
 
         Assert.Empty(lines);
     }
+
+    [Fact]
+    public void BuildTreeLines_WhenVotingReactionTagIncluded_ExcludesVotingReactionTagFromTree()
+    {
+        var tags = new List<Tag>
+        {
+            CreateTag(1, "root"),
+            CreateTag(2, "child", 1),
+            CreateTag(3, "good", 1), // VotingReactionTag
+            CreateTag(4, "bad", 2)   // VotingReactionTag
+        };
+        var target = tags[0];
+        HashSet<int> expanded = [1, 2];
+
+        var lines = TagTreePopoverViewModel.BuildTreeLines(target, tags, expanded, enableExpand: true);
+
+        Assert.Equal([1, 2], lines.Select(l => l.TagId));
+        Assert.DoesNotContain(lines, l => l.Name is "good" or "bad");
+    }
+
+    [Fact]
+    public void BuildTreeLines_WhenTargetIsVotingReactionTag_ReturnsEmpty()
+    {
+        var tags = new List<Tag>
+        {
+            CreateTag(1, "root"),
+            CreateTag(2, "good", 1) // VotingReactionTag
+        };
+        var target = tags[1];
+
+        var lines = TagTreePopoverViewModel.BuildTreeLines(target, tags, [1, 2], enableExpand: true);
+
+        Assert.Empty(lines);
+    }
+
+    [Fact]
+    public void GetAutoExpandIds_WhenTargetIsVotingReactionTag_ReturnsEmpty()
+    {
+        var tags = new List<Tag>
+        {
+            CreateTag(1, "root"),
+            CreateTag(2, "good", 1)
+        };
+        var target = tags[1];
+
+        var ids = TagTreePopoverViewModel.GetAutoExpandIds(target, tags);
+
+        Assert.Empty(ids);
+    }
 }

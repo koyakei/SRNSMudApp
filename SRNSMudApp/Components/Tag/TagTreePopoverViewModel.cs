@@ -1,5 +1,10 @@
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
+#region
 
+using SRNSMudApp.Models.Unions;
+
+#endregion
+
+// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 namespace SRNSMudApp.Components.Tag;
 
 using Tag = SRNSMudApp.Data.Tag;
@@ -31,11 +36,17 @@ public static class TagTreePopoverViewModel
     public static HashSet<int> GetAutoExpandIds(Tag targetTag, IReadOnlyList<Tag> allTags)
     {
         HashSet<int> expanded = [];
-        var current = allTags.FirstOrDefault(t => t.Id == targetTag.Id);
+        if (targetTag == null || targetTag.GetKind() is VotingReactionTag)
+        {
+            return expanded;
+        }
+
+        var filteredTags = allTags.Where(t => t.GetKind() is not VotingReactionTag).ToList();
+        var current = filteredTags.FirstOrDefault(t => t.Id == targetTag.Id);
         while (current != null)
         {
             _ = expanded.Add(current.Id);
-            current = allTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
+            current = filteredTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
         }
 
         return expanded;
@@ -55,28 +66,34 @@ public static class TagTreePopoverViewModel
         bool enableExpand)
     {
         var lines = new List<TagTreeLine>();
-        if (targetTag == null || allTags.Count == 0)
+        if (targetTag == null || allTags.Count == 0 || targetTag.GetKind() is VotingReactionTag)
+        {
+            return lines;
+        }
+
+        var filteredTags = allTags.Where(t => t.GetKind() is not VotingReactionTag).ToList();
+        if (filteredTags.Count == 0)
         {
             return lines;
         }
 
         // 対象タグのルート（最上位の祖先）を求める
         var ancestors = new HashSet<int>();
-        var curr = allTags.FirstOrDefault(t => t.Id == (targetTag.ParentTagId != 0 ? targetTag.ParentTagId : -1));
+        var curr = filteredTags.FirstOrDefault(t => t.Id == (targetTag.ParentTagId != 0 ? targetTag.ParentTagId : -1));
         var rootTag = targetTag;
         while (curr != null)
         {
             _ = ancestors.Add(curr.Id);
             rootTag = curr;
-            curr = allTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
+            curr = filteredTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
         }
 
-        var siblings = allTags
+        var siblings = filteredTags
             .Where(t => t.ParentTagId == targetTag.ParentTagId && t.Id != targetTag.Id)
             .Select(t => t.Id)
             .ToHashSet();
 
-        AddTreeLinesRecursive(lines, rootTag, 0, targetTag.Id, ancestors, siblings, allTags, expandedTagIds, enableExpand);
+        AddTreeLinesRecursive(lines, rootTag, 0, targetTag.Id, ancestors, siblings, filteredTags, expandedTagIds, enableExpand);
         return lines;
     }
 
