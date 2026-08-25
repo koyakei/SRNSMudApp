@@ -34,10 +34,7 @@ public class TagEmbeddingServiceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagEmbeddingServiceTests));
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-        _db = new ApplicationDbContext(options);
+        _db = new ApplicationDbContext(_testDb.Options);
 
         var user = new ApplicationUser { Id = "embedding-test-user", UserName = "embedding-test-user" };
         _db.Users.Add(user);

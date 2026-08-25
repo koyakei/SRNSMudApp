@@ -37,22 +37,11 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     public async Task<List<Tag>> LoadTagsAsync()
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-        List<Tag> tags = await context.Tags.Where(t => !t.IsSystem).ToListAsync();
-
-        // 循環参照を検出して解除する（DB上のデータも修復する）
-        IReadOnlyList<Tag> repaired = Components.Tag.TagTreeViewModel.DetectAndBreakCycles(tags);
-        foreach (Tag repairedTag in repaired)
-        {
-            Tag? dbTag = await context.Tags.FindAsync(repairedTag.Id);
-            dbTag?.ParentTagId = null;
-        }
-
-        if (repaired.Count > 0)
-        {
-            _ = await context.SaveChangesAsync();
-        }
-
-        return tags;
+        return await context.Tags
+            .Where(t => !t.IsSystem)
+            .OrderBy(t => t.Node)
+            .AsNoTracking()
+            .ToListAsync();
     }
 
     public async Task<TagTreeDeleteResult> DeleteTagsAsync(string userId, IReadOnlyList<int> selectedIds)
@@ -100,7 +89,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                         context.TagRelationToTags.RemoveRange(relationsToDelete);
                     }
 
-                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（ParentTagId = null）に変更する
+                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（Node = GetRoot(), ParentTagId = null）に変更する
                     List<Tag> orphanedChildren = await context.Tags
                         .Where(t => t.ParentTagId != null &&
                                     authorizedIds.Contains(t.ParentTagId.Value) &&
@@ -110,6 +99,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     foreach (Tag child in orphanedChildren)
                     {
                         child.ParentTagId = null;
+                        child.Node = HierarchyId.GetRoot();
                     }
 
                     // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
@@ -143,6 +133,39 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     public async Task AddTagAsync(Tag tag)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+
+        if (tag.Name != Tag.RootTagName && !tag.ParentTagId.HasValue)
+        {
+            Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+            if (rootTag != null)
+            {
+                tag.ParentTagId = rootTag.Id;
+            }
+        }
+
+        if (tag.ParentTagId.HasValue)
+        {
+            HierarchyId? parentNode = await context.Tags
+                .Where(t => t.Id == tag.ParentTagId.Value)
+                .Select(t => (HierarchyId?)t.Node)
+                .FirstOrDefaultAsync();
+
+            if (parentNode != null)
+            {
+                HierarchyId? lastChild = await context.Tags
+                    .Where(t => t.Node.GetAncestor(1) == parentNode)
+                    .OrderByDescending(t => t.Node)
+                    .Select(t => (HierarchyId?)t.Node)
+                    .FirstOrDefaultAsync();
+
+                tag.Node = parentNode.GetDescendant(lastChild, null);
+            }
+        }
+        else if (tag.Name == Tag.RootTagName)
+        {
+            tag.Node = HierarchyId.GetRoot();
+        }
+
         _ = context.Tags.Add(tag);
         _ = await context.SaveChangesAsync();
     }
@@ -151,15 +174,45 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
-        switch (tagToUpdate)
+        if (tagToUpdate is null)
         {
-            case not null:
-                tagToUpdate.ParentTagId = parentTagId;
-                tagToUpdate.UpdatedDate = DateTime.UtcNow;
-                _ = await context.SaveChangesAsync();
-                return true;
-            default:
-                return false;
+            return false;
         }
+
+        if (!parentTagId.HasValue && tagToUpdate.Name != Tag.RootTagName)
+        {
+            Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+            if (rootTag != null)
+            {
+                parentTagId = rootTag.Id;
+            }
+        }
+
+        var parentNode = HierarchyId.GetRoot();
+        if (parentTagId.HasValue)
+        {
+            HierarchyId? foundParentNode = await context.Tags
+                .Where(t => t.Id == parentTagId.Value)
+                .Select(t => (HierarchyId?)t.Node)
+                .FirstOrDefaultAsync();
+
+            if (foundParentNode != null)
+            {
+                parentNode = foundParentNode;
+            }
+        }
+
+        HierarchyId? lastChild = await context.Tags
+            .Where(t => t.Node.GetAncestor(1) == parentNode)
+            .OrderByDescending(t => t.Node)
+            .Select(t => (HierarchyId?)t.Node)
+            .FirstOrDefaultAsync();
+
+        tagToUpdate.Node = parentNode.GetDescendant(lastChild, null);
+        tagToUpdate.ParentTagId = parentTagId;
+        tagToUpdate.UpdatedDate = DateTime.UtcNow;
+
+        _ = await context.SaveChangesAsync();
+        return true;
     }
 }

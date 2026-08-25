@@ -22,6 +22,7 @@ namespace SRNSMudApp.Components.UI;
 
 using Item = SRNSMudApp.Data.Item;
 using Tag = SRNSMudApp.Data.Tag;
+using SRNSMudApp.Models.Unions;
 
 /// <summary>
 ///     ItemCard のコードビハインド。
@@ -341,7 +342,13 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
-        if (tagFromDb.OwnerId != CurrentUserId)
+        var requiresContract = tagFromDb.GetKind() switch
+        {
+            UserCustomTag custom => custom.OwnerId != CurrentUserId,
+            SystemClassificationTag or VotingReactionTag => false
+        };
+
+        if (requiresContract)
         {
             await ProposeTaggingContractAsync(tagFromDb);
             return;

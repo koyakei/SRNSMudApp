@@ -34,11 +34,7 @@ public class TagWeightLimitTests : IAsyncLifetime
 
     private ApplicationDbContext CreateDbContext()
     {
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
-        return new ApplicationDbContext(options);
+        return new ApplicationDbContext(_testDb.Options);
     }
 
     [Fact]

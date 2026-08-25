@@ -30,11 +30,7 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
 
     private ApplicationDbContext CreateDbContext()
     {
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
-        return new ApplicationDbContext(options);
+        return new ApplicationDbContext(_testDb.Options);
     }
 
     [Fact]
@@ -117,5 +113,50 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
         // ユーザーB（タグのオーナーではない）が実行しようとすると例外が発生すること
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             context.CreateFreeTagRelationAsync(item.Id, tag.Id, otherUserB.Id));
+    }
+
+    [Fact]
+    public async Task CreateFreeTagRelationAsync_ShouldSucceed_WhenTagOwnerIsSystem()
+    {
+        // Arrange
+        await using ApplicationDbContext context = CreateDbContext();
+
+        var systemUser = new ApplicationUser { Id = "system", UserName = "system" };
+        var userB = new ApplicationUser { Id = "userB", UserName = "userB" };
+        context.Users.AddRange(systemUser, userB);
+
+        var item = new Item { Content = "User Item", OwnerId = "userB", Owner = userB };
+        context.Items.Add(item);
+
+        var systemTag = new Tag { Name = "SystemTag", OwnerId = "system", Owner = systemUser, CachedWeight = 50, IsSystem = true };
+        context.Tags.Add(systemTag);
+
+        await context.SaveChangesAsync();
+
+        // Act - userB creates relation with system tag
+        await context.CreateFreeTagRelationAsync(item.Id, systemTag.Id, userB.Id);
+
+        // Assert
+        TagRelation? relation = await context.TagRelations!
+            .FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
+
+        Assert.NotNull(relation);
+        Assert.Equal(1, relation.Weight);
+        Assert.Equal("userB", relation.OwnerId);
+
+        TagWeightLedger? ledger = await context.TagWeightLedgers!
+            .FirstOrDefaultAsync(l => l.TagId == systemTag.Id && l.SourceId == relation.Id);
+
+        Assert.NotNull(ledger);
+        Assert.Equal("userB", ledger.OwnerId);
+        Assert.Equal(1, ledger.Delta);
+        Assert.Equal(50, ledger.PreviousWeight);
+        Assert.Equal(51, ledger.NewWeight);
+        Assert.True(ledger.IsOwnerAction);
+        Assert.Equal("System Tag Tagging", ledger.Reason);
+
+        Tag? updatedTag = await context.Tags!.FindAsync(systemTag.Id);
+        Assert.NotNull(updatedTag);
+        Assert.Equal(51, updatedTag.CachedWeight);
     }
 }

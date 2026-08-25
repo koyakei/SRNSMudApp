@@ -42,7 +42,7 @@ public class RequireConfirmedAccountTests : IAsyncLifetime
         _ = _ctx.Services.AddLogging();
 
         _ = _ctx.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(_testDb.ConnectionString), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
+            options.UseSqlServer(_testDb.ConnectionString, sqlOptions => sqlOptions.UseHierarchyId()), ServiceLifetime.Scoped, ServiceLifetime.Singleton);
 
         _ = _ctx.Services.AddIdentityCore<ApplicationUser>()
             .AddRoles<IdentityRole>()

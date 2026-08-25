@@ -1,17 +1,12 @@
-using System.Security.Claims;
-
 using AngleSharp.Dom;
 
 using Bunit;
 
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
-
-using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
 using SRNSMudApp.Data;
@@ -22,24 +17,17 @@ using Xunit;
 namespace SRNSMudApp.Tests.Components.User;
 
 [Collection(MsSqlCollection.Name)]
-public class UserManagementTests : IAsyncLifetime
+public class UserManagementTests(MsSqlContainerFixture fixture) : IAsyncLifetime
 {
-    private readonly MsSqlContainerFixture _fixture;
     private MsSqlTestDatabase _testDb = null!;
     private readonly BunitContext _ctx = new();
 
-    public UserManagementTests(MsSqlContainerFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     public async Task InitializeAsync()
     {
-        _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(UserManagementTests));
+        _testDb = await MsSqlTestDatabase.CreateAsync(fixture.ConnectionString, nameof(UserManagementTests));
 
-        _ = _ctx.Services.AddAuth("test-user-id", "Admin");
-        _ = _ctx.Services.AddSrnsComponentServices();
-
+        _ctx.Services.AddAuth("test-user-id", "Admin");
+        _ctx.Services.AddSrnsComponentServices();
         _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -60,11 +48,14 @@ public class UserManagementTests : IAsyncLifetime
         var userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!,
             null!, null!, null!, null!);
 
-        // Mock IsInRoleAsync to initially return false
+        // Mock IsInRoleAsync to initially return false for all users
         _ = userManagerMock.Setup(u => u.IsInRoleAsync(It.IsAny<ApplicationUser>(), "Admin")).ReturnsAsync(false);
-        // Mock FindByIdAsync
-        _ = userManagerMock.Setup(u => u.FindByIdAsync("user1"))
-            .ReturnsAsync(new ApplicationUser { Id = "user1", UserName = "testuser@example.com" });
+        // Mock FindByIdAsync for the target user
+        var targetUser = new ApplicationUser { Id = "user1", UserName = "testuser@example.com" };
+        _ = userManagerMock.Setup(u => u.FindByIdAsync("user1")).ReturnsAsync(targetUser);
+        // Mock FindByIdAsync for system_root (seeded by MsSqlTestDatabase) to avoid null early-return
+        _ = userManagerMock.Setup(u => u.FindByIdAsync("system_root"))
+            .ReturnsAsync(new ApplicationUser { Id = "system_root", UserName = "system_root" });
         // Mock AddToRoleAsync
         _ = userManagerMock.Setup(u => u.AddToRoleAsync(It.IsAny<ApplicationUser>(), "Admin"))
             .ReturnsAsync(IdentityResult.Success);
@@ -95,12 +86,17 @@ public class UserManagementTests : IAsyncLifetime
         // Assert: user is in the table
         Assert.Contains("testuser@example.com", component.Markup);
 
-        // Act: find the switch and toggle it to true
-        // MudSwitch uses an input type="checkbox"
-        IElement mudSwitch = component.Find("input[type=\"checkbox\"]");
-        mudSwitch.Change(true); // Toggle to true
+        // Act: testuser@example.com の行を特定し、その行の MudSwitch (checkbox) を操作する。
+        // system_root もテーブルに表示されるため Find("input[type=checkbox]") で先頭を取ると
+        // system_root の行を操作してしまう可能性がある。Closest で行を絞り込む。
+        IElement targetRow = component
+            .FindAll("td")
+            .First(td => td.TextContent.Contains("testuser@example.com"))
+            .Closest("tr")!;
+        IElement mudSwitch = targetRow.QuerySelector("input[type='checkbox']")!;
+        mudSwitch.Change(true);
 
-        // Assert: AddToRoleAsync should have been called
+        // Assert: AddToRoleAsync should have been called exactly once for the target user
         component.WaitForAssertion(() => userManagerMock.Verify(u => u.AddToRoleAsync(It.IsAny<ApplicationUser>(), "Admin"), Times.Once));
     }
 }

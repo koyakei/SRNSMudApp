@@ -57,7 +57,11 @@ public static class TagTreeViewModel
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
     public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Tag> filteredTags)
     {
-        IReadOnlyCollection<Tag> tagList = filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags];
+        return BuildTreeDataInternal(parentId, filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags], []);
+    }
+
+    private static IReadOnlyList<object> BuildTreeDataInternal(int? parentId, IReadOnlyCollection<Tag> tagList, HashSet<int> visitedInPath)
+    {
         List<object> result = [];
         List<Tag> children;
 
@@ -69,19 +73,25 @@ public static class TagTreeViewModel
                     children =
                     [
                         .. tagList
-                        .Where(t => t.ParentTagId == null || !allFilteredIds.Contains(t.ParentTagId.Value))
+                        .Where(t => t.ParentTagId == null || t.ParentTagId == t.Id || !allFilteredIds.Contains(t.ParentTagId.Value))
                         .OrderBy(t => t.Name)
                     ];
                     break;
                 }
             default:
-                children = [.. tagList.Where(t => t.ParentTagId == parentId).OrderBy(t => t.Name)];
+                children = [.. tagList.Where(t => t.ParentTagId == parentId && t.ParentTagId != t.Id).OrderBy(t => t.Name)];
                 break;
         }
 
         foreach (Tag child in children)
         {
-            IReadOnlyList<object> nodeChildren = BuildTreeData(child.Id, tagList);
+            if (visitedInPath.Contains(child.Id))
+            {
+                continue;
+            }
+
+            var nextVisited = new HashSet<int>(visitedInPath) { child.Id };
+            IReadOnlyList<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, nextVisited);
             switch (nodeChildren.Count)
             {
                 case 0:

@@ -1,5 +1,6 @@
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Components.Tag;
 
@@ -45,6 +46,9 @@ public static class ItemTagChipViewModel
         var isMyTag = relation.OwnerId == currentUserId;
         var hasHighlight = highlightEvent != null;
 
+        var ownerUserName = relation.Tag?.Owner?.UserName ??
+            (relation.Tag?.GetKind() is SystemClassificationTag ? "system" : null);
+
         return new ItemTagChipDisplay
         {
             TagId = tagId,
@@ -55,7 +59,7 @@ public static class ItemTagChipViewModel
             FontWeight = hasHighlight ? "bold" : "normal",
             WeightIncreased = highlightEvent != null && highlightEvent.NewWeight > highlightEvent.PreviousWeight,
             TagName = showNameAndOwner ? relation.Tag?.Name ?? "不明" : null,
-            OwnerName = showNameAndOwner ? ItemCardViewModel.GetShortOwnerName(relation.Tag?.Owner?.UserName) : null,
+            OwnerName = showNameAndOwner ? ItemCardViewModel.GetShortOwnerName(ownerUserName) : null,
             ChipId = $"tag-chip-{itemId}-{tagId}",
             DisplayWeight = GetDisplayWeight(isDeleted, isUpdated, highlightEvent, relation.Weight),
             AddButtonColor = (highlightEvent != null && highlightEvent.NewWeight > highlightEvent.PreviousWeight)
@@ -64,7 +68,7 @@ public static class ItemTagChipViewModel
             AddedTags =
             [
                 .. allTagRelationsToTags.Where(ttr =>
-                    ttr.TargetTagId == tagId && ttr.Tag is { IsSystem: false })
+                    ttr.TargetTagId == tagId && ttr.Tag?.GetKind() is not VotingReactionTag)
             ]
         };
     }

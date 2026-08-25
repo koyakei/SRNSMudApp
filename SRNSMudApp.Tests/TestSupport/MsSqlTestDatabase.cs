@@ -39,13 +39,47 @@ public sealed class MsSqlTestDatabase : IAsyncDisposable
         var dbConnectionString = builder.ConnectionString;
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(dbConnectionString)
+            .UseSqlServer(dbConnectionString, sqlOptions => sqlOptions.UseHierarchyId())
             .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         await using (var context = new ApplicationDbContext(options))
         {
             await context.Database.MigrateAsync();
+
+            var systemUser = await context.Users.FindAsync("system_root");
+            if (systemUser is null)
+            {
+                systemUser = new ApplicationUser
+                {
+                    Id = "system_root",
+                    UserName = "system_root",
+                    NormalizedUserName = "SYSTEM_ROOT",
+                    Email = "system_root@example.com",
+                    NormalizedEmail = "SYSTEM_ROOT@EXAMPLE.COM",
+                    EmailConfirmed = true,
+                    SecurityStamp = Guid.NewGuid().ToString()
+                };
+                _ = context.Users.Add(systemUser);
+                _ = await context.SaveChangesAsync();
+            }
+
+            if (!await context.Tags.AnyAsync(t => t.Name == Tag.RootTagName))
+            {
+                var rootTag = new Tag
+                {
+                    Name = Tag.RootTagName,
+                    Content = "全てのタグの頂点となるルートタグ",
+                    IsSystem = true,
+                    OwnerId = systemUser.Id,
+                    Node = HierarchyId.GetRoot(),
+                    ParentTagId = null,
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                };
+                _ = context.Tags.Add(rootTag);
+                _ = await context.SaveChangesAsync();
+            }
         }
 
         return new MsSqlTestDatabase(containerConnectionString, databaseName, dbConnectionString, options);

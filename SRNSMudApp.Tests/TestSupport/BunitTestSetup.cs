@@ -72,9 +72,14 @@ public static class BunitTestSetup
     /// <summary>
     ///     認証テスト用の <see cref="AuthenticationState" /> を生成する。
     /// </summary>
-    public static AuthenticationState CreateAuthState(string userId)
+    public static AuthenticationState CreateAuthState(string userId, params string[] roles)
     {
-        Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
+        Claim[] claims =
+        [
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Name, userId),
+            ..roles.Select(r => new Claim(ClaimTypes.Role, r))
+        ];
         ClaimsIdentity identity = new(claims, "TestAuthType");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
@@ -112,13 +117,13 @@ public static class BunitTestSetup
     public static IServiceCollection AddMsSqlDbFactory(this IServiceCollection services, string connectionString)
     {
         _ = services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(connectionString)
+            options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId())
                    .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)),
             ServiceLifetime.Scoped,
             ServiceLifetime.Singleton);
 
         return services.AddDbContextFactory<ApplicationDbContext>(options =>
-            options.UseSqlServer(connectionString)
+            options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId())
                    .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
     }
 }

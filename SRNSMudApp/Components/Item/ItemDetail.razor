@@ -1,3 +1,6 @@
+@page "/ItemDetail/{ItemId:int}"
+@using SRNSMudApp.Data
+
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
     @* ページ状態の描画は AsyncPageView (RenderFragment 差し替え) に委譲する (mainRules: 条件文回避) *@
     <SRNSMudApp.Components.UI.AsyncPageView T="ItemDetailData" State="_pageState">

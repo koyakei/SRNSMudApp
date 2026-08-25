@@ -46,12 +46,42 @@ public interface IItemListDataProvider
 
     /// <summary>エクスポートに必要な生データを取得する。</summary>
     Task<ItemListExportData> LoadExportDataAsync(IReadOnlyList<int> itemIds);
+
+    /// <summary>
+    /// 祖先タグIDを指定して、そのタグおよびすべての子孫タグが付与された Item を取得する。
+    /// IsDescendantOf を使った IQueryable ベースのクエリ。N+1 を発生させない。
+    /// </summary>
+    Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId);
 }
 
 public class ItemListDataProvider(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ITagEmbeddingService tagEmbeddingService) : IItemListDataProvider
 {
+    public async Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId)
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+
+        HierarchyId? ancestorNode = await context.Tags
+            .Where(t => t.Id == ancestorTagId)
+            .Select(t => (HierarchyId?)t.Node)
+            .FirstOrDefaultAsync();
+
+        if (ancestorNode is null)
+        {
+            return [];
+        }
+
+        return await context.Items
+            .AsNoTracking()
+            .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+            .Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(ancestorNode)))
+            .OrderByDescending(i => i.UpdatedDate)
+            .ToListAsync();
+    }
+
     public async Task<Dictionary<int, Tag>> GetTagsByIdsAsync(IEnumerable<int> tagIds)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();

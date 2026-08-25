@@ -20,21 +20,25 @@ namespace SRNSMudApp.Services;
 /// </summary>
 public interface IImportTagDataProvider
 {
-    /// <summary>ログインユーザー所有のタグを、テキスト + ベクトル類似度で検索する。</summary>
+    /// <summary>ログインユーザー所有のタグおよびシステムタグを、テキスト + ベクトル類似度で検索する。</summary>
     Task<IReadOnlyList<Tag>> SearchUserTagsAsync(string userId, string? value, CancellationToken token = default);
 
     /// <summary>
     ///     CSV の各行 (カンマ区切りのタグ名階層) を親タグ配下にインポートする。
     /// </summary>
+    /// <param name="userId">実行ユーザーID。</param>
+    /// <param name="selectedParentTagName">親タグ名。</param>
+    /// <param name="csvContent">CSVデータ。</param>
+    /// <param name="asSystem">true の場合、システムタグ（Owner: "system", IsSystem: true）としてインポートする。</param>
     /// <returns>新規作成されたタグ数。</returns>
-    Task<int> ImportCsvTagsAsync(string userId, string selectedParentTagName, string csvContent);
+    Task<int> ImportCsvTagsAsync(string userId, string selectedParentTagName, string csvContent, bool asSystem = false);
 }
 
 public class ImportTagDataProvider(
     IDbContextFactory<ApplicationDbContext> dbContextFactory,
     ITagEmbeddingService tagEmbeddingService) : IImportTagDataProvider
 {
-    private static readonly Regex TagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F]+$");
+    private static readonly Regex TagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$");
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
@@ -44,7 +48,9 @@ public class ImportTagDataProvider(
         CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync(token);
-        IQueryable<Tag> query = dbContext.Tags.Where(t => t.OwnerId == userId).AsQueryable();
+        IQueryable<Tag> query = dbContext.Tags
+            .Where(t => t.OwnerId == userId || t.IsSystem || t.OwnerId == "system")
+            .AsQueryable();
 
         if (string.IsNullOrEmpty(value))
         {
@@ -88,15 +94,18 @@ public class ImportTagDataProvider(
     public async Task<int> ImportCsvTagsAsync(
         string userId,
         string selectedParentTagName,
-        string csvContent)
+        string csvContent,
+        bool asSystem = false)
     {
         await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         var lines = csvContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
 
-        // Load existing tags for this user
+        var effectiveOwnerId = asSystem ? "system" : userId;
+
+        // Load existing tags for this user / system
         Dictionary<string, Tag> existingTags = await dbContext.Tags
-            .Where(t => t.OwnerId == userId)
+            .Where(t => asSystem ? (t.OwnerId == "system" || t.IsSystem) : t.OwnerId == userId)
             .ToDictionaryAsync(t => t.Name, t => t);
 
         var createdCount = 0;
@@ -111,6 +120,12 @@ public class ImportTagDataProvider(
             if (existingTags.TryGetValue(selectedParentTagName, out Tag? trackedBaseTag))
             {
                 baseParentTag = trackedBaseTag;
+            }
+            else
+            {
+                baseParentTag = await dbContext.Tags.FirstOrDefaultAsync(t =>
+                    (t.OwnerId == userId || t.IsSystem || t.OwnerId == "system") && t.Name == selectedParentTagName)
+                    ?? await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
             }
 
             foreach (var line in lines)
@@ -140,8 +155,12 @@ public class ImportTagDataProvider(
                             var newTag = new Tag
                             {
                                 Name = tagName,
-                                OwnerId = userId,
-                                ParentTag = currentParentTag,
+                                OwnerId = effectiveOwnerId,
+                                IsSystem = asSystem,
+                                ParentTagId = currentParentTag?.Id,
+                                Node = currentParentTag == null
+                                    ? HierarchyId.GetRoot()
+                                    : currentParentTag.Node.GetDescendant(null, null),
                                 CreatedDate = DateTime.UtcNow,
                                 UpdatedDate = DateTime.UtcNow
                             };
@@ -157,6 +176,7 @@ public class ImportTagDataProvider(
                             }
 
                             _ = dbContext.Tags.Add(newTag);
+                            _ = await dbContext.SaveChangesAsync();
 
                             existingTags[tagName] = newTag;
                             currentParentTag = newTag;
@@ -165,12 +185,13 @@ public class ImportTagDataProvider(
                         }
                     }
 
-                    if (currentParentTag != null && !ReferenceEquals(tag.ParentTag, currentParentTag))
+                    if (currentParentTag != null && tag.ParentTagId != currentParentTag.Id)
                     {
                         // Avoid circular reference
                         if (!IsDescendantOrSelf(tag, currentParentTag!))
                         {
-                            tag.ParentTag = currentParentTag;
+                            tag.ParentTagId = currentParentTag.Id;
+                            tag.Node = currentParentTag.Node.GetDescendant(null, null);
                         }
                     }
 
@@ -192,22 +213,11 @@ public class ImportTagDataProvider(
 
     private static bool IsDescendantOrSelf(Tag parent, Tag target)
     {
-        if (ReferenceEquals(parent, target))
+        if (ReferenceEquals(parent, target) || parent.Id == target.Id)
         {
             return true;
         }
 
-        Tag? current = target;
-        while (current?.ParentTag != null)
-        {
-            if (ReferenceEquals(current.ParentTag, parent))
-            {
-                return true;
-            }
-
-            current = current.ParentTag;
-        }
-
-        return false;
+        return target.Node.IsDescendantOf(parent.Node);
     }
 }

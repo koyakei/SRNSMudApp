@@ -1,10 +1,11 @@
 @using SRNSMudApp.Data
 @using SRNSMudApp.Components.Tag
+@using SRNSMudApp.Models.Unions
 @using MudBlazor
 
 @{
     var allTags = Item.TagRelations?
-        .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+        .Where(tr => tr.Tag != null && tr.Tag.GetKind() is not VotingReactionTag)
         .OrderByDescending(tr => tr.Weight)
         .ToList() ?? [];
 

@@ -136,7 +136,7 @@ public class ItemTagChipViewModelTests
     }
 
     [Fact]
-    public void GetDisplay_FiltersAddedTags_ExcludesSystemAndOtherTargets()
+    public void GetDisplay_FiltersAddedTags_ExcludesVotingTagsAndOtherTargets()
     {
         var relation = CreateRelation(tagId: 10);
         List<TagRelationToTag> all =
@@ -149,7 +149,7 @@ public class ItemTagChipViewModelTests
                 TagId = 40,
                 TargetTagId = 10,
                 OwnerId = "u",
-                Tag = new Tag { Id = 40, Name = "Sys", IsSystem = true, OwnerId = "u" }
+                Tag = new Tag { Id = 40, Name = "good", IsSystem = true, OwnerId = "u" }
             }
         ];
 
@@ -158,5 +158,26 @@ public class ItemTagChipViewModelTests
 
         TagRelationToTag added = Assert.Single(display.AddedTags);
         Assert.Equal(20, added.TagId);
+    }
+
+    [Fact]
+    public void GetDisplay_ForSystemClassificationTag_DisplaysSystemOwnerName()
+    {
+        var systemTag = new Tag { Id = 50, Name = "SystemCategory", OwnerId = "system", IsSystem = true };
+        var relation = new TagRelation
+        {
+            Id = 1,
+            ItemId = 1,
+            TagId = 50,
+            OwnerId = "user-1",
+            Weight = 3,
+            Tag = systemTag
+        };
+
+        var display = ItemTagChipViewModel.GetDisplay(
+            relation, 1, "user-1", null, 0, Backgrounds, TextColors, true, NoAddedTags);
+
+        Assert.Equal("system", display.OwnerName);
+        Assert.Equal("SystemCategory", display.TagName);
     }
 }

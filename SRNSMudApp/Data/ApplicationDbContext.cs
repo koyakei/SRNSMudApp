@@ -58,15 +58,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(t => t.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Node (hierarchyid) のインデックス設定
         _ = builder.Entity<Tag>()
-            .HasOne(t => t.ParentTag)
-            .WithMany()
-            .HasForeignKey(t => t.ParentTagId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .HasIndex(t => t.Node)
+            .HasDatabaseName("IX_Tags_Node");
 
         _ = builder.Entity<Tag>()
             .HasIndex(t => new { t.OwnerId, t.Name })
             .IsUnique();
+
+        _ = builder.Entity<Tag>()
+            .ToTable(t => t.HasCheckConstraint(
+                "CK_Tags_RootOnlyForUniversalTag",
+                "[Name] = N'全て∀' OR [Node] <> hierarchyid::GetRoot()"));
 
         var embeddingComparer = new ValueComparer<float[]>(
             (c1, c2) => c1 != null && c2 != null ? Enumerable.SequenceEqual(c1, c2) : c1 == c2,
@@ -263,6 +267,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         UpdateTimestamps();
+        ValidateRootTagConstraint();
         await EnforceTagWeightLimitsAsync(cancellationToken);
         return await base.SaveChangesAsync(cancellationToken);
     }
@@ -460,9 +465,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         try
         {
-            // 1. Tag のオーナー権限検証
+            // 1. Tag のオーナー権限検証 (SystemClassificationTag は誰でも無償付与可能、UserCustomTag は本人のみ)
             Tag tag = await Tags.FindAsync(tagId) ?? throw new InvalidOperationException("指定されたタグが見つかりません。");
-            if (tag.OwnerId != currentUserId)
+#pragma warning disable CA1508
+            var isAuthorized = tag.GetKind() switch
+            {
+                UserCustomTag custom => custom.OwnerId == currentUserId,
+                SystemClassificationTag => true,
+                VotingReactionTag => false
+            };
+#pragma warning restore CA1508
+
+            if (!isAuthorized)
             {
                 throw new UnauthorizedAccessException("このタグを無償で付与する権限がありません（タグのオーナーではありません）。");
             }
@@ -496,6 +510,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             var newWeight = tag.CachedWeight;
 
             // 5. 元帳 (Ledger) への記帳
+            var isSystemTag = tag.GetKind() is SystemClassificationTag;
             var ledger = new TagWeightLedger
             {
                 TagId = tagId,
@@ -506,8 +521,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 Delta = 1,
                 PreviousWeight = previousWeight,
                 NewWeight = newWeight,
-                IsOwnerAction = true,
-                Reason = "Owner Self-Tagging",
+                IsOwnerAction = !isSystemTag || tag.OwnerId == currentUserId,
+                Reason = isSystemTag ? "System Classification Tagging" : "Owner Self-Tagging",
                 OwnerId = currentUserId
             };
             _ = TagWeightLedgers.Add(ledger);
@@ -528,6 +543,73 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             await transaction.RollbackAsync();
             throw;
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ValidateRootTagConstraint();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateRootTagConstraint();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void ValidateRootTagConstraint()
+    {
+        Tag? rootTag = null;
+        HierarchyId? rootNode = null;
+        var rootTagId = 0;
+
+        foreach (EntityEntry<Tag> entry in ChangeTracker.Entries<Tag>())
+        {
+            if (entry.State is EntityState.Added)
+            {
+                if (entry.Entity.Name == Tag.RootTagName)
+                {
+                    entry.Entity.Node = HierarchyId.GetRoot();
+                    entry.Entity.ParentTagId = null;
+                    continue;
+                }
+
+                if (entry.Entity.Node == HierarchyId.GetRoot())
+                {
+                    if (rootTag is null && rootNode is null)
+                    {
+                        rootTag = Tags.Local.FirstOrDefault(t => t.Name == Tag.RootTagName)
+                                  ?? Tags.FirstOrDefault(t => t.Name == Tag.RootTagName);
+                        if (rootTag != null)
+                        {
+                            rootTagId = rootTag.Id;
+                            rootNode = rootTag.Node;
+                        }
+                    }
+
+                    if (rootNode != null)
+                    {
+                        if (!entry.Entity.ParentTagId.HasValue && rootTagId != 0)
+                        {
+                            entry.Entity.ParentTagId = rootTagId;
+                        }
+
+                        entry.Entity.Node = rootNode.GetDescendant(null, null);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
+                    }
+                }
+            }
+            else if (entry.State is EntityState.Modified)
+            {
+                if (entry.Entity.Name != Tag.RootTagName && entry.Entity.Node == HierarchyId.GetRoot())
+                {
+                    throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
+                }
+            }
         }
     }
 }

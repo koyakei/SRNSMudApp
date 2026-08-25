@@ -57,6 +57,33 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
             return TypedResults.LocalRedirect($"~/{returnUrl}");
         });
 
+        _ = accountGroup.MapPost("/MakeMeAdmin", async (
+            HttpContext context,
+            [FromServices] UserManager<ApplicationUser> userManager,
+            [FromServices] SignInManager<ApplicationUser> signInManager,
+            [FromServices] IWebHostEnvironment env,
+            [FromForm] string? returnUrl) =>
+        {
+            if (!env.IsDevelopment())
+            {
+                return Results.Forbid();
+            }
+
+            ApplicationUser? user = await userManager.GetUserAsync(context.User);
+            if (user is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!await userManager.IsInRoleAsync(user, "Admin"))
+            {
+                _ = await userManager.AddToRoleAsync(user, "Admin");
+            }
+
+            await signInManager.RefreshSignInAsync(user);
+            return TypedResults.LocalRedirect(string.IsNullOrEmpty(returnUrl) ? "~/" : $"~/{returnUrl}");
+        }).RequireAuthorization();
+
         _ = accountGroup.MapPost("/PasskeyCreationOptions", async (
             HttpContext context,
             [FromServices] UserManager<ApplicationUser> userManager,

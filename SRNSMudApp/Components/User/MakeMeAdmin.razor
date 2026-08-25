@@ -1,10 +1,6 @@
 @page "/User/MakeMeAdmin"
-@attribute [Authorize(Roles = "Admin")]
-@using System.Security.Claims
-@using Microsoft.AspNetCore.Identity
+@attribute [Authorize]
 @rendermode InteractiveServer
-@inject UserManager<ApplicationUser> UserManager
-@inject ISnackbar Snackbar
 @inject IWebHostEnvironment Env
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
@@ -17,84 +13,15 @@
             break;
         case true:
             <MudText Class="mb-4">
-                開発用機能です。現在のログインユーザーに「Admin」ロールを付与します。
+                開発用機能です。現在のログインユーザーに「Admin」ロールを付与し、セッション（Cookie）を即時更新します。
             </MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@GrantAdminAsync" Disabled="@_isLoading">
-                @switch (_isLoading)
-                {
-                    case true:
-                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                        <MudText Class="ms-2">処理中...</MudText>
-                        break;
-                    case false:
-                        <MudText>自分をAdminにする</MudText>
-                        break;
-                }
-            </MudButton>
+            <form action="Account/MakeMeAdmin" method="post">
+                <AntiforgeryToken/>
+                <input type="hidden" name="returnUrl" value="Tag/AddTag"/>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                    自分をAdminにして AddTag を開く
+                </MudButton>
+            </form>
             break;
     }
 </MudContainer>
-
-@code {
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-
-    private bool _isLoading;
-
-    private async Task GrantAdminAsync()
-    {
-        switch (Env.IsDevelopment())
-        {
-            case false: return;
-        }
-
-        _isLoading = true;
-        try
-        {
-            var authState = await AuthState!;
-            var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            switch (string.IsNullOrEmpty(userId))
-            {
-                case true:
-                    Snackbar.Add("ログインしていません。", Severity.Warning);
-                    return;
-            }
-
-            var user = await UserManager.FindByIdAsync(userId);
-            switch (user)
-            {
-                case null:
-                    Snackbar.Add("ユーザーが見つかりません。", Severity.Error);
-                    return;
-            }
-
-            var result = await UserManager.AddToRoleAsync(user, "Admin");
-            switch (result.Succeeded)
-            {
-                case true:
-                    Snackbar.Add("Adminロールを付与しました！再ログインすると反映されます。", Severity.Success);
-                    break;
-                case false:
-                    switch (result.Errors.Any(e => e.Code == "UserAlreadyInRole"))
-                    {
-                        case true:
-                            Snackbar.Add("既にAdminロールを持っています。", Severity.Info);
-                            break;
-                        case false:
-                            Snackbar.Add("権限付与に失敗しました: " + string.Join(", ", result.Errors.Select(e => e.Description)), Severity.Error);
-                            break;
-                    }
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
-
-}

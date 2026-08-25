@@ -27,15 +27,11 @@ public class ItemTagServiceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(ItemTagServiceTests));
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
-        _dbContext = new ApplicationDbContext(options);
+        _dbContext = new ApplicationDbContext(_testDb.Options);
 
         var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
         mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => new ApplicationDbContext(options));
+            .ReturnsAsync(() => new ApplicationDbContext(_testDb.Options));
 
         _service = new ItemTagService(mockDbFactory.Object);
     }
@@ -116,6 +112,32 @@ public class ItemTagServiceTests : IAsyncLifetime
         Assert.Equal(5, ledger.PreviousWeight);
         Assert.Equal(6, ledger.NewWeight);
         Assert.Equal(1, ledger.Delta);
+    }
+
+    [Fact]
+    public async Task AddTagToItemAsync_ShouldSucceed_WhenTagIsOwnedBySystem()
+    {
+        var systemUserId = "system";
+        var normalUserId = "UserB";
+        _dbContext.Users.AddRange(
+            new ApplicationUser { Id = systemUserId, UserName = "system" },
+            new ApplicationUser { Id = normalUserId, UserName = "UserB" });
+
+        var item = new Item { Content = "UserItem", OwnerId = normalUserId };
+        _dbContext.Items.Add(item);
+        var systemTag = new Tag { Name = "SystemTag", OwnerId = systemUserId, CachedWeight = 10, IsSystem = true };
+        _dbContext.Tags.Add(systemTag);
+        await _dbContext.SaveChangesAsync();
+
+        var result = await _service.AddTagToItemAsync(item.Id, systemTag.Id, normalUserId);
+
+        Assert.Null(result);
+        Tag? updatedTag = await _dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == systemTag.Id);
+        Assert.Equal(11, updatedTag!.CachedWeight);
+
+        TagRelation? relation = await _dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
+        Assert.NotNull(relation);
+        Assert.Equal(normalUserId, relation.OwnerId);
     }
 
     [Fact]

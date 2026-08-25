@@ -66,7 +66,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return await (tagOption switch
         {
             None => Task.FromResult<string?>("タグが見つかりません。"),
-            Some<Tag> someTag => CheckAuth(someTag.Value.OwnerId == currentUserId, "タグの作成者ではないため、追加する権限がありません。") switch
+            Some<Tag> someTag => CheckAuth(someTag.Value.GetKind() is not UserCustomTag custom || custom.OwnerId == currentUserId, "タグの作成者ではないため、追加する権限がありません。") switch
             {
                 OperationUnauthorized unauth => Task.FromResult<string?>(unauth.Reason),
                 OperationAuthorized => ProcessAddTagRelation(context, itemId, tagId, currentUserId, someTag.Value)

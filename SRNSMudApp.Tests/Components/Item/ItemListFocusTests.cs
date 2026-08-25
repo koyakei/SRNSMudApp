@@ -90,10 +90,13 @@ public class ItemListFocusTests(MsSqlContainerFixture fixture) : IAsyncLifetime
         cut.Find($"#item-card-{firstItemId}").Click();
 
         // Assert: フォーカススタイルが適用される
-        IElement card = cut.Find($"#item-card-{firstItemId}");
-        var style = card.GetAttribute("style") ?? "";
-        Assert.Contains("border-width: 2px", style);
-        Assert.Contains("var(--mud-palette-primary)", style);
+        cut.WaitForAssertion(() =>
+        {
+            IElement card = cut.Find($"#item-card-{firstItemId}");
+            var style = card.GetAttribute("style") ?? "";
+            Assert.Contains("border-width: 2px", style);
+            Assert.Contains("var(--mud-palette-primary)", style);
+        });
 
         // Assert: URLが更新される
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();

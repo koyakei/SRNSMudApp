@@ -125,12 +125,12 @@ if (!builder.Environment.IsEnvironment("Testing"))
                            throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
     _ = builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(connectionString),
+            options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId()),
         ServiceLifetime.Scoped, // DbContext 自体は今まで通り Scoped (Identity用)
         ServiceLifetime.Singleton); // 設定情報(Options)を Singleton に変更 (Factory用)
 
     _ = builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-        options.UseSqlServer(connectionString));
+        options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId()));
 }
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -157,34 +157,64 @@ builder.Services.AddSingleton<ITagEmbeddingService, TagEmbeddingService>();
 
 WebApplication app = builder.Build();
 
-// Seed Admin Role
+// Seed Admin Role and Root Tag
 using (IServiceScope scope = app.Services.CreateScope())
 {
-    if (app.Environment.IsEnvironment("Testing"))
-    {
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-#pragma warning disable CA1031, RCS1075
-        try
-        {
-            await db.Database.MigrateAsync();
-        }
-        catch (Exception)
-        {
-            // WebApplicationFactory runs Program.cs multiple times. Ignore if already created.
-        }
-#pragma warning restore CA1031, RCS1075
-    }
-
+    ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     RoleManager<IdentityRole> roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    UserManager<ApplicationUser> userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
 #pragma warning disable CA1031, RCS1075
     try
     {
         await SeedLock.WaitAsync();
         try
         {
+            if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+            {
+                try
+                {
+                    await db.Database.MigrateAsync();
+                }
+                catch (Exception)
+                {
+                    // Ignore if already migrated
+                }
+            }
+
             if (!await roleManager.RoleExistsAsync("Admin"))
             {
                 _ = await roleManager.CreateAsync(new IdentityRole("Admin"));
+            }
+
+            ApplicationUser? systemUser = await userManager.FindByNameAsync("system");
+            if (systemUser is null)
+            {
+                systemUser = new ApplicationUser
+                {
+                    Id = "system",
+                    UserName = "system",
+                    Email = "system@example.com",
+                    EmailConfirmed = true
+                };
+                _ = await userManager.CreateAsync(systemUser, "SystemPassword123!");
+            }
+
+            if (!await db.Tags.AnyAsync(t => t.Name == Tag.RootTagName))
+            {
+                var rootTag = new Tag
+                {
+                    Name = Tag.RootTagName,
+                    Content = "全てのタグの頂点となるルートタグ",
+                    IsSystem = true,
+                    OwnerId = systemUser.Id,
+                    Node = HierarchyId.GetRoot(),
+                    ParentTagId = null,
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                };
+                _ = db.Tags.Add(rootTag);
+                _ = await db.SaveChangesAsync();
             }
         }
         finally

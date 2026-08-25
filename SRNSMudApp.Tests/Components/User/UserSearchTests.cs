@@ -34,11 +34,7 @@ public class UserSearchTests : IAsyncLifetime
         _ctx.Services.AddMsSqlDbFactory(_testDb.ConnectionString);
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
-        await using var dbContext = new ApplicationDbContext(options);
+        await using var dbContext = new ApplicationDbContext(_testDb.Options);
         dbContext.Users.AddRange(
             new ApplicationUser { Id = "1", UserName = "TestUser1", NormalizedUserName = "TESTUSER1" },
             new ApplicationUser { Id = "2", UserName = "AdminUser", NormalizedUserName = "ADMINUSER" },

@@ -100,6 +100,7 @@ public class TagDialogDataProvider(
         }
 
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await EnsureParentNodeAsync(dbContext, newTag);
         _ = dbContext.Tags.Add(newTag);
         _ = await dbContext.SaveChangesAsync();
     }
@@ -193,7 +194,47 @@ public class TagDialogDataProvider(
     public async Task CreateTagWithoutEmbeddingAsync(Tag newTag)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await EnsureParentNodeAsync(dbContext, newTag);
         _ = dbContext.Tags.Add(newTag);
         _ = await dbContext.SaveChangesAsync();
+    }
+
+    private static async Task EnsureParentNodeAsync(ApplicationDbContext dbContext, Tag newTag)
+    {
+        if (newTag.Name == Tag.RootTagName)
+        {
+            newTag.Node = HierarchyId.GetRoot();
+            newTag.ParentTagId = null;
+            return;
+        }
+
+        if (newTag.Node == HierarchyId.GetRoot())
+        {
+            Tag? parentTag = null;
+            if (newTag.ParentTagId.HasValue)
+            {
+                parentTag = await dbContext.Tags.FindAsync(newTag.ParentTagId.Value);
+            }
+
+            if (parentTag is null)
+            {
+                parentTag = await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+                if (parentTag is not null)
+                {
+                    newTag.ParentTagId = parentTag.Id;
+                }
+            }
+
+            if (parentTag is not null)
+            {
+                HierarchyId? lastChildNode = await dbContext.Tags
+                    .Where(t => t.ParentTagId == parentTag.Id)
+                    .OrderByDescending(t => t.Node)
+                    .Select(t => (HierarchyId?)t.Node)
+                    .FirstOrDefaultAsync();
+
+                newTag.Node = parentTag.Node.GetDescendant(lastChildNode, null);
+            }
+        }
     }
 }

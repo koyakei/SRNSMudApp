@@ -38,6 +38,17 @@
         </NoItemsTemplate>
     </MudAutocomplete>
 
+    @switch (_isAdmin)
+    {
+        case true:
+            <MudSwitch T="bool"
+                       @bind-Value="_importAsSystem"
+                       Label="システムタグとしてインポート (Owner: system)"
+                       Color="Color.Warning"
+                       Class="mb-4" />
+            break;
+    }
+
     <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles" Accept=".csv">
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
@@ -72,6 +83,8 @@
     public int Weight { get; set; } = 0;
     private IBrowserFile? _file;
     private bool _isImporting;
+    private bool _isAdmin;
+    private bool _importAsSystem;
     private string? _currentUserId;
     private Tag? _selectedParentTag;
 
@@ -92,6 +105,7 @@
             case not null:
                 var authState = await AuthState;
                 _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _isAdmin = authState.User.IsInRole("Admin");
                 break;
         }
     }
@@ -135,7 +149,7 @@
             var content = await reader.ReadToEndAsync();
 
             int createdCount =
-                await ImportTagData.ImportCsvTagsAsync(_currentUserId!, _selectedParentTag.Name, content);
+                await ImportTagData.ImportCsvTagsAsync(_currentUserId!, _selectedParentTag.Name, content, _isAdmin && _importAsSystem);
 
             Snackbar.Add($"インポートが完了しました。{createdCount}個のタグを新規作成しました。", Severity.Success);
             _file = null;

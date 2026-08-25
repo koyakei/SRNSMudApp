@@ -25,10 +25,7 @@ public class TaggingContractServiceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TaggingContractServiceTests));
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-        _dbContext = new ApplicationDbContext(options);
+        _dbContext = new ApplicationDbContext(_testDb.Options);
         _service = new TaggingContractService(_dbContext);
 
         string[] standardUsers = ["Requester", "TagOwner", "UserA", "UserB", "UserC", "System", "Alice", "Bob", "Charlie", "user1", "user2", "tag-owner", "item-owner"];

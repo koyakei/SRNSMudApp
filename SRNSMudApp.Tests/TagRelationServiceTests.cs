@@ -25,11 +25,7 @@ public class TagRelationServiceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _testDb = await MsSqlTestDatabase.CreateAsync(_fixture.ConnectionString, nameof(TagRelationServiceTests));
-        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
-        _context = new ApplicationDbContext(options);
+        _context = new ApplicationDbContext(_testDb.Options);
         _service = new TagRelationService(_context);
     }
 
@@ -201,10 +197,6 @@ public class TagRelationServiceTests : IAsyncLifetime
     [Fact]
     public async Task AddTagToItemAsync_WithUntrackedItem_ShouldNotThrowPrimaryKeyException()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(_testDb.ConnectionString)
-            .Options;
-
         var testUserId = Guid.NewGuid().ToString();
         var itemContent = "Test Item " + Guid.NewGuid();
         var tagName = "Test Tag " + Guid.NewGuid();
@@ -213,7 +205,7 @@ public class TagRelationServiceTests : IAsyncLifetime
         int tagId;
 
         // 1. Arrange: 別のDbContextでデータを作成して保存する
-        await using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(_testDb.Options))
         {
             var user = new ApplicationUser
             {
@@ -236,7 +228,7 @@ public class TagRelationServiceTests : IAsyncLifetime
         } // ここでDbContextがDisposeされ、itemとtagは追跡されなくなる
 
         // 2. Act: 新しいDbContextを持つTagRelationServiceで操作する
-        await using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(_testDb.Options))
         {
             var service = new TagRelationService(db);
             var result = await service.LinkTagToItemAsync(itemId, tagId, testUserId);
@@ -244,7 +236,7 @@ public class TagRelationServiceTests : IAsyncLifetime
         }
 
         // 3. Assert: 正しくTagRelationが作成されているか確認する
-        await using (var db = new ApplicationDbContext(options))
+        await using (var db = new ApplicationDbContext(_testDb.Options))
         {
             var relations = await db.TagRelations
                 .Where(tr => tr.ItemId == itemId && tr.TagId == tagId)

@@ -90,11 +90,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             _ = services.RemoveAll<IDbContextFactory<ApplicationDbContext>>();
             _ = services.RemoveAll<ApplicationDbContext>();
 
-            _ = services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(_connectionString),
+            _ = services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(_connectionString, sqlOptions => sqlOptions.UseHierarchyId()),
                 ServiceLifetime.Scoped, ServiceLifetime.Singleton);
 
             _ = services.AddDbContextFactory<ApplicationDbContext>(options =>
-                options.UseSqlServer(_connectionString));
+                options.UseSqlServer(_connectionString, sqlOptions => sqlOptions.UseHierarchyId()));
 
             // Inject Mock ExternalTokenVerificationService
             _ = services.RemoveAll<IExternalTokenVerificationService>();
