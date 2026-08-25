@@ -45,8 +45,8 @@ public class Tag : BaseEntity
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TagRelation> TagRelations { get; set; } = [];
 
-    // hierarchyid 列。ルートタグは HierarchyId.GetRoot() で初期化
-    public HierarchyId Node { get; set; } = HierarchyId.GetRoot();
+    // hierarchyid 列。ルートタグ以外で未指定の場合は SaveChanges で自動的にルートタグ配下に配置
+    public HierarchyId Node { get; set; } = null!;
 
     // 移行用に一時的に残す（データ移行完了後に削除予定）
     public int? ParentTagId { get; set; }

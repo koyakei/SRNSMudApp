@@ -575,7 +575,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                     continue;
                 }
 
-                if (entry.Entity.Node == HierarchyId.GetRoot())
+                if (entry.Entity.Node is null)
                 {
                     if (rootTag is null && rootNode is null)
                     {
@@ -601,6 +601,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                     {
                         throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
                     }
+                }
+                else if (entry.Entity.Node == HierarchyId.GetRoot())
+                {
+                    throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
                 }
             }
             else if (entry.State is EntityState.Modified)

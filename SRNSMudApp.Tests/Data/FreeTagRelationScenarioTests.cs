@@ -152,8 +152,8 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
         Assert.Equal(1, ledger.Delta);
         Assert.Equal(50, ledger.PreviousWeight);
         Assert.Equal(51, ledger.NewWeight);
-        Assert.True(ledger.IsOwnerAction);
-        Assert.Equal("System Tag Tagging", ledger.Reason);
+        Assert.False(ledger.IsOwnerAction);
+        Assert.Equal("System Classification Tagging", ledger.Reason);
 
         Tag? updatedTag = await context.Tags!.FindAsync(systemTag.Id);
         Assert.NotNull(updatedTag);

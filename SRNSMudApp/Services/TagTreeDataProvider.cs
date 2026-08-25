@@ -89,17 +89,33 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                         context.TagRelationToTags.RemoveRange(relationsToDelete);
                     }
 
-                    // 削除対象のタグを親に持つ子タグを取得し、ルートノード（Node = GetRoot(), ParentTagId = null）に変更する
+                    // 削除対象のタグを親に持つ子タグを取得し、ルートタグ（"全て∀"）配下に変更する
                     List<Tag> orphanedChildren = await context.Tags
                         .Where(t => t.ParentTagId != null &&
                                     authorizedIds.Contains(t.ParentTagId.Value) &&
                                     !authorizedIds.Contains(t.Id))
                         .ToListAsync();
 
-                    foreach (Tag child in orphanedChildren)
+                    if (orphanedChildren.Count > 0)
                     {
-                        child.ParentTagId = null;
-                        child.Node = HierarchyId.GetRoot();
+                        Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+                        HierarchyId? lastChildNode = rootTag != null
+                            ? await context.Tags
+                                .Where(t => t.ParentTagId == rootTag.Id)
+                                .OrderByDescending(t => t.Node)
+                                .Select(t => (HierarchyId?)t.Node)
+                                .FirstOrDefaultAsync()
+                            : null;
+
+                        foreach (Tag child in orphanedChildren)
+                        {
+                            child.ParentTagId = rootTag?.Id;
+                            if (rootTag != null)
+                            {
+                                child.Node = rootTag.Node.GetDescendant(lastChildNode, null);
+                                lastChildNode = child.Node;
+                            }
+                        }
                     }
 
                     // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
