@@ -19,7 +19,7 @@ Blazor環境におけるCBOおよびRFCの急増を防ぐため、以下のパ�
 
 Facadeパターン: 複数のサービスに依存する複雑なコンポーネントには、処理をまとめるFacade層を設けること。
 
-詳細な実装ルールは .agent/rules/ 配下の指定に従うこと。
+詳細な実装ルールは `.agents/rules/` 配下の指定に従うこと。
 
 ## C# ReSharper Compatibility
 - Always write C# code that is compliant with JetBrains ReSharper coding standards and inspections.

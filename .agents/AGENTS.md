@@ -27,7 +27,7 @@ Facadeパターン: 複数のサービスに依存する複雑なコンポーネ
 4. 表示専用子コンポーネント: 大きなページコンポーネントは「状態保持コンテナ」と「表示専用子コンポーネント」に分割する。子コンポーネントは `[Parameter]` のデータ + `RenderFragment?` スロット（例: `BaseTagChip` の `PrefixContent` 等）のみを受け取り、サービス注入なしで bUnit レンダリングテストが可能な構成にする。型による表示切り替えが必要な場合は `DynamicComponent` と型マッピングを検討すること。
 5. テスト共通セットアップ: bUnit テストでは `SRNSMudApp.Tests/TestSupport/BunitTestSetup` (`AddAuth()`, `AddInMemoryDbFactory()`, `AddSrnsDialogs()`, `CreateAuthState()`, `AuthHost`) を利用し、セットアップコードの重複を避けること。
 
-詳細な実装ルールは .agent/rules/ 配下の指定に従うこと。
+詳細な実装ルールは `.agents/rules/` 配下の指定に従うこと。
 
 ## C# ReSharper Compatibility
 - Always write C# code that is compliant with JetBrains ReSharper coding standards and inspections.

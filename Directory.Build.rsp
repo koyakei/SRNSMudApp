@@ -1,0 +1,4 @@
+# Sandbox/CI compatibility: keep MSBuild in a single process and do not reuse nodes.
+# This avoids out-of-process MSBuild node startup when named pipes are unavailable.
+-maxcpucount:1
+-nodeReuse:false
