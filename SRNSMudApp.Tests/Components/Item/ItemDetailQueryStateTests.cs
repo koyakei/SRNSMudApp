@@ -85,10 +85,10 @@ public class ItemDetailQueryStateTests
     {
         Dictionary<string, object?> parameters =
             new ItemDetailQueryState
-                {
-                    ActiveTab = "requests",
-                    SelectedRequestId = 7
-                }
+            {
+                ActiveTab = "requests",
+                SelectedRequestId = 7
+            }
                 .BuildParameters();
 
         Assert.Equal("requests", parameters["tab"]);

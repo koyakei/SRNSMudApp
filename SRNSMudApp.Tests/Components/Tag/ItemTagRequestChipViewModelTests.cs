@@ -5,10 +5,10 @@ using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
+using Item = SRNSMudApp.Data.Item;
 // 親名前空間の下にある namespace Tag / Item より先に Data 側の型を解決させるため、
 // エイリアスを名前空間の内側に置く
 using Tag = SRNSMudApp.Data.Tag;
-using Item = SRNSMudApp.Data.Item;
 
 /// <summary>
 ///     ItemTagRequestChipViewModel の単体テスト。

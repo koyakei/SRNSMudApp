@@ -164,4 +164,3 @@ public class TaggingRequestActionsTests
         _snackbarMock.Verify(s => s.Add("却下に失敗しました: boom", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
     }
 }
-

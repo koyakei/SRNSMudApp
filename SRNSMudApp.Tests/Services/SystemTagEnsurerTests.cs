@@ -96,4 +96,3 @@ public class SystemTagEnsurerTests
         _homeDataMock.Verify(h => h.EnsureSystemTagsAsync(UserId), Times.Once);
     }
 }
-

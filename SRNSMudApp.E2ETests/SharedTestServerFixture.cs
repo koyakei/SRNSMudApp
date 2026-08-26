@@ -21,6 +21,31 @@ namespace SRNSMudApp.E2ETests;
 [SetUpFixture]
 public class SharedTestServerFixture
 {
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void ModuleInit()
+    {
+        SanitizeBrowserEnvironment();
+    }
+
+    private static void SanitizeBrowserEnvironment()
+    {
+        var browser = Environment.GetEnvironmentVariable("BROWSER");
+        if (string.IsNullOrWhiteSpace(browser))
+        {
+            return;
+        }
+
+        // Playwright.NUnit が解釈可能なブラウザ名は 'chromium', 'firefox', 'webkit' のみ。
+        // VS Code / Dev Container / Linux 環境等で BROWSER に実行ファイルやシェルスクリプトのパスが
+        // 自動設定されている場合、PlaywrightSettingsProvider が ArgumentException をスローするためクリアする。
+        if (!string.Equals(browser, "chromium", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(browser, "firefox", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(browser, "webkit", StringComparison.OrdinalIgnoreCase))
+        {
+            Environment.SetEnvironmentVariable("BROWSER", null);
+        }
+    }
+
     public static CustomWebApplicationFactory Factory { get; private set; } = null!;
 
     public static string ServerAddress => Factory.ServerAddress;
@@ -28,6 +53,8 @@ public class SharedTestServerFixture
     [OneTimeSetUp]
     public void GlobalSetUp()
     {
+        SanitizeBrowserEnvironment();
+
         Environment.SetEnvironmentVariable("Authentication__Google__ClientId",
             "1234567890-dummy.apps.googleusercontent.com");
 

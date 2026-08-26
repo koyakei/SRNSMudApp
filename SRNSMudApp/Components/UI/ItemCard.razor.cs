@@ -20,9 +20,10 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.UI;
 
+using SRNSMudApp.Models.Unions;
+
 using Item = SRNSMudApp.Data.Item;
 using Tag = SRNSMudApp.Data.Tag;
-using SRNSMudApp.Models.Unions;
 
 /// <summary>
 ///     ItemCard のコードビハインド。
