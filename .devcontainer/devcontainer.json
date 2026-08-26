@@ -1,0 +1,29 @@
+{
+	"name": "SRNSWebApp DevContainer",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"version": "latest",
+			"enableNonRootDocker": "true",
+			"moby": "true"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"omnisharp.useModernNet": true,
+				"dotnet.server.useOmnisharp": false
+			},
+			"extensions": [
+				"ms-dotnettools.csharp",
+				"ms-dotnettools.csdevkit",
+				"ms-dotnettools.vscode-dotnet-runtime"
+			]
+		}
+	},
+	"forwardPorts": [1433, 5009, 7180],
+	"remoteUser": "vscode"
+}
+
