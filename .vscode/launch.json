@@ -11,7 +11,8 @@
             "cwd": "${workspaceFolder}/SRNSMudApp",
             "stopAtEntry": false,
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5009"
             },
             "launchBrowser": {
                 "enabled": false

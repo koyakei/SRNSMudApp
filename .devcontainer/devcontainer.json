@@ -2,7 +2,8 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/dotnet-mssql
 {
 	"name": ".NET (C#), Node.js (TypeScript) & MS SQL",
-	"image": "mcr.microsoft.com/dotnet/sdk:11.0-preview",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "app",
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
@@ -33,19 +34,14 @@
 				"ms-dotnettools.csharp@prerelease",
 				"ms-mssql.mssql",
 				"ms-dotnettools.csdevkit@prerelease",
-				"ms-dotnettools.vscode-dotnet-runtime",
+				"ms-dotnettools.vscode-dotnet-runtime@prerelease",
 				"Google.google-antigravity"
 			]
 		}
 	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	"forwardPorts": [5000, 5001],
-	"portsAttributes": {
-			"5001": {
-				"protocol": "https"
-			}
-	},
+	"forwardPorts": [5009, 1433],
 
 	// postCreateCommand.sh parameters: $1=SA password, $2=dacpac path, $3=sql script(s) path
 	"postCreateCommand": "bash .devcontainer/mssql/postCreateCommand.sh 'P@ssw0rd' './bin/Debug/' './.devcontainer/mssql/'"
