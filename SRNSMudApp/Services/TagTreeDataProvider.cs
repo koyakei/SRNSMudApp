@@ -20,7 +20,7 @@ public sealed record TagTreeDeleteResult(
 /// </summary>
 public interface ITagTreeDataProvider
 {
-    /// <summary>システムタグ以外を読み込み、循環参照があれば検出して DB も修復する。</summary>
+    /// <summary>VoteTag / ReactionTag 以外を読み込む。</summary>
     Task<List<Tag>> LoadTagsAsync();
 
     Task<TagTreeDeleteResult> DeleteTagsAsync(string userId, IReadOnlyList<int> selectedIds);
@@ -38,7 +38,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.Tags
-            .Where(t => !t.IsSystem)
+            .Where(t => !Tag.VoteTagNames.Contains(t.Name) && !Tag.ReactionTagNames.Contains(t.Name))
             .OrderBy(t => t.Node)
             .AsNoTracking()
             .ToListAsync();
