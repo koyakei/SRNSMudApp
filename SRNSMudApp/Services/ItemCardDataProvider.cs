@@ -195,23 +195,23 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
                 }
             default:
-                switch (existingRelation.Weight == targetWeight)
+                var newWeight = existingRelation.Weight + targetWeight;
+                switch (newWeight)
                 {
-                    // 同じ Weight の場合はトグル解除 (Removed)
-                    case true:
+                    // 逆操作によって Weight が 0 に達した場合はリレーションを削除 (Removed)
+                    case 0:
                         {
-                            var prevWeight = existingRelation.Weight;
                             _ = context.TagRelations.Remove(existingRelation);
                             _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, prevWeight);
+                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, 0);
                         }
-                    // 異なる Weight (+1 -> -1 など) の場合は更新 (Updated)
+                    // 同方向なら加算、逆方向なら減算して Weight を更新 (Updated)
                     default:
                         {
-                            existingRelation.Weight = targetWeight;
+                            existingRelation.Weight = newWeight;
                             existingRelation.UpdatedDate = DateTime.UtcNow;
                             _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
+                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, newWeight);
                         }
                 }
         }

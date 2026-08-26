@@ -119,23 +119,7 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ToggleItemReaction_OppositeWeight_UpdatesRelation()
-    {
-        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
-        await using (db)
-        {
-            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
-            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
-
-            Assert.Equal(ItemVoteAction.Updated, result.Action);
-            Assert.Equal(-1, result.Weight);
-            TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
-            Assert.Equal(-1, relation.Weight);
-        }
-    }
-
-    [Fact]
-    public async Task ToggleItemReaction_SecondClickSameWeight_RemovesRelation()
+    public async Task ToggleItemReaction_SecondClickSameDirection_IncreasesWeight()
     {
         var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
         await using (db)
@@ -143,7 +127,66 @@ public class ItemCardDataProviderTests : IAsyncLifetime
             _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
             ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
 
+            Assert.Equal(ItemVoteAction.Updated, result.Action);
+            Assert.Equal(2, result.Weight);
+            TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
+            Assert.Equal(2, relation.Weight);
+        }
+    }
+
+    [Fact]
+    public async Task ToggleItemReaction_OppositeDirection_DecreasesWeight()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
+
+            Assert.Equal(ItemVoteAction.Updated, result.Action);
+            Assert.Equal(1, result.Weight);
+            TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
+            Assert.Equal(1, relation.Weight);
+        }
+    }
+
+    [Fact]
+    public async Task ToggleItemReaction_OppositeDirectionToZero_RemovesRelation()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            _ = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            ItemVoteResult result = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
+
             Assert.Equal(ItemVoteAction.Removed, result.Action);
+            Assert.Equal(0, result.Weight);
+            Assert.False(await db.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId));
+        }
+    }
+
+    [Fact]
+    public async Task ToggleItemReaction_Downvote_AccumulatesNegativeWeightAndRemovesOnZero()
+    {
+        var (db, sut, userId, tagId, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            ItemVoteResult addResult = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
+            Assert.Equal(ItemVoteAction.Added, addResult.Action);
+            Assert.Equal(-1, addResult.Weight);
+
+            ItemVoteResult updateResult = await sut.ToggleItemReactionAsync(itemId, userId, tagId, -1);
+            Assert.Equal(ItemVoteAction.Updated, updateResult.Action);
+            Assert.Equal(-2, updateResult.Weight);
+
+            ItemVoteResult reverseStep1 = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            Assert.Equal(ItemVoteAction.Updated, reverseStep1.Action);
+            Assert.Equal(-1, reverseStep1.Weight);
+
+            ItemVoteResult reverseStep2 = await sut.ToggleItemReactionAsync(itemId, userId, tagId, 1);
+            Assert.Equal(ItemVoteAction.Removed, reverseStep2.Action);
+            Assert.Equal(0, reverseStep2.Weight);
             Assert.False(await db.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId));
         }
     }

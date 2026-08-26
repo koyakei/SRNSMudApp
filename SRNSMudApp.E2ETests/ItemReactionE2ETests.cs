@@ -84,16 +84,40 @@ public class ItemReactionE2ETests : PageTest
         await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
         await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
 
-        // 5. 「真実」下矢印ボタンをクリックしてダウンボートに変更 (-1)
+        // 5. 再度「真実」上矢印ボタンをクリックして Weight を加算 (+2)
+        await shinjiUpvoteBtn.ClickAsync();
+
+        // 加算後: 上矢印が Info カラーのままで、チップのスコアが (2) に変化
+        await Expect(shinjiChip).ToContainTextAsync("真実 (2)");
+        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+
+        // 6. 「真実」下矢印ボタンをクリックして逆操作（減算: +1）
         await shinjiDownvoteBtn.ClickAsync();
 
-        // 変更後: 下矢印が Error カラーになり、上矢印は通常色に戻り、チップのスコアが (-1) に変化
+        // 減算後: チップのスコアが (1) に変化
+        await Expect(shinjiChip).ToContainTextAsync("真実 (1)");
+        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+
+        // 7. 再度下矢印ボタンをクリックして逆操作で 0 に達し投票解除
+        await shinjiDownvoteBtn.ClickAsync();
+
+        // 解除後: 上下矢印ともにアクティブカラーが消え、スコア表記が消える
+        await Expect(shinjiChip).Not.ToContainTextAsync("真実 (");
+        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+
+        // 8. 「真実」下矢印ボタンをクリックしてダウンボート付与 (-1)
+        await shinjiDownvoteBtn.ClickAsync();
+
+        // 付与後: 下矢印が Error カラーになり、チップのスコアが (-1) に変化
         await Expect(shinjiChip).ToContainTextAsync("真実 (-1)");
         await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
         await Expect(shinjiDownvoteBtn).ToHaveClassAsync(new Regex("mud-error-text"));
 
-        // 6. 再度下矢印ボタンをクリックして投票解除 (0)
-        await shinjiDownvoteBtn.ClickAsync();
+        // 9. 「真実」上矢印ボタンをクリックして逆操作で 0 に戻す
+        await shinjiUpvoteBtn.ClickAsync();
 
         // 解除後: 上下矢印ともにアクティブカラーが消え、スコア表記が消える
         await Expect(shinjiChip).Not.ToContainTextAsync("真実 (");
