@@ -2,7 +2,8 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Components;
-using SRNSMudApp.Components.Tag;
+using Microsoft.EntityFrameworkCore;
+using MudBlazor;
 using SRNSMudApp.Data;
 using Xunit;
 
@@ -14,22 +15,46 @@ namespace SRNSMudApp.Tests.Architecture;
 /// </summary>
 public class DbContextInjectionRuleTests
 {
-    [Theory]
-    [InlineData(typeof(TagList))]
-    [InlineData(typeof(TagTable))]
-    public void Component_ShouldNotInjectDbContextDirectly_ToPreventConcurrencyIssues(Type componentType)
+    [Fact]
+    public void Components_ShouldNotInjectDbContextDirectly_ToPreventConcurrencyIssues()
     {
-        // Arrange
-        PropertyInfo[] properties =
-            componentType.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        Type[] violatingComponents = GetServerComponents()
+            .Where(HasForbiddenDbContextInjection)
+            .ToArray();
 
-        // Act
-        var hasDirectDbContextInjection = properties.Any(p =>
-            p.PropertyType == typeof(ApplicationDbContext) &&
-            p.GetCustomAttributes(typeof(InjectAttribute), true).Length != 0);
-
-        // Assert
-        Assert.False(hasDirectDbContextInjection,
-            $"{componentType.Name} should inject IDbContextFactory<ApplicationDbContext> instead of ApplicationDbContext directly to prevent InvalidOperationException during concurrent rendering.");
+        Assert.Empty(violatingComponents);
     }
+
+    [Fact]
+    public void Components_ShouldUseDialogLauncherInsteadOfMudDialogService()
+    {
+        Type[] violatingComponents = GetServerComponents()
+            .Where(HasForbiddenDialogServiceInjection)
+            .ToArray();
+
+        Assert.Empty(violatingComponents);
+    }
+
+    private static Type[] GetServerComponents() =>
+        typeof(ApplicationDbContext).Assembly
+            .GetTypes()
+            .Where(type =>
+                type.IsClass &&
+                !type.IsAbstract &&
+                typeof(ComponentBase).IsAssignableFrom(type) &&
+                type.Namespace?.StartsWith("SRNSMudApp.Components", StringComparison.Ordinal) is true)
+            .ToArray();
+
+    private static bool HasForbiddenDbContextInjection(Type componentType) =>
+        GetInjectedProperties(componentType).Any(property =>
+            property.PropertyType == typeof(ApplicationDbContext) ||
+            property.PropertyType == typeof(IDbContextFactory<ApplicationDbContext>));
+
+    private static bool HasForbiddenDialogServiceInjection(Type componentType) =>
+        GetInjectedProperties(componentType).Any(property => property.PropertyType == typeof(IDialogService));
+
+    private static PropertyInfo[] GetInjectedProperties(Type componentType) =>
+        componentType.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Where(property => property.GetCustomAttributes(typeof(InjectAttribute), inherit: true).Length != 0)
+            .ToArray();
 }

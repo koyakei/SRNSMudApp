@@ -2,3 +2,4 @@
 # This avoids out-of-process MSBuild node startup when named pipes are unavailable.
 -maxcpucount:1
 -nodeReuse:false
+-verbosity:detailed
