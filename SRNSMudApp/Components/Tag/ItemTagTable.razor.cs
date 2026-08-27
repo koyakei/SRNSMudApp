@@ -26,13 +26,28 @@ public partial class ItemTagTable
     [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public EventCallback OnDataChanged { get; set; }
+    [Parameter] public string? SearchString { get; set; }
+    [Parameter] public EventCallback<string?> SearchStringChanged { get; set; }
 
     private MudAutocomplete<string>? _autocomplete;
     private string _searchString = "";
 
-    private Task HandleValueChangedAsync(string? value)
+    protected override void OnParametersSet()
+    {
+        if (SearchString != null && SearchString != _searchString)
+        {
+            _searchString = SearchString;
+        }
+        else if (SearchString == null && !string.IsNullOrEmpty(_searchString) && SearchStringChanged.HasDelegate)
+        {
+            _searchString = "";
+        }
+    }
+
+    private async Task HandleValueChangedAsync(string? value)
     {
         _searchString = value ?? "";
+        await SearchStringChanged.InvokeAsync(string.IsNullOrWhiteSpace(_searchString) ? null : _searchString);
 
         switch (TagSearchQuery.Parse(_searchString))
         {
@@ -42,8 +57,6 @@ public partial class ItemTagTable
             default:
                 break;
         }
-
-        return Task.CompletedTask;
     }
 
     private async Task ReopenMenuAfterDelayAsync()

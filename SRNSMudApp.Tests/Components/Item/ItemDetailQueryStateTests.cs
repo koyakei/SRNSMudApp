@@ -76,21 +76,59 @@ public class ItemDetailQueryStateTests
         Assert.Equal(expected, ItemDetailQueryState.FromTabIndex(index));
     }
 
+    [Fact]
+    public void ParseFromUri_WithFilters_ParsesFiltersCorrectly()
+    {
+        var state = ItemDetailQueryState.ParseFromUri(
+            new Uri("http://localhost/ItemDetail/5?f=name:tagA&f=10@userB"));
+
+        Assert.Equal(2, state.Filters.Count);
+        Assert.Equal("tagA", state.Filters[0].TagName);
+        Assert.Null(state.Filters[0].UserName);
+        Assert.Equal(10, state.Filters[1].TagId);
+        Assert.Equal("userB", state.Filters[1].UserName);
+    }
+
+    [Fact]
+    public void ParseFromUri_WithFallbackSearchQuery_ParsesFilters()
+    {
+        var state = ItemDetailQueryState.ParseFromUri(
+            new Uri("http://localhost/ItemDetail/5?search=tagA%20%40userB"));
+
+        Assert.Single(state.Filters);
+        Assert.Equal("tagA", state.Filters[0].TagName);
+        Assert.Equal("userB", state.Filters[0].UserName);
+    }
+
+    [Fact]
+    public void ParseFromUri_WithFallbackQQuery_ParsesFilters()
+    {
+        var state = ItemDetailQueryState.ParseFromUri(
+            new Uri("http://localhost/ItemDetail/5?q=tagA"));
+
+        Assert.Single(state.Filters);
+        Assert.Equal("tagA", state.Filters[0].TagName);
+        Assert.Null(state.Filters[0].UserName);
+    }
+
     // --- Create + BuildParameters ラウンドトリップ ---
 
     [Fact]
-    public void BuildParameters_ContainsTabAndRequestId()
+    public void BuildParameters_ContainsTabAndRequestIdAndFilters()
     {
         Dictionary<string, object?> parameters =
             new ItemDetailQueryState
             {
                 ActiveTab = "requests",
-                SelectedRequestId = 7
+                SelectedRequestId = 7,
+                Filters = [FilterEntry.FromName("tagA", "userB")]
             }
                 .BuildParameters();
 
         Assert.Equal("requests", parameters["tab"]);
         Assert.Equal(7, parameters["requestId"]);
+        var filters = Assert.IsAssignableFrom<string[]>(parameters["f"]);
+        Assert.Contains("name:tagA@userB", filters);
     }
 
     [Fact]
@@ -104,23 +142,39 @@ public class ItemDetailQueryStateTests
         Assert.Null(parameters["tab"]);
         Assert.True(parameters.ContainsKey("requestId"));
         Assert.Null(parameters["requestId"]);
+        Assert.True(parameters.ContainsKey("f"));
+        Assert.Null(parameters["f"]);
     }
 
     [Fact]
     public void RoundTrip_BuildThenParse_PreservesState()
     {
         ItemDetailQueryState original =
-            ItemDetailQueryState.Create(tabIndex: 2, selectedRequestId: 55);
+            ItemDetailQueryState.Create(tabIndex: 2, selectedRequestId: 55, [FilterEntry.FromName("testTag", "userX")]);
 
         Dictionary<string, object?> parameters = original.BuildParameters();
-        var query = string.Join('&',
-            parameters.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+        var queryParts = new List<string>();
+        foreach ((string key, object? value) in parameters)
+        {
+            if (value is string[] arr)
+            {
+                queryParts.AddRange(arr.Select(v => $"{key}={Uri.EscapeDataString(v)}"));
+            }
+            else if (value != null)
+            {
+                queryParts.Add($"{key}={Uri.EscapeDataString(value.ToString() ?? "")}");
+            }
+        }
+        var query = string.Join('&', queryParts);
 
         var parsed = ItemDetailQueryState.ParseFromUri(
             new Uri($"http://localhost/ItemDetail/1?{query}"));
 
         Assert.Equal(original.ActiveTab, parsed.ActiveTab);
         Assert.Equal(original.SelectedRequestId, parsed.SelectedRequestId);
+        Assert.Single(parsed.Filters);
+        Assert.Equal("testTag", parsed.Filters[0].TagName);
+        Assert.Equal("userX", parsed.Filters[0].UserName);
 
         // 正規化されたタブ文字列は同一インデックスへ逆変換できる
         Assert.Equal(2, ItemDetailQueryState.ToTabIndex(parsed.ActiveTab));

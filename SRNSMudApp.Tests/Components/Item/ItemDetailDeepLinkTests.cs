@@ -165,6 +165,82 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
         Assert.Contains(UserName, selectedRow.TextContent);
     }
 
+    [Fact]
+    public void DeepLinkUrl_RestoresFilterSearch()
+    {
+        const int itemId = 1;
+        var tag1 = new SRNSMudApp.Data.Tag { Id = 10, Name = "AlphaTag", OwnerId = UserId };
+        var tag2 = new SRNSMudApp.Data.Tag { Id = 20, Name = "BetaTag", OwnerId = UserId };
+        var item = new SRNSMudApp.Data.Item
+        {
+            Id = itemId,
+            Content = "DeepLink Search Item",
+            OwnerId = UserId,
+            Owner = new ApplicationUser { Id = UserId, UserName = UserName },
+            TagRelations =
+            [
+                new TagRelation { TagId = tag1.Id, Tag = tag1, ItemId = itemId, OwnerId = UserId },
+                new TagRelation { TagId = tag2.Id, Tag = tag2, ItemId = itemId, OwnerId = UserId }
+            ]
+        };
+
+        _ = _itemDetailDataMock.Setup(d => d.GetItemDetailAsync(itemId))
+            .ReturnsAsync(new ItemDetailPageData(item, [tag1, tag2], [], []));
+
+        _ = _contractServiceMock.Setup(s => s.GetRequestsByItemIdAsync(itemId))
+            .ReturnsAsync([]);
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo($"http://localhost/ItemDetail/{itemId}?f=name:AlphaTag");
+
+        IRenderedComponent<ItemDetail> cut =
+            _ctx.Render<ItemDetail>(parameters => parameters.Add(p => p.ItemId, itemId));
+
+        cut.WaitForState(() => !cut.Markup.Contains("mud-progress-circular"));
+
+        cut.WaitForState(() => cut.Markup.Contains("AlphaTag"));
+        Assert.DoesNotContain("BetaTag", cut.Markup);
+    }
+
+    [Fact]
+    public async Task SearchFilterChange_UpdatesUrlQuery()
+    {
+        const int itemId = 1;
+        var tag1 = new SRNSMudApp.Data.Tag { Id = 10, Name = "AlphaTag", OwnerId = UserId };
+        var item = new SRNSMudApp.Data.Item
+        {
+            Id = itemId,
+            Content = "Search Change Item",
+            OwnerId = UserId,
+            Owner = new ApplicationUser { Id = UserId, UserName = UserName },
+            TagRelations =
+            [
+                new TagRelation { TagId = tag1.Id, Tag = tag1, ItemId = itemId, OwnerId = UserId }
+            ]
+        };
+
+        _ = _itemDetailDataMock.Setup(d => d.GetItemDetailAsync(itemId))
+            .ReturnsAsync(new ItemDetailPageData(item, [tag1], [], []));
+
+        _ = _contractServiceMock.Setup(s => s.GetRequestsByItemIdAsync(itemId))
+            .ReturnsAsync([]);
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo($"http://localhost/ItemDetail/{itemId}");
+
+        IRenderedComponent<ItemDetail> cut =
+            _ctx.Render<ItemDetail>(parameters => parameters.Add(p => p.ItemId, itemId));
+
+        cut.WaitForState(() => !cut.Markup.Contains("mud-progress-circular"));
+
+        IRenderedComponent<SRNSMudApp.Components.Tag.ItemTagTable> table =
+            cut.FindComponent<SRNSMudApp.Components.Tag.ItemTagTable>();
+
+        await cut.InvokeAsync(() => table.Instance.SearchStringChanged.InvokeAsync("AlphaTag"));
+
+        cut.WaitForAssertion(() => Assert.Contains("f=name%3AAlphaTag", navigationManager.Uri));
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -5,13 +5,6 @@ using Microsoft.Extensions.Primitives;
 
 namespace SRNSMudApp.Components.Item;
 
-/// <summary>URL クエリ上のタグフィルタ 1 件分 (タグ ID またはタグ名 + 任意ユーザー名)。</summary>
-public sealed record FilterEntry(int? TagId, string? TagName, string? UserName)
-{
-    public static FilterEntry FromId(int tagId, string? userName = null) => new(tagId, null, userName);
-    public static FilterEntry FromName(string tagName, string? userName = null) => new(null, tagName, userName);
-}
-
 /// <summary>
 ///     ItemList ページの URL クエリ状態を表す値オブジェクト。
 ///     URL 形式は以下の繰り返し可能なキーで構成される:
@@ -42,13 +35,11 @@ public sealed record ItemListQueryState
     /// <summary>スクロール対象のタグ ID。</summary>
     public int? FocusTagId { get; init; }
 
-    private const string FilterKey = "f";
+    private const string FilterKey = TagFilterQueryCodec.FilterKey;
     private const string SortKey = "sort";
     private const string ItemKey = "item";
     private const string FocusKey = "focus";
     private const string FocusTagKey = "focusTag";
-
-    private const string NamePrefix = "name:";
 
     /// <summary>
     ///     URI のクエリ部分をパースして <see cref="ItemListQueryState" /> を生成する。
@@ -60,7 +51,7 @@ public sealed record ItemListQueryState
 
         return new ItemListQueryState
         {
-            Filters = [.. ParseFilters(query)],
+            Filters = [.. TagFilterQueryCodec.ParseFilters(query)],
             SortEntries = [.. ParseSortEntries(query)],
             SelectedItemIds = [.. ParseInts(query, ItemKey)],
             FocusItemId = ParseSingleInt(query, FocusKey),
@@ -76,45 +67,12 @@ public sealed record ItemListQueryState
     {
         return new Dictionary<string, object?>
         {
-            { FilterKey, Filters.Count > 0 ? Filters.Select(EncodeFilter).ToArray() : null },
+            { FilterKey, Filters.Count > 0 ? Filters.Select(TagFilterQueryCodec.EncodeFilter).ToArray() : null },
             { SortKey, SortEntries.Count > 0 ? SortEntries.Select(EncodeSort).ToArray() : null },
             { ItemKey, SelectedItemIds.Count > 0 ? SelectedItemIds.ToArray() : null },
             { FocusKey, FocusItemId },
             { FocusTagKey, FocusTagId }
         };
-    }
-
-    private static IEnumerable<FilterEntry> ParseFilters(Dictionary<string, StringValues> query)
-    {
-        if (!query.TryGetValue(FilterKey, out StringValues values))
-        {
-            yield break;
-        }
-
-        foreach (var value in values)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                continue;
-            }
-
-            var separatorIndex = value.IndexOf('@', StringComparison.Ordinal);
-            var mainPart = separatorIndex < 0 ? value : value[..separatorIndex];
-            var userName = separatorIndex < 0 ? null : value[(separatorIndex + 1)..];
-
-            if (mainPart.StartsWith(NamePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var tagName = mainPart[NamePrefix.Length..];
-                if (!string.IsNullOrWhiteSpace(tagName))
-                {
-                    yield return FilterEntry.FromName(tagName, userName);
-                }
-            }
-            else if (int.TryParse(mainPart, out var tagId) && tagId > 0)
-            {
-                yield return FilterEntry.FromId(tagId, userName);
-            }
-        }
     }
 
     private static IEnumerable<SortEntry> ParseSortEntries(Dictionary<string, StringValues> query)
@@ -132,7 +90,7 @@ public sealed record ItemListQueryState
             }
 
             var parts = value.Split(':');
-            if (parts.Length == 2 && int.TryParse(parts[0], out var tagId))
+            if (parts.Length == 2 && int.TryParse(parts[0], CultureInfo.InvariantCulture, out var tagId))
             {
                 switch (parts[1])
                 {
@@ -158,7 +116,7 @@ public sealed record ItemListQueryState
 
         foreach (var value in values)
         {
-            if (int.TryParse(value, out var id) && id > 0)
+            if (int.TryParse(value, CultureInfo.InvariantCulture, out var id) && id > 0)
             {
                 yield return id;
             }
@@ -169,24 +127,10 @@ public sealed record ItemListQueryState
     {
         return query.TryGetValue(key, out StringValues values) &&
                values.Count > 0 &&
-               int.TryParse(values[0], out var id) &&
+               int.TryParse(values[0], CultureInfo.InvariantCulture, out var id) &&
                id > 0
             ? id
             : null;
-    }
-
-    private static string EncodeFilter(FilterEntry filter)
-    {
-        if (filter.TagId.HasValue)
-        {
-            return string.IsNullOrEmpty(filter.UserName)
-                ? filter.TagId.Value.ToString(CultureInfo.InvariantCulture)
-                : $"{filter.TagId.Value}@{filter.UserName}";
-        }
-
-        return string.IsNullOrEmpty(filter.UserName)
-            ? $"{NamePrefix}{filter.TagName}"
-            : $"{NamePrefix}{filter.TagName}@{filter.UserName}";
     }
 
     private static string EncodeSort(SortEntry entry) =>

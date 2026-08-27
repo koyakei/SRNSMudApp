@@ -59,12 +59,23 @@ public partial class ItemDetail
     [SupplyParameterFromQuery(Name = "requestId")]
     public int? SelectedRequestIdQuery { get; set; }
 
+    [SupplyParameterFromQuery(Name = "f")]
+    public string[]? FilterQueries { get; set; }
+
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? SearchQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? QQuery { get; set; }
+
     private int _activeTabIndex;
     private TaggingRequestEntity? _selectedRequest;
+    private string? _searchQuery;
 
     protected override async Task OnInitializedAsync()
     {
         _activeTabIndex = ItemDetailQueryState.ToTabIndex(ActiveTabQuery);
+        InitializeSearchQueryFromUri();
 
         await LoadDataAsync();
     }
@@ -77,8 +88,22 @@ public partial class ItemDetail
                 await LoadDataAsync();
                 break;
         }
+
+        var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+        FilterEntry? filter = state.Filters.FirstOrDefault();
+        var currentSearch = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
+        if (currentSearch != _searchQuery)
+        {
+            _searchQuery = currentSearch;
+        }
     }
 
+    private void InitializeSearchQueryFromUri()
+    {
+        var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+        FilterEntry? filter = state.Filters.FirstOrDefault();
+        _searchQuery = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "データ取得時に発生した例外をエラー状態として画面表示するために広く捕捉する")]
@@ -120,6 +145,14 @@ public partial class ItemDetail
 
             _allTags = data.AllTags;
             _allTagRelationsToTags = data.AllTagRelationsToTags;
+
+            // タグ一覧取得後に TagId ベースのフィルタ文字列を解決する
+            var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+            FilterEntry? filter = state.Filters.FirstOrDefault();
+            if (filter != null)
+            {
+                _searchQuery = TagFilterQueryCodec.ToSearchString(filter, _allTags);
+            }
 
             _pageState = new Loaded<ItemDetailData>(new ItemDetailData(data.Item, requests ?? [], data.Ledgers));
         }
@@ -188,14 +221,24 @@ public partial class ItemDetail
         UpdateUrlQuery();
     }
 
+    private void OnSearchStringChanged(string? search)
+    {
+        _searchQuery = string.IsNullOrWhiteSpace(search) ? null : search;
+        UpdateUrlQuery();
+    }
+
     private void UpdateUrlQuery()
     {
+        FilterEntry? filter = TagFilterQueryCodec.FromSearchString(_searchQuery);
+        IReadOnlyList<FilterEntry> filters = filter != null ? [filter] : [];
+
         // URL 形式の知識は ItemDetailQueryState に一元化
         Dictionary<string, object?> parameters =
             new ItemDetailQueryState
             {
                 ActiveTab = ActiveTabQuery,
-                SelectedRequestId = SelectedRequestIdQuery
+                SelectedRequestId = SelectedRequestIdQuery,
+                Filters = filters
             }
                 .BuildParameters();
         var uri = NavigationManager.GetUriWithQueryParameters(parameters);
