@@ -238,36 +238,46 @@ public class ItemListDataProvider(
                     case TagIdFilter idFilter:
                         if (string.IsNullOrWhiteSpace(idFilter.UserName))
                         {
-                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == idFilter.TagId));
-                            tagQuery = tagQuery.Where(t => t.Id == idFilter.TagId || t.TargetTagRelations.Any(tr => tr.TagId == idFilter.TagId));
+                            query = query.Where(i => i.TagRelations.Any(tr =>
+                                context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
+                            tagQuery = tagQuery.Where(t =>
+                                context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => t.Node.IsDescendantOf(pt.Node)) ||
+                                t.TargetTagRelations.Any(tr => context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
                         }
                         else
                         {
                             query = query.Where(i =>
                                 i.TagRelations.Any(tr =>
-                                    tr.TagId == idFilter.TagId && tr.Owner.UserName == idFilter.UserName));
+                                    context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
+                                    tr.Owner.UserName == idFilter.UserName));
                             tagQuery = tagQuery.Where(t =>
-                                (t.Id == idFilter.TagId && t.Owner.UserName == idFilter.UserName) ||
+                                (context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => t.Node.IsDescendantOf(pt.Node)) && t.Owner.UserName == idFilter.UserName) ||
                                 t.TargetTagRelations.Any(tr =>
-                                    tr.TagId == idFilter.TagId && tr.Owner.UserName == idFilter.UserName));
+                                    context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
+                                    tr.Owner.UserName == idFilter.UserName));
                         }
                         break;
 
                     case TagNameFilter nameFilter:
                         if (string.IsNullOrWhiteSpace(nameFilter.UserName))
                         {
-                            query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Name == nameFilter.TagName));
-                            tagQuery = tagQuery.Where(t => t.Name == nameFilter.TagName || t.TargetTagRelations.Any(tr => tr.Tag.Name == nameFilter.TagName));
+                            query = query.Where(i => i.TagRelations.Any(tr =>
+                                context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
+                            tagQuery = tagQuery.Where(t =>
+                                context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => t.Node.IsDescendantOf(pt.Node)) ||
+                                t.TargetTagRelations.Any(tr => context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
                         }
                         else
                         {
                             query = query.Where(i =>
                                 i.TagRelations.Any(tr =>
-                                    tr.Tag.Name == nameFilter.TagName && tr.Owner.UserName == nameFilter.UserName));
+                                    context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
+                                    tr.Owner.UserName == nameFilter.UserName));
                             tagQuery = tagQuery.Where(t =>
-                                (t.Name == nameFilter.TagName && t.Owner.UserName == nameFilter.UserName) ||
+                                (context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => t.Node.IsDescendantOf(pt.Node)) && t.Owner.UserName == nameFilter.UserName) ||
                                 t.TargetTagRelations.Any(tr =>
-                                    tr.Tag.Name == nameFilter.TagName && tr.Owner.UserName == nameFilter.UserName));
+                                    context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
+                                    tr.Owner.UserName == nameFilter.UserName));
                         }
                         break;
                 }
@@ -287,7 +297,6 @@ public class ItemListDataProvider(
     public async Task<ItemListExportData> LoadExportDataAsync(IReadOnlyList<int> itemIds)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
-
         Dictionary<int, Tag> allTags = await context.Tags.ToDictionaryAsync(t => t.Id);
 
         List<TagRelation> itemTags = await context.TagRelations

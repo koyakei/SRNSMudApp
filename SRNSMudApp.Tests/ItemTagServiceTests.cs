@@ -198,6 +198,7 @@ public class ItemTagServiceTests : IAsyncLifetime
                 await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == childTag.Id && l.SourceType == "TagRelationToTagInsert");
             Assert.NotNull(ledger);
             Assert.Equal(childTag.Id, ledger.TagId);
+            Assert.Equal(targetTag.Id, ledger.TargetTagId);
             Assert.Equal(10, ledger.PreviousWeight);
             Assert.Equal(11, ledger.NewWeight);
             Assert.Equal(1, ledger.Delta);
@@ -238,6 +239,7 @@ public class ItemTagServiceTests : IAsyncLifetime
                 await dbContext.TagWeightLedgers!.SingleOrDefaultAsync(l => l.TagId == childTag.Id && l.SourceType == "TagRelationToTagDelete");
             Assert.NotNull(ledger);
             Assert.Equal(childTag.Id, ledger.TagId);
+            Assert.Equal(targetTag.Id, ledger.TargetTagId);
             Assert.Equal(10, ledger.PreviousWeight);
             Assert.Equal(7, ledger.NewWeight);
             Assert.Equal(-3, ledger.Delta);

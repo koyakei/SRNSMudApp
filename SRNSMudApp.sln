@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.0.0
@@ -10,8 +10,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.Tests", "SRNSMudApp.Tests\SRNSMudApp.Tests.csproj", "{91DDB242-790A-44A1-B289-9D310785B517}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.E2ETests", "SRNSMudApp.E2ETests\SRNSMudApp.E2ETests.csproj", "{39528A6A-B63F-4473-BD02-EBDEEB474A6A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRNSMudApp.E2ETests_SRNSMudApp.E2ETests_After_a740850ef2f0140b07404c73dd69eb59abb04524", "..\..\..\..\var\folders\7_\c8_cv5jx4131ssb7l7js_1q80000gn\T\SRNSMudApp.E2ETests_SRNSMudApp.E2ETests_After_a740850ef2f0140b07404c73dd69eb59abb04524.csproj", "{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,18 +69,6 @@ Global
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x64.Build.0 = Release|Any CPU
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x86.ActiveCfg = Release|Any CPU
 		{39528A6A-B63F-4473-BD02-EBDEEB474A6A}.Release|x86.Build.0 = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|x64.Build.0 = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Debug|x86.Build.0 = Debug|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|Any CPU.Build.0 = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|x64.ActiveCfg = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|x64.Build.0 = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|x86.ActiveCfg = Release|Any CPU
-		{97BCF072-F0F2-4E5C-84DE-8F55AA3B1A70}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
