@@ -198,8 +198,11 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
 
         cut.WaitForState(() => !cut.Markup.Contains("mud-progress-circular"));
 
-        cut.WaitForState(() => cut.Markup.Contains("AlphaTag"));
-        Assert.DoesNotContain("BetaTag", cut.Markup);
+        IRenderedComponent<SRNSMudApp.Components.Tag.ItemTagTable> table =
+            cut.FindComponent<SRNSMudApp.Components.Tag.ItemTagTable>();
+
+        table.WaitForState(() => table.Markup.Contains("AlphaTag"));
+        Assert.DoesNotContain("BetaTag", table.Markup);
     }
 
     [Fact]

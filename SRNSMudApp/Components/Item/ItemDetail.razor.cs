@@ -59,15 +59,6 @@ public partial class ItemDetail
     [SupplyParameterFromQuery(Name = "requestId")]
     public int? SelectedRequestIdQuery { get; set; }
 
-    [SupplyParameterFromQuery(Name = "f")]
-    public string[]? FilterQueries { get; set; }
-
-    [SupplyParameterFromQuery(Name = "search")]
-    public string? SearchQuery { get; set; }
-
-    [SupplyParameterFromQuery(Name = "q")]
-    public string? QQuery { get; set; }
-
     private int _activeTabIndex;
     private TaggingRequestEntity? _selectedRequest;
     private string? _searchQuery;
@@ -90,7 +81,7 @@ public partial class ItemDetail
         }
 
         var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        FilterEntry? filter = state.Filters.FirstOrDefault();
+        FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
         var currentSearch = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
         if (currentSearch != _searchQuery)
         {
@@ -101,7 +92,7 @@ public partial class ItemDetail
     private void InitializeSearchQueryFromUri()
     {
         var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        FilterEntry? filter = state.Filters.FirstOrDefault();
+        FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
         _searchQuery = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
     }
 
@@ -148,7 +139,7 @@ public partial class ItemDetail
 
             // タグ一覧取得後に TagId ベースのフィルタ文字列を解決する
             var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-            FilterEntry? filter = state.Filters.FirstOrDefault();
+            FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
             if (filter != null)
             {
                 _searchQuery = TagFilterQueryCodec.ToSearchString(filter, _allTags);

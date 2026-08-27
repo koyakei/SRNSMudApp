@@ -6,13 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
     <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <NoWarn>$(NoWarn);CA2252</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4"/>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0-*"/>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
     <PackageReference Include="Microsoft.Playwright.NUnit" Version="1.48.0"/>
     <PackageReference Include="NUnit" Version="4.3.2"/>
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0"/>
