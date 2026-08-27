@@ -81,9 +81,16 @@ public class ItemListDataProvider(
 
     public async Task<Dictionary<int, Tag>> GetTagsByIdsAsync(IEnumerable<int> tagIds)
     {
+        var ids = tagIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+        
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
-            .Where(t => tagIds.Contains(t.Id))
+            .AsNoTracking()
+            .Where(t => ids.Contains(t.Id))
             .ToListAsync();
         return tags.ToDictionary(t => t.Id);
     }

@@ -83,7 +83,39 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         UpdatedDate = DateTime.UtcNow
                     };
                     _ = context.TagRelations.Add(newRelation);
+
+                    _ = context.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = userId,
+                        Target = new ItemTarget(itemId),
+                        FollowedTagId = goodTagId,
+                        EventType = "Insert",
+                        NewWeight = targetWeight
+                    });
+
                     _ = await context.SaveChangesAsync();
+
+                    if (tag is not null)
+                    {
+                        var prevWeightAdd = tag.CachedWeight;
+                        tag.CachedWeight += targetWeight;
+                        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+                        {
+                            TagId = tag.Id,
+                            TagNameSnapshot = tag.Name,
+                            SourceType = "TagRelationInsert",
+                            SourceId = newRelation.Id,
+                            PreviousWeight = prevWeightAdd,
+                            NewWeight = tag.CachedWeight,
+                            Delta = targetWeight,
+                            IsOwnerAction = true,
+                            Reason = "Vote付与",
+                            OwnerId = userId
+                        });
+
+                        _ = await context.SaveChangesAsync();
+                    }
+
                     return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
                 }
             default:
@@ -102,7 +134,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
                                     SourceType = "TagRelationDelete",
-                                    SourceId = existingRelation.Id,
+                                    SourceId = null,
                                     PreviousWeight = prevWeightCancel,
                                     NewWeight = tag.CachedWeight,
                                     Delta = deltaCancel,
@@ -176,6 +208,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         TagRelation? existingRelation = await context.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == reactionTagId);
+        Tag? tag = await context.Tags.FindAsync(reactionTagId);
 
         switch (existingRelation)
         {
@@ -191,7 +224,38 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         UpdatedDate = DateTime.UtcNow
                     };
                     _ = context.TagRelations.Add(newRelation);
+
+                    _ = context.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = userId,
+                        Target = new ItemTarget(itemId),
+                        FollowedTagId = reactionTagId,
+                        EventType = "Insert",
+                        NewWeight = targetWeight
+                    });
+
                     _ = await context.SaveChangesAsync();
+
+                    if (tag is not null)
+                    {
+                        var prevWeightAdd = tag.CachedWeight;
+                        tag.CachedWeight += targetWeight;
+                        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+                        {
+                            TagId = tag.Id,
+                            TagNameSnapshot = tag.Name,
+                            SourceType = "TagRelationInsert",
+                            SourceId = newRelation.Id,
+                            PreviousWeight = prevWeightAdd,
+                            NewWeight = tag.CachedWeight,
+                            Delta = targetWeight,
+                            IsOwnerAction = true,
+                            Reason = "Reaction付与",
+                            OwnerId = userId
+                        });
+
+                        _ = await context.SaveChangesAsync();
+                    }
                     return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
                 }
             default:
@@ -201,6 +265,35 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     // 逆操作によって Weight が 0 に達した場合はリレーションを削除 (Removed)
                     case 0:
                         {
+                            var deltaCancel = -existingRelation.Weight;
+                            if (tag is not null)
+                            {
+                                var prevWeightCancel = tag.CachedWeight;
+                                tag.CachedWeight += deltaCancel;
+                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+                                {
+                                    TagId = tag.Id,
+                                    TagNameSnapshot = tag.Name,
+                                    SourceType = "TagRelationDelete",
+                                    SourceId = null,
+                                    PreviousWeight = prevWeightCancel,
+                                    NewWeight = tag.CachedWeight,
+                                    Delta = deltaCancel,
+                                    IsOwnerAction = true,
+                                    Reason = "Reaction取り消し",
+                                    OwnerId = userId
+                                });
+                            }
+
+                            _ = context.TimelineEvents!.Add(new TimelineEvent
+                            {
+                                OwnerId = userId,
+                                Target = new ItemTarget(itemId),
+                                FollowedTagId = reactionTagId,
+                                EventType = "Delete",
+                                PreviousWeight = existingRelation.Weight
+                            });
+
                             _ = context.TagRelations.Remove(existingRelation);
                             _ = await context.SaveChangesAsync();
                             return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, 0);
@@ -208,8 +301,39 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     // 同方向なら加算、逆方向なら減算して Weight を更新 (Updated)
                     default:
                         {
+                            var deltaUpdate = targetWeight;
                             existingRelation.Weight = newWeight;
                             existingRelation.UpdatedDate = DateTime.UtcNow;
+
+                            if (tag is not null)
+                            {
+                                var prevWeightUpdate = tag.CachedWeight;
+                                tag.CachedWeight += deltaUpdate;
+                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+                                {
+                                    TagId = tag.Id,
+                                    TagNameSnapshot = tag.Name,
+                                    SourceType = "TagRelationUpdate",
+                                    SourceId = existingRelation.Id,
+                                    PreviousWeight = prevWeightUpdate,
+                                    NewWeight = tag.CachedWeight,
+                                    Delta = deltaUpdate,
+                                    IsOwnerAction = true,
+                                    Reason = "Reaction変更",
+                                    OwnerId = userId
+                                });
+                            }
+
+                            _ = context.TimelineEvents!.Add(new TimelineEvent
+                            {
+                                OwnerId = userId,
+                                Target = new ItemTarget(itemId),
+                                FollowedTagId = reactionTagId,
+                                EventType = "Update",
+                                PreviousWeight = existingRelation.Weight - deltaUpdate,
+                                NewWeight = existingRelation.Weight
+                            });
+
                             _ = await context.SaveChangesAsync();
                             return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, newWeight);
                         }

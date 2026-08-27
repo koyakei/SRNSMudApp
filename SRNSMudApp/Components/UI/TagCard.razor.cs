@@ -93,6 +93,14 @@ public partial class TagCard : IAsyncDisposable
             {
                 await JS.InvokeVoidAsync("contentOverflowHelper.removeDotNetRef", _dotNetRef);
             }
+            catch (JSDisconnectedException)
+            {
+                // ignored
+            }
+            catch (TaskCanceledException)
+            {
+                // ignored
+            }
             catch (JSException)
             {
                 // ignored
