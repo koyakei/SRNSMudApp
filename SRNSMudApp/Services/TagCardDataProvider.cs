@@ -131,8 +131,9 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             {
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
+                TargetTagId = targetTagId,
                 SourceType = "TagRelationToTagInsert",
-                SourceId = null,
+                SourceId = newRelation.Id,
                 PreviousWeight = prevWeight,
                 NewWeight = tagFromDb.CachedWeight,
                 Delta = 1,
@@ -163,6 +164,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     {
                         TagId = tag.Id,
                         TagNameSnapshot = tag.Name,
+                        TargetTagId = entity.TargetTagId,
                         SourceType = "TagRelationToTagDelete",
                         SourceId = entity.Id,
                         PreviousWeight = prevWeight,
@@ -299,6 +301,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
+                TargetTagId = entity.TargetTagId,
                 SourceType = "TagRelationToTagUpdate",
                 SourceId = entity.Id,
                 PreviousWeight = prevWeight,

@@ -20,6 +20,9 @@ public class TagWeightLedger : BaseEntity
     // 対象アイテムのID (TagRelationが削除された後も履歴を保持するため)
     public int? ItemId { get; set; }
 
+    // 対象親タグのID (TagRelationToTagが削除された後も履歴を保持するため)
+    public int? TargetTagId { get; set; }
+
     [NotMapped]
     public LedgerSource Source
     {

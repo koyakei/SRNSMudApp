@@ -399,14 +399,14 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         await (tagOption switch
         {
-            Some<Tag> someTag => ExecuteAddTagToTagLedgerAsync(context, someTag.Value, currentUserId),
+            Some<Tag> someTag => ExecuteAddTagToTagLedgerAsync(context, someTag.Value, targetTagId, currentUserId),
             _ => Task.CompletedTask
         });
 
         return null;
     }
 
-    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, string currentUserId)
+    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int targetTagId, string currentUserId)
     {
         var prevWeight = tagFromDb.CachedWeight;
         tagFromDb.CachedWeight += 1;
@@ -415,6 +415,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tagFromDb.Id,
             TagNameSnapshot = tagFromDb.Name,
+            TargetTagId = targetTagId,
             SourceType = "TagRelationToTagInsert",
             SourceId = null,
             PreviousWeight = prevWeight,
@@ -472,8 +473,9 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
+            TargetTagId = entity.TargetTagId,
             SourceType = "TagRelationToTagDelete",
-            SourceId = null,
+            SourceId = entity.Id,
             PreviousWeight = prevWeight,
             NewWeight = tag.CachedWeight,
             Delta = -entity.Weight,

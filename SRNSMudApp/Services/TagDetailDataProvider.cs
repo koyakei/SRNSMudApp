@@ -83,7 +83,7 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
 
         List<TagWeightLedger> weightLedgers = await context.TagWeightLedgers!
             .Include(l => l.Owner)
-            .Where(l => l.TagId == tagId)
+            .Where(l => l.TagId == tagId || l.TargetTagId == tagId)
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()
             .ToListAsync();

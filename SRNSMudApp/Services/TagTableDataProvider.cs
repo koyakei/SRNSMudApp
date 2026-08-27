@@ -64,6 +64,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             {
                 TagId = tagFromDb.Id,
                 TagNameSnapshot = tagFromDb.Name,
+                TargetTagId = targetTagId,
                 SourceType = "TagRelationToTagInsert",
                 SourceId = null,
                 PreviousWeight = prevWeight,
@@ -98,8 +99,9 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
+                TargetTagId = entity.TargetTagId,
                 SourceType = "TagRelationToTagDelete",
-                SourceId = entity.Id,
+                SourceId = null,
                 PreviousWeight = prevWeight,
                 NewWeight = tag.CachedWeight,
                 Delta = -entity.Weight,
