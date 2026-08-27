@@ -231,4 +231,51 @@ public class ItemReactionE2ETests : PageTest
             Assert.That(deleteLedger!.Delta, Is.EqualTo(-1));
         }
     }
+
+    [Test]
+    public async Task GivenAuthenticatedUser_WhenClickReactionChip_ThenNavigatesToItemDetailWithSearchQuery()
+    {
+        // 1. モック認証でログイン
+        var email = $"reaction-nav-{Guid.NewGuid():N}@example.com";
+        await WebAuthnTestHelpers.LoginWithMockGoogleAsync(Page, _serverAddress, email);
+
+        int targetItemId;
+
+        // 2. DB 上のログインユーザーを取得してテスト用アイテムをセットアップ
+        using (IServiceScope scope = _factory.AppServices.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var userName = email.Split('@')[0];
+            ApplicationUser? user = db.Users.FirstOrDefault(u => u.UserName == userName || u.Email == email)
+                ?? db.Users.OrderByDescending(u => u.Id).First();
+
+            var item = new Item
+            {
+                Content = $"Reaction Navigation Test Item {Guid.NewGuid():N}",
+                OwnerId = user.Id
+            };
+            db.Items.Add(item);
+            await db.SaveChangesAsync();
+            targetItemId = item.Id;
+        }
+
+        // 3. アイテム一覧画面へ移動し、アイテムカードが表示されるのを待機
+        await Page.GotoAsync($"{_serverAddress}/Item/ItemList?focus={targetItemId}");
+        await Page.WaitForSelectorAsync($"#item-card-{targetItemId}", new PageWaitForSelectorOptions { Timeout = 10000 });
+
+        ILocator itemCard = Page.Locator($"#item-card-{targetItemId}");
+        ILocator shinjiChip = itemCard.Locator("[data-testid='reaction-shinji']");
+
+        // 4. 「真実」チップ（タグ名/アイコン）をクリック
+        await shinjiChip.ClickAsync();
+
+        // 5. ItemDetail ページに遷移し、URL にタグ検索クエリが含まれることを検証
+        await Page.WaitForURLAsync(new Regex($"/ItemDetail/{targetItemId}"), new PageWaitForURLOptions { Timeout = 10000 });
+        Assert.That(Page.Url, Does.Contain($"/ItemDetail/{targetItemId}"));
+        Assert.That(Page.Url, Does.Contain("f="));
+
+        // 6. ItemDetail ページの検索バーに「真実」がセットされ、タイトル「アイテム詳細」が表示されていることを検証
+        ILocator title = Page.Locator("text=アイテム詳細");
+        await Expect(title).ToBeVisibleAsync();
+    }
 }

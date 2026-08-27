@@ -15,7 +15,13 @@
 }
 
 .reaction-chip {
-    cursor: default;
+    cursor: pointer;
     user-select: none;
     font-size: 0.8rem;
+    transition: background-color 0.2s ease;
 }
+
+.reaction-chip:hover {
+    background-color: var(--mud-palette-action-default-hover, rgba(0, 0, 0, 0.08));
+}
+

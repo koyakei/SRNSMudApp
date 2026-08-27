@@ -68,7 +68,8 @@
                          OnDataChanged="OnDataChanged"
                          OnAddTagClicked="OnAddTagClicked"/>
 
-        <ReactionBar ShinjiScore="@GetReactionScore("真実")"
+        <ReactionBar ItemId="@Item.Id"
+                     ShinjiScore="@GetReactionScore("真実")"
                      ZenScore="@GetReactionScore("善")"
                      BiScore="@GetReactionScore("美")"
                      IsShinjiUpvoted="@IsItemReactionUpvoted("真実")"

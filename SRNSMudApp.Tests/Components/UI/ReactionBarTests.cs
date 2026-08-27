@@ -3,6 +3,7 @@ using AngleSharp.Dom;
 using Bunit;
 
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 
 using MudBlazor.Services;
 
@@ -65,6 +66,66 @@ public class ReactionBarTests : IAsyncDisposable
             Assert.NotNull(result);
             Assert.Equal(expectedTag, result.Value.Tag);
             Assert.Equal(expectedWeight, result.Value.Weight);
+        });
+    }
+
+    [Theory]
+    [InlineData("真実", "reaction-shinji")]
+    [InlineData("善", "reaction-zen")]
+    [InlineData("美", "reaction-bi")]
+    public async Task ReactionBar_ClickReactionChip_NavigatesToItemDetailWithQuery(string expectedTag, string testId)
+    {
+        const int itemId = 42;
+        NavigationManager navManager = _ctx.Services.GetRequiredService<NavigationManager>();
+
+        IRenderedComponent<ReactionBar> cut = _ctx.Render<ReactionBar>(parameters => parameters
+            .Add(p => p.ItemId, itemId));
+
+        IElement chip = cut.Find($"[data-testid='{testId}']");
+        chip.Click();
+
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Contains($"/ItemDetail/{itemId}", navManager.Uri);
+            Assert.Contains($"f=name%3A{Uri.EscapeDataString(expectedTag)}", navManager.Uri);
+        });
+    }
+
+    [Theory]
+    [InlineData("真実", "reaction-shinji")]
+    [InlineData("善", "reaction-zen")]
+    [InlineData("美", "reaction-bi")]
+    public async Task ReactionBar_ClickReactionChip_TriggersOnReactionTagClickedCallback(string expectedTag, string testId)
+    {
+        string? clickedTag = null;
+        IRenderedComponent<ReactionBar> cut = _ctx.Render<ReactionBar>(parameters => parameters
+            .Add(p => p.OnReactionTagClicked, EventCallback.Factory.Create<string>(this, tag => clickedTag = tag)));
+
+        IElement chip = cut.Find($"[data-testid='{testId}']");
+        chip.Click();
+
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Equal(expectedTag, clickedTag);
+        });
+    }
+
+    [Fact]
+    public async Task ReactionBar_KeyDownEnterOnChip_NavigatesToItemDetailWithQuery()
+    {
+        const int itemId = 100;
+        NavigationManager navManager = _ctx.Services.GetRequiredService<NavigationManager>();
+
+        IRenderedComponent<ReactionBar> cut = _ctx.Render<ReactionBar>(parameters => parameters
+            .Add(p => p.ItemId, itemId));
+
+        IElement chip = cut.Find("[data-testid='reaction-shinji']");
+        chip.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" });
+
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Contains($"/ItemDetail/{itemId}", navManager.Uri);
+            Assert.Contains($"f=name%3A{Uri.EscapeDataString("真実")}", navManager.Uri);
         });
     }
 }

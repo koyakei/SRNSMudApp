@@ -1,4 +1,7 @@
+@using Microsoft.AspNetCore.Components.Web
 @using MudBlazor
+@using SRNSMudApp.Components.Item
+@inject NavigationManager NavigationManager
 
 <div class="d-flex align-center flex-wrap gap-3 mt-2 mb-1 reaction-bar">
     @* --- 真実 --- *@
@@ -6,6 +9,10 @@
         <span id="reaction-chip-shinji"
               data-testid="reaction-shinji"
               aria-label="真実リアクション"
+              role="button"
+              tabindex="0"
+              @onclick="@(() => HandleTagClickAsync("真実"))"
+              @onkeydown="@(e => HandleKeyDownAsync(e, "真実"))"
               class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
             <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" Color="Color.Info" Class="mr-1" />
             <MudText Typo="Typo.body2" Class="font-weight-medium">
@@ -37,6 +44,10 @@
         <span id="reaction-chip-zen"
               data-testid="reaction-zen"
               aria-label="善リアクション"
+              role="button"
+              tabindex="0"
+              @onclick="@(() => HandleTagClickAsync("善"))"
+              @onkeydown="@(e => HandleKeyDownAsync(e, "善"))"
               class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
             <MudIcon Icon="@Icons.Material.Filled.Favorite" Size="Size.Small" Color="Color.Success" Class="mr-1" />
             <MudText Typo="Typo.body2" Class="font-weight-medium">
@@ -68,6 +79,10 @@
         <span id="reaction-chip-bi"
               data-testid="reaction-bi"
               aria-label="美リアクション"
+              role="button"
+              tabindex="0"
+              @onclick="@(() => HandleTagClickAsync("美"))"
+              @onkeydown="@(e => HandleKeyDownAsync(e, "美"))"
               class="reaction-chip d-flex align-center px-2 py-1 rounded-pill">
             <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" Color="Color.Secondary" Class="mr-1" />
             <MudText Typo="Typo.body2" Class="font-weight-medium">
@@ -96,6 +111,8 @@
 </div>
 
 @code {
+    [Parameter] public int ItemId { get; set; }
+
     [Parameter] public int ShinjiScore { get; set; }
     [Parameter] public int ZenScore { get; set; }
     [Parameter] public int BiScore { get; set; }
@@ -110,4 +127,32 @@
     [Parameter] public bool IsBiDownvoted { get; set; }
 
     [Parameter] public EventCallback<(string ReactionTagName, int TargetWeight)> OnReactionVoteClicked { get; set; }
+    [Parameter] public EventCallback<string> OnReactionTagClicked { get; set; }
+
+    private async Task HandleTagClickAsync(string tagName)
+    {
+        if (OnReactionTagClicked.HasDelegate)
+        {
+            await OnReactionTagClicked.InvokeAsync(tagName);
+        }
+
+        if (ItemId > 0)
+        {
+            var parameters = new ItemDetailQueryState
+            {
+                Filters = [FilterEntry.FromName(tagName)]
+            }.BuildParameters();
+            var uri = NavigationManager.GetUriWithQueryParameters($"/ItemDetail/{ItemId}", parameters);
+            NavigationManager.NavigateTo(uri);
+        }
+    }
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e, string tagName)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await HandleTagClickAsync(tagName);
+        }
+    }
 }
+
