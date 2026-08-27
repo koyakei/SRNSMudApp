@@ -2,8 +2,6 @@ using System.Diagnostics;
 
 using SRNSMudApp.Components.UI;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.Components.UI;
 
 /// <summary>

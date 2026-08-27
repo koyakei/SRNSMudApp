@@ -329,7 +329,7 @@ public partial class ItemCard : IAsyncDisposable
             "真実" => CurrentUserShinjiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "真実" && t.IsSystem)?.Id,
             "善" => CurrentUserZenTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "善" && t.IsSystem)?.Id,
             "美" => CurrentUserBiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "美" && t.IsSystem)?.Id,
-            _ => (int?)null
+            _ => null
         };
 
         Tag reactionTag;
@@ -439,11 +439,13 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
+#pragma warning disable CA1508
         var requiresContract = tagFromDb.GetKind() switch
         {
             UserCustomTag custom => custom.OwnerId != CurrentUserId,
             SystemClassificationTag or VoteTag or ReactionTag => false
         };
+#pragma warning restore CA1508
 
         if (requiresContract)
         {

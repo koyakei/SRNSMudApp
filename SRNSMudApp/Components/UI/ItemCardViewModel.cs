@@ -114,12 +114,12 @@ public static class ItemCardViewModel
         string? currentUserId,
         int? reactionTagId,
         string? reactionTagName = null)
-        => !string.IsNullOrEmpty(currentUserId) && tagRelations != null &&
-           tagRelations.Any(tr =>
+        => !string.IsNullOrEmpty(currentUserId) &&
+           tagRelations?.Any(tr =>
                tr.OwnerId == currentUserId &&
                tr.Weight > 0 &&
                ((reactionTagId is { } tagId && tr.TagId == tagId) ||
-                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName)));
+                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName))) == true;
 
     /// <summary>
     ///     現在のユーザーがアイテムに指定リアクションをダウンボート済み（Weight &lt; 0）かどうかを返す。
@@ -129,12 +129,12 @@ public static class ItemCardViewModel
         string? currentUserId,
         int? reactionTagId,
         string? reactionTagName = null)
-        => !string.IsNullOrEmpty(currentUserId) && tagRelations != null &&
-           tagRelations.Any(tr =>
+        => !string.IsNullOrEmpty(currentUserId) &&
+           tagRelations?.Any(tr =>
                tr.OwnerId == currentUserId &&
                tr.Weight < 0 &&
                ((reactionTagId is { } tagId && tr.TagId == tagId) ||
-                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName)));
+                (!string.IsNullOrEmpty(reactionTagName) && tr.Tag?.Name == reactionTagName))) == true;
 
     /// <summary>
     ///     現在のユーザーがアイテムに指定リアクションを付与済みかどうかを返す。

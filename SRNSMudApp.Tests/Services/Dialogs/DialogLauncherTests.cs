@@ -1,7 +1,5 @@
 #region
 
-using System.Threading.Tasks;
-
 using Bunit;
 
 using Microsoft.AspNetCore.Components;
@@ -12,8 +10,6 @@ using Moq;
 using MudBlazor;
 
 using SRNSMudApp.Services.Dialogs;
-
-using Xunit;
 
 #endregion
 

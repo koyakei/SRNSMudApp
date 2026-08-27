@@ -1,15 +1,9 @@
 #region
-using System;
-using System.Threading.Tasks;
-
 using Bunit;
 
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
-using SRNSMudApp.Tests.TestSupport;
-
-using Xunit;
 #endregion
 
 namespace SRNSMudApp.Tests.Components.Tag;

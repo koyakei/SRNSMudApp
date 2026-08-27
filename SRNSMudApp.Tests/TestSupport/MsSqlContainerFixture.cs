@@ -1,7 +1,5 @@
 using Testcontainers.MsSql;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.TestSupport;
 
 /// <summary>

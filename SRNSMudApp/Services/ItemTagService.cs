@@ -395,14 +395,14 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         await (tagOption switch
         {
-            Some<Tag> someTag => ExecuteAddTagToTagLedgerAsync(context, someTag.Value, newRelation.Id, currentUserId),
+            Some<Tag> someTag => ExecuteAddTagToTagLedgerAsync(context, someTag.Value, currentUserId),
             _ => Task.CompletedTask
         });
 
         return null;
     }
 
-    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int relationId, string currentUserId)
+    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, string currentUserId)
     {
         var prevWeight = tagFromDb.CachedWeight;
         tagFromDb.CachedWeight += 1;

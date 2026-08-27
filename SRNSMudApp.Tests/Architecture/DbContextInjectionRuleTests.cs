@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Reflection;
 
 using Microsoft.AspNetCore.Components;
@@ -8,8 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using MudBlazor;
 
 using SRNSMudApp.Data;
-
-using Xunit;
 
 namespace SRNSMudApp.Tests.Architecture;
 

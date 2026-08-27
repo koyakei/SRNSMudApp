@@ -1,7 +1,6 @@
 #region
 
 using SRNSMudApp.Components.Tag;
-using SRNSMudApp.Data;
 
 #endregion
 

@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 using AngleSharp.Dom;
 
 using Bunit;
@@ -15,11 +10,7 @@ using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
-using SRNSMudApp.Data;
 using SRNSMudApp.Services;
-using SRNSMudApp.Tests.TestSupport;
-
-using Xunit;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 

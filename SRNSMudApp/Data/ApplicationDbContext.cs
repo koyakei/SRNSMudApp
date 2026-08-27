@@ -467,14 +467,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             // 1. Tag のオーナー権限検証 (SystemClassificationTag は誰でも無償付与可能、UserCustomTag は本人のみ)
             Tag tag = await Tags.FindAsync(tagId) ?? throw new InvalidOperationException("指定されたタグが見つかりません。");
-#pragma warning disable CA1508
+#pragma warning disable CA1508, IDE0072
             var isAuthorized = tag.GetKind() switch
             {
                 UserCustomTag custom => custom.OwnerId == currentUserId,
                 SystemClassificationTag => true,
                 VoteTag or ReactionTag => false
             };
-#pragma warning restore CA1508
+#pragma warning restore CA1508, IDE0072
 
             if (!isAuthorized)
             {

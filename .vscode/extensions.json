@@ -1,16 +1,18 @@
 {
     "recommendations": [
-        // --- 1. C#言語サーバー & デバッガ (MITライセンス準拠) ---
-        // RoslynベースのIntelliSenseとnetcoredbgを用いたデバッグを提供するコアエンジン
-        "nromanov.dotrush",
+        // --- 1. C#言語サーバー & デバッガ ---
+        // C# Dev Kit を使用してIntelliSenseとデバッグを提供するコアエンジン
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime",
         // --- 2. データベース管理 (MSSQLへのアクセス) ---
-        // 公式mssqlの代替。Docker上のDBへの接続、クエリ実行、モックデータ生成を担う
+        // Docker上のDBへの接続、クエリ実行、モックデータ生成を担う
         "cweijan.vscode-database-client2",
-        // --- 3. Docker・コンテナインフラ管理 (MITライセンス準拠) ---
+        // --- 3. Docker・コンテナインフラ管理 ---
         // MSSQLコンテナやWebAPIコンテナのオーケストレーション、ログ監視用
         "ms-azuretools.vscode-docker",
         // --- 4. フロントエンド開発支援 (MudBlazor / Razor用) ---
-        // DotRushのRazor構文解析の弱点を補い、マークアップ記述を加速する
+        // Razor構文解析を補い、マークアップ記述を加速する
         "adrianwilczynski.blazor-snippet-pack",
         "formulahendry.auto-complete-tag",
         "formulahendry.auto-rename-tag",
@@ -19,10 +21,6 @@
         "aaron-bond.better-comments"
     ],
     "unwantedRecommendations": [
-        // --- 警告: 以下の拡張機能はVS Code公式バイナリ専用のライセンスであるため除外 ---
-        "ms-dotnettools.csharp",
-        "ms-dotnettools.csdevkit",
-        "ms-dotnettools.vscode-dotnet-runtime",
-        "ms-mssql.mssql"
+        "nromanov.dotrush"
     ]
 }

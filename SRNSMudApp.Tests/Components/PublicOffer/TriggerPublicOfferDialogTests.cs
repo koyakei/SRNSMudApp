@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 
 using AngleSharp.Dom;
 
@@ -22,9 +17,6 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
-using SRNSMudApp.Tests.TestSupport;
-
-using Xunit;
 
 namespace SRNSMudApp.Tests.Components.PublicOffer;
 

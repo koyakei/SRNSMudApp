@@ -56,11 +56,9 @@ public static class TagTreeViewModel
 
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
     public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Tag> filteredTags)
-    {
-        return BuildTreeDataInternal(parentId, filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags], []);
-    }
+        => BuildTreeDataInternal(parentId, filteredTags as IReadOnlyCollection<Tag> ?? [.. filteredTags], []);
 
-    private static IReadOnlyList<object> BuildTreeDataInternal(int? parentId, IReadOnlyCollection<Tag> tagList, HashSet<int> visitedInPath)
+    private static List<object> BuildTreeDataInternal(int? parentId, IReadOnlyCollection<Tag> tagList, HashSet<int> visitedInPath)
     {
         List<object> result = [];
         List<Tag> children;
@@ -91,7 +89,7 @@ public static class TagTreeViewModel
             }
 
             var nextVisited = new HashSet<int>(visitedInPath) { child.Id };
-            IReadOnlyList<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, nextVisited);
+            var nodeChildren = BuildTreeDataInternal(child.Id, tagList, nextVisited);
             switch (nodeChildren.Count)
             {
                 case 0:

@@ -3,8 +3,6 @@ using MudBlazor;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.Components.UI;
 
 /// <summary>

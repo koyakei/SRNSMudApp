@@ -2,14 +2,11 @@ using SRNSMudApp.Components.Pages;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.Components.Pages;
 
 using Item = SRNSMudApp.Data.Item;
 // 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
 // エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
 
 /// <summary>
 ///     NotificationsViewModel の単体テスト。

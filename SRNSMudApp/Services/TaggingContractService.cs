@@ -610,7 +610,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return await (assetValidation switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<RightAsset?> s => ProcessTriggerAssetActionAsync(contract, offer, s.Value, executorUserId)
+            Success<RightAsset?> s => ProcessTriggerAssetActionAsync(contract, offer, s.Value)
         });
     }
 
@@ -625,7 +625,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         };
     }
 
-    private async Task<Result<string>> ProcessTriggerAssetActionAsync(TaggingRequestEntity contract, PublicTradeOffer offer, RightAsset? validatedAsset, string executorUserId)
+    private async Task<Result<string>> ProcessTriggerAssetActionAsync(TaggingRequestEntity contract, PublicTradeOffer offer, RightAsset? validatedAsset)
     {
         var consumedAssetId = await (validatedAsset switch
         {

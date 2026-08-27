@@ -55,7 +55,6 @@ public partial class TagTree : IAsyncDisposable
 
         await LoadDataAsync();
         _dataLoaded = true;
-        StateHasChanged();
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

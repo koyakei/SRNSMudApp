@@ -1,7 +1,5 @@
 using SRNSMudApp.Components.Item;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.Components.Item;
 
 /// <summary>

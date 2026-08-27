@@ -67,19 +67,16 @@ public class ItemListDataProvider(
             .Select(t => (HierarchyId?)t.Node)
             .FirstOrDefaultAsync();
 
-        if (ancestorNode is null)
-        {
-            return [];
-        }
-
-        return await context.Items
-            .AsNoTracking()
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
-            .Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(ancestorNode)))
-            .OrderByDescending(i => i.UpdatedDate)
-            .ToListAsync();
+        return ancestorNode is null
+            ? []
+            : await context.Items
+                .AsNoTracking()
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                .Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(ancestorNode)))
+                .OrderByDescending(i => i.UpdatedDate)
+                .ToListAsync();
     }
 
     public async Task<Dictionary<int, Tag>> GetTagsByIdsAsync(IEnumerable<int> tagIds)

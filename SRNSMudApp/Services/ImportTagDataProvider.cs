@@ -116,17 +116,11 @@ public class ImportTagDataProvider(
 
         try
         {
-            Tag? baseParentTag = null;
-            if (existingTags.TryGetValue(selectedParentTagName, out Tag? trackedBaseTag))
-            {
-                baseParentTag = trackedBaseTag;
-            }
-            else
-            {
-                baseParentTag = await dbContext.Tags.FirstOrDefaultAsync(t =>
+            Tag? baseParentTag = existingTags.TryGetValue(selectedParentTagName, out Tag? trackedBaseTag)
+                ? trackedBaseTag
+                : await dbContext.Tags.FirstOrDefaultAsync(t =>
                     (t.OwnerId == userId || t.IsSystem || t.OwnerId == "system") && t.Name == selectedParentTagName)
                     ?? await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
-            }
 
             foreach (var line in lines)
             {
@@ -212,12 +206,5 @@ public class ImportTagDataProvider(
     }
 
     private static bool IsDescendantOrSelf(Tag parent, Tag target)
-    {
-        if (ReferenceEquals(parent, target) || parent.Id == target.Id)
-        {
-            return true;
-        }
-
-        return target.Node.IsDescendantOf(parent.Node);
-    }
+        => ReferenceEquals(parent, target) || parent.Id == target.Id || target.Node.IsDescendantOf(parent.Node);
 }

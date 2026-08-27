@@ -1,8 +1,6 @@
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 
-using Xunit;
-
 namespace SRNSMudApp.Tests.Components.Tag;
 
 // 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
