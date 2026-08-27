@@ -1,13 +1,24 @@
+@using SRNSMudApp.Components.Tag
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models
+
 <div class="d-flex justify-space-between align-center mb-4">
     <MudText Typo="Typo.h5">付けられたタグ</MudText>
 
-    <MudTextField @bind-Value="_searchString"
-                  Placeholder="タグ名またはユーザー名で検索"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
-                  IconSize="Size.Medium"
-                  Class="mt-0 search-input"
-                  Clearable="true"/>
+    <MudAutocomplete @ref="_autocomplete"
+                     T="string"
+                     Value="@_searchString"
+                     ValueChanged="HandleValueChangedAsync"
+                     SearchFunc="@SearchSuggestionsAsync"
+                     Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..."
+                     Adornment="Adornment.Start"
+                     AdornmentIcon="@Icons.Material.Filled.Search"
+                     IconSize="Size.Medium"
+                     Class="mt-0 search-input"
+                     DebounceInterval="300"
+                     Clearable="true"
+                     ResetValueOnEmptyText="true"
+                     MaxItems="10"/>
 </div>
 
 <MudTable Items="@TagRelations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Filter="FilterFunc"
@@ -46,28 +57,3 @@
         <MudTablePager/>
     </PagerContent>
 </MudTable>
-
-@code {
-    [Parameter] public IEnumerable<TagRelation> TagRelations { get; set; } = [];
-    [Parameter] public Item Item { get; set; } = null!;
-    [Parameter] public string CurrentUserId { get; set; } = "";
-    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
-    [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
-    [Parameter] public EventCallback OnDataChanged { get; set; }
-
-    private string _searchString = "";
-
-    private bool FilterFunc(TagRelation relation)
-    {
-        switch (string.IsNullOrWhiteSpace(_searchString))
-        {
-            case true: return true;
-        }
-
-        var nameMatch = relation.Tag?.Name?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
-        var userMatch = relation.Tag?.Owner?.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true;
-
-        return nameMatch || userMatch;
-    }
-
-}

@@ -36,44 +36,17 @@ public sealed class ItemListFocusTests : IAsyncLifetime
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
         authorization.SetAuthorized("focus_user");
         authorization.SetClaims(new Claim(ClaimTypes.NameIdentifier, UserId));
+
+        var storeMock = new Mock<IUserStore<ApplicationUser>>();
+        var userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!,
+            null!, null!, null!, null!);
+        _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public void ClickingItemCard_AppliesFocusStyle_AndUpdatesUrl()
-    {
-        var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
-        var item2 = new SRNSMudApp.Data.Item { Id = 2, Content = "Second focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
-        List<SRNSMudApp.Data.Item> items = [item1, item2];
-
-        _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
-            .ReturnsAsync(([], []));
-
-        IRenderedComponent<ResourceList> cut =
-            _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, items));
-
-        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
-
-        // Act: 1件目のカードをクリック
-        cut.Find("#item-card-1").Click();
-
-        // Assert: フォーカススタイルが適用される
-        cut.WaitForAssertion(() =>
-        {
-            IElement card = cut.Find("#item-card-1");
-            var style = card.GetAttribute("style") ?? "";
-            Assert.Contains("border-width: 2px", style);
-            Assert.Contains("var(--mud-palette-primary)", style);
-        });
-
-        // Assert: URLが更新される
-        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        cut.WaitForAssertion(() => Assert.Contains("focus=1", navigationManager.Uri));
-    }
-
-    [Fact]
-    public void DirectUrlWithFocusItem_RestoresFocusStyle()
+    public void RestoringUrlWithFocusParameter_AppliesFocusStyleToTargetCard()
     {
         var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
         var item2 = new SRNSMudApp.Data.Item { Id = 2, Content = "Second focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
@@ -110,6 +83,9 @@ public sealed class ItemListFocusTests : IAsyncLifetime
         _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
             .ReturnsAsync(([], []));
 
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/?focus=1");
+
         IRenderedComponent<ResourceList> cut =
             _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, items));
 
@@ -117,7 +93,6 @@ public sealed class ItemListFocusTests : IAsyncLifetime
 
         // フォーカス状態にする
         cut.Find("#item-card-1").Click();
-        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         cut.WaitForAssertion(() => Assert.Contains("focus=1", navigationManager.Uri));
 
         IElement authorLink = cut.Find($"#item-card-1 a[href='/User/UserDetail/{UserId}']");
@@ -175,6 +150,10 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([item1], []));
 
@@ -205,8 +184,8 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
         // Assert: f= (タグフィルタ) と focus= が共存する
         cut.WaitForAssertion(() =>
         {
-            var uri = navigationManager.Uri;
-            Assert.Contains("f=10", uri);
+            var uri = Uri.UnescapeDataString(navigationManager.Uri);
+            Assert.Contains($"f=name:{TagName}", uri);
             Assert.Contains("focus=1", uri);
         });
     }

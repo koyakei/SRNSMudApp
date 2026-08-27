@@ -1,3 +1,6 @@
+// CA1508, IDE0010: union 型 (ItemListFilter) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
+#pragma warning disable CA1508, IDE0010
+
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 
@@ -7,8 +10,15 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Services;
 
-/// <summary>タグフィルタ条件 (ユーザー名指定は任意)。</summary>
-public sealed record ItemListFilter(int TagId, string? UserName);
+/// <summary>特定タグIDによるフィルタ条件。</summary>
+public sealed record TagIdFilter(int TagId, string? UserName);
+
+/// <summary>タグ名による同名タグ全件フィルタ条件。</summary>
+public sealed record TagNameFilter(string TagName, string? UserName);
+
+/// <summary>タグフィルタ条件 (TagId 指定 または TagName 指定)。</summary>
+[SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
+public union ItemListFilter(TagIdFilter, TagNameFilter);
 
 /// <summary>ソート条件。</summary>
 public sealed record ItemListSort(int TagId, bool Ascending);
@@ -30,6 +40,9 @@ public interface IItemListDataProvider
 {
     /// <summary>ID 群に一致するタグを取得する。</summary>
     Task<Dictionary<int, Tag>> GetTagsByIdsAsync(IEnumerable<int> tagIds);
+
+    /// <summary>タグ名群に一致する代表タグを取得する。</summary>
+    Task<Dictionary<string, Tag>> GetTagsByNamesAsync(IEnumerable<string> tagNames);
 
     Task<Tag?> FindTagByNameAsync(string tagName);
 
@@ -86,13 +99,29 @@ public class ItemListDataProvider(
         {
             return [];
         }
-        
+
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
             .AsNoTracking()
             .Where(t => ids.Contains(t.Id))
             .ToListAsync();
         return tags.ToDictionary(t => t.Id);
+    }
+
+    public async Task<Dictionary<string, Tag>> GetTagsByNamesAsync(IEnumerable<string> tagNames)
+    {
+        var names = tagNames.Distinct().ToList();
+        if (names.Count == 0)
+        {
+            return [];
+        }
+
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        List<Tag> tags = await context.Tags
+            .AsNoTracking()
+            .Where(t => names.Contains(t.Name))
+            .ToListAsync();
+        return tags.GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
     }
 
     public async Task<Tag?> FindTagByNameAsync(string tagName)
@@ -204,19 +233,43 @@ public class ItemListDataProvider(
         {
             foreach (ItemListFilter filter in filters)
             {
-                if (string.IsNullOrWhiteSpace(filter.UserName))
+                switch (filter)
                 {
-                    query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == filter.TagId));
-                    tagQuery = tagQuery.Where(t => t.TargetTagRelations.Any(tr => tr.TagId == filter.TagId));
-                }
-                else
-                {
-                    query = query.Where(i =>
-                        i.TagRelations.Any(tr =>
-                            tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
-                    tagQuery = tagQuery.Where(t =>
-                        t.TargetTagRelations.Any(tr =>
-                            tr.TagId == filter.TagId && tr.Owner.UserName == filter.UserName));
+                    case TagIdFilter idFilter:
+                        if (string.IsNullOrWhiteSpace(idFilter.UserName))
+                        {
+                            query = query.Where(i => i.TagRelations.Any(tr => tr.TagId == idFilter.TagId));
+                            tagQuery = tagQuery.Where(t => t.Id == idFilter.TagId || t.TargetTagRelations.Any(tr => tr.TagId == idFilter.TagId));
+                        }
+                        else
+                        {
+                            query = query.Where(i =>
+                                i.TagRelations.Any(tr =>
+                                    tr.TagId == idFilter.TagId && tr.Owner.UserName == idFilter.UserName));
+                            tagQuery = tagQuery.Where(t =>
+                                (t.Id == idFilter.TagId && t.Owner.UserName == idFilter.UserName) ||
+                                t.TargetTagRelations.Any(tr =>
+                                    tr.TagId == idFilter.TagId && tr.Owner.UserName == idFilter.UserName));
+                        }
+                        break;
+
+                    case TagNameFilter nameFilter:
+                        if (string.IsNullOrWhiteSpace(nameFilter.UserName))
+                        {
+                            query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Name == nameFilter.TagName));
+                            tagQuery = tagQuery.Where(t => t.Name == nameFilter.TagName || t.TargetTagRelations.Any(tr => tr.Tag.Name == nameFilter.TagName));
+                        }
+                        else
+                        {
+                            query = query.Where(i =>
+                                i.TagRelations.Any(tr =>
+                                    tr.Tag.Name == nameFilter.TagName && tr.Owner.UserName == nameFilter.UserName));
+                            tagQuery = tagQuery.Where(t =>
+                                (t.Name == nameFilter.TagName && t.Owner.UserName == nameFilter.UserName) ||
+                                t.TargetTagRelations.Any(tr =>
+                                    tr.Tag.Name == nameFilter.TagName && tr.Owner.UserName == nameFilter.UserName));
+                        }
+                        break;
                 }
             }
 

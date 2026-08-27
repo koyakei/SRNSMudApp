@@ -55,6 +55,10 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([], []));
 
@@ -80,9 +84,10 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
             Assert.Contains(TagName, chip.TextContent);
         });
 
-        // Assert 2: URL クエリに f= (タグフィルタ) が含まれる
+        // Assert 2: URL クエリに f=name: (タグ名フィルタ) が含まれる (URLエンコード対応)
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
-        Assert.Contains("f=10", navigationManager.Uri);
+        var unescapedUri = Uri.UnescapeDataString(navigationManager.Uri);
+        Assert.Contains($"f=name:{TagName}", unescapedUri);
     }
 
     public async Task DisposeAsync()

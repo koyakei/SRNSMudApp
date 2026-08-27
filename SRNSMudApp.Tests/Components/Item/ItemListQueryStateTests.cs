@@ -6,7 +6,7 @@ namespace SRNSMudApp.Tests.Components.Item;
 ///     ItemListQueryState の単体テスト。
 ///     URL クエリパラメータのパースと再構築ロジックを高速に検証する。
 ///     クエリ形式:
-///       f=&lt;tagId&gt; / f=&lt;tagId&gt;@&lt;userName&gt; (繰り返し可)
+///       f=&lt;tagId&gt; / f=&lt;tagId&gt;@&lt;userName&gt; / f=name:&lt;tagName&gt; / f=name:&lt;tagName&gt;@&lt;userName&gt; (繰り返し可)
 ///       sort=&lt;tagId&gt;:&lt;asc|desc&gt; (繰り返し可、出現順 = 優先度)
 ///       item=&lt;itemId&gt; (繰り返し可) / focus=&lt;itemId&gt; / focusTag=&lt;tagId&gt;
 /// </summary>
@@ -27,6 +27,16 @@ public class ItemListQueryStateTests
     }
 
     [Fact]
+    public void ParseFromUri_WithTagNameFilters_ParsesTagNames()
+    {
+        var state = ItemListQueryState.ParseFromUri(new Uri("http://localhost/Item/ItemList?f=name:CSharp&f=name:React@alice"));
+
+        Assert.Equal(2, state.Filters.Count);
+        Assert.Equal(("CSharp", null), (state.Filters[0].TagName, state.Filters[0].UserName));
+        Assert.Equal(("React", "alice"), (state.Filters[1].TagName, state.Filters[1].UserName));
+    }
+
+    [Fact]
     public void ParseFromUri_WithNoFilters_ReturnsEmpty()
     {
         var state = ItemListQueryState.ParseFromUri(new Uri("http://localhost/Item/ItemList"));
@@ -37,7 +47,7 @@ public class ItemListQueryStateTests
     [Fact]
     public void ParseFromUri_WithInvalidFilter_IgnoresInvalidValues()
     {
-        var state = ItemListQueryState.ParseFromUri(new Uri("http://localhost/Item/ItemList?f=5&f=abc&f=0&f=-1"));
+        var state = ItemListQueryState.ParseFromUri(new Uri("http://localhost/Item/ItemList?f=5&f=0&f=-1"));
 
         Assert.Single(state.Filters);
         Assert.Equal(5, state.Filters[0].TagId);
@@ -172,12 +182,12 @@ public class ItemListQueryStateTests
     {
         var state = new ItemListQueryState
         {
-            Filters = [new FilterEntry(12, "alice"), new FilterEntry(3, null)]
+            Filters = [FilterEntry.FromId(12, "alice"), FilterEntry.FromId(3, null), FilterEntry.FromName("React", "bob")]
         };
 
         Dictionary<string, object?> parameters = state.BuildParameters();
 
-        Assert.Equal(["12@alice", "3"], (string[])parameters["f"]!);
+        Assert.Equal(["12@alice", "3", "name:React@bob"], (string[])parameters["f"]!);
     }
 
     [Fact]
@@ -219,7 +229,7 @@ public class ItemListQueryStateTests
     public void BuildParameters_RoundTrip_PreservesAllParameters()
     {
         var original = ItemListQueryState.ParseFromUri(
-            new Uri("http://localhost/Item/ItemList?f=3&f=7@alice&sort=3:desc&sort=7:asc&item=11&item=22&focus=99&focusTag=6"));
+            new Uri("http://localhost/Item/ItemList?f=3&f=7@alice&f=name:React@bob&sort=3:desc&sort=7:asc&item=11&item=22&focus=99&focusTag=6"));
         Dictionary<string, object?> parameters = original.BuildParameters();
 
         var query = string.Join("&",

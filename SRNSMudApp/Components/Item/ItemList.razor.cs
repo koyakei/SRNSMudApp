@@ -1,4 +1,4 @@
-// CA1508: union 型 (TagSearchQuery) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
+// CA1508: union 型 (TagSearchQuery, ItemListFilter) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
 #pragma warning disable CA1508
 
 using Microsoft.AspNetCore.Components;
@@ -37,17 +37,43 @@ public partial class ItemList
 
     protected override async Task OnInitializedAsync()
     {
-        // URL 復元は ItemListQueryState に一元化。タグ ID だけでは表示名が必要なため
-        // フィルタ + ソートで参照される ID を一括取得して Tag 実体へ解決する
+        // URL 復元は ItemListQueryState に一元化。
+        // TagId 指定と TagName 指定の両方のエントリを復元する
         var state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        Dictionary<int, Tag> tagsById = await ListData.GetTagsByIdsAsync(
-            state.Filters.Select(f => f.TagId).Concat(state.SortEntries.Select(e => e.TagId)));
+        var filterTagIds = state.Filters.Where(f => f.TagId.HasValue).Select(f => f.TagId!.Value);
+        var sortTagIds = state.SortEntries.Select(e => e.TagId);
+        Dictionary<int, Tag> tagsById = await ListData.GetTagsByIdsAsync(filterTagIds.Concat(sortTagIds));
+
+        var nameFilters = state.Filters
+            .Where(f => !f.TagId.HasValue && !string.IsNullOrWhiteSpace(f.TagName))
+            .Select(f => f.TagName!)
+            .ToList();
+        Dictionary<string, Tag> tagsByName = await ListData.GetTagsByNamesAsync(nameFilters);
 
         foreach (FilterEntry filter in state.Filters)
         {
-            if (tagsById.TryGetValue(filter.TagId, out Tag? tag))
+            if (filter.TagId.HasValue)
             {
-                _selectedFilters.Add(new TagFilter { Tag = tag, UserName = filter.UserName });
+                if (tagsById.TryGetValue(filter.TagId.Value, out Tag? tag))
+                {
+                    _selectedFilters.Add(new TagFilter
+                    {
+                        TagId = tag.Id,
+                        Tag = tag,
+                        TagName = tag.Name,
+                        UserName = filter.UserName
+                    });
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(filter.TagName))
+            {
+                _ = tagsByName.TryGetValue(filter.TagName, out Tag? tag);
+                _selectedFilters.Add(new TagFilter
+                {
+                    TagName = filter.TagName,
+                    Tag = tag,
+                    UserName = filter.UserName
+                });
             }
         }
 
@@ -123,12 +149,14 @@ public partial class ItemList
     {
         Tag? tag = await ListData.FindTagByNameAsync(tagName);
 
-        if (tag is not null)
+        if (!_selectedFilters.Any(f => f.TagName.Equals(tagName, StringComparison.OrdinalIgnoreCase) && f.UserName == userName))
         {
-            if (!_selectedFilters.Any(f => f.Tag.Id == tag.Id && f.UserName == userName))
+            _selectedFilters.Add(new TagFilter
             {
-                _selectedFilters.Add(new TagFilter { Tag = tag, UserName = userName });
-            }
+                TagName = tagName,
+                Tag = tag,
+                UserName = userName
+            });
         }
 
         _tagSearchText = "";
@@ -142,9 +170,9 @@ public partial class ItemList
         // focus / item などの他パラメータは ItemListQueryState が保持してくれる
         ItemListQueryState updated = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri)) with
         {
-            Filters = [.. _selectedFilters.Select(f => new FilterEntry(
-                f.Tag.Id,
-                string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))],
+            Filters = [.. _selectedFilters.Select(f => f.TagId.HasValue
+                ? FilterEntry.FromId(f.TagId.Value, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName)
+                : FilterEntry.FromName(f.TagName, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))],
             SortEntries = [.. _sortConditions.Select(c => new SortEntry(c.Tag.Id, c.Order))]
         };
 
@@ -155,7 +183,14 @@ public partial class ItemList
     private async Task RemoveTagFilter(TagFilter filter)
     {
         _ = _selectedFilters.Remove(filter);
-        _ = _sortConditions.RemoveAll(c => c.Tag.Id == filter.Tag.Id);
+        if (filter.TagId.HasValue)
+        {
+            _ = _sortConditions.RemoveAll(c => c.Tag.Id == filter.TagId.Value);
+        }
+        else
+        {
+            _ = _sortConditions.RemoveAll(c => c.Tag.Name.Equals(filter.TagName, StringComparison.OrdinalIgnoreCase));
+        }
         UpdateUrlQuery();
         await LoadDataAsync();
     }
@@ -170,8 +205,10 @@ public partial class ItemList
 
     private async Task LoadDataAsync()
     {
-        List<ItemListFilter> filters =
-        [.. _selectedFilters.Select(f => new ItemListFilter(f.Tag.Id, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))];
+        List<ItemListFilter> filters = [.. _selectedFilters.Select(f => f.TagId.HasValue
+            ? new ItemListFilter(new TagIdFilter(f.TagId.Value, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))
+            : new ItemListFilter(new TagNameFilter(f.TagName, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName)))];
+
         List<ItemListSort> sorts =
         [.. _sortConditions.Select(c => new ItemListSort(c.Tag.Id, c.Order == SortOrder.Asc))];
 
@@ -206,7 +243,9 @@ public partial class ItemList
 
     private Task<IEnumerable<Tag>> SearchSortTagsAsync(string? value, CancellationToken token)
     {
-        IEnumerable<Tag> source = _selectedFilters.Select(f => f.Tag);
+        IEnumerable<Tag> source = _selectedFilters
+            .Select(f => f.Tag)
+            .Where(t => t != null)!;
 
         return Task.FromResult(string.IsNullOrWhiteSpace(value)
             ? source

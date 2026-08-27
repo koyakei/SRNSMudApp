@@ -5,14 +5,18 @@ using Microsoft.Extensions.Primitives;
 
 namespace SRNSMudApp.Components.Item;
 
-/// <summary>URL クエリ上のタグフィルタ 1 件分 (タグ ID + 任意ユーザー名)。</summary>
-public sealed record FilterEntry(int TagId, string? UserName);
+/// <summary>URL クエリ上のタグフィルタ 1 件分 (タグ ID またはタグ名 + 任意ユーザー名)。</summary>
+public sealed record FilterEntry(int? TagId, string? TagName, string? UserName)
+{
+    public static FilterEntry FromId(int tagId, string? userName = null) => new(tagId, null, userName);
+    public static FilterEntry FromName(string tagName, string? userName = null) => new(null, tagName, userName);
+}
 
 /// <summary>
 ///     ItemList ページの URL クエリ状態を表す値オブジェクト。
 ///     URL 形式は以下の繰り返し可能なキーで構成される:
 ///     <list type="bullet">
-///         <item><c>f</c>: フィルタ (<c>&lt;tagId&gt;</c> または <c>&lt;tagId&gt;@&lt;userName&gt;</c>)</item>
+///         <item><c>f</c>: フィルタ (<c>&lt;tagId&gt;</c>、<c>&lt;tagId&gt;@&lt;userName&gt;</c>、<c>name:&lt;tagName&gt;</c>、<c>name:&lt;tagName&gt;@&lt;userName&gt;</c>)</item>
 ///         <item><c>sort</c>: ソート (<c>&lt;tagId&gt;:&lt;asc|desc&gt;</c>、出現順 = 優先度)</item>
 ///         <item><c>item</c>: 選択アイテム ID (将来の一括操作に備えた予約域)</item>
 ///         <item><c>focus</c>: スクロール対象アイテム ID (単一)</item>
@@ -43,6 +47,8 @@ public sealed record ItemListQueryState
     private const string ItemKey = "item";
     private const string FocusKey = "focus";
     private const string FocusTagKey = "focusTag";
+
+    private const string NamePrefix = "name:";
 
     /// <summary>
     ///     URI のクエリ部分をパースして <see cref="ItemListQueryState" /> を生成する。
@@ -87,20 +93,26 @@ public sealed record ItemListQueryState
 
         foreach (var value in values)
         {
-            // "tagId@userName" 形式。最初の '@' で分割し、ID は先頭の数字列として解釈するため
-            // ユーザー名に '@' が含まれても破綻しない
             if (string.IsNullOrEmpty(value))
             {
                 continue;
             }
 
             var separatorIndex = value.IndexOf('@', StringComparison.Ordinal);
-            var idPart = separatorIndex < 0 ? value : value[..separatorIndex];
+            var mainPart = separatorIndex < 0 ? value : value[..separatorIndex];
             var userName = separatorIndex < 0 ? null : value[(separatorIndex + 1)..];
 
-            if (int.TryParse(idPart, out var tagId) && tagId > 0)
+            if (mainPart.StartsWith(NamePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                yield return new FilterEntry(tagId, userName);
+                var tagName = mainPart[NamePrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(tagName))
+                {
+                    yield return FilterEntry.FromName(tagName, userName);
+                }
+            }
+            else if (int.TryParse(mainPart, out var tagId) && tagId > 0)
+            {
+                yield return FilterEntry.FromId(tagId, userName);
             }
         }
     }
@@ -163,10 +175,19 @@ public sealed record ItemListQueryState
             : null;
     }
 
-    private static string EncodeFilter(FilterEntry filter) =>
-        string.IsNullOrEmpty(filter.UserName)
-            ? filter.TagId.ToString(CultureInfo.InvariantCulture)
-            : $"{filter.TagId}@{filter.UserName}";
+    private static string EncodeFilter(FilterEntry filter)
+    {
+        if (filter.TagId.HasValue)
+        {
+            return string.IsNullOrEmpty(filter.UserName)
+                ? filter.TagId.Value.ToString(CultureInfo.InvariantCulture)
+                : $"{filter.TagId.Value}@{filter.UserName}";
+        }
+
+        return string.IsNullOrEmpty(filter.UserName)
+            ? $"{NamePrefix}{filter.TagName}"
+            : $"{NamePrefix}{filter.TagName}@{filter.UserName}";
+    }
 
     private static string EncodeSort(SortEntry entry) =>
         $"{entry.TagId}:{(entry.Order == SortOrder.Asc ? "asc" : "desc")}";
