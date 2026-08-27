@@ -471,8 +471,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             var isAuthorized = tag.GetKind() switch
             {
                 UserCustomTag custom => custom.OwnerId == currentUserId,
-                SystemClassificationTag => true,
-                VoteTag or ReactionTag => false
+                SystemClassificationTag or ReactionTag => true,
+                VoteTag => false
             };
 #pragma warning restore CA1508, IDE0072
 
