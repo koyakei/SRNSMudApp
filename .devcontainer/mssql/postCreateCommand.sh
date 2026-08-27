@@ -40,5 +40,28 @@ else
         "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'SRNSMudApp') CREATE DATABASE SRNSMudApp;"
 fi
 
+# 6. E2Eテスト用 Playwright ブラウザのインストール
+echo ">>> Playwright ブラウザをインストール中..."
+dotnet build SRNSMudApp.E2ETests/SRNSMudApp.E2ETests.csproj 2>/dev/null
+pwsh SRNSMudApp.E2ETests/bin/Debug/net11.0/playwright.ps1 install --with-deps chromium
+#    ARM64 Linux でも Playwright の Chromium はサポートされている。
+#    --with-deps が Ubuntu resolute で失敗する場合に備え、依存ライブラリを先にインストール。
+echo ">>> Playwright 依存ライブラリをインストール中..."
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+    libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 \
+    libxkbcommon0 libatspi2.0-0t64 libxcomposite1 libxdamage1 libxfixes3 \
+    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libwayland-client0 \
+    2>/dev/null || \
+sudo apt-get install -y --no-install-recommends \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 \
+    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libwayland-client0 \
+    2>/dev/null || true
+
+echo ">>> Playwright Chromium をインストール中..."
+dotnet build SRNSMudApp.E2ETests/SRNSMudApp.E2ETests.csproj -c Debug 2>/dev/null || true
+pwsh SRNSMudApp.E2ETests/bin/Debug/net11.0/playwright.ps1 install chromium
+
 echo "=== postCreateCommand: 完了 ==="
 

@@ -4,6 +4,10 @@ services:
   app:
     image: mcr.microsoft.com/devcontainers/dotnet:11.0-preview
 
+    # Docker-in-Docker feature に必要
+    init: true
+    privileged: true
+
     volumes:
     - ../..:/workspaces:cached
 
