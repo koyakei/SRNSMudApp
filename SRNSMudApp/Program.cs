@@ -18,8 +18,6 @@ using SRNSMudApp.Services;
 using SRNSMudApp.Services.Auth;
 using SRNSMudApp.Services.Dialogs;
 
-using _Imports = SRNSMudApp.Client._Imports;
-
 #endregion
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
