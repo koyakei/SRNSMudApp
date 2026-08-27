@@ -3,32 +3,11 @@
 @using System.Security.Claims
 @implements IAsyncDisposable
 
-@* ===== タグリスト ===== *@
-@switch (Tags.Any())
-{
-    case true:
-        <MudStack Spacing="3">
-            @foreach (var tag in Tags)
-            {
-                <SRNSMudApp.Components.UI.TagCard Tag="@tag"
-                                                      AllTags="@_allTags"
-                                                      CurrentUserId="@_currentUserId"
-                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                      CurrentUserBadTagId="@_currentUserBadTagId"
-                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                      OnDataChanged="NotifyChangedAsync"
-                                                      IsFocused="@(_focusTagId == tag.Id)"
-                                                      OnFocus="SetFocusTag"/>
-            }
-        </MudStack>
-        break;
-}
-
 @* ===== アイテムリスト ===== *@
 @switch (Items.Any())
 {
     case true:
-        <MudStack Spacing="3" Class="@(Tags.Any() ? "mt-4" : "")">
+        <MudStack Spacing="3">
             @foreach (var item in Items)
             {
                 <SRNSMudApp.Components.UI.ItemCard Item="@item"
@@ -44,6 +23,27 @@
                                                        OnDataChanged="NotifyChangedAsync"
                                                        IsFocused="@(_focusItemId == item.Id)"
                                                        OnFocus="SetFocusItem"/>
+            }
+        </MudStack>
+        break;
+}
+
+@* ===== タグリスト ===== *@
+@switch (Tags.Any())
+{
+    case true:
+        <MudStack Spacing="3" Class="@(Items.Any() ? "mt-4" : "")">
+            @foreach (var tag in Tags)
+            {
+                <SRNSMudApp.Components.UI.TagCard Tag="@tag"
+                                                      AllTags="@_allTags"
+                                                      CurrentUserId="@_currentUserId"
+                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                      CurrentUserBadTagId="@_currentUserBadTagId"
+                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                      OnDataChanged="NotifyChangedAsync"
+                                                      IsFocused="@(_focusTagId == tag.Id)"
+                                                      OnFocus="SetFocusTag"/>
             }
         </MudStack>
         break;
