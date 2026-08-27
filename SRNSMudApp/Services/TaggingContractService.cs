@@ -286,6 +286,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = newRelation.Id,
             ConsumedRightAssetId = consumedAssetId,
@@ -340,6 +341,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = relation.Id,
             ConsumedRightAssetId = consumedAssetId,
@@ -449,6 +451,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = requestedTag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = relation1.Id,
             ConsumedRightAssetId = requesterAssetId,
@@ -504,6 +507,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = requestedTag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = relation.Id,
             ConsumedRightAssetId = requesterAssetId,
@@ -553,6 +557,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = mutualPayload.OfferedTagId,
             TagNameSnapshot = offeredTag.Name,
+            ItemId = mutualPayload.OfferedTargetItemId,
             SourceType = "TagRelation",
             SourceId = relation2.Id,
             ConsumedRightAssetId = offeredTagAsset.Id,
@@ -699,6 +704,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = offer.OfferedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = newRelation.Id,
             ConsumedRightAssetId = consumedAssetId,
@@ -764,6 +770,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = offer.OfferedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = relation.Id,
             ConsumedRightAssetId = consumedAssetId,
@@ -910,6 +917,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = newRelation.Id,
             ConsumedRightAssetId = consumedAssetId,
@@ -1018,6 +1026,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         {
             TagId = contract.RequestedTagId,
             TagNameSnapshot = tag.Name,
+            ItemId = contract.TargetItemId,
             SourceType = "TagRelation",
             SourceId = relation.Id,
             ConsumedRightAssetId = consumedAssetId,

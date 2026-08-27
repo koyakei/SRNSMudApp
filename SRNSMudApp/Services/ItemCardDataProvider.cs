@@ -103,6 +103,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         {
                             TagId = tag.Id,
                             TagNameSnapshot = tag.Name,
+                            ItemId = itemId,
                             SourceType = "TagRelationInsert",
                             SourceId = newRelation.Id,
                             PreviousWeight = prevWeightAdd,
@@ -133,6 +134,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
+                                    ItemId = itemId,
                                     SourceType = "TagRelationDelete",
                                     SourceId = null,
                                     PreviousWeight = prevWeightCancel,
@@ -171,6 +173,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
+                                    ItemId = itemId,
                                     SourceType = "TagRelationUpdate",
                                     SourceId = existingRelation.Id,
                                     PreviousWeight = prevWeightUpdate,
@@ -244,6 +247,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                         {
                             TagId = tag.Id,
                             TagNameSnapshot = tag.Name,
+                            ItemId = itemId,
                             SourceType = "TagRelationInsert",
                             SourceId = newRelation.Id,
                             PreviousWeight = prevWeightAdd,
@@ -274,6 +278,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
+                                    ItemId = itemId,
                                     SourceType = "TagRelationDelete",
                                     SourceId = null,
                                     PreviousWeight = prevWeightCancel,
@@ -313,6 +318,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                                 {
                                     TagId = tag.Id,
                                     TagNameSnapshot = tag.Name,
+                                    ItemId = itemId,
                                     SourceType = "TagRelationUpdate",
                                     SourceId = existingRelation.Id,
                                     PreviousWeight = prevWeightUpdate,

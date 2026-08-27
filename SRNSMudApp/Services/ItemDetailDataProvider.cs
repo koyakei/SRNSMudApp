@@ -57,7 +57,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .Include(l => l.Owner)
             .Include(l => l.TagRelation)
             .ThenInclude(tr => tr.Tag)
-            .Where(l => l.TagRelation != null && l.TagRelation.ItemId == itemId)
+            .Where(l => l.ItemId == itemId || (l.TagRelation != null && l.TagRelation.ItemId == itemId))
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()
             .ToListAsync();

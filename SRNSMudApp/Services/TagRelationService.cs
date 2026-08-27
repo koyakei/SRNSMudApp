@@ -58,6 +58,7 @@ public class TagRelationService(ApplicationDbContext context)
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
+                ItemId = item.Id,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
                 ConsumedRightAssetId = rightAsset.Id,
@@ -164,6 +165,7 @@ public class TagRelationService(ApplicationDbContext context)
             {
                 TagId = tag.Id,
                 TagNameSnapshot = tag.Name,
+                ItemId = item.Id,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
                 ConsumedRightAssetId = rightAsset.Id,

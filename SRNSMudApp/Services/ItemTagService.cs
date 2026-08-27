@@ -108,6 +108,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tagFromDb.Id,
             TagNameSnapshot = tagFromDb.Name,
+            ItemId = itemId,
             SourceType = "TagRelationInsert",
             SourceId = newRelation.Id,
             PreviousWeight = prevWeight,
@@ -174,6 +175,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
+            ItemId = relation.ItemId,
             SourceType = "TagRelationDelete",
             SourceId = relation.Id,
             PreviousWeight = prevWeight,
@@ -231,6 +233,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
+            ItemId = entity.ItemId,
             SourceType = "TagRelationUpdate",
             SourceId = entity.Id,
             PreviousWeight = prevWeight,
@@ -307,6 +310,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         {
             TagId = tag.Id,
             TagNameSnapshot = tag.Name,
+            ItemId = entity.ItemId,
             SourceType = "TagRelationUpdate",
             SourceId = entity.Id,
             PreviousWeight = prevWeight,
