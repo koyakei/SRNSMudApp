@@ -424,6 +424,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             {
                 TagId = tagId,
                 TagNameSnapshot = tag.Name,
+                ItemId = itemId,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
                 ConsumedRightAssetId = asset.Id,
@@ -515,6 +516,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             {
                 TagId = tagId,
                 TagNameSnapshot = tag.Name,
+                ItemId = itemId,
                 SourceType = "TagRelation",
                 SourceId = relation.Id,
                 ConsumedRightAssetId = rightAsset.Id, // 必ずセットされる

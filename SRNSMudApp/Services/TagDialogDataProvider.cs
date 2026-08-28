@@ -208,7 +208,7 @@ public class TagDialogDataProvider(
             return;
         }
 
-        if (newTag.Node == HierarchyId.GetRoot())
+        if (newTag.Node is null || newTag.Node == HierarchyId.GetRoot())
         {
             Tag? parentTag = null;
             if (newTag.ParentTagId.HasValue)
@@ -228,7 +228,7 @@ public class TagDialogDataProvider(
             if (parentTag is not null)
             {
                 HierarchyId? lastChildNode = await dbContext.Tags
-                    .Where(t => t.ParentTagId == parentTag.Id)
+                    .Where(t => t.ParentTagId == parentTag.Id || t.Node.GetAncestor(1) == parentTag.Node)
                     .OrderByDescending(t => t.Node)
                     .Select(t => (HierarchyId?)t.Node)
                     .FirstOrDefaultAsync();
