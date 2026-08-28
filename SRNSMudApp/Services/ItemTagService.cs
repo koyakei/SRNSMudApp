@@ -23,17 +23,17 @@ namespace SRNSMudApp.Services;
 public record OperationAuthorized;
 public record OperationUnauthorized(string Reason);
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union AuthorizationState(OperationAuthorized, OperationUnauthorized);
+public readonly union AuthorizationState(OperationAuthorized, OperationUnauthorized);
 
 public record TagRelationExists;
 public record TagRelationDoesNotExist;
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagRelationState(TagRelationExists, TagRelationDoesNotExist);
+public readonly union TagRelationState(TagRelationExists, TagRelationDoesNotExist);
 
 public record SameTag;
 public record DifferentTag;
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagComparisonState(SameTag, DifferentTag);
+public readonly union TagComparisonState(SameTag, DifferentTag);
 
 public record SameWeight;
 public record DifferentWeight;
@@ -102,7 +102,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = await context.SaveChangesAsync();
 
         var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight += 1;
+        tagFromDb.CachedWeight++;
 
         _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
@@ -409,7 +409,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int targetTagId, string currentUserId)
     {
         var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight += 1;
+        tagFromDb.CachedWeight++;
 
         _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {

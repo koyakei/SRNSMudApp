@@ -1,9 +1,4 @@
-// 兄弟名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-
 namespace SRNSMudApp.Components.UI;
-
-using Tag = SRNSMudApp.Data.Tag;
 
 /// <summary>現在ユーザーの投票用システムタグ ID。</summary>
 public readonly record struct SystemTagIds(int? GoodTagId, int? BadTagId)
@@ -28,7 +23,7 @@ public static class ResourceListViewModel
     /// <summary>
     ///     現在ユーザー所有の投票用システムタグ (good / bad) の ID を返す。
     /// </summary>
-    public static SystemTagIds FindSystemTags(IEnumerable<Tag>? tags, string? currentUserId)
+    public static SystemTagIds FindSystemTags(IEnumerable<Data.Tag>? tags, string? currentUserId)
     {
         if (tags == null || string.IsNullOrEmpty(currentUserId))
         {
@@ -36,10 +31,10 @@ public static class ResourceListViewModel
         }
 
         // CA1851: 複数回の列挙を避けるため一度材料化する
-        List<Tag> tagList = [.. tags];
-        var goodTag = tagList.FirstOrDefault(
+        List<Data.Tag> tagList = [.. tags];
+        Data.Tag? goodTag = tagList.Find(
             t => t.OwnerId == currentUserId && t.Name == "good" && t.IsSystem);
-        var badTag = tagList.FirstOrDefault(
+        Data.Tag? badTag = tagList.Find(
             t => t.OwnerId == currentUserId && t.Name == "bad" && t.IsSystem);
 
         return new SystemTagIds(goodTag?.Id, badTag?.Id);
@@ -48,19 +43,19 @@ public static class ResourceListViewModel
     /// <summary>
     ///     現在ユーザー所有のリアクション用システムタグ (真実 / 善 / 美) の ID を返す。
     /// </summary>
-    public static ReactionTagIds FindReactionTags(IEnumerable<Tag>? tags, string? currentUserId)
+    public static ReactionTagIds FindReactionTags(IEnumerable<Data.Tag>? tags, string? currentUserId)
     {
         if (tags == null || string.IsNullOrEmpty(currentUserId))
         {
             return default;
         }
 
-        List<Tag> tagList = [.. tags];
-        var shinjiTag = tagList.FirstOrDefault(
+        List<Data.Tag> tagList = [.. tags];
+        Data.Tag? shinjiTag = tagList.Find(
             t => t.OwnerId == currentUserId && t.Name == "真実" && t.IsSystem);
-        var zenTag = tagList.FirstOrDefault(
+        Data.Tag? zenTag = tagList.Find(
             t => t.OwnerId == currentUserId && t.Name == "善" && t.IsSystem);
-        var biTag = tagList.FirstOrDefault(
+        Data.Tag? biTag = tagList.Find(
             t => t.OwnerId == currentUserId && t.Name == "美" && t.IsSystem);
 
         return new ReactionTagIds(shinjiTag?.Id, zenTag?.Id, biTag?.Id);

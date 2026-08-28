@@ -2,9 +2,6 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Components.Tag;
 
-// 親名前空間 Tag より先に Data.Item 型を解決させるため、エイリアスを置く
-using Item = SRNSMudApp.Data.Item;
-
 /// <summary>ItemTagRequestChip の表示状態。</summary>
 public sealed record ItemTagRequestChipState(bool Visible, bool IsAdd, int ReplyCount);
 
@@ -20,7 +17,7 @@ public static class ItemTagRequestChipViewModel
     ///     すでに関連付けが存在する追加リクエスト、または関連付けが存在しない削除リクエストも
     ///     非表示（放置されているリクエスト対策）。
     /// </summary>
-    public static ItemTagRequestChipState Compute(TaggingRequestEntity request, Item item)
+    public static ItemTagRequestChipState Compute(TaggingRequestEntity request, Data.Item item)
     {
         // Proposed 以外（Executed / Canceled）は非表示
         if (request.Status is not TradeStatus.Proposed)

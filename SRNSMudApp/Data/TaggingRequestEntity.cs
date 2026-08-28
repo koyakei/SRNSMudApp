@@ -41,7 +41,6 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
         set => RejectionInfoJson = JsonSerializer.Serialize(value);
     }
 
-
     // --- Merged Subclass Properties ---
 
     // Type discriminator equivalent
@@ -64,7 +63,6 @@ public class TaggingRequestEntity : BaseEntity, ITaggable
             : JsonSerializer.Deserialize<ContractPayload>(ContractPayloadJson, PayloadJsonOptions);
         set => ContractPayloadJson = JsonSerializer.Serialize(value, PayloadJsonOptions);
     }
-
 
     // ITaggable Implementation
     public virtual ICollection<Tag> Tags { get; init; } = [];

@@ -178,7 +178,7 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
 
         // Act 2: タグ検索を実行
         IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>().First();
+            cut.FindComponents<MudAutocomplete<string>>()[0];
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName + " @"));
         IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
         await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));

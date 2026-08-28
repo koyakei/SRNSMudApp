@@ -66,7 +66,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             .Where(tr => tr.ItemId == itemId && tr.OwnerId == userId)
             .ToListAsync();
 
-        TagRelation? existingRelation = relations.FirstOrDefault(tr => tr.TagId == goodTagId);
+        TagRelation? existingRelation = relations.Find(tr => tr.TagId == goodTagId);
         Tag? tag = await context.Tags.FindAsync(goodTagId);
 
         switch (existingRelation)

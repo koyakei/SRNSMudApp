@@ -11,12 +11,8 @@ using MudBlazor;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
-
-
 namespace SRNSMudApp.Components.Tag;
 
-using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     TagTree ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、jqTree との JS 連携・
@@ -35,7 +31,7 @@ public partial class TagTree : IAsyncDisposable
 
     private const string TreeContainerId = "jqtree-container";
 
-    private List<Tag> _tags = [];
+    private List<Data.Tag> _tags = [];
     private string? _searchText;
     private DotNetObjectReference<TagTree>? _dotNetRef;
     private bool _isTreeInitialized;
@@ -93,7 +89,7 @@ public partial class TagTree : IAsyncDisposable
         }
     }
 
-    private IEnumerable<Tag> GetFilteredTags() => TagTreeViewModel.FilterTags(_tags, _searchText, _currentUserId);
+    private IEnumerable<Data.Tag> GetFilteredTags() => TagTreeViewModel.FilterTags(_tags, _searchText, _currentUserId);
 
     private string GetSerializedTreeData() => TagTreeViewModel.SerializeTreeData(GetFilteredTags());
 
@@ -204,7 +200,7 @@ public partial class TagTree : IAsyncDisposable
             case { Canceled: false, Data: TagCreateChildDialog.Result data }:
                 try
                 {
-                    Tag newTag = new()
+                    Data.Tag newTag = new()
                     {
                         Name = data.Name,
                         Content = data.Content,
@@ -250,8 +246,8 @@ public partial class TagTree : IAsyncDisposable
         Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
     public async Task OnTreeMove(int movedNodeId, int targetNodeId, string position)
     {
-        var movedItem = _tags.FirstOrDefault(t => t.Id == movedNodeId);
-        var targetItem = _tags.FirstOrDefault(t => t.Id == targetNodeId);
+        Data.Tag? movedItem = _tags.Find(t => t.Id == movedNodeId);
+        Data.Tag? targetItem = _tags.Find(t => t.Id == targetNodeId);
 
         switch ((movedItem, targetItem))
         {

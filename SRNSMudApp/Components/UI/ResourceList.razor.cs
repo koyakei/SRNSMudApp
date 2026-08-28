@@ -19,10 +19,6 @@ using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Components.UI;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-// 兄弟名前空間 ...Tag / .Item が同名型と解決されるため、エイリアスは名前空間の内側に置く
-// 兄弟名前空間 ...Tag / .Item が同名型と解決されるため、エイリアスは名前空間の内側に置く
 /// <summary>
 ///     ResourceList のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、システムタグ解決・フォーカス管理・
@@ -32,8 +28,8 @@ public partial class ResourceList : IAsyncDisposable
 {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    [Parameter] public IEnumerable<Item> Items { get; set; } = [];
-    [Parameter] public IEnumerable<Tag> Tags { get; set; } = [];
+    [Parameter] public IEnumerable<Data.Item> Items { get; set; } = [];
+    [Parameter] public IEnumerable<Data.Tag> Tags { get; set; } = [];
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool EnableUrlUpdate { get; set; } = true;
 
@@ -45,7 +41,7 @@ public partial class ResourceList : IAsyncDisposable
     private string _currentUserId = "";
 
     // ===== タグツリーポップオーバー用ステート（子に渡すため取得しておく） =====
-    private List<Tag> _allTags = [];
+    private List<Data.Tag> _allTags = [];
     private List<TagRelationToTag> _allTagRelationsToTags = [];
 
     // ===== フォーカスステート =====
@@ -74,7 +70,7 @@ public partial class ResourceList : IAsyncDisposable
 
     private async Task FetchTagsAsync()
     {
-        (List<Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
+        (List<Data.Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
         _allTags = tags;
         _allTagRelationsToTags = relations;
 

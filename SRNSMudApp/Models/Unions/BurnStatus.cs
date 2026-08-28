@@ -5,4 +5,4 @@ public record Burned(DateTime BurnedAt);
 public record NotBurned();
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union BurnStatus(Burned, NotBurned);
+public readonly union BurnStatus(Burned, NotBurned);

@@ -25,7 +25,7 @@ public record RequestApprovedNotification(
 public record RequestReplyNotification(int ReplyItemId, int RequestId, string ActorName);
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union NotificationType(
+public readonly union NotificationType(
     TagRequestNotification,
     ItemReplyNotification,
     RequestRejectedNotification,

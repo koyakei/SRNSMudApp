@@ -3,11 +3,6 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-using Item = SRNSMudApp.Data.Item;
-// 親名前空間の下にある namespace Tag / Item より先に Data 側の型を解決させるため、
-// エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagRequestChipViewModel の単体テスト。
 ///     可視性・種別・リプライ件数の分岐を bUnit なしで網羅的に検証する。
@@ -17,7 +12,7 @@ public class ItemTagRequestChipViewModelTests
     private static TaggingRequestEntity CreateRequest(
         TradeStatus status = TradeStatus.Proposed,
         TaggingRequestType type = TaggingRequestType.Add,
-        List<Item>? replies = null) =>
+        List<SRNSMudApp.Data.Item>? replies = null) =>
         new()
         {
             Id = 1,
@@ -26,13 +21,13 @@ public class ItemTagRequestChipViewModelTests
             Status = status,
             RequestType = type,
             RequestedTagId = 10,
-            RequestedTag = new Tag { Id = 10, Name = "target-tag", OwnerId = "owner" },
+            RequestedTag = new SRNSMudApp.Data.Tag { Id = 10, Name = "target-tag", OwnerId = "owner" },
             Replies = replies!
         };
 
-    private static Item CreateItem(params int[] tagIds)
+    private static SRNSMudApp.Data.Item CreateItem(params int[] tagIds)
     {
-        var item = new Item { Id = 1, Content = "item", OwnerId = "owner" };
+        var item = new SRNSMudApp.Data.Item { Id = 1, Content = "item", OwnerId = "owner" };
         foreach (var tagId in tagIds)
         {
             item.TagRelations.Add(new TagRelation
@@ -102,7 +97,7 @@ public class ItemTagRequestChipViewModelTests
     [Fact]
     public void Compute_WithReplies_CountsReplies()
     {
-        List<Item> replies =
+        List<SRNSMudApp.Data.Item> replies =
         [
             new() { Id = 100, Content = "reply-1", OwnerId = "u1", ParentItemId = 1 },
             new() { Id = 101, Content = "reply-2", OwnerId = "u2", ParentItemId = 1 }
@@ -127,7 +122,7 @@ public class ItemTagRequestChipViewModelTests
     public void Compute_WithNullTagRelations_TreatsAsNoTag_DoesNotThrow()
     {
         // Item.TagRelations が null でも例外を投げず hasTag == false 相当として扱う
-        var item = new Item { Id = 1, Content = "item", OwnerId = "owner" };
+        var item = new SRNSMudApp.Data.Item { Id = 1, Content = "item", OwnerId = "owner" };
         item.TagRelations = null!;
 
         var exception = Record.Exception(() =>

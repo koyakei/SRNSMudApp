@@ -2,21 +2,17 @@ using SRNSMudApp.Components.Tag;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     TagTreePopoverViewModel の単体テスト。
 ///     自動展開 ID 計算とツリー行構築を bUnit なしで検証する。
 /// </summary>
 public class TagTreePopoverViewModelTests
 {
-    private static Tag CreateTag(int id, string name, int? parentId = null) =>
+    private static SRNSMudApp.Data.Tag CreateTag(int id, string name, int? parentId = null) =>
         new() { Id = id, Name = name, OwnerId = "user-1", ParentTagId = parentId };
 
     /// <summary>root(1) ─ child(2) ─ grandchild(3)、sibling(4) は child の兄弟。</summary>
-    private static List<Tag> CreateSampleTags() =>
+    private static List<SRNSMudApp.Data.Tag> CreateSampleTags() =>
     [
         CreateTag(1, "root"),
         CreateTag(2, "child", 1),
@@ -106,7 +102,7 @@ public class TagTreePopoverViewModelTests
     [Fact]
     public void BuildTreeLines_WhenVoteTagOrReactionTagIncluded_ExcludesFromTree()
     {
-        var tags = new List<Tag>
+        var tags = new List<SRNSMudApp.Data.Tag>
         {
             CreateTag(1, "root"),
             CreateTag(2, "child", 1),
@@ -128,7 +124,7 @@ public class TagTreePopoverViewModelTests
     [Fact]
     public void BuildTreeLines_WhenTargetIsVoteTagOrReactionTag_ReturnsEmpty()
     {
-        var tags = new List<Tag>
+        var tags = new List<SRNSMudApp.Data.Tag>
         {
             CreateTag(1, "root"),
             CreateTag(2, "good", 1), // VoteTag
@@ -145,7 +141,7 @@ public class TagTreePopoverViewModelTests
     [Fact]
     public void GetAutoExpandIds_WhenTargetIsVoteTagOrReactionTag_ReturnsEmpty()
     {
-        var tags = new List<Tag>
+        var tags = new List<SRNSMudApp.Data.Tag>
         {
             CreateTag(1, "root"),
             CreateTag(2, "good", 1),

@@ -21,9 +21,6 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.Pages;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     NotificationsPage のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、通知取得・既読処理・リクエスト承認/却下などの
@@ -48,7 +45,7 @@ public partial class NotificationsPage
     private IReadOnlyList<NotificationDto> _notifications = [];
     private bool _isLoading = true;
 
-    private List<Tag> _allTags = [];
+    private List<Data.Tag> _allTags = [];
     private List<TagRelationToTag> _allTagRelationsToTags = [];
     private int? _currentUserGoodTagId;
     private int? _currentUserBadTagId;
@@ -76,7 +73,7 @@ public partial class NotificationsPage
 
     private async Task FetchTagsAsync()
     {
-        (List<Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
+        (List<Data.Tag> tags, List<TagRelationToTag> relations) = await HomeData.GetTagsAndRelationsAsync();
         _allTags = tags;
         _allTagRelationsToTags = relations;
 
@@ -101,7 +98,7 @@ public partial class NotificationsPage
             return;
         }
 
-        List<Item> items = await NotificationsData.GetAssociatedItemsAsync(itemIds);
+        List<Data.Item> items = await NotificationsData.GetAssociatedItemsAsync(itemIds);
         NotificationsViewModel.MapAssociatedItems(_notifications, items);
     }
 
@@ -150,7 +147,7 @@ public partial class NotificationsPage
         // UIを更新 (IReadOnlyList のため関数型に置換)
         if (notification.Kind is TagRequestNotification reqNote)
         {
-            var updated = notification with
+            NotificationDto updated = notification with
             {
                 Kind = reqNote with { Status = TradeStatus.Executed },
                 IsRead = true
@@ -184,7 +181,7 @@ public partial class NotificationsPage
                 // UIを更新 (IReadOnlyList のため関数型に置換)
                 if (notification.Kind is TagRequestNotification reqNote)
                 {
-                    var updated = notification with
+                    NotificationDto updated = notification with
                     {
                         Kind = reqNote with { Status = TradeStatus.Rejected },
                         IsRead = true

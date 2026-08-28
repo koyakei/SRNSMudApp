@@ -1,19 +1,12 @@
 
-// using を名前空間の内側に置くことで、兄弟名前空間 SRNSMudApp.Components.Tag よりも
-// 先に SRNSMudApp.Data の Tag 型を解決させる
 using System.Globalization;
 
 using MudBlazor;
 
 using SRNSMudApp.Data;
 
-#region
-
-#endregion
-
 namespace SRNSMudApp.Components.UI;
 
-using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     チップ 1 個分の表示情報。
 /// </summary>
@@ -50,7 +43,7 @@ public static class TagCardViewModel
     private static readonly string[] ChipTextColors = ["#26215C"];
 
     /// <summary>good / bad システムタグへのリレーション数からスコアを計算する。</summary>
-    public static int GetTagScore(Tag tag)
+    public static int GetTagScore(Data.Tag tag)
     {
         var goodCount =
             tag.TargetTagRelations?.Count(tr => tr.Tag?.Name == "good" && tr.Tag?.IsSystem == true) ?? 0;
@@ -59,14 +52,14 @@ public static class TagCardViewModel
         return goodCount - badCount;
     }
 
-    public static bool IsTagUpvoted(Tag tag, int? currentUserGoodTagId, string currentUserId)
+    public static bool IsTagUpvoted(Data.Tag tag, int? currentUserGoodTagId, string currentUserId)
     {
         return currentUserGoodTagId.HasValue &&
                tag.TargetTagRelations?.Any(tr =>
                    tr.TagId == currentUserGoodTagId.Value && tr.OwnerId == currentUserId) == true;
     }
 
-    public static bool IsTagDownvoted(Tag tag, int? currentUserBadTagId, string currentUserId)
+    public static bool IsTagDownvoted(Data.Tag tag, int? currentUserBadTagId, string currentUserId)
     {
         return currentUserBadTagId.HasValue &&
                tag.TargetTagRelations?.Any(tr =>
@@ -77,7 +70,7 @@ public static class TagCardViewModel
     ///     表示対象のタグリレーション一覧を構築する。
     ///     システムタグを除外し、削除イベントがあれば仮想的なリレーションとして追加する。
     /// </summary>
-    public static TagCardDisplayList BuildDisplayList(Tag tag, IReadOnlyList<TimelineEvent>? highlightEvents, bool areTagsExpanded)
+    public static TagCardDisplayList BuildDisplayList(Data.Tag tag, IReadOnlyList<TimelineEvent>? highlightEvents, bool areTagsExpanded)
     {
         List<TagRelationToTag> allTags = tag.TargetTagRelations?
             .Where(tr => tr.Tag is { IsSystem: false })
@@ -157,15 +150,15 @@ public static class TagCardViewModel
     }
 
     /// <summary>親タグを設定した際に循環参照が発生するかどうかを判定する。</summary>
-    public static bool HasParentCycle(Tag parentTag, Tag childTag, IReadOnlyList<Tag> allTags)
+    public static bool HasParentCycle(Data.Tag parentTag, Data.Tag childTag, IReadOnlyList<Data.Tag> allTags)
     {
         // 循環参照の簡易チェック
-        var currentParent = parentTag.ParentTagId;
-        var hasCycle = false;
+        int? currentParent = parentTag.ParentTagId;
+        bool hasCycle = false;
         while (currentParent != null && !hasCycle)
         {
             hasCycle = currentParent == childTag.Id;
-            var p = allTags.FirstOrDefault(t => t.Id == currentParent);
+            Data.Tag? p = allTags.FirstOrDefault(t => t.Id == currentParent);
             currentParent = p?.ParentTagId;
         }
 
@@ -177,7 +170,7 @@ public static class TagCardViewModel
         relationOwnerId == currentUserId;
 
     /// <summary>自分自身を親タグに設定しようとしているかどうかを判定する。</summary>
-    public static bool IsSelfParent(Tag parentTag, Tag childTag) => parentTag.Id == childTag.Id;
+    public static bool IsSelfParent(Data.Tag parentTag, Data.Tag childTag) => parentTag.Id == childTag.Id;
 
     /// <summary>同一タグへの変更 (無意味な変更) かどうかを判定する。</summary>
     public static bool IsSameTagChange(int currentTagId, int newTagId) => currentTagId == newTagId;

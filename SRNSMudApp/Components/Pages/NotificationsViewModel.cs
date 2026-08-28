@@ -5,7 +5,6 @@ using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Components.Pages;
 
-using Item = SRNSMudApp.Data.Item;
 /// <summary>
 ///     NotificationsPage コンポーネントに含まれる純粋なロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
@@ -28,7 +27,7 @@ public static class NotificationsViewModel
     /// </summary>
     public static void MapAssociatedItems(
         IEnumerable<NotificationDto> notifications,
-        IReadOnlyCollection<Item> items)
+        IReadOnlyCollection<Data.Item> items)
     {
         if (items.Count == 0)
         {
@@ -39,7 +38,7 @@ public static class NotificationsViewModel
         foreach (NotificationDto notification in notifications)
         {
             if (notification.AssociatedItemId != 0 &&
-                itemDict.TryGetValue(notification.AssociatedItemId, out Item? item))
+                itemDict.TryGetValue(notification.AssociatedItemId, out Data.Item? item))
             {
                 notification.AssociatedItem = item;
             }

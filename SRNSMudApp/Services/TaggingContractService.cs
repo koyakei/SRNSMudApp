@@ -150,7 +150,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             {
                 "Gratis" => ExecuteGratisAsync(new GratisContractData(entity), currentUserId),
                 "Mutual" => ExecuteMutualAsync(new MutualContractData(entity), currentUserId),
-                "Trigger" => ExecuteTriggerAsync(new TriggerContractData(entity), currentUserId),
+                "Trigger" => ExecuteTriggerAsync(new TriggerContractData(entity)),
                 "Bounty" => ExecuteBountyAsync(new BountyContractData(entity), currentUserId, fulfillerAssetId),
                 _ => Task.FromResult<Result<string>>(new Failure("DBに未知の契約型が存在します。"))
             });
@@ -582,7 +582,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return new Success<string>("相互タグ付けが完了しました。");
     }
 
-    private async Task<Result<string>> ExecuteTriggerAsync(TriggerContractData contractData, string executorUserId)
+    private async Task<Result<string>> ExecuteTriggerAsync(TriggerContractData contractData)
     {
         TaggingRequestEntity contract = contractData.Entity;
 
@@ -600,11 +600,11 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         return await (offerResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<PublicTradeOffer> s => ProcessTriggerWithOfferAsync(contract, s.Value, executorUserId)
+            Success<PublicTradeOffer> s => ProcessTriggerWithOfferAsync(contract, s.Value)
         });
     }
 
-    private async Task<Result<string>> ProcessTriggerWithOfferAsync(TaggingRequestEntity contract, PublicTradeOffer offer, string executorUserId)
+    private async Task<Result<string>> ProcessTriggerWithOfferAsync(TaggingRequestEntity contract, PublicTradeOffer offer)
     {
         Result<RightAsset?> assetValidation = (offer.RequiredAssetAmount > 0) switch
         {

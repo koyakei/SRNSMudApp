@@ -63,8 +63,8 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             .Where(tr => tr.TargetTagId == tagId && tr.OwnerId == userId)
             .ToListAsync();
 
-        TagRelationToTag? targetRelation = relations.FirstOrDefault(tr => tr.TagId == targetSystemTagId);
-        TagRelationToTag? oppositeRelation = relations.FirstOrDefault(tr => tr.TagId == oppositeSystemTagId);
+        TagRelationToTag? targetRelation = relations.Find(tr => tr.TagId == targetSystemTagId);
+        TagRelationToTag? oppositeRelation = relations.Find(tr => tr.TagId == oppositeSystemTagId);
 
         if (targetRelation is not null)
         {
@@ -126,7 +126,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         if (tagFromDb is not null)
         {
             var prevWeight = tagFromDb.CachedWeight;
-            tagFromDb.CachedWeight += 1;
+            tagFromDb.CachedWeight++;
             _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,

@@ -3,10 +3,6 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagChipViewModel の単体テスト。
 ///     ハイライト状態・所有者別のチップ表示計算を bUnit なしで検証する。
@@ -24,7 +20,7 @@ public class ItemTagChipViewModelTests
             TagId = tagId,
             OwnerId = ownerId,
             Weight = 5,
-            Tag = new Tag { Id = tagId, Name = "TestTag", OwnerId = ownerId }
+            Tag = new SRNSMudApp.Data.Tag { Id = tagId, Name = "TestTag", OwnerId = ownerId }
         };
 
     private static IReadOnlyList<TagRelationToTag> NoAddedTags { get; } = [];
@@ -137,15 +133,15 @@ public class ItemTagChipViewModelTests
         var relation = CreateRelation(tagId: 10);
         List<TagRelationToTag> all =
         [
-            new() { Id = 1, TagId = 20, TargetTagId = 10, OwnerId = "u", Tag = new Tag { Id = 20, Name = "Child", OwnerId = "u" } },
-            new() { Id = 2, TagId = 30, TargetTagId = 99, OwnerId = "u", Tag = new Tag { Id = 30, Name = "Other", OwnerId = "u" } },
+            new() { Id = 1, TagId = 20, TargetTagId = 10, OwnerId = "u", Tag = new SRNSMudApp.Data.Tag { Id = 20, Name = "Child", OwnerId = "u" } },
+            new() { Id = 2, TagId = 30, TargetTagId = 99, OwnerId = "u", Tag = new SRNSMudApp.Data.Tag { Id = 30, Name = "Other", OwnerId = "u" } },
             new()
             {
                 Id = 3,
                 TagId = 40,
                 TargetTagId = 10,
                 OwnerId = "u",
-                Tag = new Tag { Id = 40, Name = "good", IsSystem = true, OwnerId = "u" }
+                Tag = new SRNSMudApp.Data.Tag { Id = 40, Name = "good", IsSystem = true, OwnerId = "u" }
             }
         ];
 
@@ -159,7 +155,7 @@ public class ItemTagChipViewModelTests
     [Fact]
     public void GetDisplay_ForSystemClassificationTag_DisplaysSystemOwnerName()
     {
-        var systemTag = new Tag { Id = 50, Name = "SystemCategory", OwnerId = "system", IsSystem = true };
+        var systemTag = new SRNSMudApp.Data.Tag { Id = 50, Name = "SystemCategory", OwnerId = "system", IsSystem = true };
         var relation = new TagRelation
         {
             Id = 1,

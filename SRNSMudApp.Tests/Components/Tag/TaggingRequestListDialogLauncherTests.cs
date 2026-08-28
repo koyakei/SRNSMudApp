@@ -87,5 +87,9 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
             .AddCascadingValue(Task.FromResult(BunitTestSetup.CreateAuthState(TagOwnerId))));
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
 }

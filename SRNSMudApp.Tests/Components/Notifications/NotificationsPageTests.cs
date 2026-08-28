@@ -25,7 +25,6 @@ namespace SRNSMudApp.Tests.Components.Notifications;
 public sealed class NotificationsPageTests : IAsyncLifetime
 {
     private const string OwnerUserId = "notif-owner-id";
-    private const string RequesterUserId = "notif-requester-id";
 
     private readonly BunitContext _ctx = new();
     private readonly Mock<INotificationService> _notifServiceMock = new();
@@ -122,12 +121,12 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         Assert.Equal(2, host.FindAll("button[title='リクエストを承認する']").Count);
 
         // Act 1: 1件目を承認
-        host.FindAll("button[title='リクエストを承認する']").First().Click();
+        host.FindAll("button[title='リクエストを承認する']")[0].Click();
 
         _actionsMock.Verify(a => a.ApproveAsync(note1.SourceId, OwnerUserId), Times.Once);
 
         // Act 2: 2件目を却下
-        host.FindAll("button[title='リクエストを却下する']").Last().Click();
+        host.FindAll("button[title='リクエストを却下する']")[^1].Click();
 
         _contractServiceMock.Verify(s => s.CancelContractAsync(note2.SourceId, OwnerUserId), Times.Once);
     }

@@ -11,31 +11,23 @@
 @inject ISnackbar Snackbar
 @inject UserManager<ApplicationUser> UserManager
 
-<div class="w-100 pb-2">
+<MudStack Class="w-100 pb-2">
     @switch (_newItem)
     {
         case null:
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             <MudText>読み込み中...</MudText>
             break;
         case not null:
             <EditForm Model="@_newItem" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit"
                       FormName="AddItem" class="w-100">
-                <DataAnnotationsValidator/>
+                <DataAnnotationsValidator />
 
-                <div class="d-flex gap-4 align-start">
-                    <div class="flex-grow-1 d-flex flex-column additem-content">
-                        <MudTextField @bind-Value="_newItem.Content"
-                                      For="@(() => _newItem.Content)"
-                                      name="_newItem.Content"
-                                      Placeholder="新しいアイテムのコンテンツを入力..."
-                                      Variant="Variant.Outlined"
-                                      Lines="3"
-                                      MaxLength="1000"
-                                      Counter="1000"
-                                      Required="true"
-                                      RequiredError="コンテンツは必須です。"
-                                      Immediate="true"/>
+                <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Start">
+                    <MudStack Class="flex-grow-1" Style="min-width: 0;">
+                        <MudTextField @bind-Value="_newItem.Content" For="@(() => _newItem.Content)" name="_newItem.Content"
+                                      Placeholder="新しいアイテムのコンテンツを入力..." Variant="Variant.Outlined" Lines="3" MaxLength="1000"
+                                      Counter="1000" Required="true" RequiredError="コンテンツは必須です。" Immediate="true" />
 
                         @* 抽出したURLのプレビューを表示 *@
                         @{
@@ -44,39 +36,36 @@
                         @switch (urls.Any())
                         {
                             case true:
-                                <div class="d-flex flex-column gap-2 mt-2">
+                                <MudStack Spacing="2" Class="mt-2">
                                     @foreach (var url in urls.Take(3)) // 最大3件程度に制限
                                     {
-                                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url"/>
+                                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url" />
                                     }
-                                </div>
+                                </MudStack>
                                 break;
                         }
-                    </div>
+                    </MudStack>
 
-                    <div class="d-flex flex-column align-center mt-2 additem-submit">
-                        <MudButton ButtonType="ButtonType.Submit"
-                                   Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   Size="Size.Large"
-                                   Class="w-100">
+                    <MudStack AlignItems="AlignItems.Center" Class="mt-2" Style="min-width: 90px;">
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                                   Size="Size.Large" Class="w-100">
                             保存
                         </MudButton>
-                    </div>
-                </div>
+                    </MudStack>
+                </MudStack>
             </EditForm>
             break;
     }
-</div>
+</MudStack>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = null!;
 
-    [Parameter] public IEnumerable<Tag> InitialTags { get; set; } = [];
+    [Parameter] public IEnumerable<Data.Tag> InitialTags { get; set; } = [];
 
     [Parameter] public EventCallback OnItemAdded { get; set; }
 
-    [SupplyParameterFromForm] private Item? _newItem { get; set; }
+    [SupplyParameterFromForm] private Data.Item? _newItem { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -96,7 +85,7 @@
                         break;
                 }
 
-                _newItem = new Item
+                _newItem = new Data.Item
                 {
                     Content = string.Empty,
                     OwnerId = userId
@@ -117,7 +106,7 @@
             await ItemCardData.CreateItemAsync(
                 _newItem, InitialTags?.Select(t => t.Id).ToList());
 
-            _newItem = new Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
+            _newItem = new Data.Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
 
             Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
 

@@ -3,17 +3,13 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-// 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     TagTableViewModel の単体テスト。
 ///     検索フィルタ・添付タグ表示計算・権限判定を bUnit なしで検証する。
 /// </summary>
 public class TagTableViewModelTests
 {
-    private static Tag CreateTag(int id = 1, string name = "Tag", string ownerId = "user-1", bool isSystem = false) =>
+    private static SRNSMudApp.Data.Tag CreateTag(int id = 1, string name = "Tag", string ownerId = "user-1", bool isSystem = false) =>
         new()
         {
             Id = id,
@@ -83,7 +79,7 @@ public class TagTableViewModelTests
     [Fact]
     public void GetTagSearchSuggestions_WithValue_FiltersByName()
     {
-        List<Tag> tags = [CreateTag(1, "server"), CreateTag(2, "service"), CreateTag(3, "database")];
+        List<SRNSMudApp.Data.Tag> tags = [CreateTag(1, "server"), CreateTag(2, "service"), CreateTag(3, "database")];
 
         var suggestions = TagTableViewModel.GetTagSearchSuggestions(tags, "ser");
 

@@ -4,10 +4,6 @@ using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Tests.Components.Pages;
 
-using Item = SRNSMudApp.Data.Item;
-// 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-
 /// <summary>
 ///     NotificationsViewModel の単体テスト。
 ///     関連アイテム解決・ハイライトイベント生成・相対時刻表現を bUnit なしで検証する。
@@ -48,7 +44,7 @@ public class NotificationsViewModelTests
     {
         NotificationDto n5 = CreateNotification(associatedItemId: 5);
         NotificationDto n6 = CreateNotification(associatedItemId: 6);
-        Item item5 = new() { Id = 5, Content = "five", OwnerId = "user-1" };
+        SRNSMudApp.Data.Item item5 = new() { Id = 5, Content = "five", OwnerId = "user-1" };
 
         NotificationsViewModel.MapAssociatedItems([n5, n6], [item5]);
 

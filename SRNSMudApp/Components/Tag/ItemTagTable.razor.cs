@@ -11,9 +11,6 @@ using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Components.Tag;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagTable のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、サジェストとテーブルフィルタのイベント処理はこちらに集約する。
@@ -21,9 +18,9 @@ using Tag = SRNSMudApp.Data.Tag;
 public partial class ItemTagTable
 {
     [Parameter] public IEnumerable<TagRelation> TagRelations { get; set; } = [];
-    [Parameter] public Item Item { get; set; } = null!;
+    [Parameter] public Data.Item Item { get; set; } = null!;
     [Parameter] public string CurrentUserId { get; set; } = "";
-    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public string? SearchString { get; set; }
@@ -77,7 +74,7 @@ public partial class ItemTagTable
         });
     }
 
-    private Task<IEnumerable<string>> SearchSuggestionsAsync(string? value, CancellationToken token)
+    private Task<IEnumerable<string>> SearchSuggestionsAsync(string? value, CancellationToken _)
     {
         return Task.FromResult<IEnumerable<string>>(
             ItemTagTableViewModel.GetSearchSuggestions(TagRelations, value));

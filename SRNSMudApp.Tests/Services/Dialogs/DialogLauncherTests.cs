@@ -1,4 +1,4 @@
-#region
+using System.Diagnostics.CodeAnalysis;
 
 using Bunit;
 
@@ -11,13 +11,12 @@ using MudBlazor;
 
 using SRNSMudApp.Services.Dialogs;
 
-#endregion
-
 namespace SRNSMudApp.Tests.Services.Dialogs;
 
 /// <summary>
 ///     <see cref="DialogLauncher" /> が <see cref="IDialogService" /> へ正しく委譲することを検証する。
 /// </summary>
+[SuppressMessage("Usage", "CA2263:Prefer generic overload", Justification = "IDialogService の非ジェネリック ShowAsync 委譲動作を直接検証するため")]
 public class DialogLauncherTests : IAsyncDisposable
 {
     private sealed class DummyDialog : ComponentBase
@@ -68,5 +67,9 @@ public class DialogLauncherTests : IAsyncDisposable
             Times.Once);
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
 }

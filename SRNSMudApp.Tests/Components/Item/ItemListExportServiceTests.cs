@@ -5,11 +5,6 @@ using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Components.Item;
 
-// 親名前空間 SRNSMudApp.Tests.Components の下にある namespace Item より先に
-// Data.Item 型を解決させるため、エイリアスを名前空間の内側に置く
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemListExportService の単体テスト。
 ///     タグ展開 (親タグ・関連タグ) とリンクプレビュー組み立てを bUnit なしで検証する。
@@ -27,7 +22,7 @@ public class ItemListExportServiceTests
         var service = new ItemListExportService(CreatePreviewService());
 
         IReadOnlyList<ExportItemDto> result = await service.BuildExportAsync(
-            exportData, [new Item { Id = 1, Content = "content", OwnerId = "u1" }]);
+            exportData, [new SRNSMudApp.Data.Item { Id = 1, Content = "content", OwnerId = "u1" }]);
 
         ExportItemDto dto = Assert.Single(result);
         Assert.Empty(dto.Tags);
@@ -36,17 +31,17 @@ public class ItemListExportServiceTests
     [Fact]
     public async Task BuildExportAsync_WithParentAndRelatedTags_ExpandsHierarchy()
     {
-        var parent = new Tag { Id = 1, Name = "Parent", OwnerId = "u1" };
-        var child = new Tag { Id = 2, Name = "Child", ParentTagId = 1, OwnerId = "u1" };
-        var related = new Tag { Id = 3, Name = "Related", OwnerId = "u1" };
+        var parent = new SRNSMudApp.Data.Tag { Id = 1, Name = "Parent", OwnerId = "u1" };
+        var child = new SRNSMudApp.Data.Tag { Id = 2, Name = "Child", ParentTagId = 1, OwnerId = "u1" };
+        var related = new SRNSMudApp.Data.Tag { Id = 3, Name = "Related", OwnerId = "u1" };
         var exportData = new ItemListExportData(
-            AllTags: new Dictionary<int, Tag> { [1] = parent, [2] = child, [3] = related },
+            AllTags: new Dictionary<int, SRNSMudApp.Data.Tag> { [1] = parent, [2] = child, [3] = related },
             ItemTagRelations: [new TagRelation { ItemId = 1, TagId = 2, OwnerId = "u1" }],
             TagToTagRelations: [new TagRelationToTag { TagId = 3, TargetTagId = 2, OwnerId = "u1" }]);
         var service = new ItemListExportService(CreatePreviewService());
 
         IReadOnlyList<ExportItemDto> result = await service.BuildExportAsync(
-            exportData, [new Item { Id = 1, Content = "content", OwnerId = "u1" }]);
+            exportData, [new SRNSMudApp.Data.Item { Id = 1, Content = "content", OwnerId = "u1" }]);
 
         ExportItemDto dto = Assert.Single(result);
         ExportTagDto tag = Assert.Single(dto.Tags);
@@ -63,7 +58,7 @@ public class ItemListExportServiceTests
         var service = new ItemListExportService(CreatePreviewService());
 
         IReadOnlyList<ExportItemDto> result =
-            await service.BuildExportAsync(exportData, [new Item { Id = 1, Content = content, OwnerId = "u1" }]);
+            await service.BuildExportAsync(exportData, [new SRNSMudApp.Data.Item { Id = 1, Content = content, OwnerId = "u1" }]);
 
         ExportItemDto dto = Assert.Single(result);
         Assert.Equal(3, dto.LinkPreviews.Count);
@@ -79,7 +74,7 @@ public class ItemListExportServiceTests
             new HttpClient(new StatusCodeHandler(HttpStatusCode.NotFound))));
 
         IReadOnlyList<ExportItemDto> result = await service.BuildExportAsync(
-            exportData, [new Item { Id = 1, Content = "see https://fail.com", OwnerId = "u1" }]);
+            exportData, [new SRNSMudApp.Data.Item { Id = 1, Content = "see https://fail.com", OwnerId = "u1" }]);
 
         ExportItemDto dto = Assert.Single(result);
         Assert.Empty(dto.LinkPreviews);

@@ -1,3 +1,7 @@
+// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
+// 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
+#pragma warning disable IDE0010, IDE0072
+
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
@@ -8,16 +12,8 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
-// 兄弟名前空間 SRNSMudApp.Components.Tag が同名型と解決されるため、
-// エイリアスを名前空間の内側に置く
-
-// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
-// 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
-#pragma warning disable IDE0010, IDE0072
-
 namespace SRNSMudApp.Components.UI;
 
-using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     TagCard のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、JS 連携・投票・タグ操作・ダイアログ起動などの
@@ -31,11 +27,11 @@ public partial class TagCard : IAsyncDisposable
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
-    [Parameter][EditorRequired] public Tag Tag { get; set; } = null!;
+    [Parameter][EditorRequired] public Data.Tag Tag { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
-    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
     [Parameter] public int? CurrentUserBadTagId { get; set; }
@@ -182,7 +178,7 @@ public partial class TagCard : IAsyncDisposable
     }
 
     // --- Tag Operations ---
-    private async Task OnAddTagToTagClicked(Tag? targetTag)
+    private async Task OnAddTagToTagClicked(Data.Tag? targetTag)
     {
         await (targetTag switch
         {
@@ -193,7 +189,7 @@ public partial class TagCard : IAsyncDisposable
 
     /// <summary>タグ選択ダイアログを表示し、選択されたタグで処理を実行する共通フロー。</summary>
     private async Task ExecuteWithTagSelection(
-        string title, Tag targetTag, Func<Tag, Tag, Task> execute)
+        string title, Data.Tag targetTag, Func<Data.Tag, Data.Tag, Task> execute)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
         IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>(title, options);
@@ -204,7 +200,7 @@ public partial class TagCard : IAsyncDisposable
             return;
         }
 
-        if (result.Data is not Tag selectedTag)
+        if (result.Data is not Data.Tag selectedTag)
         {
             return;
         }
@@ -212,7 +208,7 @@ public partial class TagCard : IAsyncDisposable
         await execute(targetTag, selectedTag);
     }
 
-    private async Task AddTagToTagAsync(Tag targetTag, Tag selectedTag)
+    private async Task AddTagToTagAsync(Data.Tag targetTag, Data.Tag selectedTag)
     {
         TagCardOperationResult result =
             await TagCardData.AddTagToTagAsync(targetTag.Id, selectedTag.Id, CurrentUserId);
@@ -343,7 +339,7 @@ public partial class TagCard : IAsyncDisposable
         }
     }
 
-    private async Task OnAddChildTagFromTree(Tag? targetTag)
+    private async Task OnAddChildTagFromTree(Data.Tag? targetTag)
     {
         await (targetTag switch
         {
@@ -352,7 +348,7 @@ public partial class TagCard : IAsyncDisposable
         });
     }
 
-    private async Task SetParentTagAsync(Tag parentTag, Tag childTag)
+    private async Task SetParentTagAsync(Data.Tag parentTag, Data.Tag childTag)
     {
         if (TagCardViewModel.IsSelfParent(parentTag, childTag))
         {

@@ -22,7 +22,11 @@ public class BaseTagChipTests : IAsyncDisposable
     }
 
     // 非同期でBunitContextを破棄し、MudBlazorのKeyInterceptorServiceのエラーを防ぐ
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public void BaseTagChip_ShouldRenderTagNameAndWeight()

@@ -43,10 +43,10 @@ public class ImportTagDataProviderTests : IAsyncLifetime
             await dbContext.SeedUsersAsync(testUser);
         }
 
-        SRNSMudApp.Data.Tag rootTag;
+        Tag rootTag;
         await using (var dbContext = await _dbFactory.CreateDbContextAsync())
         {
-            rootTag = new SRNSMudApp.Data.Tag { Name = $"RootTag_{tid}", OwnerId = testUser };
+            rootTag = new Tag { Name = $"RootTag_{tid}", OwnerId = testUser };
             _ = dbContext.Tags.Add(rootTag);
             _ = await dbContext.SaveChangesAsync();
         }
@@ -57,15 +57,15 @@ public class ImportTagDataProviderTests : IAsyncLifetime
 
         await using (var dbContext = await _dbFactory.CreateDbContextAsync())
         {
-            List<SRNSMudApp.Data.Tag> tags = await dbContext.Tags.Where(t => t.OwnerId == testUser).ToListAsync();
+            List<Tag> tags = await dbContext.Tags.Where(t => t.OwnerId == testUser).ToListAsync();
 
-            SRNSMudApp.Data.Tag animal = tags.Single(t => t.Name == $"Animal_{tid}");
+            Tag animal = tags.Single(t => t.Name == $"Animal_{tid}");
             Assert.Equal(rootTag.Id, animal.ParentTagId);
 
-            SRNSMudApp.Data.Tag dog = tags.Single(t => t.Name == $"Dog_{tid}");
+            Tag dog = tags.Single(t => t.Name == $"Dog_{tid}");
             Assert.Equal(animal.Id, dog.ParentTagId);
 
-            SRNSMudApp.Data.Tag cat = tags.Single(t => t.Name == $"Cat_{tid}");
+            Tag cat = tags.Single(t => t.Name == $"Cat_{tid}");
             Assert.Equal(animal.Id, cat.ParentTagId);
         }
     }
@@ -81,14 +81,14 @@ public class ImportTagDataProviderTests : IAsyncLifetime
         {
             await dbContext.SeedUsersAsync(testUser, otherUser);
             dbContext.Tags.AddRange(
-                new SRNSMudApp.Data.Tag { Name = $"UserTag1_{tid}", OwnerId = testUser },
-                new SRNSMudApp.Data.Tag { Name = $"SystemRootTag_{tid}", IsSystem = true, OwnerId = "system" },
-                new SRNSMudApp.Data.Tag { Name = $"OtherUserTag_{tid}", OwnerId = otherUser }
+                new Tag { Name = $"UserTag1_{tid}", OwnerId = testUser },
+                new Tag { Name = $"SystemRootTag_{tid}", IsSystem = true, OwnerId = "system" },
+                new Tag { Name = $"OtherUserTag_{tid}", OwnerId = otherUser }
             );
             _ = await dbContext.SaveChangesAsync();
         }
 
-        IReadOnlyList<SRNSMudApp.Data.Tag> results = await _provider.SearchUserTagsAsync(testUser, "");
+        IReadOnlyList<Tag> results = await _provider.SearchUserTagsAsync(testUser, "");
 
         Assert.Contains(results, t => t.Name == $"UserTag1_{tid}");
         Assert.Contains(results, t => t.Name == $"SystemRootTag_{tid}");
@@ -106,10 +106,10 @@ public class ImportTagDataProviderTests : IAsyncLifetime
             await dbContext.SeedUsersAsync(adminUser);
         }
 
-        SRNSMudApp.Data.Tag systemRootTag;
+        Tag systemRootTag;
         await using (var dbContext = await _dbFactory.CreateDbContextAsync())
         {
-            systemRootTag = new SRNSMudApp.Data.Tag { Name = $"SystemCategory_{tid}", IsSystem = true, OwnerId = "system" };
+            systemRootTag = new Tag { Name = $"SystemCategory_{tid}", IsSystem = true, OwnerId = "system" };
             _ = dbContext.Tags.Add(systemRootTag);
             _ = await dbContext.SaveChangesAsync();
         }
@@ -120,14 +120,14 @@ public class ImportTagDataProviderTests : IAsyncLifetime
 
         await using (var dbContext = await _dbFactory.CreateDbContextAsync())
         {
-            List<SRNSMudApp.Data.Tag> systemTags = await dbContext.Tags.Where(t => t.OwnerId == "system" && t.Name.EndsWith(tid)).ToListAsync();
+            List<Tag> systemTags = await dbContext.Tags.Where(t => t.OwnerId == "system" && t.Name.EndsWith(tid)).ToListAsync();
 
-            SRNSMudApp.Data.Tag science = systemTags.Single(t => t.Name == $"Science_{tid}");
+            Tag science = systemTags.Single(t => t.Name == $"Science_{tid}");
             Assert.True(science.IsSystem);
             Assert.Equal("system", science.OwnerId);
             Assert.Equal(systemRootTag.Id, science.ParentTagId);
 
-            SRNSMudApp.Data.Tag physics = systemTags.Single(t => t.Name == $"Physics_{tid}");
+            Tag physics = systemTags.Single(t => t.Name == $"Physics_{tid}");
             Assert.True(physics.IsSystem);
             Assert.Equal("system", physics.OwnerId);
             Assert.Equal(science.Id, physics.ParentTagId);

@@ -1,26 +1,16 @@
-#region
-
-#endregion
-
-namespace SRNSMudApp.Tests.Components.UI;
-
-// 兄弟名前空間 SRNSMudApp.Tests.Components.Tag より先に Data.Tag 型を解決させるため、
-// using を名前空間の内側に置く
 using MudBlazor;
 
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 
-using Xunit;
-
-using Tag = SRNSMudApp.Data.Tag;
+namespace SRNSMudApp.Tests.Components.UI;
 
 /// <summary>
 ///     TagCardViewModel (純粋ロジック) の単体テスト。bUnit を使わずに検証する。
 /// </summary>
 public class TagCardViewModelTests
 {
-    private static Tag CreateTag(List<TagRelationToTag>? relations = null) => new Tag { Id = 1, Name = "root", OwnerId = "owner", TargetTagRelations = relations ?? [] };
+    private static SRNSMudApp.Data.Tag CreateTag(List<TagRelationToTag>? relations = null) => new() { Id = 1, Name = "root", OwnerId = "owner", TargetTagRelations = relations ?? [] };
 
     private static TagRelationToTag CreateRelation(int id, int tagId, string? tagName = null, bool isSystem = false,
         int weight = 1, string ownerId = "owner")
@@ -32,14 +22,14 @@ public class TagCardViewModelTests
             TargetTagId = 1,
             Weight = weight,
             OwnerId = ownerId,
-            Tag = tagName == null ? null! : new Tag { Id = tagId, Name = tagName, IsSystem = isSystem, OwnerId = "tag-owner" }
+            Tag = tagName == null ? null! : new SRNSMudApp.Data.Tag { Id = tagId, Name = tagName, IsSystem = isSystem, OwnerId = "tag-owner" }
         };
     }
 
     [Fact]
     public void GetTagScore_GoodMinusBad()
     {
-        Tag tag = CreateTag(
+        SRNSMudApp.Data.Tag tag = CreateTag(
         [
             CreateRelation(1, 10, "good", isSystem: true),
             CreateRelation(2, 11, "good", isSystem: true),
@@ -56,7 +46,7 @@ public class TagCardViewModelTests
     [Fact]
     public void IsTagUpvoted_MatchesRelationOwnerAndSystemTag()
     {
-        Tag tag = CreateTag([CreateRelation(1, 10, "good", isSystem: true, ownerId: "me")]);
+        SRNSMudApp.Data.Tag tag = CreateTag([CreateRelation(1, 10, "good", isSystem: true, ownerId: "me")]);
 
         Assert.True(TagCardViewModel.IsTagUpvoted(tag, 10, "me"));
         Assert.False(TagCardViewModel.IsTagUpvoted(tag, 10, "other"));
@@ -64,9 +54,9 @@ public class TagCardViewModelTests
     }
 
     [Fact]
-    public void BuildDisplayList_ExcludesSystemTags_AndOrdersByWeightDescending()
+    public void BuildDisplayList_ExcludesSystemTagsAndSortsByWeightDesc()
     {
-        Tag tag = CreateTag(
+        SRNSMudApp.Data.Tag tag = CreateTag(
         [
             CreateRelation(1, 10, "a", weight: 1),
             CreateRelation(2, 11, "b", weight: 5),
@@ -83,7 +73,7 @@ public class TagCardViewModelTests
     [Fact]
     public void BuildDisplayList_WithFiveTags_CollapsesAndCountsHidden_WhenNotExpanded()
     {
-        Tag tag = CreateTag(
+        SRNSMudApp.Data.Tag tag = CreateTag(
         [
             CreateRelation(1, 10, "a"), CreateRelation(2, 11, "b"),
             CreateRelation(3, 12, "c"), CreateRelation(4, 13, "d"),
@@ -104,7 +94,7 @@ public class TagCardViewModelTests
     [Fact]
     public void BuildDisplayList_DeleteEventForMissingTag_AddsVirtualRelation()
     {
-        Tag tag = CreateTag([]);
+        SRNSMudApp.Data.Tag tag = CreateTag([]);
         List<TimelineEvent> events =
         [
             new()
@@ -113,7 +103,7 @@ public class TagCardViewModelTests
                 FollowedTagId = 99,
                 PreviousWeight = 3,
                 OwnerId = "someone",
-                FollowedTag = new Tag { Id = 99, Name = "deleted-tag", OwnerId = "tag-owner" }
+                FollowedTag = new SRNSMudApp.Data.Tag { Id = 99, Name = "deleted-tag", OwnerId = "tag-owner" }
             }
         ];
 
@@ -170,15 +160,15 @@ public class TagCardViewModelTests
     [Fact]
     public void HasParentCycle_DetectsDirectAndIndirectCycles()
     {
-        Tag child = new() { Id = 1, Name = "child", OwnerId = "u1" };
-        Tag parent = new() { Id = 2, ParentTagId = 1, Name = "parent", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag child = new() { Id = 1, Name = "child", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag parent = new() { Id = 2, ParentTagId = 1, Name = "parent", OwnerId = "u1" };
 
         Assert.True(TagCardViewModel.HasParentCycle(parent, child, [child, parent]));
 
-        Tag grandChild = new() { Id = 3, ParentTagId = 2, Name = "grand", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag grandChild = new() { Id = 3, ParentTagId = 2, Name = "grand", OwnerId = "u1" };
         Assert.True(TagCardViewModel.HasParentCycle(grandChild, parent, [parent, grandChild]));
 
-        Tag unrelated = new() { Id = 4, ParentTagId = 5, Name = "unrelated", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag unrelated = new() { Id = 4, ParentTagId = 5, Name = "unrelated", OwnerId = "u1" };
         Assert.False(TagCardViewModel.HasParentCycle(unrelated, child, [child, parent]));
     }
 
@@ -197,8 +187,8 @@ public class TagCardViewModelTests
     [Fact]
     public void IsSelfParent_DetectsSelfReference()
     {
-        Tag tag = new() { Id = 1, Name = "self", OwnerId = "u1" };
-        Tag other = new() { Id = 2, Name = "other", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag tag = new() { Id = 1, Name = "self", OwnerId = "u1" };
+        SRNSMudApp.Data.Tag other = new() { Id = 2, Name = "other", OwnerId = "u1" };
 
         Assert.True(TagCardViewModel.IsSelfParent(tag, tag));
         Assert.False(TagCardViewModel.IsSelfParent(tag, other));

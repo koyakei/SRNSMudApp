@@ -34,11 +34,12 @@ public interface IImportTagDataProvider
     Task<int> ImportCsvTagsAsync(string userId, string selectedParentTagName, string csvContent, bool asSystem = false);
 }
 
-public class ImportTagDataProvider(
+public partial class ImportTagDataProvider(
     IDbContextFactory<ApplicationDbContext> dbContextFactory,
     ITagEmbeddingService tagEmbeddingService) : IImportTagDataProvider
 {
-    private static readonly Regex TagNameRegex = new(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$");
+    [GeneratedRegex(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$")]
+    private static partial Regex TagNameRegex();
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
@@ -137,7 +138,7 @@ public class ImportTagDataProvider(
                 foreach (var tagName in tagNames)
                 {
                     // Validate tag name
-                    if (!TagNameRegex.IsMatch(tagName))
+                    if (!TagNameRegex().IsMatch(tagName))
                     {
                         throw new InvalidOperationException($"不正なタグ名が含まれています: '{tagName}'");
                     }

@@ -9,21 +9,15 @@ using SRNSMudApp.Components.Contract;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
-// 兄弟名前空間 SRNSMudApp.Components.Tag / .Item が同名型と解決されるため、
-// エイリアスを名前空間の内側に置く
 
 // IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
 // 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
 #pragma warning disable IDE0010, IDE0072
 
 namespace SRNSMudApp.Components.UI;
-
-using SRNSMudApp.Models.Unions;
-
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
 
 /// <summary>
 ///     ItemCard のコードビハインド。
@@ -40,11 +34,11 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
     [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
 
-    [Parameter][EditorRequired] public Item Item { get; set; } = null!;
+    [Parameter][EditorRequired] public Data.Item Item { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
-    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
@@ -59,7 +53,7 @@ public partial class ItemCard : IAsyncDisposable
     ///     リプライ 1 件の描画テンプレート (ネストした ItemCard)。
     ///     ItemReplyThread への描画委譲に使用する。
     /// </summary>
-    private RenderFragment<Item> ReplyTemplate => reply => builder =>
+    private RenderFragment<Data.Item> ReplyTemplate => reply => builder =>
     {
         builder.OpenComponent<ItemCard>(0);
         builder.AddAttribute(1, nameof(Item), reply);
@@ -82,7 +76,7 @@ public partial class ItemCard : IAsyncDisposable
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
 
     private bool _isRepliesExpanded;
-    private IReadOnlyList<Item> _replies = [];
+    private IReadOnlyList<Data.Item> _replies = [];
     private string _newReplyContent = "";
     private bool _isSubmittingReply;
 
@@ -213,7 +207,7 @@ public partial class ItemCard : IAsyncDisposable
         _isSubmittingReply = true;
         try
         {
-            var addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
+            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
             if (addedReply is not null)
             {
                 _newReplyContent = "";
@@ -311,7 +305,7 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task VoteReactionAsync((string ReactionTagName, int TargetWeight) args)
     {
-        var (reactionTagName, targetWeight) = args;
+        (string reactionTagName, int targetWeight) = args;
         if (string.IsNullOrEmpty(CurrentUserId))
         {
             _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
@@ -332,7 +326,7 @@ public partial class ItemCard : IAsyncDisposable
             _ => null
         };
 
-        Tag reactionTag;
+        Data.Tag reactionTag;
         if (!reactionTagId.HasValue)
         {
             reactionTag = await ItemCardData.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
@@ -425,15 +419,15 @@ public partial class ItemCard : IAsyncDisposable
 
         switch (result)
         {
-            case { Canceled: false, Data: Tag selectedTag }:
+            case { Canceled: false, Data: Data.Tag selectedTag }:
                 await AddTagToItemAsync(selectedTag);
                 break;
         }
     }
 
-    private async Task AddTagToItemAsync(Tag selectedTag)
+    private async Task AddTagToItemAsync(Data.Tag selectedTag)
     {
-        Tag? tagFromDb = await ItemCardData.GetTagWithOwnerAsync(selectedTag.Id);
+        Data.Tag? tagFromDb = await ItemCardData.GetTagWithOwnerAsync(selectedTag.Id);
         if (tagFromDb is null)
         {
             return;
@@ -463,7 +457,7 @@ public partial class ItemCard : IAsyncDisposable
         await ExecuteAddTagToItemAsync(selectedTag, tagFromDb);
     }
 
-    private async Task ProposeTaggingContractAsync(Tag tagFromDb)
+    private async Task ProposeTaggingContractAsync(Data.Tag tagFromDb)
     {
         var parameters = new DialogParameters<ProposeContractDialog>
         {
@@ -486,7 +480,7 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 
-    private async Task ExecuteAddTagToItemAsync(Tag selectedTag, Tag tagFromDb)
+    private async Task ExecuteAddTagToItemAsync(Data.Tag selectedTag, Data.Tag tagFromDb)
     {
         TagRelation? newRelation =
             await ItemCardData.AddFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);

@@ -71,7 +71,7 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
 
         cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
         IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>().First();
+            cut.FindComponents<MudAutocomplete<string>>()[0];
 
         // Act 1: 候補「SearchTestTag」の選択を再現
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName));

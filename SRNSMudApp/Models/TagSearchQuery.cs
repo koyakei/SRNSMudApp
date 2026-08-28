@@ -8,7 +8,7 @@ public record IncompleteSearch(string TagName);
 public record EmptySearch;
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagSearchQuery(TagNameSearch, TagWithUserSearch, IncompleteSearch, EmptySearch)
+public readonly union TagSearchQuery(TagNameSearch, TagWithUserSearch, IncompleteSearch, EmptySearch)
 {
     public static TagSearchQuery Parse(string? query)
     {

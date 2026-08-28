@@ -5,7 +5,7 @@ using Moq;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 
-namespace SRNSMudApp.Tests.Services;
+namespace SRNSMudApp.Tests;
 
 public class ItemTagServiceTests : IAsyncLifetime
 {

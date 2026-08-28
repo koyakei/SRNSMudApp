@@ -127,7 +127,7 @@ public class ItemDetailQueryStateTests
 
         Assert.Equal("requests", parameters["tab"]);
         Assert.Equal(7, parameters["requestId"]);
-        var filters = Assert.IsAssignableFrom<string[]>(parameters["f"]);
+        var filters = Assert.IsType<string[]>(parameters["f"]);
         Assert.Contains("name:tagA@userB", filters);
     }
 

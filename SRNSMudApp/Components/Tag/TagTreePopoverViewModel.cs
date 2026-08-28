@@ -4,10 +4,7 @@ using SRNSMudApp.Models.Unions;
 
 #endregion
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
 namespace SRNSMudApp.Components.Tag;
-
-using Tag = SRNSMudApp.Data.Tag;
 
 /// <summary>タグツリーポップオーバーの 1 行分の表示データ。</summary>
 public record TagTreeLine(
@@ -33,7 +30,7 @@ public static class TagTreePopoverViewModel
     /// <summary>
     ///     対象タグとその祖先を自動展開対象として返す。
     /// </summary>
-    public static HashSet<int> GetAutoExpandIds(Tag targetTag, IReadOnlyList<Tag> allTags)
+    public static HashSet<int> GetAutoExpandIds(Data.Tag targetTag, IReadOnlyList<Data.Tag> allTags)
     {
         HashSet<int> expanded = [];
         if (targetTag == null || targetTag.GetKind() is VoteTag or ReactionTag)
@@ -41,12 +38,12 @@ public static class TagTreePopoverViewModel
             return expanded;
         }
 
-        var filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
-        var current = filteredTags.FirstOrDefault(t => t.Id == targetTag.Id);
+        List<Data.Tag> filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
+        Data.Tag? current = filteredTags.Find(t => t.Id == targetTag.Id);
         while (current != null)
         {
             _ = expanded.Add(current.Id);
-            current = filteredTags.FirstOrDefault(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
+            current = filteredTags.Find(t => t.Id == (current.ParentTagId != 0 ? current.ParentTagId : -1));
         }
 
         return expanded;
@@ -60,8 +57,8 @@ public static class TagTreePopoverViewModel
     /// <param name="expandedTagIds">展開中のタグ ID。</param>
     /// <param name="enableExpand">展開操作が有効かどうか。</param>
     public static IReadOnlyList<TagTreeLine> BuildTreeLines(
-        Tag targetTag,
-        IReadOnlyList<Tag> allTags,
+        Data.Tag targetTag,
+        IReadOnlyList<Data.Tag> allTags,
         HashSet<int> expandedTagIds,
         bool enableExpand)
     {
@@ -71,7 +68,7 @@ public static class TagTreePopoverViewModel
             return lines;
         }
 
-        var filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
+        List<Data.Tag> filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
         if (filteredTags.Count == 0)
         {
             return lines;
@@ -79,13 +76,13 @@ public static class TagTreePopoverViewModel
 
         // 対象タグのルート（最上位の祖先）を求める
         HashSet<int> ancestors = [];
-        var curr = filteredTags.FirstOrDefault(t => t.Id == (targetTag.ParentTagId != 0 ? targetTag.ParentTagId : -1));
-        var rootTag = targetTag;
+        Data.Tag? curr = filteredTags.Find(t => t.Id == (targetTag.ParentTagId != 0 ? targetTag.ParentTagId : -1));
+        Data.Tag rootTag = targetTag;
         while (curr != null)
         {
             _ = ancestors.Add(curr.Id);
             rootTag = curr;
-            curr = filteredTags.FirstOrDefault(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
+            curr = filteredTags.Find(t => t.Id == (curr.ParentTagId != 0 ? curr.ParentTagId : -1));
         }
 
         var siblings = filteredTags
@@ -99,12 +96,12 @@ public static class TagTreePopoverViewModel
 
     private static void AddTreeLinesRecursive(
         List<TagTreeLine> lines,
-        Tag current,
+        Data.Tag current,
         int depth,
         int targetTagId,
         HashSet<int> ancestors,
         HashSet<int> siblings,
-        IReadOnlyList<Tag> allTags,
+        IReadOnlyList<Data.Tag> allTags,
         HashSet<int> expandedTagIds,
         bool enableExpand)
     {
@@ -130,7 +127,7 @@ public static class TagTreePopoverViewModel
             return;
         }
 
-        foreach (Tag child in children)
+        foreach (Data.Tag child in children)
         {
             if (enableExpand || isParent || isCurrent || isChild)
             {

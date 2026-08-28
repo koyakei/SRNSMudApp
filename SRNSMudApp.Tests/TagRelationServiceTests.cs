@@ -4,7 +4,7 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
-namespace SRNSMudApp.Tests.Services;
+namespace SRNSMudApp.Tests;
 
 public class TagRelationServiceTests : IAsyncLifetime
 {

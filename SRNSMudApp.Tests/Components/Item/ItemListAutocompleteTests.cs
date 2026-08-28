@@ -64,7 +64,7 @@ public sealed class ItemListAutocompleteTests : IAsyncLifetime
 
         cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
         IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>().First();
+            cut.FindComponents<MudAutocomplete<string>>()[0];
 
         // Act 1: "Item1" 入力時のサジェスト候補を取得
         IEnumerable<string> suggestions =

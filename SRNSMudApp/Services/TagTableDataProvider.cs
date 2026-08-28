@@ -59,7 +59,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         if (tagFromDb is not null)
         {
             var prevWeight = tagFromDb.CachedWeight;
-            tagFromDb.CachedWeight += 1;
+            tagFromDb.CachedWeight++;
             _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,

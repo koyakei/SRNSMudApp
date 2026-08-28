@@ -206,7 +206,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             TimelineTarget? target = (feedGroup.Events.Count > 0 ? feedGroup.Events[0] : null)?.Target;
             switch (target)
             {
-                case Models.Unions.ItemTarget it:
+                case ItemTarget it:
                     feedGroup.Item = await db.Items!
                         .Include(i => i.Owner)
                         .Include(i => i.TagRelations)
@@ -215,7 +215,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(i => i.Id == it.TargetItemId);
                     break;
-                case Models.Unions.TagTarget tt:
+                case TagTarget tt:
                     feedGroup.Tag = await db.Tags!
                         .Include(t => t.Owner)
                         .Include(t => t.TargetTagRelations!)

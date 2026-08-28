@@ -24,7 +24,11 @@ public class ReactionBarTests : IAsyncDisposable
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public void ReactionBar_RendersAllThreeChipsAndButtons()

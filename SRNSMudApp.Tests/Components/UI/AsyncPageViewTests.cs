@@ -20,7 +20,11 @@ public class AsyncPageViewTests : IDisposable
         _ = _ctx.Services.AddMudServices();
     }
 
-    public void Dispose() => _ctx.Dispose();
+    public void Dispose()
+    {
+        _ctx.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private IRenderedComponent<AsyncPageView<string>> Render(
         AsyncPageState<string> state,

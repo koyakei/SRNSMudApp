@@ -20,9 +20,6 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.Item;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemDetail ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、データ取得・URL クエリ同期・ダイアログ起動などの
@@ -34,7 +31,7 @@ public partial class ItemDetail
     // CA1002: Requests はリクエスト却下時に要素削除するため List のままとする。
     [SuppressMessage("Design", "CA1034:Do not nest type. Alternatively, change its accessibility so that it is not externally visible.")]
     [SuppressMessage("Design", "CA1002:Do not expose generic lists")]
-    public record ItemDetailData(Item Item, List<TaggingRequestEntity> Requests, IReadOnlyList<TagWeightLedger> Ledgers);
+    public record ItemDetailData(Data.Item Item, List<TaggingRequestEntity> Requests, IReadOnlyList<TagWeightLedger> Ledgers);
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -50,7 +47,7 @@ public partial class ItemDetail
     private AsyncPageState<ItemDetailData> _pageState = new Loading();
 
     private string _currentUserId = "";
-    private IReadOnlyList<Tag> _allTags = [];
+    private IReadOnlyList<Data.Tag> _allTags = [];
     private IReadOnlyList<TagRelationToTag> _allTagRelationsToTags = [];
 
     [SupplyParameterFromQuery(Name = "tab")]
@@ -153,14 +150,12 @@ public partial class ItemDetail
         }
     }
 
-
     private void OnSelectedRequestChanged(TaggingRequestEntity? request)
     {
         _selectedRequest = request;
         SelectedRequestIdQuery = request?.Id;
         UpdateUrlQuery();
     }
-
 
     // Removed RemoveItemTagAsync as it's now handled inside ItemTagChip
 

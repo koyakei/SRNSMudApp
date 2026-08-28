@@ -10,10 +10,6 @@ using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Components.Tag;
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagChip のコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、タグ操作・ダイアログ起動などの
@@ -27,9 +23,9 @@ public partial class ItemTagChip
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
 
     [Parameter][EditorRequired] public TagRelation TagRelation { get; set; } = null!;
-    [Parameter][EditorRequired] public Item Item { get; set; } = null!;
+    [Parameter][EditorRequired] public Data.Item Item { get; set; } = null!;
     [Parameter] public string CurrentUserId { get; set; } = "";
-    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public TimelineEvent? HighlightEvent { get; set; }
     [Parameter] public EventCallback OnDataChanged { get; set; }
@@ -91,7 +87,7 @@ public partial class ItemTagChip
 
     private Task HandleSuccessfulRemoval()
     {
-        var localRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == TagRelation.Id);
+        TagRelation? localRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == TagRelation.Id);
         _ = localRelation switch
         {
             not null => Item.TagRelations.Remove(localRelation),
@@ -205,7 +201,7 @@ public partial class ItemTagChip
         return NotifyChangedAsync();
     }
 
-    private async Task OnAddTagToTagClicked(Tag? targetTag)
+    private async Task OnAddTagToTagClicked(Data.Tag? targetTag)
     {
         await (targetTag switch
         {
@@ -216,7 +212,7 @@ public partial class ItemTagChip
 
     /// <summary>タグ選択ダイアログを表示し、選択されたタグで処理を実行する共通フロー。</summary>
     private async Task ExecuteWithTagSelection(
-        string title, Tag targetTag, Func<Tag, Tag, Task> execute)
+        string title, Data.Tag targetTag, Func<Data.Tag, Data.Tag, Task> execute)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
         IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>(title, options);
@@ -227,7 +223,7 @@ public partial class ItemTagChip
             return;
         }
 
-        if (result.Data is not Tag selectedTag)
+        if (result.Data is not Data.Tag selectedTag)
         {
             return;
         }
@@ -235,7 +231,7 @@ public partial class ItemTagChip
         await execute(targetTag, selectedTag);
     }
 
-    private async Task ExecuteAddTagToTagAsync(Tag targetTag, Tag selectedTag)
+    private async Task ExecuteAddTagToTagAsync(Data.Tag targetTag, Data.Tag selectedTag)
     {
         var error = await ItemTagService.AddTagToTagAsync(targetTag.Id, selectedTag.Id, CurrentUserId);
         await (error switch
@@ -264,7 +260,7 @@ public partial class ItemTagChip
         });
     }
 
-    private async Task OnAddChildTagFromTree(Tag? targetTag)
+    private async Task OnAddChildTagFromTree(Data.Tag? targetTag)
     {
         await (targetTag switch
         {
@@ -273,7 +269,7 @@ public partial class ItemTagChip
         });
     }
 
-    private async Task ExecuteSetParentTagAsync(Tag parentTag, Tag childTag)
+    private async Task ExecuteSetParentTagAsync(Data.Tag parentTag, Data.Tag childTag)
     {
         var error = await ItemTagService.SetParentTagAsync(parentTag.Id, childTag.Id, CurrentUserId, AllTags);
         await (error switch

@@ -20,8 +20,6 @@ public class Item : BaseEntity
     // JSON serialized ItemKind union (e.g. ReplyItem, RequestBodyItem, etc)
     public string ItemKindJson { get; set; } = string.Empty;
 
-
-
     // リプライ先のアイテム（親）
     public int? ParentItemId { get; set; }
     public Item? ParentItem { get; set; }

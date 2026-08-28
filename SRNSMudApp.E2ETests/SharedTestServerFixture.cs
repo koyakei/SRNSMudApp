@@ -20,6 +20,7 @@ namespace SRNSMudApp.E2ETests;
 public class SharedTestServerFixture
 {
     [System.Runtime.CompilerServices.ModuleInitializer]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("NUnit", "NUnit1028:Non-test methods in SetUpFixture", Justification = "ModuleInitializer is required to be internal for module level access")]
     internal static void ModuleInit()
     {
         SanitizeBrowserEnvironment();

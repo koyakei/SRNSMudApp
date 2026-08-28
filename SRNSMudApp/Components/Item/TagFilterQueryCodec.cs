@@ -6,8 +6,6 @@ using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Components.Item;
 
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>URL クエリ上のタグフィルタ 1 件分 (タグ ID またはタグ名 + 任意ユーザー名)。</summary>
 public sealed record FilterEntry(int? TagId, string? TagName, string? UserName)
 {
@@ -92,19 +90,14 @@ public static class TagFilterQueryCodec
     /// <summary>
     ///     <see cref="FilterEntry" /> を URL クエリパラメータ文字列へエンコードする。
     /// </summary>
-    public static string EncodeFilter(FilterEntry filter)
-    {
-        if (filter.TagId.HasValue)
-        {
-            return string.IsNullOrEmpty(filter.UserName)
+    public static string EncodeFilter(FilterEntry filter) =>
+        filter.TagId.HasValue
+            ? string.IsNullOrEmpty(filter.UserName)
                 ? filter.TagId.Value.ToString(CultureInfo.InvariantCulture)
-                : $"{filter.TagId.Value}@{filter.UserName}";
-        }
-
-        return string.IsNullOrEmpty(filter.UserName)
-            ? $"{NamePrefix}{filter.TagName}"
-            : $"{NamePrefix}{filter.TagName}@{filter.UserName}";
-    }
+                : $"{filter.TagId.Value}@{filter.UserName}"
+            : string.IsNullOrEmpty(filter.UserName)
+                ? $"{NamePrefix}{filter.TagName}"
+                : $"{NamePrefix}{filter.TagName}@{filter.UserName}";
 
     /// <summary>
     ///     検索テキスト（例: "タグ名", "タグ名 @ユーザー名"）から <see cref="FilterEntry" /> を生成する。
@@ -124,7 +117,7 @@ public static class TagFilterQueryCodec
     ///     <see cref="FilterEntry" /> を検索バー用文字列へ変換する。
     ///     TagId のみの場合は必要に応じて <paramref name="allTags" /> からタグ名を解決する。
     /// </summary>
-    public static string ToSearchString(FilterEntry filter, IEnumerable<Tag>? allTags = null)
+    public static string ToSearchString(FilterEntry filter, IEnumerable<Data.Tag>? allTags = null)
     {
         var tagName = filter.TagName;
         if (string.IsNullOrEmpty(tagName) && filter.TagId.HasValue && allTags != null)
@@ -137,13 +130,10 @@ public static class TagFilterQueryCodec
             tagName = filter.TagId.Value.ToString(CultureInfo.InvariantCulture);
         }
 
-        if (string.IsNullOrEmpty(tagName))
-        {
-            return string.Empty;
-        }
-
-        return string.IsNullOrEmpty(filter.UserName)
-            ? tagName
-            : $"{tagName} @{filter.UserName}";
+        return string.IsNullOrEmpty(tagName)
+            ? string.Empty
+            : string.IsNullOrEmpty(filter.UserName)
+                ? tagName
+                : $"{tagName} @{filter.UserName}";
     }
 }

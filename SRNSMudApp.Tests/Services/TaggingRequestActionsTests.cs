@@ -26,7 +26,7 @@ public class TaggingRequestActionsTests
     private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
     private readonly Mock<IDialogReference> _dialogReferenceMock = new();
     private readonly Mock<ISnackbar> _snackbarMock = new();
-    private readonly ITaggingRequestActions _actions = null!;
+    private readonly TaggingRequestActions _actions = null!;
 
     public TaggingRequestActionsTests()
     {

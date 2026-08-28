@@ -5,4 +5,4 @@ public record SystemInvitation();
 public record AdminInvitation(string InvitedByAdminId);
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union InvitationSource(SystemInvitation, AdminInvitation);
+public readonly union InvitationSource(SystemInvitation, AdminInvitation);

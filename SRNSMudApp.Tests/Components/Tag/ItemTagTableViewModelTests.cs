@@ -3,15 +3,13 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.Tag;
 
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ItemTagTableViewModel の単体テスト。
 ///     TagSearchQuery を用いた 2 段階サジェストおよびテーブルフィルタ判定を検証する。
 /// </summary>
 public class ItemTagTableViewModelTests
 {
-    private static Tag CreateTag(int id = 1, string name = "CSharp", string ownerName = "alice") =>
+    private static SRNSMudApp.Data.Tag CreateTag(int id = 1, string name = "CSharp", string ownerName = "alice") =>
         new()
         {
             Id = id,
@@ -21,7 +19,7 @@ public class ItemTagTableViewModelTests
             Content = $"Content for {name}"
         };
 
-    private static TagRelation CreateTagRelation(int id, Tag tag, string ownerName = "alice") =>
+    private static TagRelation CreateTagRelation(int id, SRNSMudApp.Data.Tag tag, string ownerName = "alice") =>
         new()
         {
             Id = id,
@@ -131,7 +129,7 @@ public class ItemTagTableViewModelTests
     [Fact]
     public void GetSearchSuggestions_WithIncompleteSearch_WhenNoUser_ReturnsTagNameWithAt()
     {
-        var tag = new Tag { Id = 1, Name = "CSharp", OwnerId = "user-1" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "CSharp", OwnerId = "user-1" };
         var relation = new TagRelation { Id = 1, TagId = 1, Tag = tag, OwnerId = "user-1" };
 
         var suggestions = ItemTagTableViewModel.GetSearchSuggestions([relation], "CSharp @");

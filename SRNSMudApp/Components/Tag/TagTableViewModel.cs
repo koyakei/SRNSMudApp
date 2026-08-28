@@ -1,10 +1,7 @@
 using SRNSMudApp.Data;
 
-// 親名前空間 Tag より先に Data.Tag 型を解決させるため、エイリアスを置く
-
 namespace SRNSMudApp.Components.Tag;
 
-using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     添付タグ列の表示状態。
 /// </summary>
@@ -30,7 +27,7 @@ public static class TagTableViewModel
     /// <summary>
     ///     MudTable のフィルタ条件。検索語が空の場合はすべて表示する。
     /// </summary>
-    public static bool FilterFunc(Tag tag, string? search)
+    public static bool FilterFunc(Data.Tag tag, string? search)
     {
         return string.IsNullOrWhiteSpace(search) ||
                tag.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -41,9 +38,9 @@ public static class TagTableViewModel
     /// <summary>
     ///     オートコンプリート用のタグ名候補を返す。重複は除去し最大 20 件に制限する。
     /// </summary>
-    public static IReadOnlyList<string> GetTagSearchSuggestions(IEnumerable<Tag>? sourceTags, string? value)
+    public static IReadOnlyList<string> GetTagSearchSuggestions(IEnumerable<Data.Tag>? sourceTags, string? value)
     {
-        IEnumerable<Tag> tags = sourceTags ?? [];
+        IEnumerable<Data.Tag> tags = sourceTags ?? [];
         return string.IsNullOrEmpty(value)
             ? [.. tags.Select(t => t.Name).Distinct().Take(20)]
             : [.. tags
@@ -56,7 +53,7 @@ public static class TagTableViewModel
     /// <summary>
     ///     対象タグに添付された（システムタグ以外の）タグ関係をウェイト降順で返す。
     /// </summary>
-    public static IReadOnlyList<TagRelationToTag> GetAttachedTags(Tag tag)
+    public static IReadOnlyList<TagRelationToTag> GetAttachedTags(Data.Tag tag)
     {
         return tag.TargetTagRelations?
                    .Where(tr => tr.Tag?.IsSystem == false)
@@ -68,7 +65,7 @@ public static class TagTableViewModel
     /// <summary>
     ///     展開状態を考慮して、添付タグ列に表示するタグ関係と隠し件数を計算する。
     /// </summary>
-    public static AttachedTagsDisplay GetAttachedTagsDisplay(Tag tag, bool isExpanded)
+    public static AttachedTagsDisplay GetAttachedTagsDisplay(Data.Tag tag, bool isExpanded)
     {
         IReadOnlyList<TagRelationToTag> allTags = GetAttachedTags(tag);
         var hasManyTags = allTags.Count >= AttachedTagsDisplay.ManyTagsThreshold;
@@ -88,12 +85,12 @@ public static class TagTableViewModel
     /// <summary>
     ///     現在のユーザーがそのタグを編集できるかどうかを返す。
     /// </summary>
-    public static bool CanEditTag(Tag tag, string? currentUserId) => tag.OwnerId == currentUserId;
+    public static bool CanEditTag(Data.Tag tag, string? currentUserId) => tag.OwnerId == currentUserId;
 
     /// <summary>
     ///     現在のユーザーがそのタグを削除できるかどうかを返す（システムタグは不可）。
     /// </summary>
-    public static bool CanDeleteTag(Tag tag, string? currentUserId) =>
+    public static bool CanDeleteTag(Data.Tag tag, string? currentUserId) =>
         tag.OwnerId == currentUserId && !tag.IsSystem;
 
     /// <summary>

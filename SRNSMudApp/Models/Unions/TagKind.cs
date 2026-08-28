@@ -30,4 +30,4 @@ public record UserCustomTag(string Name, string OwnerId);
 ///     タグの種別を表す Union 型。
 /// </summary>
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagKind(VoteTag, ReactionTag, SystemClassificationTag, UserCustomTag);
+public readonly union TagKind(VoteTag, ReactionTag, SystemClassificationTag, UserCustomTag);

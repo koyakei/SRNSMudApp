@@ -73,9 +73,9 @@ public class ItemListDataProviderTests : IAsyncLifetime
             db.Tags.AddRange(childTag, otherTag);
             await db.SaveChangesAsync();
 
-            var itemWithParent = new SRNSMudApp.Data.Item { Content = $"ItemParent_{tid}", OwnerId = user1Id };
-            var itemWithChild = new SRNSMudApp.Data.Item { Content = $"ItemChild_{tid}", OwnerId = user1Id };
-            var itemWithOther = new SRNSMudApp.Data.Item { Content = $"ItemOther_{tid}", OwnerId = user1Id };
+            var itemWithParent = new Item { Content = $"ItemParent_{tid}", OwnerId = user1Id };
+            var itemWithChild = new Item { Content = $"ItemChild_{tid}", OwnerId = user1Id };
+            var itemWithOther = new Item { Content = $"ItemOther_{tid}", OwnerId = user1Id };
             db.Items.AddRange(itemWithParent, itemWithChild, itemWithOther);
             await db.SaveChangesAsync();
 
@@ -107,7 +107,7 @@ public class ItemListDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task LoadItemsAndTagsAsync_WithTagIdFilterAndUserName_FiltersByAuthor()
     {
-        var (db, sut, user1Id, user1Name, user2Id, user2Name, tid) = await CreateScopeAsync();
+        var (db, sut, user1Id, user1Name, user2Id, _, tid) = await CreateScopeAsync();
         await using (db)
         {
             var rootTag = await db.Tags.FirstAsync(t => t.Name == Tag.RootTagName);
@@ -131,8 +131,8 @@ public class ItemListDataProviderTests : IAsyncLifetime
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
 
-            var itemUser1 = new SRNSMudApp.Data.Item { Content = $"ItemU1_{tid}", OwnerId = user1Id };
-            var itemUser2 = new SRNSMudApp.Data.Item { Content = $"ItemU2_{tid}", OwnerId = user2Id };
+            var itemUser1 = new Item { Content = $"ItemU1_{tid}", OwnerId = user1Id };
+            var itemUser2 = new Item { Content = $"ItemU2_{tid}", OwnerId = user2Id };
             db.Items.AddRange(itemUser1, itemUser2);
             await db.SaveChangesAsync();
 
@@ -184,9 +184,9 @@ public class ItemListDataProviderTests : IAsyncLifetime
             db.Tags.AddRange(childTag, otherTag);
             await db.SaveChangesAsync();
 
-            var itemWithParent = new SRNSMudApp.Data.Item { Content = $"ItemP_{tid}", OwnerId = user1Id };
-            var itemWithChild = new SRNSMudApp.Data.Item { Content = $"ItemC_{tid}", OwnerId = user1Id };
-            var itemWithOther = new SRNSMudApp.Data.Item { Content = $"ItemO_{tid}", OwnerId = user1Id };
+            var itemWithParent = new Item { Content = $"ItemP_{tid}", OwnerId = user1Id };
+            var itemWithChild = new Item { Content = $"ItemC_{tid}", OwnerId = user1Id };
+            var itemWithOther = new Item { Content = $"ItemO_{tid}", OwnerId = user1Id };
             db.Items.AddRange(itemWithParent, itemWithChild, itemWithOther);
             await db.SaveChangesAsync();
 
@@ -238,8 +238,8 @@ public class ItemListDataProviderTests : IAsyncLifetime
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
 
-            var itemUser1 = new SRNSMudApp.Data.Item { Content = $"ItemU1_{tid}", OwnerId = user1Id };
-            var itemUser2 = new SRNSMudApp.Data.Item { Content = $"ItemU2_{tid}", OwnerId = user2Id };
+            var itemUser1 = new Item { Content = $"ItemU1_{tid}", OwnerId = user1Id };
+            var itemUser2 = new Item { Content = $"ItemU2_{tid}", OwnerId = user2Id };
             db.Items.AddRange(itemUser1, itemUser2);
             await db.SaveChangesAsync();
 

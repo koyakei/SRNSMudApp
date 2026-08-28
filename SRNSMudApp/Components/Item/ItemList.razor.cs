@@ -7,21 +7,17 @@ using Microsoft.JSInterop;
 
 using SRNSMudApp.Models;
 using SRNSMudApp.Services;
-// 兄弟名前空間 SRNSMudApp.Components.Tag より先に Data.Tag 型を解決させるため、
-// using を名前空間の内側に置く。namespace Item も同名型と衝突する
 
 namespace SRNSMudApp.Components.Item;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
 /// <summary>
 ///     ItemList ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、状態保持とサービス呼び出しはこちらに集約する。
 /// </summary>
 public partial class ItemList
 {
-    private IEnumerable<Item> _items = [];
-    private IEnumerable<Tag> _foundTags = [];
+    private IEnumerable<Data.Item> _items = [];
+    private IEnumerable<Data.Tag> _foundTags = [];
 
     // ===== タグ検索フィルタ用ステート =====
     private readonly List<TagFilter> _selectedFilters = [];
@@ -39,22 +35,22 @@ public partial class ItemList
     {
         // URL 復元は ItemListQueryState に一元化。
         // TagId 指定と TagName 指定の両方のエントリを復元する
-        var state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        var filterTagIds = state.Filters.Where(f => f.TagId.HasValue).Select(f => f.TagId!.Value);
-        var sortTagIds = state.SortEntries.Select(e => e.TagId);
-        Dictionary<int, Tag> tagsById = await ListData.GetTagsByIdsAsync(filterTagIds.Concat(sortTagIds));
+        ItemListQueryState state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
+        IEnumerable<int> filterTagIds = state.Filters.Where(f => f.TagId.HasValue).Select(f => f.TagId!.Value);
+        IEnumerable<int> sortTagIds = state.SortEntries.Select(e => e.TagId);
+        Dictionary<int, Data.Tag> tagsById = await ListData.GetTagsByIdsAsync(filterTagIds.Concat(sortTagIds));
 
-        var nameFilters = state.Filters
+        List<string> nameFilters = state.Filters
             .Where(f => !f.TagId.HasValue && !string.IsNullOrWhiteSpace(f.TagName))
             .Select(f => f.TagName!)
             .ToList();
-        Dictionary<string, Tag> tagsByName = await ListData.GetTagsByNamesAsync(nameFilters);
+        Dictionary<string, Data.Tag> tagsByName = await ListData.GetTagsByNamesAsync(nameFilters);
 
         foreach (FilterEntry filter in state.Filters)
         {
             if (filter.TagId.HasValue)
             {
-                if (tagsById.TryGetValue(filter.TagId.Value, out Tag? tag))
+                if (tagsById.TryGetValue(filter.TagId.Value, out Data.Tag? tag))
                 {
                     _selectedFilters.Add(new TagFilter
                     {
@@ -67,7 +63,7 @@ public partial class ItemList
             }
             else if (!string.IsNullOrWhiteSpace(filter.TagName))
             {
-                _ = tagsByName.TryGetValue(filter.TagName, out Tag? tag);
+                _ = tagsByName.TryGetValue(filter.TagName, out Data.Tag? tag);
                 _selectedFilters.Add(new TagFilter
                 {
                     TagName = filter.TagName,
@@ -79,7 +75,7 @@ public partial class ItemList
 
         foreach (SortEntry entry in state.SortEntries)
         {
-            if (tagsById.TryGetValue(entry.TagId, out Tag? tag))
+            if (tagsById.TryGetValue(entry.TagId, out Data.Tag? tag))
             {
                 _sortConditions.Add(new SortCondition { Tag = tag, Order = entry.Order });
             }
@@ -147,7 +143,7 @@ public partial class ItemList
 
     private async Task ExecuteSearch(string tagName, string? userName)
     {
-        Tag? tag = await ListData.FindTagByNameAsync(tagName);
+        Data.Tag? tag = await ListData.FindTagByNameAsync(tagName);
 
         if (!_selectedFilters.Any(f => f.TagName.Equals(tagName, StringComparison.OrdinalIgnoreCase) && f.UserName == userName))
         {
@@ -183,14 +179,9 @@ public partial class ItemList
     private async Task RemoveTagFilter(TagFilter filter)
     {
         _ = _selectedFilters.Remove(filter);
-        if (filter.TagId.HasValue)
-        {
-            _ = _sortConditions.RemoveAll(c => c.Tag.Id == filter.TagId.Value);
-        }
-        else
-        {
-            _ = _sortConditions.RemoveAll(c => c.Tag.Name.Equals(filter.TagName, StringComparison.OrdinalIgnoreCase));
-        }
+        _ = filter.TagId.HasValue
+            ? _sortConditions.RemoveAll(c => c.Tag.Id == filter.TagId.Value)
+            : _sortConditions.RemoveAll(c => c.Tag.Name.Equals(filter.TagName, StringComparison.OrdinalIgnoreCase));
         UpdateUrlQuery();
         await LoadDataAsync();
     }
@@ -217,7 +208,7 @@ public partial class ItemList
         _foundTags = page.Tags;
     }
 
-    private async Task OnSortTargetTagAdded(Tag? tag)
+    private async Task OnSortTargetTagAdded(Data.Tag? tag)
     {
         if (tag != null && _sortConditions.All(c => c.Tag.Id != tag.Id))
         {
@@ -241,9 +232,9 @@ public partial class ItemList
         await LoadDataAsync();
     }
 
-    private Task<IEnumerable<Tag>> SearchSortTagsAsync(string? value, CancellationToken token)
+    private Task<IEnumerable<Data.Tag>> SearchSortTagsAsync(string? value, CancellationToken _)
     {
-        IEnumerable<Tag> source = _selectedFilters
+        IEnumerable<Data.Tag> source = _selectedFilters
             .Select(f => f.Tag)
             .Where(t => t != null)!;
 

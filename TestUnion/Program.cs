@@ -5,7 +5,7 @@ namespace TestUnion;
 
 public record ItemTarget(int TargetItemId);
 public record TagTarget(int TargetTagId);
-public union TimelineTarget(ItemTarget, TagTarget);
+public readonly union TimelineTarget(ItemTarget, TagTarget);
 
 class Program
 {
@@ -16,7 +16,7 @@ class Program
             TimelineTarget target = new ItemTarget(123);
             string json = JsonSerializer.Serialize(target);
             Console.WriteLine("Serialized: " + json);
-            
+
             var deserialized = JsonSerializer.Deserialize<TimelineTarget>(json);
             Console.WriteLine("Deserialized type: " + deserialized.GetType());
         }

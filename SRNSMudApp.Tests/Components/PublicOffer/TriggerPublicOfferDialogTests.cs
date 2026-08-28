@@ -75,10 +75,10 @@ public sealed class TriggerPublicOfferDialogTests : IAsyncLifetime
         host.WaitForState(() => host.Markup.Contains("タグを付与する対象のアイテム"));
 
         IRenderedComponent<MudAutocomplete<SRNSMudApp.Data.Item>> autocomplete =
-            host.FindComponents<MudAutocomplete<SRNSMudApp.Data.Item>>().First();
+            host.FindComponents<MudAutocomplete<SRNSMudApp.Data.Item>>()[0];
         await host.InvokeAsync(() => autocomplete.Instance.ValueChanged!.InvokeAsync(charlieItem));
 
-        IRenderedComponent<MudForm> form = host.FindComponents<MudForm>().First();
+        IRenderedComponent<MudForm> form = host.FindComponents<MudForm>()[0];
         await host.InvokeAsync(() => form.Instance.ValidateAsync());
 
         IElement triggerButton =

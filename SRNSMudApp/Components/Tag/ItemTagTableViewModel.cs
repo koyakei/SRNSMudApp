@@ -81,8 +81,8 @@ public static class ItemTagTableViewModel
             .SelectMany(r => new[] { r.Tag?.Owner?.UserName, r.Owner?.UserName })
             .Where(u => !string.IsNullOrWhiteSpace(u))
             .Distinct()
-            .Where(u => string.IsNullOrWhiteSpace(userSearch) || u!.Contains(userSearch, StringComparison.OrdinalIgnoreCase))
-            .Select(u => u!)
+            .Where(u => string.IsNullOrWhiteSpace(userSearch) || u.Contains(userSearch, StringComparison.OrdinalIgnoreCase))
+            .OfType<string>()
             .Take(MaxSuggestionCount)];
 
         return userNames.Count == 0 && string.IsNullOrWhiteSpace(userSearch)

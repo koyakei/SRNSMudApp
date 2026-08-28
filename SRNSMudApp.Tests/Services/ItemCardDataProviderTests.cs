@@ -36,7 +36,7 @@ public class ItemCardDataProviderTests : IAsyncLifetime
         await db.SeedUsersAsync(userId, systemId, authorId);
 
         var tag = new Tag { Name = $"good_{tid}", IsSystem = true, OwnerId = systemId, CachedWeight = 0 };
-        var item = new SRNSMudApp.Data.Item { Content = $"target_{tid}", OwnerId = authorId };
+        var item = new Item { Content = $"target_{tid}", OwnerId = authorId };
 
         db.Tags.Add(tag);
         db.Items.Add(item);
@@ -48,7 +48,7 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task ToggleItemVote_FirstClick_AddsRelationWithTargetWeight()
     {
-        var (db, sut, userId, goodTagId, itemId, tid) = await CreateScopeAsync();
+        var (db, sut, userId, goodTagId, itemId, _) = await CreateScopeAsync();
         await using (db)
         {
             ItemVoteResult result = await sut.ToggleItemVoteAsync(itemId, userId, goodTagId, 1);
@@ -64,7 +64,7 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task ToggleItemVote_SecondDifferentWeight_UpdatesAndWritesLedger()
     {
-        var (db, sut, userId, goodTagId, itemId, tid) = await CreateScopeAsync();
+        var (db, sut, userId, goodTagId, itemId, _) = await CreateScopeAsync();
         await using (db)
         {
             _ = await sut.ToggleItemVoteAsync(itemId, userId, goodTagId, 1);
@@ -86,7 +86,7 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task ToggleItemVote_SameWeightTwice_CancelsVoteAndRemovesRelation()
     {
-        var (db, sut, userId, goodTagId, itemId, tid) = await CreateScopeAsync();
+        var (db, sut, userId, goodTagId, itemId, _) = await CreateScopeAsync();
         await using (db)
         {
             _ = await sut.ToggleItemVoteAsync(itemId, userId, goodTagId, 1);
@@ -193,11 +193,11 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task CreateItemAsync_WithExistingOwner_DoesNotDuplicateUserAndStoresItem()
     {
-        var (db, sut, userId, goodTagId, itemId, tid) = await CreateScopeAsync();
+        var (db, sut, _, goodTagId, _, tid) = await CreateScopeAsync();
         await using (db)
         {
             var authorId = $"author_{tid}";
-            var newItem = new SRNSMudApp.Data.Item
+            var newItem = new Item
             {
                 Content = $"New item created by existing author_{tid}",
                 OwnerId = authorId

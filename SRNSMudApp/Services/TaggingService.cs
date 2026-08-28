@@ -16,13 +16,13 @@ public record TagExists;
 public record TagMissing;
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union TagPresenceState(TagExists, TagMissing);
+public readonly union TagPresenceState(TagExists, TagMissing);
 
 public record AuthorizedToReject;
 public record UnauthorizedToReject;
 
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union RejectAuthorization(AuthorizedToReject, UnauthorizedToReject);
+public readonly union RejectAuthorization(AuthorizedToReject, UnauthorizedToReject);
 
 public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITaggingService
 {
@@ -92,7 +92,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         TaggingRequestEntity request = await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId) switch
         {
-            TaggingRequestEntity req => req,
+            { } req => req,
             null => throw new InvalidOperationException("リクエストが見つかりません。")
         };
 

@@ -15,9 +15,6 @@ using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Components.UI;
 
-using Item = SRNSMudApp.Data.Item;
-using Tag = SRNSMudApp.Data.Tag;
-
 public sealed class ResourceListRenderingTests : IAsyncLifetime
 {
     private const string UserId = "test-user-id";
@@ -47,21 +44,21 @@ public sealed class ResourceListRenderingTests : IAsyncLifetime
     public void ResourceList_RendersItemsBeforeTags()
     {
         // Arrange
-        var item = new Item
+        var item = new SRNSMudApp.Data.Item
         {
             Id = 101,
             Content = "Test Item Content",
             OwnerId = UserId,
             Owner = new ApplicationUser { Id = UserId, UserName = "test_user" }
         };
-        var tag = new Tag
+        var tag = new SRNSMudApp.Data.Tag
         {
             Id = 202,
             Name = "Test Tag Name",
             OwnerId = UserId
         };
-        List<Item> items = [item];
-        List<Tag> tags = [tag];
+        List<SRNSMudApp.Data.Item> items = [item];
+        List<SRNSMudApp.Data.Tag> tags = [tag];
 
         _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
             .ReturnsAsync(([], []));

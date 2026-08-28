@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace SRNSMudApp.Components.UI;
 
-
 /// <summary>
 ///     UrlPreviewCard に含まれる純粋なロジック（テキストフラグメント解析）を切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。

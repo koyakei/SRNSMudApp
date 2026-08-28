@@ -2,23 +2,19 @@ using SRNSMudApp.Components.UI;
 
 namespace SRNSMudApp.Tests.Components.UI;
 
-// 親名前空間の下にある namespace Tag より先に Data.Tag 型を解決させるため、
-// エイリアスを名前空間の内側に置く
-using Tag = SRNSMudApp.Data.Tag;
-
 /// <summary>
 ///     ResourceListViewModel の単体テスト。
 ///     システムタグ検索とスクロール先セレクタ計算を bUnit なしで検証する。
 /// </summary>
 public class ResourceListViewModelTests
 {
-    private static Tag CreateTag(int id, string name, string ownerId, bool isSystem = false) =>
+    private static SRNSMudApp.Data.Tag CreateTag(int id, string name, string ownerId, bool isSystem = false) =>
         new() { Id = id, Name = name, OwnerId = ownerId, IsSystem = isSystem };
 
     [Fact]
     public void FindSystemTags_ReturnsCurrentUserSystemTagIds()
     {
-        List<Tag> tags =
+        List<SRNSMudApp.Data.Tag> tags =
         [
             CreateTag(1, "good", "user-1", isSystem: true),
             CreateTag(2, "bad", "user-1", isSystem: true),
@@ -35,7 +31,7 @@ public class ResourceListViewModelTests
     [Fact]
     public void FindSystemTags_IgnoresNonSystemTags()
     {
-        List<Tag> tags = [CreateTag(1, "good", "user-1", isSystem: false)];
+        List<SRNSMudApp.Data.Tag> tags = [CreateTag(1, "good", "user-1", isSystem: false)];
 
         var result = ResourceListViewModel.FindSystemTags(tags, "user-1");
 
@@ -46,10 +42,29 @@ public class ResourceListViewModelTests
     [Fact]
     public void FindSystemTags_ForAnonymousUser_ReturnsDefault()
     {
-        List<Tag> tags = [CreateTag(1, "good", "user-1", isSystem: true)];
+        List<SRNSMudApp.Data.Tag> tags = [CreateTag(1, "good", "user-1", isSystem: true)];
 
         Assert.Equal(default, ResourceListViewModel.FindSystemTags(tags, ""));
         Assert.Equal(default, ResourceListViewModel.FindSystemTags(null, "user-1"));
+    }
+
+    [Fact]
+    public void FindReactionTags_ReturnsAllThreeReactionTagIds()
+    {
+        List<SRNSMudApp.Data.Tag> tags =
+        [
+            CreateTag(10, "真実", "user-1", isSystem: true),
+            CreateTag(11, "善", "user-1", isSystem: true),
+            CreateTag(12, "美", "user-1", isSystem: true),
+            CreateTag(13, "真実", "user-2", isSystem: true)
+        ];
+
+        var result = ResourceListViewModel.FindReactionTags(tags, "user-1");
+
+        Assert.Equal(10, result.ShinjiTagId);
+        Assert.Equal(11, result.ZenTagId);
+        Assert.Equal(12, result.BiTagId);
+        Assert.True(result.IsComplete);
     }
 
     [Theory]

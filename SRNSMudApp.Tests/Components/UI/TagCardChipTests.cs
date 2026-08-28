@@ -12,8 +12,6 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Tests.Components.UI;
 
-using Tag = SRNSMudApp.Data.Tag;
-
 public class TagCardChipTests : IAsyncDisposable
 {
     private readonly BunitContext _ctx = new();
@@ -25,12 +23,16 @@ public class TagCardChipTests : IAsyncDisposable
         _ = _ctx.Render<MudPopoverProvider>();
     }
 
-    public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _ctx.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public void TagCardChip_WhenNotActive_OverlayIsNotVisible()
     {
-        var tag = new Tag { Id = 1, Name = "TestTag", OwnerId = "u1" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "TestTag", OwnerId = "u1" };
         var relation = new TagRelationToTag { Id = 10, TagId = 1, Tag = tag, TargetTagId = 99, OwnerId = "u1", Weight = 1 };
         var display = new TagCardChipDisplayInfo
         {
@@ -45,6 +47,7 @@ public class TagCardChipTests : IAsyncDisposable
             .Add(p => p.Relation, relation)
             .Add(p => p.Display, display)
             .Add(p => p.IsActive, false)
+            .Add(p => p.AllTags, [tag])
         );
 
         var overlays = cut.FindComponents<MudOverlay>();
@@ -54,7 +57,7 @@ public class TagCardChipTests : IAsyncDisposable
     [Fact]
     public async Task TagCardChip_WhenActive_OverlayIsVisible_AndOnClickTriggersOnCloseTree()
     {
-        var tag = new Tag { Id = 1, Name = "TestTag", OwnerId = "u1" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "TestTag", OwnerId = "u1" };
         var relation = new TagRelationToTag { Id = 10, TagId = 1, Tag = tag, TargetTagId = 99, OwnerId = "u1", Weight = 1 };
         var display = new TagCardChipDisplayInfo
         {

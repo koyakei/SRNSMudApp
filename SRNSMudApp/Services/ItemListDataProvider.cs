@@ -18,7 +18,7 @@ public sealed record TagNameFilter(string TagName, string? UserName);
 
 /// <summary>タグフィルタ条件 (TagId 指定 または TagName 指定)。</summary>
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union ItemListFilter(TagIdFilter, TagNameFilter);
+public readonly union ItemListFilter(TagIdFilter, TagNameFilter);
 
 /// <summary>ソート条件。</summary>
 public sealed record ItemListSort(int TagId, bool Ascending);

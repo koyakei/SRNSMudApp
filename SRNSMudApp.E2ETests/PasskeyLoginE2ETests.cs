@@ -1,7 +1,6 @@
 #region
 
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
@@ -11,7 +10,7 @@ using Microsoft.Playwright.NUnit;
 namespace SRNSMudApp.E2ETests;
 
 [TestFixture]
-public partial class PasskeyLoginE2ETests : PageTest
+public class PasskeyLoginE2ETests : PageTest
 {
     [OneTimeSetUp]
     public void OneTimeSetUp()
@@ -66,7 +65,4 @@ public partial class PasskeyLoginE2ETests : PageTest
         // クリーンアップ
         await WebAuthnTestHelpers.RemoveVirtualAuthenticatorAsync(cdp, authenticatorId);
     }
-
-    [GeneratedRegex("Click here to confirm your account", RegexOptions.IgnoreCase)]
-    private static partial Regex ConfirmAccountRegex();
 }

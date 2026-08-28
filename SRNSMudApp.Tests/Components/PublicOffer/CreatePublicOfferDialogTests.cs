@@ -61,10 +61,10 @@ public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
         host.WaitForState(() => host.Markup.Contains("提供するタグ"));
 
         IRenderedComponent<MudAutocomplete<SRNSMudApp.Data.Tag>> autocomplete =
-            host.FindComponents<MudAutocomplete<SRNSMudApp.Data.Tag>>().First();
+            host.FindComponents<MudAutocomplete<SRNSMudApp.Data.Tag>>()[0];
         await host.InvokeAsync(() => autocomplete.Instance.ValueChanged!.InvokeAsync(tag));
 
-        IRenderedComponent<MudForm> form = host.FindComponents<MudForm>().First();
+        IRenderedComponent<MudForm> form = host.FindComponents<MudForm>()[0];
         await host.InvokeAsync(() => form.Instance.ValidateAsync());
 
         IElement publishButton =

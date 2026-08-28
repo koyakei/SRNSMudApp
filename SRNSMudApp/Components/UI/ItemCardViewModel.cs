@@ -25,12 +25,10 @@ public class RequestInfo
 ///     ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
 /// </summary>
-public static class ItemCardViewModel
+public static partial class ItemCardViewModel
 {
-    // ReSharper disable once InconsistentNaming
-    private static readonly Regex UrlRegex =
-        new(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",
-            RegexOptions.Compiled);
+    [GeneratedRegex(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)")]
+    private static partial Regex UrlRegex();
 
     public static RequestInfo GetRequestInfo(Data.Item item)
     {
@@ -163,7 +161,7 @@ public static class ItemCardViewModel
         }
 
         List<string> results = [];
-        MatchCollection matches = UrlRegex.Matches(text);
+        MatchCollection matches = UrlRegex().Matches(text);
         foreach (Match match in matches)
         {
             if (!results.Contains(match.Value))

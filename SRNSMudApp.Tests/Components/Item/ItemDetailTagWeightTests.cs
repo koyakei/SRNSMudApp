@@ -89,7 +89,7 @@ public sealed class ItemDetailTagWeightTests : IAsyncLifetime
         cut.WaitForState(() => cut.Markup.Contains(tagName));
 
         // Act: 該当タグの行にある「Weightを減らす」ボタンをクリック
-        IElement decreaseButton = cut.FindAll("button[title='Weightを減らす']").First();
+        IElement decreaseButton = cut.FindAll("button[title='Weightを減らす']")[0];
         decreaseButton.Click();
 
         // サービスの呼び出しを検証

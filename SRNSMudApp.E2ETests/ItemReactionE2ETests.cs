@@ -13,8 +13,14 @@ namespace SRNSMudApp.E2ETests;
 ///     選択時の色反転（filled/active状態）を検証する E2E テスト。
 /// </summary>
 [TestFixture]
-public class ItemReactionE2ETests : PageTest
+public partial class ItemReactionE2ETests : PageTest
 {
+    [GeneratedRegex("mud-info-text")]
+    private static partial Regex MudInfoTextRegex();
+
+    [GeneratedRegex("mud-error-text")]
+    private static partial Regex MudErrorTextRegex();
+
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -71,56 +77,56 @@ public class ItemReactionE2ETests : PageTest
         await Expect(shinjiChip).ToBeVisibleAsync();
         await Expect(shinjiChip).ToContainTextAsync("真実");
         await Expect(shinjiChip).Not.ToContainTextAsync("真実 (");
-        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
 
         // 4. 「真実」上矢印ボタンをクリックしてアップボート付与 (+1)
         await shinjiUpvoteBtn.ClickAsync();
 
         // 付与後: 上矢印が Info カラーになり、チップのスコアが (1) に変化
         await Expect(shinjiChip).ToContainTextAsync("真実 (1)");
-        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
 
         // 5. 再度「真実」上矢印ボタンをクリックして Weight を加算 (+2)
         await shinjiUpvoteBtn.ClickAsync();
 
         // 加算後: 上矢印が Info カラーのままで、チップのスコアが (2) に変化
         await Expect(shinjiChip).ToContainTextAsync("真実 (2)");
-        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
 
         // 6. 「真実」下矢印ボタンをクリックして逆操作（減算: +1）
         await shinjiDownvoteBtn.ClickAsync();
 
         // 減算後: チップのスコアが (1) に変化
         await Expect(shinjiChip).ToContainTextAsync("真実 (1)");
-        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
 
         // 7. 再度下矢印ボタンをクリックして逆操作で 0 に達し投票解除
         await shinjiDownvoteBtn.ClickAsync();
 
         // 解除後: 上下矢印ともにアクティブカラーが消え、スコア表記が消える
         await Expect(shinjiChip).Not.ToContainTextAsync("真実 (");
-        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
 
         // 8. 「真実」下矢印ボタンをクリックしてダウンボート付与 (-1)
         await shinjiDownvoteBtn.ClickAsync();
 
         // 付与後: 下矢印が Error カラーになり、チップのスコアが (-1) に変化
         await Expect(shinjiChip).ToContainTextAsync("真実 (-1)");
-        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).ToHaveClassAsync(MudErrorTextRegex());
 
         // 9. 「真実」上矢印ボタンをクリックして逆操作で 0 に戻す
         await shinjiUpvoteBtn.ClickAsync();
 
         // 解除後: 上下矢印ともにアクティブカラーが消え、スコア表記が消える
         await Expect(shinjiChip).Not.ToContainTextAsync("真実 (");
-        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(new Regex("mud-info-text"));
-        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(new Regex("mud-error-text"));
+        await Expect(shinjiUpvoteBtn).Not.ToHaveClassAsync(MudInfoTextRegex());
+        await Expect(shinjiDownvoteBtn).Not.ToHaveClassAsync(MudErrorTextRegex());
     }
 
     [Test]
@@ -169,19 +175,18 @@ public class ItemReactionE2ETests : PageTest
         {
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             Tag? shinjiTag = db.Tags.FirstOrDefault(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
-            Assert.That(shinjiTag, Is.Not.Null, "ReactionTag '真実' should exist for user");
-
             TagRelation? relation = db.TagRelations.FirstOrDefault(tr => tr.ItemId == targetItemId && tr.TagId == shinjiTag!.Id && tr.OwnerId == userId);
-            Assert.That(relation, Is.Not.Null, "TagRelation should be created for the item and reaction tag");
-            Assert.That(relation!.Weight, Is.EqualTo(1), "TagRelation weight should be 1");
+            TagWeightLedger? ledger = db.TagWeightLedgers.FirstOrDefault(l => l.TagId == shinjiTag!.Id && l.SourceType == "TagRelationInsert");
 
-            // CachedWeight が 1 に増えていることを検証
-            Assert.That(shinjiTag!.CachedWeight, Is.EqualTo(1), "Tag.CachedWeight should be incremented to 1");
-
-            // TagWeightLedger が記録されていることを検証
-            TagWeightLedger? ledger = db.TagWeightLedgers.FirstOrDefault(l => l.TagId == shinjiTag.Id && l.SourceType == "TagRelationInsert");
-            Assert.That(ledger, Is.Not.Null, "TagWeightLedger should be recorded for reaction upvote");
-            Assert.That(ledger!.Delta, Is.EqualTo(1), "Ledger delta should be 1");
+            Assert.Multiple(() =>
+            {
+                Assert.That(shinjiTag, Is.Not.Null, "ReactionTag '真実' should exist for user");
+                Assert.That(relation, Is.Not.Null, "TagRelation should be created for the item and reaction tag");
+                Assert.That(relation!.Weight, Is.EqualTo(1), "TagRelation weight should be 1");
+                Assert.That(shinjiTag!.CachedWeight, Is.EqualTo(1), "Tag.CachedWeight should be incremented to 1");
+                Assert.That(ledger, Is.Not.Null, "TagWeightLedger should be recorded for reaction upvote");
+                Assert.That(ledger!.Delta, Is.EqualTo(1), "Ledger delta should be 1");
+            });
         }
 
         // 6. 再度「真実」上矢印をクリックして Weight を加算 (+2)
@@ -193,12 +198,15 @@ public class ItemReactionE2ETests : PageTest
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             Tag shinjiTag = db.Tags.First(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
             TagRelation relation = db.TagRelations.First(tr => tr.ItemId == targetItemId && tr.TagId == shinjiTag.Id && tr.OwnerId == userId);
-            Assert.That(relation.Weight, Is.EqualTo(2));
-            Assert.That(shinjiTag.CachedWeight, Is.EqualTo(2));
-
             TagWeightLedger? updateLedger = db.TagWeightLedgers.FirstOrDefault(l => l.TagId == shinjiTag.Id && l.SourceType == "TagRelationUpdate");
-            Assert.That(updateLedger, Is.Not.Null);
-            Assert.That(updateLedger!.Delta, Is.EqualTo(1));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(relation.Weight, Is.EqualTo(2));
+                Assert.That(shinjiTag.CachedWeight, Is.EqualTo(2));
+                Assert.That(updateLedger, Is.Not.Null);
+                Assert.That(updateLedger!.Delta, Is.EqualTo(1));
+            });
         }
 
         // 7. 「真実」下矢印をクリックして逆操作（減算: +1）
@@ -210,8 +218,12 @@ public class ItemReactionE2ETests : PageTest
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             Tag shinjiTag = db.Tags.First(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
             TagRelation relation = db.TagRelations.First(tr => tr.ItemId == targetItemId && tr.TagId == shinjiTag.Id && tr.OwnerId == userId);
-            Assert.That(relation.Weight, Is.EqualTo(1));
-            Assert.That(shinjiTag.CachedWeight, Is.EqualTo(1));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(relation.Weight, Is.EqualTo(1));
+                Assert.That(shinjiTag.CachedWeight, Is.EqualTo(1));
+            });
         }
 
         // 8. 再度下矢印をクリックして 0 に達し投票解除
@@ -223,12 +235,15 @@ public class ItemReactionE2ETests : PageTest
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             Tag shinjiTag = db.Tags.First(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
             TagRelation? relation = db.TagRelations.FirstOrDefault(tr => tr.ItemId == targetItemId && tr.TagId == shinjiTag.Id && tr.OwnerId == userId);
-            Assert.That(relation, Is.Null, "TagRelation should be removed when weight reaches 0");
-            Assert.That(shinjiTag.CachedWeight, Is.EqualTo(0), "Tag.CachedWeight should return to 0");
-
             TagWeightLedger? deleteLedger = db.TagWeightLedgers.FirstOrDefault(l => l.TagId == shinjiTag.Id && l.SourceType == "TagRelationDelete");
-            Assert.That(deleteLedger, Is.Not.Null);
-            Assert.That(deleteLedger!.Delta, Is.EqualTo(-1));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(relation, Is.Null, "TagRelation should be removed when weight reaches 0");
+                Assert.That(shinjiTag.CachedWeight, Is.EqualTo(0), "Tag.CachedWeight should return to 0");
+                Assert.That(deleteLedger, Is.Not.Null);
+                Assert.That(deleteLedger!.Delta, Is.EqualTo(-1));
+            });
         }
     }
 
