@@ -18,5 +18,9 @@
     "rm -rf",
     "git push --force",
     "docker-compose down -v"
-  ]
+  ],
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  }
 }

@@ -153,7 +153,7 @@ public class ItemDetailQueryStateTests
             ItemDetailQueryState.Create(tabIndex: 2, selectedRequestId: 55, [FilterEntry.FromName("testTag", "userX")]);
 
         Dictionary<string, object?> parameters = original.BuildParameters();
-        var queryParts = new List<string>();
+        List<string> queryParts = [];
         foreach ((string key, object? value) in parameters)
         {
             if (value is string[] arr)

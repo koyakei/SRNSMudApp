@@ -8,24 +8,24 @@
                 @switch (CanApprove)
                 {
                     case true:
-                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
-                                       Color="Color.Success" 
-                                       Size="Size.Small" 
+                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle"
+                                       Color="Color.Success"
+                                       Size="Size.Small"
                                        Class="pa-0 mr-2 chip-icon-btn"
-                                       OnClick="OnApproveClicked" 
+                                       OnClick="OnApproveClicked"
                                        title="削除リクエストを承認" />
                         break;
                 }
-                
+
                 @switch (CanCancel)
                 {
                     case true:
                         <MudBadge Icon="@Icons.Material.Filled.Close" Color="Color.Error" Overlap="true" Bordered="true" Class="mr-1">
-                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" 
-                                           Color="Color.Inherit" 
-                                           Size="Size.Small" 
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                           Color="Color.Inherit"
+                                           Size="Size.Small"
                                            Class="pa-0 chip-icon-btn"
-                                           OnClick="OnCancelClicked" 
+                                           OnClick="OnCancelClicked"
                                            title="削除リクエストをキャンセル" />
                         </MudBadge>
                         break;
@@ -61,10 +61,10 @@
 @code {
     /// <summary>タグ名</summary>
     [Parameter] public string TagName { get; set; } = "";
-    
+
     /// <summary>タグの所有者名</summary>
     [Parameter] public string? OwnerName { get; set; }
-    
+
     /// <summary>Weight</summary>
     [Parameter] public int Weight { get; set; }
 
@@ -80,19 +80,19 @@
 
     /// <summary>承認時のコールバック</summary>
     [Parameter] public EventCallback OnApprove { get; set; }
-    
+
     /// <summary>キャンセル時のコールバック</summary>
     [Parameter] public EventCallback OnCancel { get; set; }
-    
+
     /// <summary>タグクリック時のコールバック</summary>
     [Parameter] public EventCallback OnTagClick { get; set; }
 
     [Parameter] public string? Style { get; set; }
     [Parameter] public string? TagStyle { get; set; }
-    
+
     /// <summary>削除リクエスト中を表現するためにデフォルトはWarning</summary>
     [Parameter] public Color Color { get; set; } = Color.Warning;
-    
+
     [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
 
     private async Task OnApproveClicked()

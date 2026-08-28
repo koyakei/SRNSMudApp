@@ -140,12 +140,12 @@
                 return;
         }
 
-        var requestType = IsRemovalRequest 
-            ? TaggingRequestType.Remove 
-            : ProposedWeightInput > 0 
-                ? TaggingRequestType.Add 
+        var requestType = IsRemovalRequest
+            ? TaggingRequestType.Remove
+            : ProposedWeightInput > 0
+                ? TaggingRequestType.Add
                 : TaggingRequestType.DecreaseWeight;
-                
+
         var absoluteWeight = Math.Abs(ProposedWeightInput);
 
         switch (isMutual)

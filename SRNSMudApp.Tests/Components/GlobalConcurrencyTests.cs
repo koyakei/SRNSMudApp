@@ -25,7 +25,7 @@ public class GlobalConcurrencyTests(ITestOutputHelper output)
             .Where(t => typeof(IComponent).IsAssignableFrom(t) && !t.IsAbstract)
             .ToList();
 
-        var failingComponents = new List<string>();
+        List<string> failingComponents = [];
 
         // Act
         foreach (Type type in componentTypes.Where(type =>

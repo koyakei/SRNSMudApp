@@ -79,7 +79,7 @@
 
     private async Task ProcessCsvFile(IBrowserFile file)
     {
-        var linesToProcess = new List<string[]>();
+        List<string[]> linesToProcess = [];
         using (var reader = new StreamReader(file.OpenReadStream()))
         {
             while (await reader.ReadLineAsync() is { } line)

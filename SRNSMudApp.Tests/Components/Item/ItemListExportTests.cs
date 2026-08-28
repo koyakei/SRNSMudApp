@@ -39,6 +39,7 @@ public sealed class ItemListExportTests : IAsyncLifetime
         var userManagerMock = new Mock<UserManager<ApplicationUser>>(storeMock.Object, null!, null!, null!, null!,
             null!, null!, null!, null!);
         _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

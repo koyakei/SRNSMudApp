@@ -44,7 +44,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 .ToDictionaryAsync(t => t.Name, t => t);
 
             IEnumerable<string> newTagNames = allTagNames.Where(name => !existingTags.ContainsKey(name));
-            var newTags = new List<Tag>();
+            List<Tag> newTags = [];
             foreach (var tagName in newTagNames)
             {
                 var newTag = new Tag { Name = tagName, OwnerId = userId };

@@ -38,6 +38,7 @@ public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

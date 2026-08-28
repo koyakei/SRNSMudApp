@@ -28,6 +28,7 @@ public sealed class ImportTagTests : IAsyncLifetime
         _ = _ctx.Services.AddScoped(_ => _providerMock.Object);
         _ = _ctx.Services.AddAuth("testuser");
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -121,6 +122,7 @@ public sealed class ImportTagTests : IAsyncLifetime
         _ = adminCtx.Services.AddScoped(_ => _providerMock.Object);
         _ = adminCtx.Services.AddAuth("adminuser", "Admin");
         adminCtx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = adminCtx.Render<MudPopoverProvider>();
 
         var rootTag = new SRNSMudApp.Data.Tag { Id = 10, Name = "AdminRoot", OwnerId = "adminuser" };
         const string csvContent = "admin1,admin2";

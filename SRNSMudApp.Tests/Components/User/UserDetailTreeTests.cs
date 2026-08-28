@@ -89,7 +89,7 @@ public sealed class UserDetailTreeTests : IAsyncLifetime
 
     private async Task<string?> ActivateTreeTabAndGetJson(string userId)
     {
-        var jsInteropInvocations = new List<Bunit.JSRuntimeInvocation>();
+        List<Bunit.JSRuntimeInvocation> jsInteropInvocations = [];
         _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);

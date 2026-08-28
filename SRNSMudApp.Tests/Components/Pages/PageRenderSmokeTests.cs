@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Pages;
@@ -34,6 +35,7 @@ public sealed class PageRenderSmokeTests : IAsyncLifetime
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

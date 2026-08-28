@@ -65,7 +65,7 @@ public static class TagTreePopoverViewModel
         HashSet<int> expandedTagIds,
         bool enableExpand)
     {
-        var lines = new List<TagTreeLine>();
+        List<TagTreeLine> lines = [];
         if (targetTag == null || allTags.Count == 0 || targetTag.GetKind() is VoteTag or ReactionTag)
         {
             return lines;
@@ -78,7 +78,7 @@ public static class TagTreePopoverViewModel
         }
 
         // 対象タグのルート（最上位の祖先）を求める
-        var ancestors = new HashSet<int>();
+        HashSet<int> ancestors = [];
         var curr = filteredTags.FirstOrDefault(t => t.Id == (targetTag.ParentTagId != 0 ? targetTag.ParentTagId : -1));
         var rootTag = targetTag;
         while (curr != null)

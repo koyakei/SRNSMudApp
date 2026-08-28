@@ -19,12 +19,14 @@ public sealed class UserSearchTests : IAsyncLifetime
 {
     private readonly BunitContext _ctx = new();
     private readonly Mock<IUserDataProvider> _userDataMock = new();
+    private readonly IRenderedComponent<MudPopoverProvider> _popoverProvider;
 
     public UserSearchTests()
     {
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _userDataMock.Object);
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _popoverProvider = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -44,17 +46,16 @@ public sealed class UserSearchTests : IAsyncLifetime
         _ = _userDataMock.Setup(d => d.SearchUsersByNormalizedNameAsync("test", It.IsAny<CancellationToken>()))
             .ReturnsAsync([user]);
 
-        IRenderedComponent<MudPopoverProvider> provider = _ctx.Render<MudPopoverProvider>();
         IRenderedComponent<UserSearch> searchComponent = _ctx.Render<UserSearch>();
 
         IElement input = searchComponent.Find("input");
         input.Input("test");
 
-        provider.WaitForState(
-            () => provider.Markup.Contains("TestUser1") || provider.Markup.Contains("一致するユーザーが見つかりません"),
+        _popoverProvider.WaitForState(
+            () => _popoverProvider.Markup.Contains("TestUser1") || _popoverProvider.Markup.Contains("一致するユーザーが見つかりません"),
             TimeSpan.FromSeconds(3));
 
-        Assert.Contains("TestUser1", provider.Markup);
+        Assert.Contains("TestUser1", _popoverProvider.Markup);
     }
 
     [Fact]
@@ -64,15 +65,14 @@ public sealed class UserSearchTests : IAsyncLifetime
         _ = _userDataMock.Setup(d => d.SearchUsersByNormalizedNameAsync("testuser", It.IsAny<CancellationToken>()))
             .ReturnsAsync([user]);
 
-        IRenderedComponent<MudPopoverProvider> provider = _ctx.Render<MudPopoverProvider>();
         IRenderedComponent<UserSearch> searchComponent = _ctx.Render<UserSearch>();
 
         IElement input = searchComponent.Find("input");
         input.Input("testuser");
 
-        provider.WaitForState(() => provider.Markup.Contains("TestUser1"), TimeSpan.FromSeconds(3));
+        _popoverProvider.WaitForState(() => _popoverProvider.Markup.Contains("TestUser1"), TimeSpan.FromSeconds(3));
 
-        Assert.Contains("TestUser1", provider.Markup);
+        Assert.Contains("TestUser1", _popoverProvider.Markup);
     }
 
     public async Task DisposeAsync()

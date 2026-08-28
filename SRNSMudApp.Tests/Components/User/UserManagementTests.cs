@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.User;
@@ -33,6 +34,7 @@ public sealed class UserManagementTests : IAsyncLifetime
         _ctx.Services.AddScoped(_ => _userManagerMock.Object);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

@@ -1,5 +1,6 @@
 using Bunit;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
@@ -15,6 +16,7 @@ public sealed class TagListConcurrencyTests : IAsyncLifetime
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddAuth("testuser");
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

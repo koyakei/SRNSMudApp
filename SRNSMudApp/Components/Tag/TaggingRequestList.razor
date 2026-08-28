@@ -68,7 +68,7 @@
 </MudTable>
 
 @code {
-    [Parameter] public IEnumerable<TaggingRequestEntity> Requests { get; set; } = new List<TaggingRequestEntity>();
+    [Parameter] public IEnumerable<TaggingRequestEntity> Requests { get; set; } = [];
     [Parameter] public EventCallback OnRequestChanged { get; set; }
     [Parameter] public RenderFragment<TaggingRequestEntity>? RejectButtonTemplate { get; set; }
     [Parameter] public TaggingRequestEntity? SelectedRequest { get; set; }

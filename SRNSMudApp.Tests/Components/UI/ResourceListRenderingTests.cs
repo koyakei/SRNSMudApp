@@ -88,4 +88,3 @@ public sealed class ResourceListRenderingTests : IAsyncLifetime
         await _ctx.DisposeAsync();
     }
 }
-

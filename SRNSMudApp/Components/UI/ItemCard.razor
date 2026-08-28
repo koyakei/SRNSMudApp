@@ -20,7 +20,7 @@
             case true:
                 var canCancel = !string.IsNullOrEmpty(CurrentUserId) && Item.OwnerId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
                 var canApprove = !string.IsNullOrEmpty(CurrentUserId) && Item.AsRequestOf?.TagOwnerUserId == CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
-                
+
                 <RequestInfoAlert RequestInfo="requestInfo"
                                   CanCancel="canCancel"
                                   CanApprove="canApprove"

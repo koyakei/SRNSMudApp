@@ -12,7 +12,7 @@
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
     <MudPaper Elevation="1" Class="pa-4">
         <MudText Typo="Typo.h5" Class="mb-4">通知</MudText>
-        
+
         @if (_isLoading)
         {
             <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="mx-auto my-4 d-block" />
@@ -60,7 +60,7 @@
                                     </MudText>
                                 </div>
                             </div>
-                            
+
                             @if (notification.AssociatedItem != null)
                             {
                                 <div class="pl-11 mt-1">
@@ -79,7 +79,7 @@
                                             TargetTagName = reqNote.TargetTagName,
                                             Status = reqNote.Status
                                         };
-                                        <SRNSMudApp.Components.UI.RequestInfoAlert 
+                                        <SRNSMudApp.Components.UI.RequestInfoAlert
                                             RequestInfo="reqInfo"
                                             CanApprove="isPending"
                                             CanReject="isPending"

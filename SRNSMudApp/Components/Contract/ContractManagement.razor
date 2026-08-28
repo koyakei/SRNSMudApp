@@ -45,9 +45,9 @@
                                                         </MudCardHeader>
                                                         <MudCardContent>
                                                             <MudChip T="string" Color="Color.Info" Size="Size.Small">
-                                                                @(contract.Status == TradeStatus.Proposed ? "提案中" : 
-                                                                  contract.Status == TradeStatus.Executed ? "承認済み" : 
-                                                                  contract.Status == TradeStatus.Rejected ? "拒否" : 
+                                                                @(contract.Status == TradeStatus.Proposed ? "提案中" :
+                                                                  contract.Status == TradeStatus.Executed ? "承認済み" :
+                                                                  contract.Status == TradeStatus.Rejected ? "拒否" :
                                                                   contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
                                                             </MudChip>
                                                             <ContractCardContent Contract="contract" />
@@ -92,9 +92,9 @@
                                                         </MudCardHeader>
                                                         <MudCardContent>
                                                             <MudChip T="string" Color="Color.Info" Size="Size.Small">
-                                                                @(contract.Status == TradeStatus.Proposed ? "提案中" : 
-                                                                  contract.Status == TradeStatus.Executed ? "承認済み" : 
-                                                                  contract.Status == TradeStatus.Rejected ? "拒否" : 
+                                                                @(contract.Status == TradeStatus.Proposed ? "提案中" :
+                                                                  contract.Status == TradeStatus.Executed ? "承認済み" :
+                                                                  contract.Status == TradeStatus.Rejected ? "拒否" :
                                                                   contract.Status == TradeStatus.Canceled ? "キャンセル" : "その他")
                                                             </MudChip>
                                                             <ContractCardContent Contract="contract" />
@@ -146,7 +146,7 @@
         {
             _pageState = new Loading();
             StateHasChanged();
-            
+
             ContractManagementPageData page = await ContractData.GetContractsAsync(_currentUserId);
 
             _pageState = new Loaded<ContractManagementData>(new ContractManagementData(page.IncomingContracts, page.OutgoingContracts));

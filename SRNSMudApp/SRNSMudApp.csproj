@@ -17,15 +17,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="bunit" Version="2.9.0" />
-    <PackageReference Include="bunit.generators" Version="2.9.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.12.0" PrivateAssets="all" />
     <PackageReference Include="Roslynator.Formatting.Analyzers" Version="4.12.0" PrivateAssets="all" />
-  </ItemGroup>
-
-
-  <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -44,16 +38,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="11.0.0-*" />
     <PackageReference Include="Extensions.MudBlazor.StaticInput" Version="4.1.0" />
     <PackageReference Include="MudBlazor" Version="9.1.0" />
-  </ItemGroup>
-
-
-  <ItemGroup>
-    <_ContentIncludedByDefault Remove="Components\Item\AddItem.razor" />
-    <_ContentIncludedByDefault Remove="Components\Account\Pages\Item\AddItem.razor" />
-    <_ContentIncludedByDefault Remove="Components\Account\Pages\Item\ItemList.razor" />
-    <_ContentIncludedByDefault Remove="Components\Account\Pages\Tag\AddTag.razor" />
-    <_ContentIncludedByDefault Remove="Components\Account\Pages\Tag\TagList.razor" />
-    <_ContentIncludedByDefault Remove="Components\Account\Pages\Tag\TagSearch.razor" />
   </ItemGroup>
 
   <ItemGroup>

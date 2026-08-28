@@ -57,7 +57,7 @@ public sealed class TagTreeTests : IAsyncLifetime
             .Setup(d => d.LoadTagsAsync())
             .ReturnsAsync([rootTag, child1, child2]);
 
-        var jsInteropInvocations = new List<JSRuntimeInvocation>();
+        List<JSRuntimeInvocation> jsInteropInvocations = [];
         _ = _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
         {
             jsInteropInvocations.Add(invocation);

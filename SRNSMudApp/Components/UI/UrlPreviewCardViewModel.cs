@@ -34,7 +34,7 @@ public static class UrlPreviewCardViewModel
         var raw = url[(markerIndex + marker.Length)..];
         var parts = raw.Split(["&text="], StringSplitOptions.RemoveEmptyEntries);
 
-        var results = new List<string>();
+        List<string> results = [];
         foreach (var part in parts)
         {
             var text = TryDecode(part);

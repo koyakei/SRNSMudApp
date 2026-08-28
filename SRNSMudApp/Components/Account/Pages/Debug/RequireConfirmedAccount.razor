@@ -1,0 +1,77 @@
+@page "/Admin/RequireConfirmedAccount"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using MudBlazor
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject IUserDataProvider UserDataProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudText Typo="Typo.h5" Class="mb-4">Require Confirmed Account (Debug)</MudText>
+    
+    @if (_users == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="@_users" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Email</MudTh>
+                <MudTh>Confirmed</MudTh>
+                <MudTh>Action</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Confirmed">
+                    @if (context.EmailConfirmed)
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small">Confirmed</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">Unconfirmed</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Action">
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               OnClick="@(() => ToggleConfirmationAsync(context))">
+                        Toggle
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    private List<ApplicationUser>? _users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _users = await UserDataProvider.GetAllUsersAsync();
+    }
+
+    private async Task ToggleConfirmationAsync(ApplicationUser user)
+    {
+        user.EmailConfirmed = !user.EmailConfirmed;
+        var result = await UserManager.UpdateAsync(user);
+        if (result.Succeeded)
+        {
+            Snackbar.Add($"Updated {user.Email}", Severity.Success);
+            await LoadUsersAsync();
+        }
+        else
+        {
+            Snackbar.Add("Failed to update user", Severity.Error);
+        }
+    }
+}

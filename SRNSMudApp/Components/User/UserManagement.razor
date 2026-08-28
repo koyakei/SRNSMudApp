@@ -57,7 +57,7 @@
     {
         List<ApplicationUser> users = await UserData.GetAllUsersAsync();
 
-        var vms = new List<UserViewModel>();
+        List<UserViewModel> vms = [];
         foreach (var u in users)
         {
             var isAdmin = await UserManager.IsInRoleAsync(u, "Admin");

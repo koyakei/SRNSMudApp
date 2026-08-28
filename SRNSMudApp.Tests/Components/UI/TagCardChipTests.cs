@@ -22,6 +22,7 @@ public class TagCardChipTests : IAsyncDisposable
     {
         _ = _ctx.Services.AddMudServices().AddSrnsComponentServices();
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public async ValueTask DisposeAsync() => await _ctx.DisposeAsync();

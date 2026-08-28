@@ -38,7 +38,7 @@ public union TagComparisonState(SameTag, DifferentTag);
 public record SameWeight;
 public record DifferentWeight;
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
-public union WeightComparisonState(SameWeight, DifferentWeight);
+public readonly union WeightComparisonState(SameWeight, DifferentWeight);
 
 public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
 {
@@ -475,7 +475,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             TagNameSnapshot = tag.Name,
             TargetTagId = entity.TargetTagId,
             SourceType = "TagRelationToTagDelete",
-            SourceId = entity.Id,
+            SourceId = null,
             PreviousWeight = prevWeight,
             NewWeight = tag.CachedWeight,
             Delta = -entity.Weight,

@@ -87,11 +87,11 @@
     [Parameter] public int TagId { get; set; }
 
     private Tag? _tag;
-    private IEnumerable<Item> _relatedItems = new List<Item>();
-    private IEnumerable<Tag> _relatedTags = new List<Tag>();
-    private IEnumerable<TagWeightLedger> _weightLedgers = new List<TagWeightLedger>();
-    private IEnumerable<PublicTradeOffer> _publicOffers = new List<PublicTradeOffer>();
-    private IEnumerable<TaggingRequestEntity> _pendingRequests = new List<TaggingRequestEntity>();
+    private IEnumerable<Item> _relatedItems = [];
+    private IEnumerable<Tag> _relatedTags = [];
+    private IEnumerable<TagWeightLedger> _weightLedgers = [];
+    private IEnumerable<PublicTradeOffer> _publicOffers = [];
+    private IEnumerable<TaggingRequestEntity> _pendingRequests = [];
     private bool _isFollowing;
     private string? _currentUserId;
 

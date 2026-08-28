@@ -65,7 +65,7 @@
 
         var dialog = await DialogLauncher.ShowAsync<TaggingRequestThreadDialog>($"Request: {Request.RequestedTag?.Name}", parameters, options);
         await dialog.Result;
-        
+
         switch (OnDataChanged.HasDelegate)
         {
             case true:

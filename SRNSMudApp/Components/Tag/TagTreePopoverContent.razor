@@ -76,7 +76,7 @@
 
 @code {
     [Parameter] public Tag TargetTag { get; set; } = null!;
-    [Parameter] public IEnumerable<Tag> AllTags { get; set; } = new List<Tag>();
+    [Parameter] public IEnumerable<Tag> AllTags { get; set; } = [];
     [Parameter] public bool EnableSwap { get; set; }
     [Parameter] public bool EnableExpand { get; set; } = true;
     [Parameter] public bool EnableNavigation { get; set; } = true;

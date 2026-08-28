@@ -188,7 +188,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             .Take(count)
             .ToListAsync();
 
-        var feedGroups = new List<TimelineFeedGroup>();
+        List<TimelineFeedGroup> feedGroups = [];
         foreach (var pg in pagedGroups)
         {
             var feedGroup = new TimelineFeedGroup
