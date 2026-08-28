@@ -20,10 +20,6 @@
     <PackageReference Include="bunit" Version="2.9.0" />
     <PackageReference Include="bunit.generators" Version="2.9.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.9.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Features" Version="5.9.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Scripting.Common" Version="5.9.0" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.12.0" PrivateAssets="all" />
     <PackageReference Include="Roslynator.Formatting.Analyzers" Version="4.12.0" PrivateAssets="all" />
   </ItemGroup>
@@ -46,8 +42,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="11.0.0-*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.0-*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="11.0.0-*" />
-    <PackageReference Include="Extensions.MudBlazor.StaticInput" Version="4.*" />
-    <PackageReference Include="MudBlazor" Version="9.*" />
+    <PackageReference Include="Extensions.MudBlazor.StaticInput" Version="4.1.0" />
+    <PackageReference Include="MudBlazor" Version="9.1.0" />
   </ItemGroup>
 
 

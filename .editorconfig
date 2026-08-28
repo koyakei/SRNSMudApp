@@ -104,8 +104,6 @@ csharp_style_var_when_type_is_apparent = true:silent
 
 # 未使用の using ディレクティブを警告として報告 (IDE0005)
 dotnet_diagnostic.IDE0005.severity = warning
-
-# 未使用のプライベートメンバーを警告 (IDE0051)
 dotnet_diagnostic.IDE0051.severity = warning
 
 # 不要なキャストの削除 (IDE0004)
@@ -415,9 +413,6 @@ dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.IDE0058.severity = none
 
 # ---------------------------------------------------------
-# ReSharper/Qodana Inspection Suppressions
-# ---------------------------------------------------------
-[*.{cs,vb,razor,cshtml}]
 
 # HTML path errors (Blazor component routing)
 resharper_html_path_error_highlighting = none
