@@ -133,4 +133,60 @@ public class ImportTagDataProviderTests : IAsyncLifetime
             Assert.Equal(science.Id, physics.ParentTagId);
         }
     }
+
+    [Fact]
+    public async Task ImportCsvTagsAsync_WithMultipleSiblings_AssignsUniqueHierarchyIds()
+    {
+        var tid = Guid.NewGuid().ToString("N")[..8];
+        var testUser = $"testuser_{tid}";
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            await dbContext.SeedUsersAsync(testUser);
+        }
+
+        Tag rootTag;
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            rootTag = new Tag { Name = $"RootTag_{tid}", OwnerId = testUser };
+            _ = dbContext.Tags.Add(rootTag);
+            _ = await dbContext.SaveChangesAsync();
+        }
+
+        // Parentの下に複数の子タグ（兄弟タグ）をインポート
+        var csvContent = $"Parent_{tid},Child1_{tid}\nParent_{tid},Child2_{tid}\nParent_{tid},Child3_{tid}";
+
+        _ = await _provider.ImportCsvTagsAsync(testUser, rootTag.Name, csvContent, false);
+
+        await using (var dbContext = await _dbFactory.CreateDbContextAsync())
+        {
+            List<Tag> tags = await dbContext.Tags
+                .Where(t => t.OwnerId == testUser && t.Name.Contains(tid))
+                .ToListAsync();
+
+            Tag parent = tags.Single(t => t.Name == $"Parent_{tid}");
+            Tag child1 = tags.Single(t => t.Name == $"Child1_{tid}");
+            Tag child2 = tags.Single(t => t.Name == $"Child2_{tid}");
+            Tag child3 = tags.Single(t => t.Name == $"Child3_{tid}");
+
+            Assert.Equal(rootTag.Id, parent.ParentTagId);
+            Assert.Equal(parent.Id, child1.ParentTagId);
+            Assert.Equal(parent.Id, child2.ParentTagId);
+            Assert.Equal(parent.Id, child3.ParentTagId);
+
+            // すべてのノードが存在し、互いに異なる（重複していない）ことを検証
+            Assert.NotNull(child1.Node);
+            Assert.NotNull(child2.Node);
+            Assert.NotNull(child3.Node);
+
+            Assert.NotEqual(child1.Node, child2.Node);
+            Assert.NotEqual(child2.Node, child3.Node);
+            Assert.NotEqual(child1.Node, child3.Node);
+
+            // それぞれが parent.Node の子孫であることを検証
+            Assert.True(child1.Node.IsDescendantOf(parent.Node));
+            Assert.True(child2.Node.IsDescendantOf(parent.Node));
+            Assert.True(child3.Node.IsDescendantOf(parent.Node));
+        }
+    }
 }
