@@ -14,4 +14,3 @@ public sealed record TagSuggestion(int? TagId, string TagName, string? UserName)
 
     public override string ToString() => DisplayText;
 }
-

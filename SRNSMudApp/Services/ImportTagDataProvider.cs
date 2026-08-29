@@ -146,6 +146,14 @@ public partial class ImportTagDataProvider(
                     if (!existingTags.TryGetValue(tagName, out Tag? tag))
                     {
                         {
+                            HierarchyId? lastChildNode = currentParentTag == null
+                                ? null
+                                : await dbContext.Tags
+                                    .Where(t => t.ParentTagId == currentParentTag.Id || t.Node.GetAncestor(1) == currentParentTag.Node)
+                                    .OrderByDescending(t => t.Node)
+                                    .Select(t => (HierarchyId?)t.Node)
+                                    .FirstOrDefaultAsync();
+
                             // Tag doesn't exist, create it
                             var newTag = new Tag
                             {
@@ -155,7 +163,7 @@ public partial class ImportTagDataProvider(
                                 ParentTagId = currentParentTag?.Id,
                                 Node = currentParentTag == null
                                     ? HierarchyId.GetRoot()
-                                    : currentParentTag.Node.GetDescendant(null, null),
+                                    : currentParentTag.Node.GetDescendant(lastChildNode, null),
                                 CreatedDate = DateTime.UtcNow,
                                 UpdatedDate = DateTime.UtcNow
                             };
@@ -185,8 +193,14 @@ public partial class ImportTagDataProvider(
                         // Avoid circular reference
                         if (!IsDescendantOrSelf(tag, currentParentTag!))
                         {
+                            HierarchyId? lastChildNode = await dbContext.Tags
+                                .Where(t => t.ParentTagId == currentParentTag.Id || t.Node.GetAncestor(1) == currentParentTag.Node)
+                                .OrderByDescending(t => t.Node)
+                                .Select(t => (HierarchyId?)t.Node)
+                                .FirstOrDefaultAsync();
+
                             tag.ParentTagId = currentParentTag.Id;
-                            tag.Node = currentParentTag.Node.GetDescendant(null, null);
+                            tag.Node = currentParentTag.Node.GetDescendant(lastChildNode, null);
                         }
                     }
 

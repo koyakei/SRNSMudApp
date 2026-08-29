@@ -281,55 +281,54 @@ public class ItemListDataProvider(
         List<Tag> foundTags;
         if (filters.Count != 0)
         {
+            var idFilterIds = new List<int>();
+            var nameFilterNames = new List<string>();
+            foreach (var f in filters)
+            {
+                switch (f)
+                {
+                    case TagIdFilter idF: idFilterIds.Add(idF.TagId); break;
+                    case TagNameFilter nameF: nameFilterNames.Add(nameF.TagName); break;
+                }
+            }
+            var filterNodesById = await context.Tags.Where(t => idFilterIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => (Microsoft.EntityFrameworkCore.HierarchyId?)t.Node);
+            var filterNodesByName = await context.Tags.Where(t => nameFilterNames.Contains(t.Name)).ToDictionaryAsync(t => t.Name, t => (Microsoft.EntityFrameworkCore.HierarchyId?)t.Node);
+
             foreach (ItemListFilter filter in filters)
             {
                 switch (filter)
                 {
                     case TagIdFilter idFilter:
-                        if (string.IsNullOrWhiteSpace(idFilter.UserName))
                         {
-                            query = query.Where(i => i.TagRelations.Any(tr =>
-                                context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
-                            tagQuery = tagQuery.Where(t =>
-                                context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => t.Node.IsDescendantOf(pt.Node)) ||
-                                t.TargetTagRelations.Any(tr => context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
-                        }
-                        else
-                        {
-                            query = query.Where(i =>
-                                i.TagRelations.Any(tr =>
-                                    context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
-                                    tr.Owner.UserName == idFilter.UserName));
-                            tagQuery = tagQuery.Where(t =>
-                                (context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => t.Node.IsDescendantOf(pt.Node)) && t.Owner.UserName == idFilter.UserName) ||
-                                t.TargetTagRelations.Any(tr =>
-                                    context.Tags.Where(pt => pt.Id == idFilter.TagId).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
-                                    tr.Owner.UserName == idFilter.UserName));
-                        }
-                        break;
+                            var targetNode = filterNodesById.GetValueOrDefault(idFilter.TagId);
+                            if (targetNode == null) continue;
 
+                            query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode)));
+                            tagQuery = tagQuery.Where(t => t.Node.IsDescendantOf(targetNode) ||
+                                t.TargetTagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode)));
+                            break;
+                        }
                     case TagNameFilter nameFilter:
-                        if (string.IsNullOrWhiteSpace(nameFilter.UserName))
                         {
-                            query = query.Where(i => i.TagRelations.Any(tr =>
-                                context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
-                            tagQuery = tagQuery.Where(t =>
-                                context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => t.Node.IsDescendantOf(pt.Node)) ||
-                                t.TargetTagRelations.Any(tr => context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node))));
+                            var targetNode = filterNodesByName.GetValueOrDefault(nameFilter.TagName);
+                            if (targetNode == null) continue;
+
+                            var targetUserName = nameFilter.UserName;
+                            if (string.IsNullOrWhiteSpace(targetUserName))
+                            {
+                                query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode)));
+                                tagQuery = tagQuery.Where(t => t.Node.IsDescendantOf(targetNode) ||
+                                    t.TargetTagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode)));
+                            }
+                            else
+                            {
+                                query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode) && tr.Owner.UserName == targetUserName));
+                                tagQuery = tagQuery.Where(t =>
+                                    (t.Node.IsDescendantOf(targetNode) && t.Owner.UserName == targetUserName) ||
+                                    t.TargetTagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode) && tr.Owner.UserName == targetUserName));
+                            }
+                            break;
                         }
-                        else
-                        {
-                            query = query.Where(i =>
-                                i.TagRelations.Any(tr =>
-                                    context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
-                                    tr.Owner.UserName == nameFilter.UserName));
-                            tagQuery = tagQuery.Where(t =>
-                                (context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => t.Node.IsDescendantOf(pt.Node)) && t.Owner.UserName == nameFilter.UserName) ||
-                                t.TargetTagRelations.Any(tr =>
-                                    context.Tags.Where(pt => pt.Name == nameFilter.TagName).Any(pt => tr.Tag.Node.IsDescendantOf(pt.Node)) &&
-                                    tr.Owner.UserName == nameFilter.UserName));
-                        }
-                        break;
                 }
             }
 

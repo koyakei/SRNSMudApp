@@ -40,7 +40,7 @@ public sealed class TagSearchViewModelTests
     public async Task AddFilterFromSuggestionAsync_WithSpecificTagId_AddsTagIdFilterAndFiresEvent()
     {
         var vm = new TagSearchViewModel(_dataProviderMock.Object);
-        var tag = new SRNSMudApp.Data.Tag { Id = 42, Name = "UniqueTag" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 42, Name = "UniqueTag", OwnerId = "test-owner" };
         var eventFired = false;
         vm.FiltersChanged += () =>
         {
@@ -67,7 +67,7 @@ public sealed class TagSearchViewModelTests
     public async Task AddFilterFromSuggestionAsync_WithMultipleUsersTag_AddsTagNameOnlyFilter()
     {
         var vm = new TagSearchViewModel(_dataProviderMock.Object);
-        var tag = new SRNSMudApp.Data.Tag { Id = 100, Name = "PopularTag" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 100, Name = "PopularTag", OwnerId = "test-owner" };
 
         _ = _dataProviderMock
             .Setup(d => d.FindTagByNameAsync("PopularTag"))
@@ -102,7 +102,7 @@ public sealed class TagSearchViewModelTests
     public async Task AddFilterFromTextAsync_AddsTagNameFilter()
     {
         var vm = new TagSearchViewModel(_dataProviderMock.Object);
-        var tag = new SRNSMudApp.Data.Tag { Id = 5, Name = "CustomTag" };
+        var tag = new SRNSMudApp.Data.Tag { Id = 5, Name = "CustomTag", OwnerId = "test-owner" };
 
         _ = _dataProviderMock
             .Setup(d => d.FindTagByNameAsync("CustomTag"))
@@ -156,4 +156,3 @@ public sealed class TagSearchViewModelTests
         Assert.Empty(vm.SelectedFilters);
     }
 }
-

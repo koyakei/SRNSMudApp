@@ -175,7 +175,7 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
 
         // Act 1: アイテムをクリックしてフォーカス
         cut.Find("#item-card-1").Click();
-        Assert.Contains("focus=1", navigationManager.Uri);
+        cut.WaitForAssertion(() => Assert.Contains("focus=1", navigationManager.Uri));
 
         // Act 2: タグ検索を実行
         IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =

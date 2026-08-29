@@ -105,7 +105,7 @@ public class ItemListDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task LoadItemsAndTagsAsync_WithTagIdFilterAndUserName_FiltersByAuthor()
+    public async Task LoadItemsAndTagsAsync_WithTagIdFilterAndUserName_IgnoresUserNameAndReturnsAllItems()
     {
         var (db, sut, user1Id, user1Name, user2Id, _, tid) = await CreateScopeAsync();
         await using (db)
@@ -142,11 +142,12 @@ public class ItemListDataProviderTests : IAsyncLifetime
             );
             await db.SaveChangesAsync();
 
+            // TagIdFilter で UserName を指定しても、ID 指定の場合は UserName が無視されて両方のアイテムが返る
             ItemListFilter[] filters = [new TagIdFilter(parentTag.Id, user1Name)];
             ItemListPageData result = await sut.LoadItemsAndTagsAsync(filters, []);
 
             Assert.Contains(result.Items, i => i.Id == itemUser1.Id);
-            Assert.DoesNotContain(result.Items, i => i.Id == itemUser2.Id);
+            Assert.Contains(result.Items, i => i.Id == itemUser2.Id);
         }
     }
 
@@ -282,7 +283,133 @@ public class ItemListDataProviderTests : IAsyncLifetime
         }
     }
 
-    private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
+    [Fact]
+    public async Task LoadItemsAndTagsAsync_WithTagIdFilter_IgnoresUserNameAndReturnsAllDescendants()
+    {
+        var (db, sut, user1Id, _, _, user2Name, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var rootTag = await db.Tags.FirstAsync(t => t.Name == Tag.RootTagName);
+
+            // 一般タグ (ID=2 など)
+            var parentTag = new Tag
+            {
+                Name = $"Parent_{tid}",
+                OwnerId = user1Id,
+                ParentTagId = rootTag.Id,
+                Node = rootTag.Node.GetDescendant(null, null)
+            };
+            db.Tags.Add(parentTag);
+            await db.SaveChangesAsync();
+
+            var childTag = new Tag
+            {
+                Name = $"Child_{tid}",
+                OwnerId = user1Id,
+                ParentTagId = parentTag.Id,
+                Node = parentTag.Node.GetDescendant(null, null)
+            };
+            db.Tags.Add(childTag);
+
+            var item = new Item
+            {
+                Content = $"Item_{tid}",
+                OwnerId = user1Id
+            };
+            db.Items.Add(item);
+            await db.SaveChangesAsync();
+
+            db.TagRelations.Add(new TagRelation
+            {
+                ItemId = item.Id,
+                TagId = childTag.Id,
+                OwnerId = user1Id
+            });
+            await db.SaveChangesAsync();
+
+            // TagIdFilter で一般タグ ID と user2 のユーザー名を指定 (f=2@user2 相当)
+            // UserName (atmark以降) は無視され、user1 所有の子孫タグおよびアイテムが返るべき
+            var filters = new List<ItemListFilter>
+            {
+                new(new TagIdFilter(parentTag.Id, user2Name))
+            };
+
+            var result = await sut.LoadItemsAndTagsAsync(filters, []);
+
+            Assert.Contains(result.Tags, t => t.Id == childTag.Id);
+            Assert.Contains(result.Items, i => i.Id == item.Id);
+
+            // ルートタグ (f=1@system 相当) でも同様に UserName が無視されて全子孫タグとアイテムが返るべき
+            var rootFilters = new List<ItemListFilter>
+            {
+                new(new TagIdFilter(rootTag.Id, "system"))
+            };
+
+            var rootResult = await sut.LoadItemsAndTagsAsync(rootFilters, []);
+
+            Assert.Contains(rootResult.Tags, t => t.Id == childTag.Id);
+            Assert.Contains(rootResult.Items, i => i.Id == item.Id);
+        }
+    }
+
+    [Fact]
+    public async Task LoadItemsAndTagsAsync_WithTagNameFilter_EnforcesUserName()
+    {
+        var (db, sut, user1Id, user1Name, user2Id, user2Name, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var rootTag = await db.Tags.FirstAsync(t => t.Name == Tag.RootTagName);
+            var tagName = $"TagName_{tid}";
+
+            var tag1 = new Tag
+            {
+                Name = tagName,
+                OwnerId = user1Id,
+                ParentTagId = rootTag.Id,
+                Node = rootTag.Node.GetDescendant(null, null)
+            };
+            db.Tags.Add(tag1);
+
+            var item1 = new Item { Content = $"Item1_{tid}", OwnerId = user1Id };
+            var item2 = new Item { Content = $"Item2_{tid}", OwnerId = user2Id };
+            db.Items.AddRange(item1, item2);
+            await db.SaveChangesAsync();
+
+            // item1 は user1 がタグ付け、item2 は user2 がタグ付け
+            db.TagRelations.Add(new TagRelation { ItemId = item1.Id, TagId = tag1.Id, OwnerId = user1Id });
+            db.TagRelations.Add(new TagRelation { ItemId = item2.Id, TagId = tag1.Id, OwnerId = user2Id });
+            await db.SaveChangesAsync();
+
+            // TagNameFilter で user1 を指定 -> item1 のみヒットし、item2 は除外されるべき
+            var filterUser1 = new List<ItemListFilter>
+            {
+                new(new TagNameFilter(tagName, user1Name))
+            };
+            var resultUser1 = await sut.LoadItemsAndTagsAsync(filterUser1, []);
+            Assert.Contains(resultUser1.Items, i => i.Id == item1.Id);
+            Assert.DoesNotContain(resultUser1.Items, i => i.Id == item2.Id);
+
+            // TagNameFilter で user2 を指定 -> item2 のみヒットし、item1 は除外されるべき
+            var filterUser2 = new List<ItemListFilter>
+            {
+                new(new TagNameFilter(tagName, user2Name))
+            };
+            var resultUser2 = await sut.LoadItemsAndTagsAsync(filterUser2, []);
+            Assert.Contains(resultUser2.Items, i => i.Id == item2.Id);
+            Assert.DoesNotContain(resultUser2.Items, i => i.Id == item1.Id);
+
+            // TagNameFilter で UserName なし -> 両方ヒットすべき
+            var filterNoUser = new List<ItemListFilter>
+            {
+                new(new TagNameFilter(tagName, null))
+            };
+            var resultNoUser = await sut.LoadItemsAndTagsAsync(filterNoUser, []);
+            Assert.Contains(resultNoUser.Items, i => i.Id == item1.Id);
+            Assert.Contains(resultNoUser.Items, i => i.Id == item2.Id);
+        }
+    }
+
+    public sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {
         public ApplicationDbContext CreateDbContext() => new(options);

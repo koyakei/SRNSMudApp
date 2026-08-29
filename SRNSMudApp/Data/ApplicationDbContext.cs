@@ -597,7 +597,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                             entry.Entity.ParentTagId = rootTagId;
                         }
 
-                        entry.Entity.Node = rootNode.GetDescendant(null, null);
+                        HierarchyId? lastChildNode = Tags.Local
+                            .Where(t => t.ParentTagId == rootTagId || (t.Node != null && t.Node.GetAncestor(1) == rootNode))
+                            .Select(t => t.Node)
+                            .Concat(Tags.Where(t => t.ParentTagId == rootTagId || t.Node.GetAncestor(1) == rootNode).Select(t => t.Node))
+                            .OrderByDescending(n => n)
+                            .FirstOrDefault();
+
+                        entry.Entity.Node = rootNode.GetDescendant(lastChildNode, null);
                     }
                     else
                     {

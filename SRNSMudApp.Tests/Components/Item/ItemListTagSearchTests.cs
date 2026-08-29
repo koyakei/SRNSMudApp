@@ -113,12 +113,12 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
-        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名で検索...']").Count > 0);
-        IElement input = cut.Find("input[placeholder='タグ名で検索...']");
-        input.Change(TagName);
+        IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =
+            cut.FindComponents<MudAutocomplete<TagSuggestion>>()[0];
+        await cut.InvokeAsync(() => autocomplete.Instance.TextChanged.InvokeAsync(TagName));
 
-        IElement adornment = cut.Find(".mud-input-adornment-start button, .mud-input-adornment-start");
-        await cut.InvokeAsync(() => adornment.Click());
+        IRenderedComponent<MudIconButton> adornment = cut.FindComponent<MudIconButton>();
+        await cut.InvokeAsync(() => adornment.Instance.OnClick.InvokeAsync(null));
 
         cut.WaitForAssertion(() =>
         {
