@@ -257,6 +257,31 @@ public class ItemListDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task SearchTagNameSuggestionsAsync_ImportedTag_ReturnsWithUsername()
+    {
+        var (db, sut, user1Id, user1Name, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var rootTag = await db.Tags.FirstAsync(t => t.Name == Tag.RootTagName);
+            var tagName = $"ImportedTag_{tid}";
+            var importedTag = new Tag
+            {
+                Name = tagName,
+                OwnerId = user1Id,
+                Node = rootTag.Node.GetDescendant(null, null)
+            };
+            db.Tags.Add(importedTag);
+            await db.SaveChangesAsync();
+
+            // TagRelation is intentionally NOT added to simulate a just-imported tag
+
+            var suggestions = await sut.SearchTagNameSuggestionsAsync(tagName);
+
+            Assert.Contains($"{tagName} @{user1Name}", suggestions);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

@@ -137,6 +137,7 @@ public class ItemListDataProvider(
         CancellationToken token = default)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(token);
+        List<string> tagNames = [];
         try
         {
             var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
@@ -157,21 +158,56 @@ public class ItemListDataProvider(
                 .Take(10)
                 .ToList();
 
-            return [.. textMatches.Concat(vectorMatches)
-                .Select(t => t.Name + " @") // 末尾に " @" を付与
+            tagNames = textMatches.Concat(vectorMatches)
+                .Select(t => t.Name)
                 .Distinct()
-                .Take(10)];
+                .Take(10)
+                .ToList();
         }
         catch
         {
-            return await context.Tags
+            tagNames = await context.Tags
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
                 .AsNoTracking()
-                .Select(t => t.Name + " @")
+                .Select(t => t.Name)
                 .Distinct()
                 .Take(10)
                 .ToListAsync(token);
         }
+
+        if (tagNames.Count == 0)
+        {
+            return [];
+        }
+
+        var tagUsersFromRelations = await context.TagRelations
+            .AsNoTracking()
+            .Where(tr => tagNames.Contains(tr.Tag.Name) && tr.Owner.UserName != null)
+            .Select(tr => new { tr.Tag.Name, tr.Owner.UserName })
+            .Distinct()
+            .ToListAsync(token);
+
+        var tagUsersFromTags = await context.Tags
+            .AsNoTracking()
+            .Where(t => tagNames.Contains(t.Name) && t.Owner.UserName != null)
+            .Select(t => new { t.Name, t.Owner.UserName })
+            .Distinct()
+            .ToListAsync(token);
+
+        var tagUsers = tagUsersFromRelations.Concat(tagUsersFromTags).Distinct().ToList();
+
+        var userCountByTag = tagUsers
+            .GroupBy(x => x.Name)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        return [.. tagNames.Select(name =>
+        {
+            if (userCountByTag.TryGetValue(name, out var users) && users.Count == 1)
+            {
+                return $"{name} @{users[0].UserName}";
+            }
+            return $"{name} @";
+        })];
     }
 
     public async Task<IReadOnlyList<string>> SearchTagUserNamesAsync(
@@ -181,11 +217,19 @@ public class ItemListDataProvider(
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(token);
 
-        IQueryable<string?> usersQuery = context.TagRelations
+        IQueryable<string?> relationUsersQuery = context.TagRelations
             .AsNoTracking()
             .Where(tr => tr.Tag.Name == tagName)
             .Select(tr => tr.Owner.UserName)
             .Where(u => u != null);
+
+        IQueryable<string?> tagOwnersQuery = context.Tags
+            .AsNoTracking()
+            .Where(t => t.Name == tagName)
+            .Select(t => t.Owner.UserName)
+            .Where(u => u != null);
+
+        IQueryable<string?> usersQuery = relationUsersQuery.Concat(tagOwnersQuery).Distinct();
 
         usersQuery = string.IsNullOrWhiteSpace(userSearch) switch
         {
