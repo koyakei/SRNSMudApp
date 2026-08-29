@@ -15,6 +15,7 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Components.Item;
@@ -69,14 +70,12 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
-        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
-        IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>()[0];
+        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名で検索...']").Count > 0);
+        IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =
+            cut.FindComponents<MudAutocomplete<TagSuggestion>>()[0];
 
         // Act 1: 候補「SearchTestTag」の選択を再現
-        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName));
-        IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
-        await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));
+        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(new TagSuggestion(null, TagName, null)));
 
         // Assert 1: 選択タグのチップが表示される
         cut.WaitForAssertion(() =>
@@ -89,18 +88,10 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         var unescapedUri = Uri.UnescapeDataString(navigationManager.Uri);
         Assert.Contains($"f=name:{TagName}", unescapedUri);
-
-        // Assert 3: 検索実行後も入力フィールドに検索テキストが残る (TagAddDialog 仕様準拠)
-        cut.WaitForAssertion(() =>
-        {
-            var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
-                .GetAttribute("value");
-            Assert.Equal(TagName, value);
-        });
     }
 
     [Fact]
-    public async Task TypingTagSearch_KeepsSearchTextInInputField_AfterSearchExecution()
+    public async Task FreeTextSearch_ViaAdornmentClick_AddsTagChip()
     {
         var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
 
@@ -122,21 +113,17 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
-        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
-        IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>()[0];
+        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名で検索...']").Count > 0);
+        IElement input = cut.Find("input[placeholder='タグ名で検索...']");
+        input.Change(TagName);
 
-        // Act: サジェスト選択ではなく文字を入力して Enter を押下
-        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName));
-        IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
-        await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));
+        IElement adornment = cut.Find(".mud-input-adornment-start button, .mud-input-adornment-start");
+        await cut.InvokeAsync(() => adornment.Click());
 
-        // Assert: 検索後も入力フィールドにテキストが保持されていること
         cut.WaitForAssertion(() =>
         {
-            var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
-                .GetAttribute("value");
-            Assert.Equal(TagName, value);
+            IElement chip = cut.Find(".mud-chip");
+            Assert.Contains(TagName, chip.TextContent);
         });
     }
 

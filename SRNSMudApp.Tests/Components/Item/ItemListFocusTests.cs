@@ -16,6 +16,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Components.Item;
@@ -165,7 +166,7 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
 
         _ = _itemListDataMock
             .Setup(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([$"{TagName} @"]);
+            .ReturnsAsync([new TagSuggestion(null, TagName, null)]);
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
@@ -177,11 +178,9 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
         Assert.Contains("focus=1", navigationManager.Uri);
 
         // Act 2: タグ検索を実行
-        IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>()[0];
-        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName + " @"));
-        IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
-        await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));
+        IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =
+            cut.FindComponents<MudAutocomplete<TagSuggestion>>()[0];
+        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(new TagSuggestion(null, TagName, null)));
 
         // Assert: f= (タグフィルタ) と focus= が共存する
         cut.WaitForAssertion(() =>

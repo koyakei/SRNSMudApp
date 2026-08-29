@@ -1,10 +1,11 @@
 @page "/Item/ItemList"
 @rendermode InteractiveServer
+@implements IDisposable
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
     <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mb-4">
         <MudTabPanel Text="アイテムの追加">
-            <AddItem InitialTags="@(_selectedFilters.Select(f => f.Tag))" OnItemAdded="LoadDataAsync"/>
+            <AddItem InitialTags="@(_tagSearchViewModel.SelectedFilters.Select(f => f.Tag))" OnItemAdded="LoadDataAsync"/>
         </MudTabPanel>
         <AuthorizeView>
             <Authorized>
@@ -16,17 +17,10 @@
     </MudTabs>
 
     @* ===== タグ検索セクション (表示専用子コンポーネントへ委譲) ===== *@
-    <TagSearchBar Value="@_tagSearchText"
-                  ValueChanged="OnSearchTextChangedAsync"
-                  SearchFunc="@SearchTagsAndUsersAsync"
-                  OnAdornmentClick="ExecuteSearch"
-                  OnSearchKeyDown="OnSearchKeyDown"
-                  SelectedFilters="_selectedFilters"
-                  OnRemoveFilter="RemoveTagFilter"
-                  OnClearAll="ClearAllTagFilters"/>
+    <TagSearchBar ViewModel="_tagSearchViewModel" />
 
     @* ===== フィルタ結果件数 ===== *@
-    @switch (_selectedFilters.Any())
+    @switch (_tagSearchViewModel.SelectedFilters.Any())
     {
         case true:
         <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
@@ -44,4 +38,3 @@
 
     <SRNSMudApp.Components.UI.ResourceList Tags="_foundTags" Items="_items" OnDataChanged="LoadDataAsync"/>
 </MudContainer>
-

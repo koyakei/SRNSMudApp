@@ -1,77 +1,76 @@
 @using SRNSMudApp.Models
-@* タグ検索バー。選択済みフィルタチップと 2 段階オートコンプリートを持つ表示専用子コンポーネント。
-   状態はすべて親から [Parameter] / EventCallback 経由で受け渡し、サービス注入なしで bUnit テスト可能。 *@
+@* タグ検索バー。選択済みフィルタチップとオートコンプリートを持つ表示専用子コンポーネント。
+   状態・ロジックはすべて TagSearchViewModel に委譲し、テスト容易性を確保。 *@
 <MudPaper Class="pa-3 mb-4 rounded-xl search-container" Outlined="true">
-    @switch (SelectedFilters.Any())
+    @switch (ViewModel.SelectedFilters.Any())
     {
         case true:
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-2 align-center">
-                @foreach (var filter in SelectedFilters)
+                @foreach (var filter in ViewModel.SelectedFilters)
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                             OnClose="@(_ => OnRemoveFilter.InvokeAsync(filter))">
+                             OnClose="@(_ => ViewModel.RemoveFilterAsync(filter))">
                         @filter.DisplayText
                     </MudChip>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
-                           OnClick="@(() => OnClearAll.InvokeAsync())" StartIcon="@Icons.Material.Filled.Clear" Class="clear-btn">
+                           OnClick="@(() => ViewModel.ClearFiltersAsync())" StartIcon="@Icons.Material.Filled.Clear" Class="clear-btn">
                     すべてクリア
                 </MudButton>
             </MudStack>
             break;
     }
 
-    @* 検索テキスト入力 (2段階オートコンプリート) *@
-    <MudAutocomplete @ref="_autocomplete" T="string" Value="@Value" ValueChanged="HandleValueChangedAsync"
-                     SearchFunc="@SearchFunc" Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..." Variant="Variant.Outlined"
-                     Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                     OnAdornmentClick="OnAdornmentClick" OnKeyDown="OnSearchKeyDown" DebounceInterval="300" Clearable="true"
-                     ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" MaxItems="10" />
+    @* 検索テキスト入力 (TagSuggestion オブジェクトによるオートコンプリート) *@
+    <MudAutocomplete @ref="_autocomplete"
+                     T="TagSuggestion"
+                     @bind-Text="_searchText"
+                     SearchFunc="@ViewModel.SearchSuggestionsAsync"
+                     ToStringFunc="@(s => s?.DisplayText)"
+                     ValueChanged="OnSuggestionSelected"
+                     Placeholder="タグ名で検索..."
+                     Variant="Variant.Outlined"
+                     Margin="Margin.Dense"
+                     Adornment="Adornment.Start"
+                     AdornmentIcon="@Icons.Material.Filled.Search"
+                     OnAdornmentClick="OnAdornmentClick"
+                     DebounceInterval="300"
+                     Clearable="true"
+                     ResetValueOnEmptyText="true"
+                     MaxItems="10" />
 </MudPaper>
 
 @code {
-    [Parameter] public string Value { get; set; } = "";
-    [Parameter] public EventCallback<string> ValueChanged { get; set; }
-    [Parameter]
-    public Func<string?, CancellationToken, Task<IEnumerable<string>>> SearchFunc { get; set; } =
-        (_, _) => Task.FromResult<IEnumerable<string>>([]);
-    [Parameter] public EventCallback<KeyboardEventArgs> OnSearchKeyDown { get; set; }
-    [Parameter] public EventCallback OnAdornmentClick { get; set; }
-    [Parameter] public IReadOnlyList<TagFilter> SelectedFilters { get; set; } = [];
-    [Parameter] public EventCallback<TagFilter> OnRemoveFilter { get; set; }
-    [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public TagSearchViewModel ViewModel { get; set; } = null!;
 
-    private MudAutocomplete<string>? _autocomplete;
+    private MudAutocomplete<TagSuggestion>? _autocomplete;
+    private string _searchText = "";
 
-    /// <summary>
-    /// 値変更を親へ通知する。タグ名のみ選択された状態 (IncompleteSearch) の場合は、
-    /// 選択直後に閉じたメニューを再表示してユーザー名をサジェストさせる (UI ハックはここに集約)。
-    /// </summary>
-    private async Task HandleValueChangedAsync(string? value)
+    private async Task OnSuggestionSelected(TagSuggestion? suggestion)
     {
-        await ValueChanged.InvokeAsync(value ?? "");
-
-        switch (TagSearchQuery.Parse(value ?? ""))
+        if (suggestion == null)
         {
-            case IncompleteSearch:
-                _ = ReopenMenuAfterDelayAsync();
-                break;
+            return;
+        }
+
+        _ = await ViewModel.AddFilterFromSuggestionAsync(suggestion);
+        _searchText = "";
+        if (_autocomplete != null)
+        {
+            await _autocomplete.ClearAsync();
         }
     }
 
-    private async Task ReopenMenuAfterDelayAsync()
+    private async Task OnAdornmentClick()
     {
-        await Task.Delay(100); // 選択時にメニューが閉じるのを待機
-        await InvokeAsync(async () =>
+        if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            switch (_autocomplete)
+            _ = await ViewModel.AddFilterFromTextAsync(_searchText);
+            _searchText = "";
+            if (_autocomplete != null)
             {
-                case not null:
-                    await _autocomplete.FocusAsync();
-                    await _autocomplete.ToggleMenuAsync();
-                    StateHasChanged();
-                    break;
+                await _autocomplete.ClearAsync();
             }
-        });
+        }
     }
 }

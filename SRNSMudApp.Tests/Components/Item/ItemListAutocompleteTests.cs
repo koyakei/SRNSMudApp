@@ -12,6 +12,7 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests.Components.Item;
@@ -44,9 +45,9 @@ public sealed class ItemListAutocompleteTests : IAsyncLifetime
     public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Suggestion_IsTagPlusAtMark_AndSelectionFillsSearchBox()
+    public async Task Suggestion_ReturnsTagSuggestion_AndSelectionAddsFilterChip()
     {
-        var expected = TagName + " @";
+        var expected = new TagSuggestion(1, TagName, "user1");
 
         _ = _itemListDataMock
             .Setup(d => d.SearchTagNameSuggestionsAsync("Item1", It.IsAny<CancellationToken>()))
@@ -54,7 +55,7 @@ public sealed class ItemListAutocompleteTests : IAsyncLifetime
 
         _ = _itemListDataMock
             .Setup(d => d.GetTagsByIdsAsync(It.IsAny<IEnumerable<int>>()))
-            .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
+            .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag> { [1] = new() { Id = 1, Name = TagName, OwnerId = UserId } });
 
         _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
@@ -62,25 +63,27 @@ public sealed class ItemListAutocompleteTests : IAsyncLifetime
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
-        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
-        IRenderedComponent<MudAutocomplete<string>> autocomplete =
-            cut.FindComponents<MudAutocomplete<string>>()[0];
+        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名で検索...']").Count > 0);
+        IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =
+            cut.FindComponents<MudAutocomplete<TagSuggestion>>()[0];
 
         // Act 1: "Item1" 入力時のサジェスト候補を取得
-        IEnumerable<string> suggestions =
+        IEnumerable<TagSuggestion> suggestions =
             await autocomplete.Instance.SearchFunc!("Item1", CancellationToken.None);
 
-        // Assert 1: 候補は「タグ名 @」形式そのもの
+        // Assert 1: 候補は TagSuggestion そのもの
         var actual = Assert.Single(suggestions);
         Assert.Equal(expected, actual);
 
         // Act 2: 候補選択を再現
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(expected));
 
-        // Assert 2: 検索欄の値が「タグ名 @」になっている
-        var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
-            .GetAttribute("value");
-        Assert.Equal(expected, value);
+        // Assert 2: チップが追加される
+        cut.WaitForAssertion(() =>
+        {
+            var chip = cut.Find(".mud-chip");
+            Assert.Contains(TagName, chip.TextContent);
+        });
     }
 
     public async Task DisposeAsync()

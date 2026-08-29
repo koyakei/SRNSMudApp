@@ -7,6 +7,7 @@ using System.Numerics.Tensors;
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Services;
 
@@ -46,8 +47,8 @@ public interface IItemListDataProvider
 
     Task<Tag?> FindTagByNameAsync(string tagName);
 
-    /// <summary>タグ名候補をテキスト + ベクトル類似度で検索する (末尾に " @" を付けて返す)。</summary>
-    Task<IReadOnlyList<string>> SearchTagNameSuggestionsAsync(string searchText, CancellationToken token = default);
+    /// <summary>タグ名候補をテキスト + ベクトル類似度で検索し、TagSuggestion 候補を返す。</summary>
+    Task<IReadOnlyList<TagSuggestion>> SearchTagNameSuggestionsAsync(string searchText, CancellationToken token = default);
 
     /// <summary>タグに付けられたユーザー名候補を検索する ("タグ名 @ユーザー名" 形式で返す)。</summary>
     Task<IReadOnlyList<string>> SearchTagUserNamesAsync(string tagName, string userSearch, CancellationToken token = default);
@@ -132,7 +133,7 @@ public class ItemListDataProvider(
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
-    public async Task<IReadOnlyList<string>> SearchTagNameSuggestionsAsync(
+    public async Task<IReadOnlyList<TagSuggestion>> SearchTagNameSuggestionsAsync(
         string searchText,
         CancellationToken token = default)
     {
@@ -183,30 +184,35 @@ public class ItemListDataProvider(
         var tagUsersFromRelations = await context.TagRelations
             .AsNoTracking()
             .Where(tr => tagNames.Contains(tr.Tag.Name) && tr.Owner.UserName != null)
-            .Select(tr => new { tr.Tag.Name, tr.Owner.UserName })
-            .Distinct()
+            .Select(tr => new { TagId = tr.Tag.Id, TagName = tr.Tag.Name, tr.Owner.UserName })
             .ToListAsync(token);
 
         var tagUsersFromTags = await context.Tags
             .AsNoTracking()
             .Where(t => tagNames.Contains(t.Name) && t.Owner.UserName != null)
-            .Select(t => new { t.Name, t.Owner.UserName })
-            .Distinct()
+            .Select(t => new { TagId = t.Id, TagName = t.Name, t.Owner.UserName })
             .ToListAsync(token);
 
-        var tagUsers = tagUsersFromRelations.Concat(tagUsersFromTags).Distinct().ToList();
+        var allTagUsers = tagUsersFromRelations.Concat(tagUsersFromTags)
+            .Distinct()
+            .ToList();
 
-        var userCountByTag = tagUsers
-            .GroupBy(x => x.Name)
+        var usersByTagName = allTagUsers
+            .GroupBy(x => x.TagName)
             .ToDictionary(g => g.Key, g => g.ToList());
 
         return [.. tagNames.Select(name =>
         {
-            if (userCountByTag.TryGetValue(name, out var users) && users.Count == 1)
+            if (usersByTagName.TryGetValue(name, out var list))
             {
-                return $"{name} @{users[0].UserName}";
+                var distinctUserNames = list.Select(x => x.UserName).Distinct().ToList();
+                if (distinctUserNames.Count == 1)
+                {
+                    var target = list[0];
+                    return new TagSuggestion(target.TagId, name, distinctUserNames[0]);
+                }
             }
-            return $"{name} @";
+            return new TagSuggestion(null, name, null);
         })];
     }
 

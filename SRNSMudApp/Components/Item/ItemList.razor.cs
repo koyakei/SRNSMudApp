@@ -1,11 +1,9 @@
-// CA1508: union 型 (TagSearchQuery, ItemListFilter) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
+// CA1508: union 型 (ItemListFilter) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
 #pragma warning disable CA1508
 
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 
-using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Components.Item;
@@ -14,14 +12,13 @@ namespace SRNSMudApp.Components.Item;
 ///     ItemList ページのコードビハインド。
 ///     マークアップ (.razor) 側は表示のみを担い、状態保持とサービス呼び出しはこちらに集約する。
 /// </summary>
-public partial class ItemList
+public sealed partial class ItemList : IDisposable
 {
     private IEnumerable<Data.Item> _items = [];
     private IEnumerable<Data.Tag> _foundTags = [];
 
-    // ===== タグ検索フィルタ用ステート =====
-    private readonly List<TagFilter> _selectedFilters = [];
-    private string _tagSearchText = "";
+    // ===== タグ検索フィルタ用 ViewModel =====
+    private TagSearchViewModel _tagSearchViewModel = null!;
 
     // ===== ソート用ステート =====
     private readonly List<SortCondition> _sortConditions = [];
@@ -33,6 +30,9 @@ public partial class ItemList
 
     protected override async Task OnInitializedAsync()
     {
+        _tagSearchViewModel = new TagSearchViewModel(ListData);
+        _tagSearchViewModel.FiltersChanged += OnFiltersChangedAsync;
+
         // URL 復元は ItemListQueryState に一元化。
         // TagId 指定と TagName 指定の両方のエントリを復元する
         ItemListQueryState state = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
@@ -46,13 +46,14 @@ public partial class ItemList
             .ToList();
         Dictionary<string, Data.Tag> tagsByName = await ListData.GetTagsByNamesAsync(nameFilters);
 
+        var initialFilters = new List<TagFilter>();
         foreach (FilterEntry filter in state.Filters)
         {
             if (filter.TagId.HasValue)
             {
                 if (tagsById.TryGetValue(filter.TagId.Value, out Data.Tag? tag))
                 {
-                    _selectedFilters.Add(new TagFilter
+                    initialFilters.Add(new TagFilter
                     {
                         TagId = tag.Id,
                         Tag = tag,
@@ -64,7 +65,7 @@ public partial class ItemList
             else if (!string.IsNullOrWhiteSpace(filter.TagName))
             {
                 _ = tagsByName.TryGetValue(filter.TagName, out Data.Tag? tag);
-                _selectedFilters.Add(new TagFilter
+                initialFilters.Add(new TagFilter
                 {
                     TagName = filter.TagName,
                     Tag = tag,
@@ -72,6 +73,7 @@ public partial class ItemList
                 });
             }
         }
+        _tagSearchViewModel.InitializeFilters(initialFilters);
 
         foreach (SortEntry entry in state.SortEntries)
         {
@@ -84,79 +86,23 @@ public partial class ItemList
         await LoadDataAsync();
     }
 
-    // ===== タグ検索メソッド =====
-
-    private async Task<IEnumerable<string>> SearchTagsAndUsersAsync(string? value, CancellationToken token)
+    private async Task OnFiltersChangedAsync()
     {
-        return TagSearchQuery.Parse(value) switch
-        {
-            EmptySearch => [],
-            TagWithUserSearch tagWithUserSearch => await ListData.SearchTagUserNamesAsync(
-                                tagWithUserSearch.TagName, tagWithUserSearch.UserName, token),
-            _ => await ListData.SearchTagNameSuggestionsAsync(value ?? "", token),
-        };
-    }
+        var activeTagIds = _tagSearchViewModel.SelectedFilters
+            .Where(f => f.TagId.HasValue)
+            .Select(f => f.TagId!.Value)
+            .ToHashSet();
 
-    private async Task OnSearchTextChangedAsync(string? value)
-    {
-        _tagSearchText = value ?? string.Empty;
+        var activeTagNames = _tagSearchViewModel.SelectedFilters
+            .Where(f => !f.TagId.HasValue)
+            .Select(f => f.TagName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // タグ名だけ選択された状態では検索を実行せず、次の入力を待つ
-        switch (TagSearchQuery.Parse(_tagSearchText))
-        {
-            case TagWithUserSearch tagWithUserSearch:
-                await ExecuteSearch(tagWithUserSearch.TagName, tagWithUserSearch.UserName);
-                break;
-            default:
-                break;
-        }
-    }
-
-    private async Task OnSearchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await ExecuteSearch();
-        }
-    }
-
-    private async Task ExecuteSearch()
-    {
-        var query = TagSearchQuery.Parse(_tagSearchText);
-        switch (query)
-        {
-            case EmptySearch:
-                break;
-            case IncompleteSearch incompleteSearch:
-                await ExecuteSearch(incompleteSearch.TagName, null);
-                break;
-            case TagNameSearch tagNameSearch:
-                await ExecuteSearch(tagNameSearch.TagName, null);
-                break;
-            case TagWithUserSearch tagWithUserSearch:
-                await ExecuteSearch(tagWithUserSearch.TagName, tagWithUserSearch.UserName);
-                break;
-            default:
-                break;
-        }
-    }
-
-    private async Task ExecuteSearch(string tagName, string? userName)
-    {
-        Data.Tag? tag = await ListData.FindTagByNameAsync(tagName);
-
-        if (!_selectedFilters.Any(f => f.TagName.Equals(tagName, StringComparison.OrdinalIgnoreCase) && f.UserName == userName))
-        {
-            _selectedFilters.Add(new TagFilter
-            {
-                TagName = tagName,
-                Tag = tag,
-                UserName = userName
-            });
-        }
+        _ = _sortConditions.RemoveAll(c => !activeTagIds.Contains(c.Tag.Id) && !activeTagNames.Contains(c.Tag.Name));
 
         UpdateUrlQuery();
         await LoadDataAsync();
+        StateHasChanged();
     }
 
     private void UpdateUrlQuery()
@@ -165,7 +111,7 @@ public partial class ItemList
         // focus / item などの他パラメータは ItemListQueryState が保持してくれる
         ItemListQueryState updated = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri)) with
         {
-            Filters = [.. _selectedFilters.Select(f => f.TagId.HasValue
+            Filters = [.. _tagSearchViewModel.SelectedFilters.Select(f => f.TagId.HasValue
                 ? FilterEntry.FromId(f.TagId.Value, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName)
                 : FilterEntry.FromName(f.TagName, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))],
             SortEntries = [.. _sortConditions.Select(c => new SortEntry(c.Tag.Id, c.Order))]
@@ -175,27 +121,9 @@ public partial class ItemList
         NavigationManager.NavigateTo(newUri, replace: true);
     }
 
-    private async Task RemoveTagFilter(TagFilter filter)
-    {
-        _ = _selectedFilters.Remove(filter);
-        _ = filter.TagId.HasValue
-            ? _sortConditions.RemoveAll(c => c.Tag.Id == filter.TagId.Value)
-            : _sortConditions.RemoveAll(c => c.Tag.Name.Equals(filter.TagName, StringComparison.OrdinalIgnoreCase));
-        UpdateUrlQuery();
-        await LoadDataAsync();
-    }
-
-    private async Task ClearAllTagFilters()
-    {
-        _selectedFilters.Clear();
-        _sortConditions.Clear();
-        UpdateUrlQuery();
-        await LoadDataAsync();
-    }
-
     private async Task LoadDataAsync()
     {
-        List<ItemListFilter> filters = [.. _selectedFilters.Select(f => f.TagId.HasValue
+        List<ItemListFilter> filters = [.. _tagSearchViewModel.SelectedFilters.Select(f => f.TagId.HasValue
             ? new ItemListFilter(new TagIdFilter(f.TagId.Value, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName))
             : new ItemListFilter(new TagNameFilter(f.TagName, string.IsNullOrWhiteSpace(f.UserName) ? null : f.UserName)))];
 
@@ -233,7 +161,7 @@ public partial class ItemList
 
     private Task<IEnumerable<Data.Tag>> SearchSortTagsAsync(string? value, CancellationToken _)
     {
-        IEnumerable<Data.Tag> source = _selectedFilters
+        IEnumerable<Data.Tag> source = _tagSearchViewModel.SelectedFilters
             .Select(f => f.Tag)
             .Where(t => t != null)!;
 
@@ -262,5 +190,14 @@ public partial class ItemList
         {
             // JS interop によるダウンロード失敗は無視する（ページ表示への影響を避ける）
         }
+    }
+
+    public void Dispose()
+    {
+        if (_tagSearchViewModel != null)
+        {
+            _tagSearchViewModel.FiltersChanged -= OnFiltersChangedAsync;
+        }
+        GC.SuppressFinalize(this);
     }
 }

@@ -278,7 +278,7 @@ public class ItemListDataProviderTests : IAsyncLifetime
 
             var suggestions = await sut.SearchTagNameSuggestionsAsync(tagName);
 
-            Assert.Contains($"{tagName} @{user1Name}", suggestions);
+            Assert.Contains(suggestions, s => s.TagId == importedTag.Id && s.TagName == tagName && s.UserName == user1Name);
         }
     }
 
