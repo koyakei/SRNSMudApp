@@ -22,5 +22,9 @@
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit"
-  }
+  },
+  "chat.plugins.enabled": true,
+  "chat.plugins.marketplaces": [
+    "dotnet/skills"
+  ]
 }
