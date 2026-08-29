@@ -5,18 +5,13 @@
 
 <MudDialog>
     <DialogContent>
-        <MudTabs ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="@OnActiveTabIndexChanged"
-                 Elevation="0" Rounded="true" ApplyEffectsToContainer="true" panelClass="pt-4">
+        <MudTabs ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="@OnActiveTabIndexChanged" Elevation="0"
+                 Rounded="true" ApplyEffectsToContainer="true" panelClass="pt-4">
             <MudTabPanel Text="既存タグから選択">
                 <!-- 検索入力エリア -->
                 <div class="d-flex align-center gap-4 mb-4">
-                    <MudTextField @bind-Value="_searchText"
-                                  Label="タグを検索"
-                                  Placeholder="タグ名 または 内容を入力..."
-                                  Immediate="true"
-                                  OnKeyDown="@HandleKeyDown"
-                                  Clearable="true"
-                                  AutoFocus="true"/>
+                    <MudTextField @bind-Value="_searchText" Label="タグを検索" Placeholder="タグ名 または 内容を入力..."
+                                  Immediate="true" OnKeyDown="@HandleKeyDown" Clearable="true" AutoFocus="true" />
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="@SearchAsync">検索</MudButton>
                 </div>
 
@@ -25,7 +20,7 @@
                 {
                     case true:
                         <div class="d-flex justify-center pa-4">
-                            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                         </div>
                         break;
                     case false when _searchResults != null:
@@ -49,35 +44,20 @@
                                                         </MudText>
                                                     </div>
                                                 </MudRadio>
-                                                <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
-                                                               Size="Size.Small"
-                                                               OnClick="@(() => ToggleTree(tag.Id))"
-                                                               title="タグツリーを表示"
-                                                               Class="ml-2"/>
-                                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
-                                                               Size="Size.Small"
-                                                               Color="Color.Info"
-                                                               OnClick="@(() => SelectParentAndOpenCreateTab(tag))"
-                                                               title="このタグの子タグを作成"
-                                                               Class="ml-1"/>
+                                                <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small"
+                                                               OnClick="@(() => ToggleTree(tag.Id))" title="タグツリーを表示" Class="ml-2" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
+                                                               Color="Color.Info" OnClick="@(() => SelectParentAndOpenCreateTab(tag))"
+                                                               title="このタグの子タグを作成" Class="ml-1" />
 
                                                 @* タグツリーポップオーバー *@
-                                                <MudOverlay Visible="@isActive"
-                                                            OnClick="@(() => _activeTreeTagId = null)"
-                                                            AutoClose="true"
-                                                            DarkBackground="false"
-                                                            ZIndex="1450" />
-                                                <MudPopover Open="@isActive"
-                                                            AnchorOrigin="Origin.TopRight"
-                                                            TransformOrigin="Origin.TopLeft"
-                                                            OverflowBehavior="OverflowBehavior.FlipAlways"
-                                                            Class="tree-popover" Paper="false"
-                                                            Style="z-index: 1500;">
-                                                    <TagTreePopoverContent TargetTag="@tag"
-                                                                           AllTags="@_allTags"
-                                                                           EnableSwap="false"
-                                                                           EnableExpand="false"
-                                                                           EnableNavigation="false"/>
+                                                <MudOverlay Visible="@isActive" OnClick="@(() => _activeTreeTagId = null)" AutoClose="true"
+                                                            DarkBackground="false" ZIndex="1450" />
+                                                <MudPopover Open="@isActive" AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.TopLeft"
+                                                            OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false"
+                                                            Style="z-index: 1500; margin-left: 10px;">
+                                                    <TagTreePopoverContent TargetTag="@tag" AllTags="@_allTags" EnableSwap="false"
+                                                                           EnableExpand="false" EnableNavigation="false" />
                                                 </MudPopover>
                                             </div>
                                         }
@@ -96,28 +76,15 @@
 
             <MudTabPanel Text="子タグを新規作成">
                 <MudStack Spacing="3">
-                    <MudAutocomplete T="Tag"
-                                     Label="親タグ"
-                                     @bind-Value="_parentTag"
-                                     SearchFunc="@SearchParentTagsAsync"
-                                     ToStringFunc="@(t => t?.Name ?? string.Empty)"
-                                     Placeholder="親タグを検索・選択..."
-                                     Clearable="true"
-                                     Required="true"
-                                     RequiredError="親タグを選択してください"
-                                     Immediate="true"
-                                     HelperText="@(_parentTag != null ? $"選択中親タグ: {_parentTag.Name}" : "親となるタグを検索して選択してください")"/>
+                    <MudAutocomplete T="Tag" Label="親タグ" @bind-Value="_parentTag" SearchFunc="@SearchParentTagsAsync"
+                                     ToStringFunc="@(t => t?.Name ?? string.Empty)" Placeholder="親タグを検索・選択..." Clearable="true"
+                                     Required="true" RequiredError="親タグを選択してください" Immediate="true"
+                                     HelperText="@(_parentTag != null ? $"選択中親タグ: {_parentTag.Name}" : "親となるタグを検索して選択してください")" />
 
-                    <MudTextField @bind-Value="_newTagName"
-                                  Label="子タグ名"
-                                  Required="true"
-                                  RequiredError="タグ名は必須です"
-                                  Immediate="true"/>
+                    <MudTextField @bind-Value="_newTagName" Label="子タグ名" Required="true" RequiredError="タグ名は必須です"
+                                  Immediate="true" />
 
-                    <MudTextField @bind-Value="_newTagContent"
-                                  Label="内容"
-                                  Lines="3"
-                                  Immediate="true"/>
+                    <MudTextField @bind-Value="_newTagContent" Label="内容" Lines="3" Immediate="true" />
                 </MudStack>
             </MudTabPanel>
         </MudTabs>

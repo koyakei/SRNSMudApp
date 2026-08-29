@@ -1,11 +1,13 @@
 @inject NavigationManager NavigationManager
 
-<MudPaper Outlined="true" Class="tag-tree-popover-content rounded-lg pa-2">
+<MudPaper Outlined="true" Class="tag-tree-popover-content rounded-lg pa-2"
+          Style="@($"max-height: {MaxHeight}; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.10); {Style}")">
     <MudList T="object" Dense="true" Class="pa-0">
         @foreach (var line in _treeLines)
         {
             <MudListItem OnClick="@(() => OnLineClicked(line))"
-                         Class="@($"pa-0 px-2 rounded {(line.IsCurrent ? "current" : "")} {(line.IsParent ? "parent" : "")} {(line.IsChild ? "child" : "")} {(line.IsSibling ? "sibling" : "")} {(EnableExpand ? "cursor-pointer" : "")}")">
+                         Class="@($"pa-0 px-2 rounded {(line.IsCurrent ? "current" : "")} {(line.IsParent ? "parent" : "")} {(line.IsChild ? "child" : "")} {(line.IsSibling ? "sibling" : "")} {(EnableExpand ? "cursor-pointer" : "")}")"
+                         Style="@(line.IsCurrent ? "background: rgba(103, 80, 164, 0.08);" : null)">
                 <div class="d-flex align-center tag-tree-line" style="gap: 4px; padding: 2px 0;">
                     <span class="tag-tree-indent">
                         <MudText Typo="Typo.body2" Color="Color.Secondary"
@@ -46,12 +48,8 @@
                     {
                         case true:
                             <span class="tag-tree-swap-btn" @onclick:stopPropagation="true">
-                                <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz"
-                                               Size="Size.Small"
-                                               Color="Color.Primary"
-                                               Class="pa-1"
-                                               OnClick="@(() => OnSwap.InvokeAsync(line.TagId))"
-                                               title="このタグに入れ替える"/>
+                                <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Primary"
+                                               Class="pa-1" OnClick="@(() => OnSwap.InvokeAsync(line.TagId))" title="このタグに入れ替える" />
                             </span>
                             break;
                     }
@@ -59,12 +57,9 @@
                     {
                         case true:
                             <span class="tag-tree-add-btn" @onclick:stopPropagation="true">
-                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
-                                               Size="Size.Small"
-                                               Color="Color.Primary"
-                                               Class="pa-1"
-                                               OnClick="@(() => AddChildTagClicked(line.TagId))"
-                                               title="このタグの子にタグを追加"/>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
+                                               Color="Color.Primary" Class="pa-1" OnClick="@(() => AddChildTagClicked(line.TagId))"
+                                               title="このタグの子にタグを追加" />
                             </span>
                             break;
                     }
@@ -81,6 +76,8 @@
     [Parameter] public bool EnableExpand { get; set; } = true;
     [Parameter] public bool EnableNavigation { get; set; } = true;
     [Parameter] public bool EnableAddChild { get; set; }
+    [Parameter] public string MaxHeight { get; set; } = "min(300px, 60vh)";
+    [Parameter] public string? Style { get; set; }
     [Parameter] public EventCallback<int> OnSwap { get; set; }
     [Parameter] public EventCallback<Tag> OnAddChildTag { get; set; }
 

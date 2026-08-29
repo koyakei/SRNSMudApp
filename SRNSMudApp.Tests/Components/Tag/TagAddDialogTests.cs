@@ -22,6 +22,7 @@ public sealed class TagAddDialogTests : IAsyncLifetime
 {
     private readonly BunitContext _ctx = new();
     private readonly Mock<ITagDialogDataProvider> _dialogDataMock = new();
+    private readonly IRenderedComponent<MudPopoverProvider> _popoverProvider;
 
     public TagAddDialogTests()
     {
@@ -30,7 +31,7 @@ public sealed class TagAddDialogTests : IAsyncLifetime
         _ = _ctx.Services.AddScoped(_ => _dialogDataMock.Object);
         _ = _ctx.Services.AddAuthorizationCore();
         _ = _ctx.Services.AddAuth("user-1");
-        _ = _ctx.Render<MudPopoverProvider>();
+        _popoverProvider = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -93,6 +94,51 @@ public sealed class TagAddDialogTests : IAsyncLifetime
         Assert.NotNull(result);
         Assert.False(result.Canceled);
         Assert.Equal(sampleTag, result.Data);
+    }
+
+    [Fact]
+    public async Task SearchTags_AndToggleTree_OpensScrollableTagTreePopoverContent()
+    {
+        var sampleTag = new SRNSMudApp.Data.Tag
+        {
+            Id = 1,
+            Name = "テストタグ",
+            Content = "テスト内容",
+            OwnerId = "user-1",
+            CachedWeight = 3
+        };
+
+        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([sampleTag]);
+        _dialogDataMock.Setup(d => d.SearchTagsAsync("テスト"))
+            .ReturnsAsync([sampleTag]);
+
+        IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
+        IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
+
+        _ = await dialogService.ShowAsync<TagAddDialog>("タグの追加");
+
+        host.WaitForState(() => host.Markup.Contains("タグを検索"));
+
+        IRenderedComponent<MudTextField<string>> input = host.FindComponent<MudTextField<string>>();
+        await host.InvokeAsync(() => input.Instance.ValueChanged.InvokeAsync("テスト"));
+
+        IElement searchButton = host.FindAll("button").First(b => b.TextContent.Trim() == "検索");
+        searchButton.Click();
+
+        host.WaitForState(() => host.Markup.Contains("テストタグ"));
+
+        IElement treeButton = host.FindAll("button").First(b => b.GetAttribute("title") == "タグツリーを表示");
+        treeButton.Click();
+
+        host.WaitForState(() => host.FindComponent<MudPopover>().Instance.Open);
+        IRenderedComponent<MudPopover> popover = host.FindComponent<MudPopover>();
+        Assert.True(popover.Instance.Open);
+
+        _popoverProvider.WaitForState(() => _popoverProvider.Markup.Contains("tag-tree-popover-content"));
+        IRenderedComponent<TagTreePopoverContent> popoverContent = _popoverProvider.FindComponent<TagTreePopoverContent>();
+        Assert.Contains("overflow-y: auto", popoverContent.Markup);
+        Assert.Contains("overscroll-behavior: contain", popoverContent.Markup);
+        Assert.Contains("max-height", popoverContent.Markup);
     }
 
     [Fact]
