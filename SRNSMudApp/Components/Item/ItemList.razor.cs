@@ -155,7 +155,6 @@ public partial class ItemList
             });
         }
 
-        _tagSearchText = "";
         UpdateUrlQuery();
         await LoadDataAsync();
     }

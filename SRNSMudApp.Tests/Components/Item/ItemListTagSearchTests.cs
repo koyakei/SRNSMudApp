@@ -89,6 +89,55 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         var unescapedUri = Uri.UnescapeDataString(navigationManager.Uri);
         Assert.Contains($"f=name:{TagName}", unescapedUri);
+
+        // Assert 3: 検索実行後も入力フィールドに検索テキストが残る (TagAddDialog 仕様準拠)
+        cut.WaitForAssertion(() =>
+        {
+            var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
+                .GetAttribute("value");
+            Assert.Equal(TagName, value);
+        });
+    }
+
+    [Fact]
+    public async Task TypingTagSearch_KeepsSearchTextInInputField_AfterSearchExecution()
+    {
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByIdsAsync(It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
+
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
+            .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.FindTagByNameAsync(TagName))
+            .ReturnsAsync(tag);
+
+        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
+
+        cut.WaitForState(() => cut.FindAll("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']").Count > 0);
+        IRenderedComponent<MudAutocomplete<string>> autocomplete =
+            cut.FindComponents<MudAutocomplete<string>>()[0];
+
+        // Act: サジェスト選択ではなく文字を入力して Enter を押下
+        await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(TagName));
+        IElement input = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']");
+        await cut.InvokeAsync(() => input.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" }));
+
+        // Assert: 検索後も入力フィールドにテキストが保持されていること
+        cut.WaitForAssertion(() =>
+        {
+            var value = cut.Find("input[placeholder='タグ名 または タグ名 @ユーザー名 で検索...']")
+                .GetAttribute("value");
+            Assert.Equal(TagName, value);
+        });
     }
 
     public async Task DisposeAsync()

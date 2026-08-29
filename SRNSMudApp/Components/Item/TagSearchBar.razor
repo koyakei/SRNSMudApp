@@ -14,8 +14,7 @@
                     </MudChip>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
-                           OnClick="@(() => OnClearAll.InvokeAsync())" StartIcon="@Icons.Material.Filled.Clear"
-                           Class="clear-btn">
+                           OnClick="@(() => OnClearAll.InvokeAsync())" StartIcon="@Icons.Material.Filled.Clear" Class="clear-btn">
                     すべてクリア
                 </MudButton>
             </MudStack>
@@ -23,28 +22,18 @@
     }
 
     @* 検索テキスト入力 (2段階オートコンプリート) *@
-    <MudAutocomplete @ref="_autocomplete"
-                     T="string"
-                     Value="@Value"
-                     ValueChanged="HandleValueChangedAsync"
-                     SearchFunc="@SearchFunc"
-                     Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..."
-                     Variant="Variant.Outlined"
-                     Margin="Margin.Dense"
-                     Adornment="Adornment.Start"
-                     AdornmentIcon="@Icons.Material.Filled.Search"
-                     OnAdornmentClick="OnAdornmentClick"
-                     OnKeyDown="OnSearchKeyDown"
-                     DebounceInterval="300"
-                     Clearable="true"
-                     ResetValueOnEmptyText="true"
-                     MaxItems="10"/>
+    <MudAutocomplete @ref="_autocomplete" T="string" Value="@Value" ValueChanged="HandleValueChangedAsync"
+                     SearchFunc="@SearchFunc" Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..." Variant="Variant.Outlined"
+                     Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                     OnAdornmentClick="OnAdornmentClick" OnKeyDown="OnSearchKeyDown" DebounceInterval="300" Clearable="true"
+                     ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" MaxItems="10" />
 </MudPaper>
 
 @code {
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
-    [Parameter] public Func<string?, CancellationToken, Task<IEnumerable<string>>> SearchFunc { get; set; } =
+    [Parameter]
+    public Func<string?, CancellationToken, Task<IEnumerable<string>>> SearchFunc { get; set; } =
         (_, _) => Task.FromResult<IEnumerable<string>>([]);
     [Parameter] public EventCallback<KeyboardEventArgs> OnSearchKeyDown { get; set; }
     [Parameter] public EventCallback OnAdornmentClick { get; set; }
@@ -55,8 +44,8 @@
     private MudAutocomplete<string>? _autocomplete;
 
     /// <summary>
-    ///     値変更を親へ通知する。タグ名のみ選択された状態 (IncompleteSearch) の場合は、
-    ///     選択直後に閉じたメニューを再表示してユーザー名をサジェストさせる (UI ハックはここに集約)。
+    /// 値変更を親へ通知する。タグ名のみ選択された状態 (IncompleteSearch) の場合は、
+    /// 選択直後に閉じたメニューを再表示してユーザー名をサジェストさせる (UI ハックはここに集約)。
     /// </summary>
     private async Task HandleValueChangedAsync(string? value)
     {
