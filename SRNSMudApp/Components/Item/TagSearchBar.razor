@@ -25,7 +25,7 @@
     <MudAutocomplete @ref="_autocomplete" T="string" Value="@Value" ValueChanged="HandleValueChangedAsync"
                      SearchFunc="@SearchFunc" Placeholder="タグ名 または タグ名 @@ユーザー名 で検索..." Variant="Variant.Outlined"
                      Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                     OnAdornmentClick="OnAdornmentClick" OnKeyDown="OnSearchKeyDown" DebounceInterval="300" Clearable="true"
+                     OnAdornmentClick="OnAdornmentClick" OnKeyDown="HandleKeyDownAsync" OnKeyUp="HandleKeyUpAsync" DebounceInterval="300" Clearable="true"
                      ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" MaxItems="10" />
 </MudPaper>
 
@@ -42,36 +42,45 @@
     [Parameter] public EventCallback OnClearAll { get; set; }
 
     private MudAutocomplete<string>? _autocomplete;
+    private bool _enterPressedOnSuggestion;
+    private string? _selectedValue;
 
-    /// <summary>
-    /// 値変更を親へ通知する。タグ名のみ選択された状態 (IncompleteSearch) の場合は、
-    /// 選択直後に閉じたメニューを再表示してユーザー名をサジェストさせる (UI ハックはここに集約)。
-    /// </summary>
-    private async Task HandleValueChangedAsync(string? value)
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
     {
-        await ValueChanged.InvokeAsync(value ?? "");
-
-        switch (TagSearchQuery.Parse(value ?? ""))
+        // サジェストメニューが開いているときは、サジェスト項目の選択確定が優先されるため、
+        // KeyDown 時点での未確定テキスト検索実行を抑制する（KeyUp で選択されたサジェストが確定される）
+        if (e.Key is "Enter" or "NumpadEnter" && _autocomplete?.Open == true)
         {
-            case IncompleteSearch:
-                _ = ReopenMenuAfterDelayAsync();
-                break;
+            _enterPressedOnSuggestion = true;
+            return;
+        }
+
+        await OnSearchKeyDown.InvokeAsync(e);
+    }
+
+    private async Task HandleKeyUpAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter" && _enterPressedOnSuggestion)
+        {
+            _enterPressedOnSuggestion = false;
+
+            if (!string.IsNullOrWhiteSpace(_selectedValue))
+            {
+                await OnSearchKeyDown.InvokeAsync(e);
+            }
+
+            if (_autocomplete is not null)
+            {
+                await _autocomplete.ClearAsync();
+            }
+
+            _selectedValue = null;
         }
     }
 
-    private async Task ReopenMenuAfterDelayAsync()
+    private async Task HandleValueChangedAsync(string? value)
     {
-        await Task.Delay(100); // 選択時にメニューが閉じるのを待機
-        await InvokeAsync(async () =>
-        {
-            switch (_autocomplete)
-            {
-                case not null:
-                    await _autocomplete.FocusAsync();
-                    await _autocomplete.ToggleMenuAsync();
-                    StateHasChanged();
-                    break;
-            }
-        });
+        _selectedValue = value;
+        await ValueChanged.InvokeAsync(value ?? "");
     }
 }

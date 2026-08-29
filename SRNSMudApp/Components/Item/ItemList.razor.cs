@@ -91,25 +91,18 @@ public partial class ItemList
         return TagSearchQuery.Parse(value) switch
         {
             EmptySearch => [],
+            IncompleteSearch incompleteSearch => await ListData.SearchTagUserNamesAsync(
+                incompleteSearch.TagName, string.Empty, token),
             TagWithUserSearch tagWithUserSearch => await ListData.SearchTagUserNamesAsync(
-                                tagWithUserSearch.TagName, tagWithUserSearch.UserName, token),
+                tagWithUserSearch.TagName, tagWithUserSearch.UserName, token),
             _ => await ListData.SearchTagNameSuggestionsAsync(value ?? "", token),
         };
     }
 
-    private async Task OnSearchTextChangedAsync(string? value)
+    private Task OnSearchTextChangedAsync(string? value)
     {
         _tagSearchText = value ?? string.Empty;
-
-        // タグ名だけ選択された状態では検索を実行せず、次の入力を待つ
-        switch (TagSearchQuery.Parse(_tagSearchText))
-        {
-            case TagWithUserSearch tagWithUserSearch:
-                await ExecuteSearch(tagWithUserSearch.TagName, tagWithUserSearch.UserName);
-                break;
-            default:
-                break;
-        }
+        return Task.CompletedTask;
     }
 
     private async Task OnSearchKeyDown(KeyboardEventArgs e)
