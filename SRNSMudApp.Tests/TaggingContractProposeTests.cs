@@ -51,6 +51,49 @@ public class TaggingContractProposeTests : TaggingContractTestBase
     }
 
     [Fact]
+    public async Task ProposeGratisContractAsync_WhenTagOwnerAutoAcceptIsEnabled_ShouldExecuteImmediately()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = requesterId };
+        var tag = new Tag { Name = $"AutoAcceptTag_{tid}", OwnerId = tagOwnerId, AutoAcceptIncomingTaggingRequests = true, CachedWeight = 10 };
+        dbContext.Items.Add(targetItem);
+        dbContext.Tags.Add(tag);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem.Id,
+            tag.Id,
+            requestType: TaggingRequestType.Add,
+            proposedWeight: 2,
+            message: "please accept automatically");
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Executed, saved!.Status);
+        Assert.NotNull(await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id));
+        Assert.Equal(12, (await dbContext.Tags.FindAsync(tag.Id))!.CachedWeight);
+    }
+
+    [Fact]
     public async Task ProposeMutualContractAsync_ShouldCreateMutualContractInProposedStatus()
     {
         // Arrange

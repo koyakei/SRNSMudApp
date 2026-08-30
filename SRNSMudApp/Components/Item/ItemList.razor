@@ -1,16 +1,18 @@
 @page "/Item/ItemList"
 @rendermode InteractiveServer
 @implements IDisposable
+@using SRNSMudApp.Components.UI
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
     <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mb-4">
         <MudTabPanel Text="アイテムの追加">
-            <AddItem InitialTags="@(_tagSearchViewModel.SelectedFilters.Select(f => f.Tag))" OnItemAdded="LoadDataAsync"/>
+            <AddItem InitialTags="@(_tagSearchViewModel.SelectedFilters.Select(f => f.Tag))"
+                     OnItemAdded="LoadDataAsync" />
         </MudTabPanel>
         <AuthorizeView>
             <Authorized>
                 <MudTabPanel Text="アイテムのインポート (CSV)">
-                    <ItemImport OnImportCompleted="LoadDataAsync"/>
+                    <ItemImport OnImportCompleted="LoadDataAsync" />
                 </MudTabPanel>
             </Authorized>
         </AuthorizeView>
@@ -20,21 +22,16 @@
     <TagSearchBar ViewModel="_tagSearchViewModel" />
 
     @* ===== フィルタ結果件数 ===== *@
-    @switch (_tagSearchViewModel.SelectedFilters.Any())
+    @if (_tagSearchViewModel.SelectedFilters.Count > 0)
     {
-        case true:
         <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
-            @(_items.Count()) 件のアイテム、@(_foundTags.Count()) 件のタグが見つかりました
+            @(_items.Count) 件のアイテム、@(_foundTags.Count) 件のタグが見つかりました
         </MudText>
-        break;
     }
 
-    <SortConditionEditor SortConditions="_sortConditions"
-                         OnSortTargetTagAdded="OnSortTargetTagAdded"
-                         SearchSortTags="@SearchSortTagsAsync"
-                         OnToggleOrder="ToggleSortOrder"
-                         OnRemoveCondition="RemoveSortCondition"
-                         OnExport="ExportToJsonAsync"/>
+    <SortConditionEditor SortConditions="_sortConditions" OnSortTargetTagAdded="OnSortTargetTagAdded"
+                         SearchSortTags="@SearchSortTagsAsync" OnToggleOrder="ToggleSortOrder" OnRemoveCondition="RemoveSortCondition"
+                         OnExport="ExportToJsonAsync" />
 
-    <SRNSMudApp.Components.UI.ResourceList Tags="_foundTags" Items="_items" OnDataChanged="LoadDataAsync"/>
+    <ResourceList Tags="_foundTags" Items="_items" OnDataChanged="LoadDataAsync" />
 </MudContainer>

@@ -5,21 +5,11 @@
 
 <MudDialog>
     <DialogContent>
-        <MudTextField T="string"
-                      @bind-Value="_editName"
-                      Label="タグ名"
-                      Variant="Variant.Outlined"
-                      Class="mb-4"
-                      AutoFocus="true"
-                      Required="true"
-                      RequiredError="タグ名は必須です"/>
+        <MudTextField T="string" @bind-Value="_editName" Label="タグ名" Variant="Variant.Outlined" Class="mb-4"
+                      AutoFocus="true" Required="true" RequiredError="タグ名は必須です" />
 
-        <MudTextField T="string"
-                      @bind-Value="_editContent"
-                      Label="内容"
-                      Variant="Variant.Outlined"
-                      Lines="3"
-                      MaxLines="5"/>
+        <MudTextField T="string" @bind-Value="_editContent" Label="内容" Variant="Variant.Outlined" Lines="3"
+                      MaxLines="5" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@Cancel">キャンセル</MudButton>
@@ -60,7 +50,8 @@
 
         try
         {
-            bool updated = await TagDialogData.UpdateTagAsync(Tag.Id, _editName, _editContent);
+            bool updated = await TagDialogData.UpdateTagAsync(Tag.Id, _editName, _editContent,
+Tag.AutoAcceptIncomingTaggingRequests);
 
             switch (updated)
             {

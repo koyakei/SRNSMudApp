@@ -14,8 +14,8 @@ namespace SRNSMudApp.Components.Item;
 /// </summary>
 public sealed partial class ItemList : IDisposable
 {
-    private IEnumerable<Data.Item> _items = [];
-    private IEnumerable<Data.Tag> _foundTags = [];
+    private IReadOnlyList<Data.Item> _items = [];
+    private IReadOnlyList<Data.Tag> _foundTags = [];
 
     // ===== タグ検索フィルタ用 ViewModel =====
     private TagSearchViewModel _tagSearchViewModel = null!;

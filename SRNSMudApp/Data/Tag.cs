@@ -33,6 +33,11 @@ public class Tag : BaseEntity
     public bool IsSystem { get; set; }
 
     /// <summary>
+    ///     このタグへのタグ付けリクエストを自動承認するかどうか。
+    /// </summary>
+    public bool AutoAcceptIncomingTaggingRequests { get; set; }
+
+    /// <summary>
     ///     タグの種別（VoteTag / ReactionTag / SystemClassificationTag / UserCustomTag）を取得する。
     /// </summary>
     public TagKind GetKind() =>

@@ -58,6 +58,23 @@ public class TaggingContractService(ApplicationDbContext dbContext)
 
         _ = dbContext.TaggingRequestEntities!.Add(contract);
         _ = await dbContext.SaveChangesAsync();
+
+        bool autoAccept = await dbContext.Tags
+            .AsNoTracking()
+            .Where(t => t.Id == requestedTagId)
+            .Select(t => t.AutoAcceptIncomingTaggingRequests)
+            .FirstOrDefaultAsync();
+
+        if (autoAccept)
+        {
+            Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
+            return autoAcceptResult switch
+            {
+                Failure f => new Failure($"自動承認に失敗しました: {f.ErrorMessage}"),
+                Success<string> => new Success<TaggingRequestEntity>(contract)
+            };
+        }
+
         return new Success<TaggingRequestEntity>(contract);
     }
 
@@ -101,6 +118,23 @@ public class TaggingContractService(ApplicationDbContext dbContext)
         };
         _ = dbContext.TaggingRequestEntities!.Add(contract);
         _ = await dbContext.SaveChangesAsync();
+
+        bool autoAccept = await dbContext.Tags
+            .AsNoTracking()
+            .Where(t => t.Id == requestedTagId)
+            .Select(t => t.AutoAcceptIncomingTaggingRequests)
+            .FirstOrDefaultAsync();
+
+        if (autoAccept)
+        {
+            Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
+            return autoAcceptResult switch
+            {
+                Failure f => new Failure($"自動承認に失敗しました: {f.ErrorMessage}"),
+                Success<string> => new Success<TaggingRequestEntity>(contract)
+            };
+        }
+
         return new Success<TaggingRequestEntity>(contract);
     }
 

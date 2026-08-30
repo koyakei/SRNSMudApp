@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using SRNSMudApp.Services
 @inject ITagDetailDataProvider TagDetailData
+@inject ITagDialogDataProvider TagDialogData
 @inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 
@@ -15,21 +16,22 @@
         case not null:
             <div class="d-flex align-center mb-4">
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                               OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+                               OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2" />
                 <MudText Typo="Typo.h5">タグ詳細</MudText>
-                <MudSpacer/>
+                <MudSpacer />
                 @switch (_currentUserId)
                 {
                     case not null:
                         <MudButton Variant="@(_isFollowing ? Variant.Outlined : Variant.Filled)"
                                    Color="@(_isFollowing ? Color.Default : Color.Primary)"
                                    StartIcon="@(_isFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
-                                   OnClick="@ToggleFollowAsync"
-                                   Class="mr-2">
+                                   OnClick="@ToggleFollowAsync" Class="mr-2">
                             @(_isFollowing ? "フォロー解除" : "フォロー")
                         </MudButton>
                         break;
                 }
+                <MudSwitch T="bool" Value="@(_tag?.AutoAcceptIncomingTaggingRequests ?? false)"
+                           ValueChanged="OnAutoAcceptChangedAsync" Label="自動承認" Color="Color.Primary" Class="mr-2" />
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
                            OnClick="@OpenEditDialog">
                     編集
@@ -39,7 +41,7 @@
             <MudCard Outlined="true" Class="mb-4 rounded-xl">
                 <MudCardContent>
                     <MudText Typo="Typo.h4" Class="d-flex align-center">
-                        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Class="mr-2"/>
+                        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Class="mr-2" />
                         @_tag.Name
                     </MudText>
                     @switch (string.IsNullOrEmpty(_tag.Content))
@@ -64,17 +66,16 @@
             <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4 mt-4">
                 <MudTabPanel Text="関連アイテム / タグ">
                     <SRNSMudApp.Components.UI.ResourceList Tags="_relatedTags" Items="_relatedItems"
-                                                               OnDataChanged="LoadDataAsync"/>
+                                                           OnDataChanged="LoadDataAsync" />
                 </MudTabPanel>
                 <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
-                    <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync"/>
+                    <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync" />
                 </MudTabPanel>
                 <MudTabPanel Text="Weight 履歴 / 取引履歴">
-                    <SRNSMudApp.Components.UI.TagWeightLedgerList Ledgers="_weightLedgers"/>
+                    <SRNSMudApp.Components.UI.TagWeightLedgerList Ledgers="_weightLedgers" />
                 </MudTabPanel>
                 <MudTabPanel Text="関連オファー">
-                    <SRNSMudApp.Components.UI.PublicTradeOfferList Offers="_publicOffers"
-                                                                       OnOfferTriggered="LoadDataAsync"/>
+                    <SRNSMudApp.Components.UI.PublicTradeOfferList Offers="_publicOffers" OnOfferTriggered="LoadDataAsync" />
                 </MudTabPanel>
             </MudTabs>
             break;
@@ -157,6 +158,23 @@
         }
 
         _isFollowing = await TagDetailData.ToggleFollowAsync(TagId, _currentUserId!);
+    }
+
+    private async Task OnAutoAcceptChangedAsync(bool enabled)
+    {
+        switch (_tag)
+        {
+            case null:
+                return;
+        }
+
+        bool updated = await TagDialogData.UpdateTagAsync(_tag.Id, _tag.Name, _tag.Content, enabled);
+        if (!updated)
+        {
+            return;
+        }
+
+        _tag.AutoAcceptIncomingTaggingRequests = enabled;
     }
 
 }
