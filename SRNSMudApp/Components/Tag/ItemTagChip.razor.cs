@@ -47,7 +47,9 @@ public partial class ItemTagChip
             return;
         }
 
+#pragma warning disable BL0012
         StateHasChanged();
+#pragma warning restore BL0012
         await Task.Yield();
 
         try

@@ -49,7 +49,7 @@ public sealed class ItemTagChipTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ItemTagChip_WhenTreeButtonClicked_ScrollsCurrentTagIntoView()
+    public async Task ItemTagChip_WhenTreeButtonClicked_ScrollsCurrentTagIntoView()
     {
         var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "TestTag", OwnerId = "test-user-id" };
         var tagRelation = new TagRelation
@@ -73,7 +73,9 @@ public sealed class ItemTagChipTests : IAsyncLifetime
             .Add(p => p.AllTagRelationsToTags, Array.Empty<TagRelationToTag>())
         );
 
-        component.FindAll("button").Last().Click();
+        var treeButton = component.FindAll("button")
+            .First(b => b.GetAttribute("title") == "タグツリーを表示");
+        await component.InvokeAsync(() => treeButton.Click());
 
         _ctx.JSInterop.VerifyInvoke("contentOverflowHelper.scrollToElement");
     }

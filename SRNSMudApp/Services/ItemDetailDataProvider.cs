@@ -25,9 +25,14 @@ public interface IItemDetailDataProvider
     Task<ItemDetailPageData?> GetItemDetailAsync(int itemId);
 }
 
+/// <summary>
+///     ItemDetail コンポーネント用データアクセスプロバイダーの実装。
+/// </summary>
+/// <param name="dbFactory">DbContext ファクトリ。</param>
 public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     : IItemDetailDataProvider
 {
+    /// <inheritdoc />
     public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();

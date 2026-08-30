@@ -79,7 +79,9 @@ public sealed class TagAddDialogTests : IAsyncLifetime
 
         IRenderedComponent<MudAutocomplete<SRNSMudApp.Data.Tag>> autocomplete =
             host.FindComponent<MudAutocomplete<SRNSMudApp.Data.Tag>>();
+#pragma warning disable MUD0012
         Assert.Equal(parentTag, autocomplete.Instance.Value);
+#pragma warning restore MUD0012
         Assert.Contains("子タグを作成して追加", host.Markup);
         Assert.DoesNotContain("選択して追加", host.Markup);
     }

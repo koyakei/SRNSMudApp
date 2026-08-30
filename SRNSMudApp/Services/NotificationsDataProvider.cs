@@ -18,9 +18,14 @@ public interface INotificationsDataProvider
     Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds);
 }
 
+/// <summary>
+///     NotificationsPage コンポーネント用データアクセスプロバイダーの実装。
+/// </summary>
+/// <param name="dbFactory">DbContext ファクトリ。</param>
 public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     : INotificationsDataProvider
 {
+    /// <inheritdoc />
     public async Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds)
     {
         switch (itemIds.Count)
