@@ -18,8 +18,6 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
-    <PackageReference Include="Roslynator.Analyzers" Version="4.12.0" PrivateAssets="all" />
-    <PackageReference Include="Roslynator.Formatting.Analyzers" Version="4.12.0" PrivateAssets="all" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -27,7 +25,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.0-*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer.HierarchyId" Version="11.0.0-*" />
-    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="11.0.0-*" />
     <PackageReference Include="NuGet.Packaging" Version="7.6.0" />
     <PackageReference Include="NuGet.Protocol" Version="7.6.0" />
     <PackageReference Include="SmartComponents.LocalEmbeddings" Version="0.1.0-preview10148" />

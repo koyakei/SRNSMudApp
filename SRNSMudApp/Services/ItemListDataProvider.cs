@@ -159,21 +159,20 @@ public class ItemListDataProvider(
                 .Take(10)
                 .ToList();
 
-            tagNames = textMatches.Concat(vectorMatches)
+            tagNames = [.. textMatches.Concat(vectorMatches)
                 .Select(t => t.Name)
                 .Distinct()
-                .Take(10)
-                .ToList();
+                .Take(10)];
         }
         catch
         {
-            tagNames = await context.Tags
+            tagNames = [.. await context.Tags
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
                 .AsNoTracking()
                 .Select(t => t.Name)
                 .Distinct()
                 .Take(10)
-                .ToListAsync(token);
+                .ToListAsync(token)];
         }
 
         if (tagNames.Count == 0)
