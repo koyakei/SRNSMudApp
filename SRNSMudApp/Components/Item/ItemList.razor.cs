@@ -40,10 +40,9 @@ public sealed partial class ItemList : IDisposable
         IEnumerable<int> sortTagIds = state.SortEntries.Select(e => e.TagId);
         Dictionary<int, Data.Tag> tagsById = await ListData.GetTagsByIdsAsync(filterTagIds.Concat(sortTagIds));
 
-        List<string> nameFilters = state.Filters
+        List<string> nameFilters = [.. state.Filters
             .Where(f => !f.TagId.HasValue && !string.IsNullOrWhiteSpace(f.TagName))
-            .Select(f => f.TagName!)
-            .ToList();
+            .Select(f => f.TagName!)];
         Dictionary<string, Data.Tag> tagsByName = await ListData.GetTagsByNamesAsync(nameFilters);
 
         var initialFilters = new List<TagFilter>();
@@ -194,10 +193,7 @@ public sealed partial class ItemList : IDisposable
 
     public void Dispose()
     {
-        if (_tagSearchViewModel != null)
-        {
-            _tagSearchViewModel.FiltersChanged -= OnFiltersChangedAsync;
-        }
+        _tagSearchViewModel.FiltersChanged -= OnFiltersChangedAsync;
         GC.SuppressFinalize(this);
     }
 }

@@ -283,16 +283,25 @@ public class ItemListDataProvider(
         {
             var idFilterIds = new List<int>();
             var nameFilterNames = new List<string>();
-            foreach (var f in filters)
+            foreach (ItemListFilter f in filters)
             {
                 switch (f)
                 {
-                    case TagIdFilter idF: idFilterIds.Add(idF.TagId); break;
-                    case TagNameFilter nameF: nameFilterNames.Add(nameF.TagName); break;
+                    case TagIdFilter idF:
+                        idFilterIds.Add(idF.TagId);
+                        break;
+                    case TagNameFilter nameF:
+                        nameFilterNames.Add(nameF.TagName);
+                        break;
                 }
             }
-            var filterNodesById = await context.Tags.Where(t => idFilterIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => (Microsoft.EntityFrameworkCore.HierarchyId?)t.Node);
-            var filterNodesByName = await context.Tags.Where(t => nameFilterNames.Contains(t.Name)).ToDictionaryAsync(t => t.Name, t => (Microsoft.EntityFrameworkCore.HierarchyId?)t.Node);
+
+            Dictionary<int, HierarchyId?> filterNodesById = await context.Tags
+                .Where(t => idFilterIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => (HierarchyId?)t.Node);
+            Dictionary<string, HierarchyId?> filterNodesByName = await context.Tags
+                .Where(t => nameFilterNames.Contains(t.Name))
+                .ToDictionaryAsync(t => t.Name, t => (HierarchyId?)t.Node);
 
             foreach (ItemListFilter filter in filters)
             {
@@ -300,8 +309,11 @@ public class ItemListDataProvider(
                 {
                     case TagIdFilter idFilter:
                         {
-                            var targetNode = filterNodesById.GetValueOrDefault(idFilter.TagId);
-                            if (targetNode == null) continue;
+                            HierarchyId? targetNode = filterNodesById.GetValueOrDefault(idFilter.TagId);
+                            if (targetNode == null)
+                            {
+                                continue;
+                            }
 
                             query = query.Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(targetNode)));
                             tagQuery = tagQuery.Where(t => t.Node.IsDescendantOf(targetNode) ||
@@ -310,8 +322,11 @@ public class ItemListDataProvider(
                         }
                     case TagNameFilter nameFilter:
                         {
-                            var targetNode = filterNodesByName.GetValueOrDefault(nameFilter.TagName);
-                            if (targetNode == null) continue;
+                            HierarchyId? targetNode = filterNodesByName.GetValueOrDefault(nameFilter.TagName);
+                            if (targetNode == null)
+                            {
+                                continue;
+                            }
 
                             var targetUserName = nameFilter.UserName;
                             if (string.IsNullOrWhiteSpace(targetUserName))
