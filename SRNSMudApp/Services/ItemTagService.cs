@@ -611,6 +611,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+
+        List<TagRelation> inheritedRelations = await context.TagRelations
+            .Where(tr => tr.ItemId == parentItemId)
+            .ToListAsync();
+
         var replyItem = new Item
         {
             Content = content,
@@ -623,8 +628,28 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         _ = context.Items!.Add(replyItem);
         _ = await context.SaveChangesAsync();
 
+        if (inheritedRelations.Count > 0)
+        {
+            var replyTagRelations = inheritedRelations
+                .Select(relation => new TagRelation
+                {
+                    ItemId = replyItem.Id,
+                    TagId = relation.TagId,
+                    Weight = relation.Weight,
+                    OwnerId = userId,
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                })
+                .ToList();
+
+            context.TagRelations.AddRange(replyTagRelations);
+            _ = await context.SaveChangesAsync();
+        }
+
         return await context.Items
             .Include(i => i.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Tag)
             .FirstOrDefaultAsync(i => i.Id == replyItem.Id);
     }
 }

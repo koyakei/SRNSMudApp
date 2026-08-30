@@ -81,6 +81,40 @@ public class ItemTagServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AddItemReplyAsync_ShouldCopyParentTagsAsDefault()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var parentItem = new Item { Content = $"ParentItem_{tid}", OwnerId = userId };
+            var tag1 = new Tag { Name = $"ParentTagA_{tid}", OwnerId = userId };
+            var tag2 = new Tag { Name = $"ParentTagB_{tid}", OwnerId = userId };
+            dbContext.Items.Add(parentItem);
+            dbContext.Tags.AddRange(tag1, tag2);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.TagRelations.AddRange(
+                new TagRelation { ItemId = parentItem.Id, TagId = tag1.Id, Weight = 1, OwnerId = userId },
+                new TagRelation { ItemId = parentItem.Id, TagId = tag2.Id, Weight = 1, OwnerId = userId });
+            await dbContext.SaveChangesAsync();
+
+            Item? reply = await service.AddItemReplyAsync(parentItem.Id, $"This is a reply_{tid}", userId);
+
+            Assert.NotNull(reply);
+            List<TagRelation> replyRelations = await dbContext.TagRelations
+                .Where(tr => tr.ItemId == reply!.Id)
+                .OrderBy(tr => tr.TagId)
+                .ToListAsync();
+
+            Assert.Equal([tag1.Id, tag2.Id], replyRelations.Select(tr => tr.TagId));
+            Assert.All(replyRelations, tr => Assert.Equal(userId, tr.OwnerId));
+        }
+    }
+
+    [Fact]
     public async Task AddTagToItemAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
         var (dbContext, service, tid) = CreateScope();
