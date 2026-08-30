@@ -115,6 +115,8 @@
 
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
+    [Parameter] public Tag? DefaultParentTag { get; set; }
+
     private Tag? SelectedTag { get; set; }
     private string _searchText = string.Empty;
 
@@ -178,6 +180,17 @@
     protected override async Task OnInitializedAsync()
     {
         _allTags = await TagDialogData.GetAllTagsAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (DefaultParentTag is null)
+        {
+            return;
+        }
+
+        _parentTag = DefaultParentTag;
+        _activeTabIndex = 1;
     }
 
     private async Task SearchAsync()

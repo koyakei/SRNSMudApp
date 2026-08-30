@@ -344,37 +344,28 @@ public partial class TagCard : IAsyncDisposable
         await (targetTag switch
         {
             null => Task.CompletedTask,
-            not null => ExecuteWithTagSelection("子タグの追加", targetTag, SetParentTagAsync)
+            not null => ShowCreateChildDialogAsync(targetTag)
         });
     }
 
-    private async Task SetParentTagAsync(Data.Tag parentTag, Data.Tag childTag)
+    private async Task ShowCreateChildDialogAsync(Data.Tag parentTag)
     {
-        if (TagCardViewModel.IsSelfParent(parentTag, childTag))
-        {
-            _ = Snackbar.Add("自分自身を親にすることはできません。", Severity.Warning);
-            return;
-        }
+        var parameters = new DialogParameters { [nameof(TagAddDialog.DefaultParentTag)] = parentTag };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
 
-        if (TagCardViewModel.HasParentCycle(parentTag, childTag, AllTags))
-        {
-            _ = Snackbar.Add("循環参照になるため親に設定できません。", Severity.Error);
-            return;
-        }
+        IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", parameters, options);
+        DialogResult? result = await dialog.Result;
 
-        TagCardOperationResult result =
-            await TagCardData.SetParentTagAsync(childTag.Id, parentTag.Id, CurrentUserId);
-        switch (result)
+        await (result switch
         {
-            case TagCardOperationResult.NotOwner:
-                _ = Snackbar.Add("対象タグの作成者ではないため、親タグを変更する権限がありません。", Severity.Error);
-                return;
-            case TagCardOperationResult.Success:
-                _ = Snackbar.Add("子タグとして設定しました。", Severity.Success);
-                await NotifyChangedAsync();
-                break;
-            case TagCardOperationResult.NotFound:
-                break;
-        }
+            { Canceled: false, Data: Data.Tag createdTag } => HandleCreatedChildTagAsync(createdTag),
+            _ => Task.CompletedTask
+        });
+    }
+
+    private Task HandleCreatedChildTagAsync(Data.Tag createdTag)
+    {
+        _ = Snackbar.Add($"'{createdTag.Name}' を追加しました。", Severity.Success);
+        return NotifyChangedAsync();
     }
 }

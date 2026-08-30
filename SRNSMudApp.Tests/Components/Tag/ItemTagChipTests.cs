@@ -48,6 +48,36 @@ public sealed class ItemTagChipTests : IAsyncLifetime
         Assert.Contains("mud-icon", component.Markup);
     }
 
+    [Fact]
+    public void ItemTagChip_WhenTreeButtonClicked_ScrollsCurrentTagIntoView()
+    {
+        var tag = new SRNSMudApp.Data.Tag { Id = 1, Name = "TestTag", OwnerId = "test-user-id" };
+        var tagRelation = new TagRelation
+        {
+            Id = 1,
+            TagId = 1,
+            Tag = tag,
+            ItemId = 1,
+            Weight = 10,
+            OwnerId = "test-user-id"
+        };
+        var item = new SRNSMudApp.Data.Item { Id = 1, Content = "Test Item", OwnerId = "test-user-id" };
+
+        _ctx.JSInterop.SetupVoid("contentOverflowHelper.scrollToElement", _ => true);
+
+        IRenderedComponent<ItemTagChip> component = _ctx.Render<ItemTagChip>(parameters => parameters
+            .Add(p => p.TagRelation, tagRelation)
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, "test-user-id")
+            .Add(p => p.AllTags, new[] { tag })
+            .Add(p => p.AllTagRelationsToTags, Array.Empty<TagRelationToTag>())
+        );
+
+        component.FindAll("button").Last().Click();
+
+        _ctx.JSInterop.VerifyInvoke("contentOverflowHelper.scrollToElement");
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -56,6 +56,35 @@ public sealed class TagAddDialogTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ShowWithDefaultParentTag_OpensCreateChildTab_AndPreselectsParent()
+    {
+        var parentTag = new SRNSMudApp.Data.Tag
+        {
+            Id = 10,
+            Name = "親タグ",
+            Content = "親の内容",
+            OwnerId = "user-1",
+            CachedWeight = 5
+        };
+
+        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([parentTag]);
+
+        IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
+        IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
+        var parameters = new DialogParameters { [nameof(TagAddDialog.DefaultParentTag)] = parentTag };
+
+        _ = await dialogService.ShowAsync<TagAddDialog>("タグの追加", parameters);
+
+        host.WaitForState(() => host.Markup.Contains("子タグ名"));
+
+        IRenderedComponent<MudAutocomplete<SRNSMudApp.Data.Tag>> autocomplete =
+            host.FindComponent<MudAutocomplete<SRNSMudApp.Data.Tag>>();
+        Assert.Equal(parentTag, autocomplete.Instance.Value);
+        Assert.Contains("子タグを作成して追加", host.Markup);
+        Assert.DoesNotContain("選択して追加", host.Markup);
+    }
+
+    [Fact]
     public async Task SearchTags_AndSelectTag_ReturnsSelectedTag()
     {
         var sampleTag = new SRNSMudApp.Data.Tag

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 using MudBlazor;
 
@@ -21,6 +22,7 @@ public partial class ItemTagChip
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
+    [Inject] private IJSRuntime JS { get; set; } = null!;
 
     [Parameter][EditorRequired] public TagRelation TagRelation { get; set; } = null!;
     [Parameter][EditorRequired] public Data.Item Item { get; set; } = null!;
@@ -36,7 +38,27 @@ public partial class ItemTagChip
 
     private bool _isTreePopoverOpen;
 
-    private void ToggleTagTreePopover() => _isTreePopoverOpen = !_isTreePopoverOpen;
+    private async Task ToggleTagTreePopover()
+    {
+        _isTreePopoverOpen = !_isTreePopoverOpen;
+
+        if (!_isTreePopoverOpen)
+        {
+            return;
+        }
+
+        StateHasChanged();
+        await Task.Yield();
+
+        try
+        {
+            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
+        }
+        catch (JSException)
+        {
+            // ignored
+        }
+    }
 
     /// <summary>親へデータ変更を通知する。</summary>
     private Task NotifyChangedAsync() =>
@@ -265,18 +287,29 @@ public partial class ItemTagChip
         await (targetTag switch
         {
             null => Task.CompletedTask,
-            not null => ExecuteWithTagSelection("子タグの追加", targetTag, ExecuteSetParentTagAsync)
+            not null => ShowCreateChildDialogAsync(targetTag)
         });
     }
 
-    private async Task ExecuteSetParentTagAsync(Data.Tag parentTag, Data.Tag childTag)
+    private async Task ShowCreateChildDialogAsync(Data.Tag parentTag)
     {
-        var error = await ItemTagService.SetParentTagAsync(parentTag.Id, childTag.Id, CurrentUserId, AllTags);
-        await (error switch
+        var parameters = new DialogParameters { [nameof(TagAddDialog.DefaultParentTag)] = parentTag };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+
+        IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", parameters, options);
+        DialogResult? result = await dialog.Result;
+
+        await (result switch
         {
-            null => HandleSuccessMessage("子タグとして設定しました。"),
-            _ => HandleError(error)
+            { Canceled: false, Data: Data.Tag createdTag } => HandleCreatedChildTagAsync(createdTag),
+            _ => Task.CompletedTask
         });
+    }
+
+    private Task HandleCreatedChildTagAsync(Data.Tag createdTag)
+    {
+        _ = Snackbar.Add($"'{createdTag.Name}' を追加しました。", Severity.Success);
+        return NotifyChangedAsync();
     }
 
     private Task HandleSuccessMessage(string message)
