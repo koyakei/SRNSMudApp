@@ -137,7 +137,7 @@ public partial class TagCard : IAsyncDisposable
             await Task.Yield();
             try
             {
-                await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
+                await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content #tag-tree-current-line");
             }
             catch (JSException)
             {

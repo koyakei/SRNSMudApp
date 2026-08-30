@@ -52,7 +52,7 @@ public partial class ItemTagChip
 
         try
         {
-            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content .tag-tree-line.current");
+            await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content #tag-tree-current-line");
         }
         catch (JSException)
         {

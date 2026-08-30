@@ -5,7 +5,8 @@
     <MudList T="object" Dense="true" Class="pa-0">
         @foreach (var line in _treeLines)
         {
-            <MudListItem OnClick="@(() => OnLineClicked(line))"
+            <MudListItem id="@(line.IsCurrent ? "tag-tree-current-line" : null)"
+                         OnClick="@(() => OnLineClicked(line))"
                          Class="@($"pa-0 px-2 rounded {(line.IsCurrent ? "current" : "")} {(line.IsParent ? "parent" : "")} {(line.IsChild ? "child" : "")} {(line.IsSibling ? "sibling" : "")} {(EnableExpand ? "cursor-pointer" : "")}")"
                          Style="@(line.IsCurrent ? "background: rgba(103, 80, 164, 0.08);" : null)">
                 <div class="d-flex align-center tag-tree-line" style="gap: 4px; padding: 2px 0;">
