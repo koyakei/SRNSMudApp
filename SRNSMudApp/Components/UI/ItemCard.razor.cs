@@ -211,6 +211,7 @@ public partial class ItemCard : IAsyncDisposable
             if (addedReply is not null)
             {
                 _newReplyContent = "";
+                _isRepliesExpanded = true;
                 await LoadRepliesAsync();
             }
         }

@@ -53,11 +53,10 @@ public class TagEmbeddingServiceTests : IAsyncLifetime
         // Act: クエリ文字列の embedding を生成し、コサイン類似度でランク付けする
         var queryEmbedding = (await _embeddingService.GenerateEmbeddingAsync("反社会的勢力")).ToArray();
 
-        List<(Tag Tag, float Similarity)> ranked = db.Tags.AsEnumerable()
+        List<(Tag Tag, float Similarity)> ranked = [.. db.Tags.AsEnumerable()
             .Where(t => t.OwnerId == userId && t.Embedding != null && t.Embedding.Length == queryEmbedding.Length)
             .Select(t => (t, TensorPrimitives.CosineSimilarity(t.Embedding!, queryEmbedding)))
-            .OrderByDescending(x => x.Item2)
-            .ToList();
+            .OrderByDescending(x => x.Item2)];
 
         // Assert: ヤクザが先頭に来ること（Target_xxx より高い類似度）
         Assert.Equal(tagName, ranked[0].Tag.Name);

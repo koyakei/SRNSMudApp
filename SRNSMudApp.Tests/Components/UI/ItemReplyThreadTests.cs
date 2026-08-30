@@ -41,6 +41,18 @@ public class ItemReplyThreadTests : BunitContext
     }
 
     [Fact]
+    public void CollapsedButWithReplies_ShowsReplyCount()
+    {
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.IsExpanded, false)
+            .Add(p => p.Replies, new[] { CreateItem(1, "reply1") })
+            .Add(p => p.ReplyTemplate, reply => b => b.AddContent(0, reply.Content)));
+
+        Assert.Contains("リプライ (1)", cut.Markup);
+        Assert.Contains("reply1", cut.Markup);
+    }
+
+    [Fact]
     public void Expanded_RendersRepliesViaTemplate()
     {
         IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters

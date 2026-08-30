@@ -3,16 +3,25 @@
 @* ItemCard のリプライスレッド表示を担う表示専用コンポーネント。
     サービス注入を持たず、データとコールバックのみで駆動するため
     bUnit で純粋レンダリングテストが可能。 *@
+@{
+    var replyCount = Replies?.Count() ?? 0;
+}
 <div class="d-flex justify-end mt-2">
-    <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline"
-               Size="Size.Small" Color="Color.Default" Variant="Variant.Text"
-               OnClick="@(async () => await OnToggleReplies.InvokeAsync())">
-        リプライ
+    <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Color="Color.Default"
+               Variant="Variant.Text" OnClick="@(async () => await OnToggleReplies.InvokeAsync())">
+        @if (replyCount > 0)
+        {
+            <span>リプライ (@replyCount)</span>
+        }
+        else
+        {
+            <span>リプライ</span>
+        }
     </MudButton>
 </div>
 
 <MudCollapse Expanded="IsExpanded">
-    <MudDivider Class="my-3"/>
+    <MudDivider Class="my-3" />
     <MudText Typo="Typo.subtitle2" Class="mb-2">リプライスレッド</MudText>
 
     @switch (Replies?.Any())
@@ -33,21 +42,16 @@
     }
 
     <div class="d-flex align-end gap-2 mt-2">
-        <MudTextField @bind-Value="@NewReplyContent"
-                      Label="リプライを入力..."
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Lines="2"
-                      Immediate="true"
-                      Class="flex-grow-1"/>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
+        <MudTextField Value="@NewReplyContent"
+                      ValueChanged="@(async (string value) => await HandleNewReplyContentChanged(value))" Label="リプライを入力..."
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Immediate="true" Class="flex-grow-1" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
                    OnClick="@(async () => await OnSubmitReply.InvokeAsync())"
                    Disabled="@(string.IsNullOrWhiteSpace(NewReplyContent) || IsSubmittingReply)">
             @switch (IsSubmittingReply)
             {
                 case true:
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
                     <span class="ms-2">送信中</span>
                     break;
                 case false:
@@ -75,4 +79,13 @@
     [Parameter] public EventCallback OnToggleReplies { get; set; }
 
     [Parameter] public EventCallback OnSubmitReply { get; set; }
+
+    private async Task HandleNewReplyContentChanged(string value)
+    {
+        NewReplyContent = value ?? string.Empty;
+        if (NewReplyContentChanged.HasDelegate)
+        {
+            await NewReplyContentChanged.InvokeAsync(NewReplyContent);
+        }
+    }
 }

@@ -18,9 +18,7 @@ public class DbContextInjectionRuleTests
     [Fact]
     public void Components_ShouldNotInjectDbContextDirectly_ToPreventConcurrencyIssues()
     {
-        Type[] violatingComponents = GetServerComponents()
-            .Where(HasForbiddenDbContextInjection)
-            .ToArray();
+        Type[] violatingComponents = [.. GetServerComponents().Where(HasForbiddenDbContextInjection)];
 
         Assert.Empty(violatingComponents);
     }
@@ -28,22 +26,19 @@ public class DbContextInjectionRuleTests
     [Fact]
     public void Components_ShouldUseDialogLauncherInsteadOfMudDialogService()
     {
-        Type[] violatingComponents = GetServerComponents()
-            .Where(HasForbiddenDialogServiceInjection)
-            .ToArray();
+        Type[] violatingComponents = [.. GetServerComponents().Where(HasForbiddenDialogServiceInjection)];
 
         Assert.Empty(violatingComponents);
     }
 
     private static Type[] GetServerComponents() =>
-        typeof(ApplicationDbContext).Assembly
+        [.. typeof(ApplicationDbContext).Assembly
             .GetTypes()
             .Where(type =>
                 type.IsClass &&
                 !type.IsAbstract &&
                 typeof(ComponentBase).IsAssignableFrom(type) &&
-                type.Namespace?.StartsWith("SRNSMudApp.Components", StringComparison.Ordinal) is true)
-            .ToArray();
+                type.Namespace?.StartsWith("SRNSMudApp.Components", StringComparison.Ordinal) is true)];
 
     private static bool HasForbiddenDbContextInjection(Type componentType) =>
         GetInjectedProperties(componentType).Any(property =>
@@ -54,7 +49,5 @@ public class DbContextInjectionRuleTests
         GetInjectedProperties(componentType).Any(property => property.PropertyType == typeof(IDialogService));
 
     private static PropertyInfo[] GetInjectedProperties(Type componentType) =>
-        componentType.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            .Where(property => property.GetCustomAttributes(typeof(InjectAttribute), inherit: true).Length != 0)
-            .ToArray();
+        [.. componentType.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Where(property => property.GetCustomAttributes(typeof(InjectAttribute), inherit: true).Length != 0)];
 }

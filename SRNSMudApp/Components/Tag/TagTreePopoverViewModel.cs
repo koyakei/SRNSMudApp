@@ -38,7 +38,7 @@ public static class TagTreePopoverViewModel
             return expanded;
         }
 
-        List<Data.Tag> filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
+        List<Data.Tag> filteredTags = [.. allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag))];
         Data.Tag? current = filteredTags.Find(t => t.Id == targetTag.Id);
         while (current != null)
         {
@@ -68,7 +68,7 @@ public static class TagTreePopoverViewModel
             return lines;
         }
 
-        List<Data.Tag> filteredTags = allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag)).ToList();
+        List<Data.Tag> filteredTags = [.. allTags.Where(t => t.GetKind() is not (VoteTag or ReactionTag))];
         if (filteredTags.Count == 0)
         {
             return lines;
