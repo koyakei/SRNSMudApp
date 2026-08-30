@@ -28,58 +28,58 @@ public sealed record HomeTimelinePage(IReadOnlyList<TimelineFeedGroup> Groups, i
 /// </summary>
 public interface IHomeDataProvider
 {
-    Task<List<int>> GetFollowedTagIdsAsync(string userId);
+    Task<List<int>> GetFollowedTagIdsAsync(string userId, CancellationToken cancellationToken = default);
 
     /// <summary>全タグとタグ間リレーション (Tag / TargetTag 込み) を取得する。</summary>
-    Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync();
+    Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>good / bad システムタグを取得し、無ければ作成する。</summary>
-    Task<SystemTagsResult> EnsureSystemTagsAsync(string userId);
+    Task<SystemTagsResult> EnsureSystemTagsAsync(string userId, CancellationToken cancellationToken = default);
 
-    Task<HomeTimelinePage> LoadTimelineAsync(IReadOnlyList<int> followedTagIds, int startIndex, int count);
+    Task<HomeTimelinePage> LoadTimelineAsync(IReadOnlyList<int> followedTagIds, int startIndex, int count, CancellationToken cancellationToken = default);
 }
 
 public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IHomeDataProvider
 {
-    public async Task<List<int>> GetFollowedTagIdsAsync(string userId)
+    public async Task<List<int>> GetFollowedTagIdsAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync(cancellationToken);
         return await db.UserTagFollows!
             .Where(f => f.OwnerId == userId)
             .Select(f => f.TagId)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
-    public async Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync()
+    public async Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync(CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
         List<Tag> tags = await context.Tags
             .Include(t => t.Owner)
             .AsNoTracking()
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         List<TagRelationToTag> relations = await context.TagRelationToTags
             .Include(tr => tr.Tag)
             .Include(tr => tr.TargetTag)
             .AsNoTracking()
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return (tags, relations);
     }
 
-    public async Task<SystemTagsResult> EnsureSystemTagsAsync(string userId)
+    public async Task<SystemTagsResult> EnsureSystemTagsAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
         Tag? goodTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "good" && t.IsSystem);
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "good" && t.IsSystem, cancellationToken);
         Tag? badTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem);
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem, cancellationToken);
         Tag? shinjiTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem);
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem, cancellationToken);
         Tag? zenTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "善" && t.IsSystem);
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "善" && t.IsSystem, cancellationToken);
         Tag? biTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "美" && t.IsSystem);
+            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "美" && t.IsSystem, cancellationToken);
 
         var created = false;
         if (goodTag is null)
@@ -155,7 +155,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         switch (created)
         {
             case true:
-                _ = await context.SaveChangesAsync();
+                _ = await context.SaveChangesAsync(cancellationToken);
                 return new SystemTagsResult(goodTag.Id, badTag.Id, shinjiTag.Id, zenTag.Id, biTag.Id, true);
             default:
                 return new SystemTagsResult(goodTag!.Id, badTag!.Id, shinjiTag!.Id, zenTag!.Id, biTag!.Id, false);
@@ -165,9 +165,10 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     public async Task<HomeTimelinePage> LoadTimelineAsync(
         IReadOnlyList<int> followedTagIds,
         int startIndex,
-        int count)
+        int count,
+        CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
         IQueryable<TimelineEvent> query = db.TimelineEvents!
             .Where(e => followedTagIds.Contains(e.FollowedTagId));
@@ -181,12 +182,12 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             })
             .OrderByDescending(g => g.LatestEventDate);
 
-        var totalGroups = await groupedQuery.CountAsync();
+        var totalGroups = await groupedQuery.CountAsync(cancellationToken);
 
         var pagedGroups = await groupedQuery
             .Skip(startIndex)
             .Take(count)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         List<TimelineFeedGroup> feedGroups = [];
         foreach (var pg in pagedGroups)
@@ -200,7 +201,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                                 e.TimelineTargetJson == pg.TimelineTargetJson)
                     .Include(e => e.FollowedTag)
                     .AsNoTracking()
-                    .ToListAsync()
+                    .ToListAsync(cancellationToken)
             };
 
             TimelineTarget? target = (feedGroup.Events.Count > 0 ? feedGroup.Events[0] : null)?.Target;
@@ -213,7 +214,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                         .ThenInclude(tr => tr.Tag)
                         .ThenInclude(t => t.Owner)
                         .AsNoTracking()
-                        .FirstOrDefaultAsync(i => i.Id == it.TargetItemId);
+                        .FirstOrDefaultAsync(i => i.Id == it.TargetItemId, cancellationToken);
                     break;
                 case TagTarget tt:
                     feedGroup.Tag = await db.Tags!
@@ -222,7 +223,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
                         .ThenInclude(tr => tr.Tag)
                         .ThenInclude(t => t.Owner)
                         .AsNoTracking()
-                        .FirstOrDefaultAsync(t => t.Id == tt.TargetTagId);
+                        .FirstOrDefaultAsync(t => t.Id == tt.TargetTagId, cancellationToken);
                     break;
                 default:
                     break;

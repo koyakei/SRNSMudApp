@@ -15,7 +15,7 @@ namespace SRNSMudApp.Services;
 public interface INotificationsDataProvider
 {
     /// <summary>通知に関連付けられたアイテムを関連データ込みで取得する。</summary>
-    Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds);
+    Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -26,7 +26,7 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
     : INotificationsDataProvider
 {
     /// <inheritdoc />
-    public async Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds)
+    public async Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default)
     {
         switch (itemIds.Count)
         {
@@ -36,7 +36,7 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 break;
         }
 
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
         return await context.Items
             .AsNoTracking()
             .Include(i => i.Owner)
@@ -48,6 +48,6 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
             .Where(i => itemIds.Contains(i.Id))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 }

@@ -22,7 +22,7 @@ public sealed record ItemDetailPageData(
 public interface IItemDetailDataProvider
 {
     /// <summary>アイテム詳細の表示データを取得する。アイテムが存在しない場合は null。</summary>
-    Task<ItemDetailPageData?> GetItemDetailAsync(int itemId);
+    Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -33,9 +33,9 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
     : IItemDetailDataProvider
 {
     /// <inheritdoc />
-    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId)
+    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
         Item? item = await context.Items
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
@@ -51,7 +51,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
             .AsNoTracking()
-            .FirstOrDefaultAsync(i => i.Id == itemId);
+            .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
         if (item is null)
         {
@@ -65,11 +65,11 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .Where(l => l.ItemId == itemId || (l.TagRelation != null && l.TagRelation.ItemId == itemId))
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        List<Tag> allTags = await context.Tags.AsNoTracking().ToListAsync();
+        List<Tag> allTags = await context.Tags.AsNoTracking().ToListAsync(cancellationToken);
         List<TagRelationToTag> allTagRelationsToTags =
-            await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync();
+            await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync(cancellationToken);
 
         return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers);
     }

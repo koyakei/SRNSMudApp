@@ -31,8 +31,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     {
         var content = message ?? (requestType switch
         {
-            TaggingRequestType.Add => "タグ追加リクエストを送信しました。",
-            _ => "タグ削除リクエストを送信しました。"
+            TaggingRequestType.Add => ContractMessages.TagAddRequestSent,
+            _ => ContractMessages.TagDeleteRequestSent
         });
 
         var requestItem = new Item
@@ -70,7 +70,7 @@ public class TaggingContractService(ApplicationDbContext dbContext)
             Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
             return autoAcceptResult switch
             {
-                Failure f => new Failure($"自動承認に失敗しました: {f.ErrorMessage}"),
+                Failure f => new Failure($"{ContractMessages.AutoAcceptFailedFormatPrefix}{f.ErrorMessage}"),
                 Success<string> => new Success<TaggingRequestEntity>(contract)
             };
         }
@@ -91,8 +91,8 @@ public class TaggingContractService(ApplicationDbContext dbContext)
     {
         var content = requestType switch
         {
-            TaggingRequestType.Add => "タグ追加リクエスト(Mutual)を送信しました。",
-            _ => "タグ削除リクエスト(Mutual)を送信しました。"
+            TaggingRequestType.Add => ContractMessages.MutualTagAddRequestSent,
+            _ => ContractMessages.MutualTagDeleteRequestSent
         };
 
         var requestItem = new Item
