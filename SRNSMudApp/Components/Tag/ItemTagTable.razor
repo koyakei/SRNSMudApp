@@ -57,3 +57,28 @@
         <MudTablePager/>
     </PagerContent>
 </MudTable>
+
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <div class="d-flex align-center gap-4 flex-wrap">
+        <MudText Typo="Typo.subtitle1" Class="mr-2">タグ付与依頼:</MudText>
+        
+        <MudAutocomplete T="ApplicationUser"
+                         Value="_selectedTargetUser"
+                         ValueChanged="@(user => _selectedTargetUser = user)"
+                         SearchFunc="@SearchUsersAsync"
+                         ToStringFunc="@(u => u?.UserName)"
+                         Placeholder="依頼先のユーザーを検索..."
+                         ResetValueOnEmptyText="true"
+                         Clearable="true"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.PersonSearch"
+                         Style="min-width: 250px;" />
+        
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="RequestSelectedTagAddAsync"
+                   StartIcon="@Icons.Material.Filled.Send">
+            リクエストを送信
+        </MudButton>
+    </div>
+</MudPaper>
