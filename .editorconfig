@@ -103,8 +103,9 @@ csharp_style_var_for_built_in_types = true:silent
 csharp_style_var_when_type_is_apparent = true:silent
 dotnet_diagnostic.IDE0007.severity = none
 
-# 未使用の using ディレクティブを警告として報告 (IDE0005)
-dotnet_diagnostic.IDE0005.severity = warning
+# 未使用の using ディレクティブは IDE 上のノイズが多く、プロジェクト全体で抑止する
+# （テストコードとコンポーネント型参照の出力が実際には有効なケースが多い）
+dotnet_diagnostic.IDE0005.severity = none
 dotnet_diagnostic.IDE0051.severity = warning
 
 # 不要なキャストの削除 (IDE0004)
