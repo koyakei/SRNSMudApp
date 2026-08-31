@@ -70,96 +70,45 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     public async Task<SystemTagsResult> EnsureSystemTagsAsync(string userId, CancellationToken cancellationToken = default)
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
-        Tag? goodTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "good" && t.IsSystem, cancellationToken);
-        Tag? badTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "bad" && t.IsSystem, cancellationToken);
-        Tag? shinjiTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "真実" && t.IsSystem, cancellationToken);
-        Tag? zenTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "善" && t.IsSystem, cancellationToken);
-        Tag? biTag =
-            await context.Tags.FirstOrDefaultAsync(t => t.OwnerId == userId && t.Name == "美" && t.IsSystem, cancellationToken);
+
+        string[] systemTagNames = ["good", "bad", "真実", "善", "美"];
+        Dictionary<string, Tag> existingTags = await context.Tags
+            .Where(t => t.OwnerId == userId && t.IsSystem && systemTagNames.Contains(t.Name))
+            .ToDictionaryAsync(t => t.Name, cancellationToken);
 
         var created = false;
-        if (goodTag is null)
+        Tag goodTag = EnsureTag(context, existingTags.GetValueOrDefault("good"), "good", userId, ref created);
+        Tag badTag = EnsureTag(context, existingTags.GetValueOrDefault("bad"), "bad", userId, ref created);
+        Tag shinjiTag = EnsureTag(context, existingTags.GetValueOrDefault("真実"), "真実", userId, ref created);
+        Tag zenTag = EnsureTag(context, existingTags.GetValueOrDefault("善"), "善", userId, ref created);
+        Tag biTag = EnsureTag(context, existingTags.GetValueOrDefault("美"), "美", userId, ref created);
+
+        if (created)
         {
-            goodTag = new Tag
-            {
-                Name = "good",
-                IsSystem = true,
-                OwnerId = userId,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            _ = context.Tags.Add(goodTag);
-            created = true;
+            _ = await context.SaveChangesAsync(cancellationToken);
         }
 
-        if (badTag is null)
+        return new SystemTagsResult(goodTag.Id, badTag.Id, shinjiTag.Id, zenTag.Id, biTag.Id, created);
+    }
+
+    private static Tag EnsureTag(ApplicationDbContext context, Tag? existing, string name, string userId, ref bool created)
+    {
+        if (existing is not null)
         {
-            badTag = new Tag
-            {
-                Name = "bad",
-                IsSystem = true,
-                OwnerId = userId,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            _ = context.Tags.Add(badTag);
-            created = true;
+            return existing;
         }
 
-        if (shinjiTag is null)
+        var newTag = new Tag
         {
-            shinjiTag = new Tag
-            {
-                Name = "真実",
-                IsSystem = true,
-                OwnerId = userId,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            _ = context.Tags.Add(shinjiTag);
-            created = true;
-        }
-
-        if (zenTag is null)
-        {
-            zenTag = new Tag
-            {
-                Name = "善",
-                IsSystem = true,
-                OwnerId = userId,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            _ = context.Tags.Add(zenTag);
-            created = true;
-        }
-
-        if (biTag is null)
-        {
-            biTag = new Tag
-            {
-                Name = "美",
-                IsSystem = true,
-                OwnerId = userId,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            _ = context.Tags.Add(biTag);
-            created = true;
-        }
-
-        switch (created)
-        {
-            case true:
-                _ = await context.SaveChangesAsync(cancellationToken);
-                return new SystemTagsResult(goodTag.Id, badTag.Id, shinjiTag.Id, zenTag.Id, biTag.Id, true);
-            default:
-                return new SystemTagsResult(goodTag!.Id, badTag!.Id, shinjiTag!.Id, zenTag!.Id, biTag!.Id, false);
-        }
+            Name = name,
+            IsSystem = true,
+            OwnerId = userId,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+        _ = context.Tags.Add(newTag);
+        created = true;
+        return newTag;
     }
 
     public async Task<HomeTimelinePage> LoadTimelineAsync(

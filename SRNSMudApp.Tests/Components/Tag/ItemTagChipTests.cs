@@ -77,7 +77,7 @@ public sealed class ItemTagChipTests : IAsyncLifetime
             .First(b => b.GetAttribute("title") == "タグツリーを表示");
         await component.InvokeAsync(() => treeButton.Click());
 
-        _ctx.JSInterop.VerifyInvoke("contentOverflowHelper.scrollToElement");
+        component.WaitForAssertion(() => _ctx.JSInterop.VerifyInvoke("contentOverflowHelper.scrollToElement"));
     }
 
     public async Task DisposeAsync()

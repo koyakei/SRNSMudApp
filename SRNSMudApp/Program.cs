@@ -16,6 +16,7 @@ using SRNSMudApp.Components.Account;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Auth;
+using SRNSMudApp.Services.Contracts;
 using SRNSMudApp.Services.Dialogs;
 
 #endregion
@@ -89,6 +90,11 @@ builder.Services.AddScoped<IUserDataProvider, UserDataProvider>();
 // 管理・インポート系のデータアクセス分離
 builder.Services.AddScoped<IAdminDataProvider, AdminDataProvider>();
 
+// 契約実行 Strategy (IContractExecutor) の登録
+builder.Services.AddScoped<IContractExecutor, GratisContractExecutor>();
+builder.Services.AddScoped<IContractExecutor, MutualContractExecutor>();
+builder.Services.AddScoped<IContractExecutor, TriggerContractExecutor>();
+builder.Services.AddScoped<IContractExecutor, BountyContractExecutor>();
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 
@@ -250,13 +256,7 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 
-app.Use(async (context, next) =>
-{
-    Endpoint? endpoint = context.GetEndpoint();
-    await File.AppendAllTextAsync("/tmp/routing.log",
-        $"[ROUTING] Path: {context.Request.Path}, Matched Endpoint: {endpoint?.DisplayName ?? "NULL"}\n");
-    await next(context);
-});
+
 
 app.MapControllers();
 
