@@ -16,5 +16,12 @@ public interface IContractExecutor
     /// <summary>
     ///     契約をアトミックに承認・実行する。
     /// </summary>
+    /// <param name="contract">承認対象の契約エンティティ。</param>
+    /// <param name="currentUserId">承認操作を実行しているユーザーの ID。</param>
+    /// <param name="fulfillerAssetId">バウンティ契約などで使用する、実行者が提供する RightAsset の ID。省略可能。</param>
+    /// <returns>
+    ///     承認・実行に成功した場合は <see cref="Success{T}" />（成功メッセージ）、
+    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
+    /// </returns>
     Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null);
 }

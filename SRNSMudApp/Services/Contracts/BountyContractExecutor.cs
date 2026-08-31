@@ -9,6 +9,10 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Contracts;
 
+/// <summary>
+///     Bounty コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
+///     タグオーナーが報酬（バウンティ）を設定し、実行者が RightAsset を提供してタグを付与または解除する。
+/// </summary>
 public class BountyContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
 {
     public string ContractType => ContractTypes.Bounty;

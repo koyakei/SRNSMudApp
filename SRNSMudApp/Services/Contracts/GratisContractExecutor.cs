@@ -11,6 +11,10 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Contracts;
 
+/// <summary>
+///     Gratis（無償タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
+///     タグオーナーが RightAsset を発行・消費し、対象アイテムへタグを付与または解除する。
+/// </summary>
 public class GratisContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
 {
     public string ContractType => ContractTypes.Gratis;

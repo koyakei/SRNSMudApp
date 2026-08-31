@@ -114,7 +114,7 @@ public partial class ItemDetail
                     return;
             }
 
-            List<TaggingRequestEntity>? requests = await TaggingContractService.GetRequestsByItemIdAsync(ItemId);
+            List<TaggingRequestEntity>? requests = (await TaggingContractService.GetRequestsByItemIdAsync(ItemId))?.ToList();
 
             switch (SelectedRequestIdQuery.HasValue && requests != null)
             {

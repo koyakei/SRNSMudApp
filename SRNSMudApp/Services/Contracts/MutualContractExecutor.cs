@@ -9,6 +9,10 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Contracts;
 
+/// <summary>
+///     Mutual（相互タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
+///     依頼者と承認者が互いに RightAsset を消費し、双方のアイテムにタグを付与または解除する。
+/// </summary>
 public class MutualContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
 {
     public string ContractType => ContractTypes.Mutual;

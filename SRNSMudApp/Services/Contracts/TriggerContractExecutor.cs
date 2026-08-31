@@ -9,6 +9,10 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services.Contracts;
 
+/// <summary>
+///     Trigger/PublicOffer コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
+///     依頼者自身が RightAsset を消費してコントラクトを実行し、対象アイテムへタグを付与または解除する。
+/// </summary>
 public class TriggerContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
 {
     public string ContractType => ContractTypes.Trigger;

@@ -20,6 +20,10 @@ using SRNSMudApp.Services.Contracts;
 
 namespace SRNSMudApp.Services;
 
+/// <summary>
+///     タグ付けコントラクト（Gratis / Mutual / Trigger / Bounty）の提案・承認・キャンセルを調整するサービス。
+///     実際の承認ロジックは <see cref="IContractExecutor" /> 実装へ委譲する（Strategy パターン）。
+/// </summary>
 public class TaggingContractService(
     ApplicationDbContext dbContext,
     IEnumerable<IContractExecutor>? executors = null)
@@ -39,6 +43,20 @@ public class TaggingContractService(
                 new BountyContractExecutor(dbContext)
             ];
 
+    /// <summary>
+    ///     Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
+    /// </summary>
+    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
+    /// <param name="tagOwnerUserId">タグオーナーのユーザー ID。</param>
+    /// <param name="targetItemId">タグ付けの対象アイテム ID。</param>
+    /// <param name="requestedTagId">付与・解除を要求するタグの ID。</param>
+    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
+    /// <param name="proposedWeight">提案する Weight 値（省略時は 1）。</param>
+    /// <param name="message">依頼時のメッセージ（省略時はデフォルトメッセージを使用）。</param>
+    /// <returns>
+    ///     成功した場合は <see cref="Success{T}" />（作成された契約エンティティ）、
+    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
+    /// </returns>
     public async Task<Result<TaggingRequestEntity>> ProposeGratisContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -75,28 +93,28 @@ public class TaggingContractService(
             RequestItem = requestItem
         };
 
-        _ = dbContext.TaggingRequestEntities!.Add(contract);
-        _ = await dbContext.SaveChangesAsync();
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
 
-        bool autoAccept = await dbContext.Tags
-            .AsNoTracking()
-            .Where(t => t.Id == requestedTagId)
-            .Select(t => t.AutoAcceptIncomingTaggingRequests)
-            .FirstOrDefaultAsync();
-
-        if (autoAccept)
-        {
-            Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
-            return autoAcceptResult switch
-            {
-                Failure f => new Failure($"{ContractMessages.AutoAcceptFailedFormatPrefix}{f.ErrorMessage}"),
-                Success<string> => new Success<TaggingRequestEntity>(contract)
-            };
-        }
-
-        return new Success<TaggingRequestEntity>(contract);
+        return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
 
+    /// <summary>
+    ///     Mutual コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
+    /// </summary>
+    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
+    /// <param name="tagOwnerUserId">タグオーナーのユーザー ID。</param>
+    /// <param name="targetItemId">タグ付けの対象アイテム ID。</param>
+    /// <param name="requestedTagId">付与・解除を要求するタグの ID。</param>
+    /// <param name="offeredTargetItemId">依頼者が提供するアイテムの ID。</param>
+    /// <param name="offeredTagId">依頼者が提供するタグの ID。</param>
+    /// <param name="consumedRightAssetId">依頼者が消費する RightAsset の ID。</param>
+    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
+    /// <param name="proposedWeight">提案する Weight 値（省略時は 1）。</param>
+    /// <returns>
+    ///     成功した場合は <see cref="Success{T}" />（作成された契約エンティティ）、
+    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
+    /// </returns>
     public async Task<Result<TaggingRequestEntity>> ProposeMutualContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -135,31 +153,20 @@ public class TaggingContractService(
             Payload = new MutualPayload(offeredTargetItemId, offeredTagId),
             RequestItem = requestItem
         };
-        _ = dbContext.TaggingRequestEntities!.Add(contract);
-        _ = await dbContext.SaveChangesAsync();
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
 
-        bool autoAccept = await dbContext.Tags
-            .AsNoTracking()
-            .Where(t => t.Id == requestedTagId)
-            .Select(t => t.AutoAcceptIncomingTaggingRequests)
-            .FirstOrDefaultAsync();
-
-        if (autoAccept)
-        {
-            Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
-            return autoAcceptResult switch
-            {
-                Failure f => new Failure($"自動承認に失敗しました: {f.ErrorMessage}"),
-                Success<string> => new Success<TaggingRequestEntity>(contract)
-            };
-        }
-
-        return new Success<TaggingRequestEntity>(contract);
+        return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
 
-    public virtual async Task<List<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
+    /// <summary>
+    ///     指定アイテムに紐づくコントラクト一覧を取得する。
+    /// </summary>
+    /// <param name="itemId">対象アイテムの ID。</param>
+    /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
+    public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
     {
-        return await dbContext.TaggingRequestEntities!
+        return await dbContext.TaggingRequestEntities
             .Include(r => r.TargetItem)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
@@ -168,9 +175,19 @@ public class TaggingContractService(
             .ToListAsync();
     }
 
+    /// <summary>
+    ///     指定コントラクトを承認・実行する。実行処理は <see cref="IContractExecutor" /> に委譲する。
+    /// </summary>
+    /// <param name="contractId">承認するコントラクトの ID。</param>
+    /// <param name="currentUserId">承認操作を実行しているユーザーの ID。</param>
+    /// <param name="fulfillerAssetId">バウンティ契約で使用する実行者 RightAsset の ID（省略可能）。</param>
+    /// <returns>
+    ///     成功した場合は <see cref="Success{T}" />（成功メッセージ）、
+    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
+    /// </returns>
     public virtual async Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
     {
-        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities!
+        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
                                           .Include(c => c.RequestedTag)
                                           .Include(c => c.ConsumedRightAsset)
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
@@ -226,14 +243,23 @@ public class TaggingContractService(
     private async Task<Result<string>> CommitAndReturnAsync(IDbContextTransaction transaction, TaggingRequestEntity entity, Success<string> s)
     {
         entity.Status = TradeStatus.Executed;
-        _ = await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
         return s;
     }
 
+    /// <summary>
+    ///     指定コントラクトをキャンセル（または拒否）する。
+    /// </summary>
+    /// <param name="contractId">キャンセルするコントラクトの ID。</param>
+    /// <param name="currentUserId">キャンセル操作を実行しているユーザーの ID。</param>
+    /// <returns>
+    ///     成功した場合は <see cref="Success{T}" />（成功メッセージ）、
+    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
+    /// </returns>
     public virtual async Task<Result<string>> CancelContractAsync(int contractId, string currentUserId)
     {
-        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities!
+        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
 
         Result<TaggingRequestEntity> fetchResult = entity switch
@@ -254,7 +280,35 @@ public class TaggingContractService(
     private async Task<Result<string>> ProcessCancelAsync(TaggingRequestEntity entity)
     {
         entity.Status = TradeStatus.Canceled;
-        _ = await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");
+    }
+
+    /// <summary>
+    ///     タグの <c>AutoAcceptIncomingTaggingRequests</c> フラグを確認し、有効であれば即時承認する。
+    ///     <see cref="ProposeGratisContractAsync" /> および <see cref="ProposeMutualContractAsync" /> から共有して使用する。
+    /// </summary>
+    private async Task<Result<TaggingRequestEntity>> TryAutoAcceptAsync(
+        TaggingRequestEntity contract,
+        int requestedTagId,
+        string tagOwnerUserId)
+    {
+        bool autoAccept = await dbContext.Tags
+            .AsNoTracking()
+            .Where(t => t.Id == requestedTagId)
+            .Select(t => t.AutoAcceptIncomingTaggingRequests)
+            .FirstOrDefaultAsync();
+
+        if (!autoAccept)
+        {
+            return new Success<TaggingRequestEntity>(contract);
+        }
+
+        Result<string> autoAcceptResult = await AcceptContractAsync(contract.Id, tagOwnerUserId);
+        return autoAcceptResult switch
+        {
+            Failure f => new Failure($"{ContractMessages.AutoAcceptFailedFormatPrefix}{f.ErrorMessage}"),
+            Success<string> => new Success<TaggingRequestEntity>(contract)
+        };
     }
 }

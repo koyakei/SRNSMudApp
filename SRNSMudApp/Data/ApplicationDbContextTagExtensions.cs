@@ -7,11 +7,19 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Data;
 
+/// <summary>
+///     <see cref="ApplicationDbContext" /> に対するタグ関連操作の拡張メソッド。
+///     ビジネスロジックを DbContext 本体から分離するため、拡張メソッドとして実装する。
+/// </summary>
 public static class ApplicationDbContextTagExtensions
 {
     /// <summary>
     ///     タグのオーナーが RightAsset を自動発行して消費し、自身のタグを付与するシナリオ
     /// </summary>
+    /// <param name="context">操作対象の <see cref="ApplicationDbContext" />。</param>
+    /// <param name="itemId">タグを付与する対象アイテムの ID。</param>
+    /// <param name="tagId">付与するタグの ID。</param>
+    /// <param name="currentUserId">操作を実行しているユーザーの ID。</param>
     public static async Task CreateFreeTagRelationAsync(
         this ApplicationDbContext context,
         int itemId,
