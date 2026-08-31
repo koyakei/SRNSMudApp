@@ -1,6 +1,8 @@
 @using SRNSMudApp.Services
+@using SRNSMudApp.Components.UI
 @inject IItemCardDataProvider ItemCardData
 @inject ISnackbar Snackbar
+@inject LinkPreviewService PreviewService
 
 <MudDialog>
     <DialogContent>
@@ -16,6 +18,22 @@
                       AutoFocus="true"
                       Required="true"
                       RequiredError="内容は必須です"/>
+
+        @* 抽出したURLのプレビューを表示 *@
+        @{
+            var urls = ItemCardViewModel.ExtractUrls(_editContent);
+        }
+        @switch (urls.Any())
+        {
+            case true:
+                <MudStack Spacing="2" Class="mt-2">
+                    @foreach (var url in urls.Take(3))
+                    {
+                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url" LoadPreview="@PreviewService.GetPreviewAsync" />
+                    }
+                </MudStack>
+                break;
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@Cancel">キャンセル</MudButton>

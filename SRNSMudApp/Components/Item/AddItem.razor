@@ -10,6 +10,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject UserManager<ApplicationUser> UserManager
+@inject LinkPreviewService PreviewService
 
 <MudStack Class="w-100 pb-2">
     @switch (_newItem)
@@ -39,7 +40,7 @@
                                 <MudStack Spacing="2" Class="mt-2">
                                     @foreach (var url in urls.Take(3)) // 最大3件程度に制限
                                     {
-                                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url" />
+                                        <SRNSMudApp.Components.UI.UrlPreviewCard Url="@url" LoadPreview="@PreviewService.GetPreviewAsync" />
                                     }
                                 </MudStack>
                                 break;

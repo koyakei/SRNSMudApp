@@ -67,6 +67,21 @@ public sealed class AddItemTests : IAsyncLifetime
         Assert.True(onItemAddedCalled);
     }
 
+    [Fact]
+    public void Input_UrlInContent_RendersUrlPreviewCardWithLoadPreview()
+    {
+        const string inputContent = "Check this out https://example.com";
+        IRenderedComponent<AddItem> cut = _ctx.Render<AddItem>();
+
+        cut.WaitForState(() => cut.FindAll("form").Count > 0);
+        cut.Find("textarea").Input(inputContent);
+
+        var previewCard = cut.FindComponent<SRNSMudApp.Components.UI.UrlPreviewCard>();
+        Assert.NotNull(previewCard);
+        Assert.Equal("https://example.com", previewCard.Instance.Url);
+        Assert.NotNull(previewCard.Instance.LoadPreview);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();
