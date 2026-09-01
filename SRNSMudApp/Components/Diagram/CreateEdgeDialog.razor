@@ -1,0 +1,100 @@
+@using TagEntity = SRNSMudApp.Data.Tag
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.AddLink" Class="mr-2" />
+            Edge（タグ間関係）の作成
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2">
+                始点となるタグ（Source）と終点となるタグ（Target）を選択して、新しい有向エッジを作成します。
+            </MudText>
+
+            <MudAutocomplete T="TagEntity"
+                             Label="Source Tag (始点)"
+                             @bind-Value="_sourceTag"
+                             SearchFunc="SearchSourceTags"
+                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
+                             Dense="true"
+                             Variant="Variant.Outlined"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             Required="true" />
+
+            <MudAutocomplete T="TagEntity"
+                             Label="Target Tag (終点)"
+                             @bind-Value="_targetTag"
+                             SearchFunc="SearchTargetTags"
+                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
+                             Dense="true"
+                             Variant="Variant.Outlined"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             Required="true" />
+
+            @if (_sourceTag != null && _targetTag != null && _sourceTag.Id == _targetTag.Id)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    Source と Target に同じタグを指定することはできません。
+                </MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!CanSubmit)">
+            作成
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public IReadOnlyList<TagEntity> AvailableTags { get; set; } = [];
+
+    private TagEntity? _sourceTag;
+    private TagEntity? _targetTag;
+
+    private bool CanSubmit =>
+        _sourceTag != null &&
+        _targetTag != null &&
+        _sourceTag.Id != _targetTag.Id;
+
+    private Task<IEnumerable<TagEntity>> SearchSourceTags(string value, CancellationToken token) =>
+        SearchTagsInternal(value, _targetTag?.Id);
+
+    private Task<IEnumerable<TagEntity>> SearchTargetTags(string value, CancellationToken token) =>
+        SearchTagsInternal(value, _sourceTag?.Id);
+
+    private Task<IEnumerable<TagEntity>> SearchTagsInternal(string value, int? excludeId)
+    {
+        IEnumerable<TagEntity> query = AvailableTags;
+        if (excludeId.HasValue)
+        {
+            query = query.Where(t => t.Id != excludeId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            query = query.Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Task.FromResult(query.Take(20));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (CanSubmit)
+        {
+            MudDialog.Close(DialogResult.Ok((SourceTagId: _sourceTag!.Id, TargetTagId: _targetTag!.Id)));
+        }
+    }
+}

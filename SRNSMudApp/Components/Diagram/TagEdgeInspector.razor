@@ -1,0 +1,128 @@
+@using SRNSMudApp.Data
+
+<MudPaper Elevation="4" Class="pa-4 tag-edge-inspector" Style="width: 360px; height: 100%; overflow-y: auto;">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6" Class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Timeline" Class="mr-2" Color="Color.Primary" />
+            Edge 詳細
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="OnClose" />
+    </div>
+
+    @if (Edge is null)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            エッジが選択されていません。
+        </MudText>
+    }
+    else
+    {
+        <MudCard Outlined="true" Class="mb-4">
+            <MudCardContent>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">関係 (Edge ID: @Edge.Id)</MudText>
+                <div class="d-flex align-center my-2">
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
+                        @(Edge.SourceTag?.Name ?? $"Tag#{Edge.SourceTagId}")
+                    </MudChip>
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Medium" Class="mx-2" Color="Color.Secondary" />
+                    <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Medium">
+                        @(Edge.TargetTag?.Name ?? $"Tag#{Edge.TargetTagId}")
+                    </MudChip>
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">作成者: @Edge.OwnerId</MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="@(() => OnDeleteEdge.InvokeAsync(Edge))"
+                           Disabled="@(!CanManageEdge)">
+                    Edge を削除
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+
+        <div class="d-flex justify-space-between align-center mb-2">
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                意味付けタグ (@Edge.TagAttachments.Count)
+            </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => OnAttachTag.InvokeAsync(Edge))"
+                       Disabled="@(string.IsNullOrEmpty(CurrentUserId))">
+                タグ紐付け
+            </MudButton>
+        </div>
+
+        @if (Edge.TagAttachments.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                このエッジに紐付けられたタグはありません。
+            </MudText>
+        }
+        else
+        {
+            <MudList T="TagEdgeTagAttachment" Dense="true" Class="pa-0">
+                @foreach (var attachment in Edge.TagAttachments)
+                {
+                    <MudListItem @key="attachment.Id" Class="px-2 py-1 mb-1 surface-card rounded">
+                        <div class="d-flex justify-space-between align-center width-100">
+                            <div>
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Info" Class="mr-1" />
+                                    <span class="font-weight-bold">@(attachment.Tag?.Name ?? $"Tag#{attachment.TagId}")</span>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Class="ml-2">
+                                        W: @attachment.Weight
+                                    </MudChip>
+                                </div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    紐付け者: @attachment.OwnerId
+                                </MudText>
+                            </div>
+                            @if (CanManageAttachment(attachment))
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Title="紐付け解除"
+                                               OnClick="@(() => OnDetachTag.InvokeAsync(attachment))" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter]
+    public TagEdge? Edge { get; set; }
+
+    [Parameter]
+    public string CurrentUserId { get; set; } = "";
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<TagEdge> OnDeleteEdge { get; set; }
+
+    [Parameter]
+    public EventCallback<TagEdge> OnAttachTag { get; set; }
+
+    [Parameter]
+    public EventCallback<TagEdgeTagAttachment> OnDetachTag { get; set; }
+
+    private bool CanManageEdge =>
+        Edge != null &&
+        !string.IsNullOrEmpty(CurrentUserId) &&
+        Edge.OwnerId == CurrentUserId;
+
+    private bool CanManageAttachment(TagEdgeTagAttachment attachment) =>
+        !string.IsNullOrEmpty(CurrentUserId) &&
+        attachment.OwnerId == CurrentUserId;
+}

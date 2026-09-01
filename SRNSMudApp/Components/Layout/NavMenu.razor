@@ -20,19 +20,20 @@
     </MudNavLink>
     <MudNavLink Href="Tag/TagList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Tag List</MudNavLink>
     <MudNavLink Href="tag-tree" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List"> Tag Tree</MudNavLink>
+    <MudNavLink Href="tag-diagram" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Hub"> Tag Diagram
+    </MudNavLink>
     <AuthorizeView>
         <Authorized>
             <MudNavLink Href="@($"User/UserDetail/{currentUserId}")" Match="NavLinkMatch.Prefix"
                         Icon="@Icons.Material.Filled.AccountCircle">
                 Profile
             </MudNavLink>
-            <MudNavLink Href="Account/Manage" Match="NavLinkMatch.Prefix"
-                        Icon="@Icons.Material.Filled.Person">
+            <MudNavLink Href="Account/Manage" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">
                 @context.User.Identity?.Name
             </MudNavLink>
             <form action="Account/Logout" method="post">
-                <AntiforgeryToken/>
-                <input type="hidden" name="ReturnUrl" value="@currentUrl"/>
+                <AntiforgeryToken />
+                <input type="hidden" name="ReturnUrl" value="@currentUrl" />
                 <button type="submit" class="mud-nav-link mud-ripple">
                     <MudIcon Icon="@Icons.Material.Filled.Logout" Color="Color.Info" Class="mr-3"></MudIcon>
                     Logout
@@ -67,8 +68,7 @@
                         Icon="@Icons.Material.Filled.Mail">
                 Inbox
             </MudNavLink>
-            <MudNavLink Href="notifications" Match="NavLinkMatch.Prefix"
-                        Icon="@Icons.Material.Filled.Notifications">
+            <MudNavLink Href="notifications" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Notifications">
                 Notifications
             </MudNavLink>
             <MudNavLink Href="PublicOffer/PublicOfferBoard" Match="NavLinkMatch.Prefix"
@@ -92,8 +92,7 @@
     @switch (Env.IsDevelopment())
     {
         case true:
-            <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix"
-                        Icon="@Icons.Material.Filled.AdminPanelSettings">
+            <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">
                 Make Me Admin
             </MudNavLink>
             break;

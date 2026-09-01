@@ -1,0 +1,156 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using TagEntity = SRNSMudApp.Data.Tag
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.BookmarkAdd" Class="mr-2" />
+            Edge へのタグ紐付け
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                対象 Edge: <strong>@Edge.SourceTag?.Name</strong> → <strong>@Edge.TargetTag?.Name</strong>
+            </MudAlert>
+
+            <MudAutocomplete T="TagEntity"
+                             Label="紐付けるタグ"
+                             Value="_selectedTag"
+                             ValueChanged="OnTagSelected"
+                             SearchFunc="SearchTags"
+                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
+                             Dense="true"
+                             Variant="Variant.Outlined"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             Required="true" />
+
+            @if (_isLoadingAssets)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
+            }
+            else if (_selectedTag != null)
+            {
+                @if (_availableAssets.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        タグ「@_selectedTag.Name」を紐付けるための所有 RightAsset（未消費の権利）がありません。
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudSelect T="RightAsset"
+                               Label="消費する RightAsset"
+                               @bind-Value="_selectedAsset"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Required="true">
+                        @foreach (var asset in _availableAssets)
+                        {
+                            <MudSelectItem Value="@asset">
+                                アセット ID: @asset.Id (残量: @asset.Amount)
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudNumericField T="int"
+                                     Label="付与 Weight"
+                                     @bind-Value="_weight"
+                                     Min="1"
+                                     Max="@(_selectedAsset?.Amount ?? 1)"
+                                     Variant="Variant.Outlined"
+                                     Dense="true" />
+
+                    <MudAlert Severity="Severity.Normal" Dense="true">
+                        紐付けを行うと RightAsset が消費されます。紐付け解除時も RightAsset は返還されません（不可逆消費仕様）。
+                    </MudAlert>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!CanSubmit)">
+            紐付け実行
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public TagEdge Edge { get; set; } = null!;
+
+    [Parameter]
+    public string CurrentUserId { get; set; } = "";
+
+    [Parameter]
+    public IReadOnlyList<TagEntity> AvailableTags { get; set; } = [];
+
+    [Inject]
+    private ITagDiagramDataProvider DataProvider { get; set; } = null!;
+
+    private TagEntity? _selectedTag;
+    private RightAsset? _selectedAsset;
+    private List<RightAsset> _availableAssets = [];
+    private int _weight = 1;
+    private bool _isLoadingAssets;
+
+    private bool CanSubmit =>
+        _selectedTag != null &&
+        _selectedAsset != null &&
+        _weight >= 1 &&
+        _weight <= _selectedAsset.Amount;
+
+    private async Task OnTagSelected(TagEntity? tag)
+    {
+        _selectedTag = tag;
+        _selectedAsset = null;
+        _availableAssets.Clear();
+
+        if (tag == null || string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            return;
+        }
+
+        _isLoadingAssets = true;
+        try
+        {
+            _availableAssets = await DataProvider.GetAvailableRightAssetsAsync(CurrentUserId, tag.Id);
+            _selectedAsset = _availableAssets.FirstOrDefault();
+            _weight = 1;
+        }
+        finally
+        {
+            _isLoadingAssets = false;
+        }
+    }
+
+    private Task<IEnumerable<TagEntity>> SearchTags(string value, CancellationToken token)
+    {
+        IEnumerable<TagEntity> query = AvailableTags;
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            query = query.Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Task.FromResult(query.Take(20));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (CanSubmit)
+        {
+            MudDialog.Close(DialogResult.Ok((TagId: _selectedTag!.Id, RightAssetId: _selectedAsset!.Id, Weight: _weight)));
+        }
+    }
+}

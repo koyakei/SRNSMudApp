@@ -231,4 +231,16 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             .AsNoTracking()
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<TagEdge>> GetAllEdgesAsync()
+    {
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        return await context.TagEdges
+            .Include(e => e.SourceTag)
+            .Include(e => e.TargetTag)
+            .Include(e => e.TagAttachments)
+                .ThenInclude(a => a.Tag)
+            .AsNoTracking()
+            .ToListAsync();
+    }
 }

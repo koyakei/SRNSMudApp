@@ -1,0 +1,43 @@
+@using Blazor.Diagrams
+@using Blazor.Diagrams.Components
+@using Blazor.Diagrams.Core.Models
+@using Blazor.Diagrams.Core.Models.Base
+@using SRNSMudApp.Data
+@using TagEntity = SRNSMudApp.Data.Tag
+
+<div class="diagram-canvas-wrapper" style="width: 100%; height: 100%; position: relative; min-height: 650px;">
+    <CascadingValue Value="Diagram" IsFixed="true">
+        <DiagramCanvas Class="diagram-canvas" />
+    </CascadingValue>
+</div>
+
+@code {
+    [Parameter]
+    public BlazorDiagram Diagram { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<TagEdge?> OnEdgeSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<TagEntity?> OnNodeSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<(int SourceTagId, int TargetTagId)> OnLinkCreated { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Diagram.SelectionChanged += HandleSelectionChanged;
+    }
+
+    private void HandleSelectionChanged(SelectableModel model)
+    {
+        if (model is TagEdgeLink link)
+        {
+            _ = OnEdgeSelected.InvokeAsync(link.Selected ? link.Edge : null);
+        }
+        else if (model is TagNode node)
+        {
+            _ = OnNodeSelected.InvokeAsync(node.Selected ? node.Tag : null);
+        }
+    }
+}

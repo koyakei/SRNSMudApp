@@ -1,0 +1,29 @@
+@using Blazor.Diagrams.Components.Renderers
+@using Blazor.Diagrams.Core.Models
+
+<div class="tag-node @(Node.Selected ? "selected" : "")">
+    <div class="tag-node-header d-flex align-center">
+        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+        <span class="tag-node-name font-weight-bold">@Node.Tag.Name</span>
+        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" Class="ml-2 px-1 tag-weight-chip">
+            @Node.Tag.CachedWeight
+        </MudChip>
+    </div>
+    @foreach (var port in Node.Ports)
+    {
+        <PortRenderer @key="port" Port="port" Class="@GetPortClass(port.Alignment)" />
+    }
+</div>
+
+@code {
+    [Parameter] public TagNode Node { get; set; } = null!;
+
+    private static string GetPortClass(PortAlignment alignment) => alignment switch
+    {
+        PortAlignment.Left => "port-left",
+        PortAlignment.Right => "port-right",
+        PortAlignment.Top => "port-top",
+        PortAlignment.Bottom => "port-bottom",
+        _ => ""
+    };
+}

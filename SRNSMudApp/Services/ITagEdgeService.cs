@@ -31,4 +31,7 @@ public interface ITagEdgeService
 
     /// <summary>指定 Edge に紐付けられている意味付けタグ一覧を取得する。</summary>
     Task<IReadOnlyList<TagEdgeTagAttachment>> GetAttachmentsForEdgeAsync(int edgeId);
+
+    /// <summary>全 Edge を関連タグおよび紐付けタグを含めて取得する。</summary>
+    Task<IReadOnlyList<TagEdge>> GetAllEdgesAsync();
 }

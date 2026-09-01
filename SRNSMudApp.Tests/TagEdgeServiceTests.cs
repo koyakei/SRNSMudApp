@@ -407,6 +407,15 @@ public class TagEdgeServiceTests : IAsyncLifetime
             Assert.Single(attachments);
             Assert.NotNull(attachments[0].Tag);
             Assert.Equal(tagMeaning.Name, attachments[0].Tag.Name);
+
+            // Test GetAllEdgesAsync
+            IReadOnlyList<TagEdge> allEdges = await service.GetAllEdgesAsync();
+            var matchedEdge1 = allEdges.FirstOrDefault(e => e.Id == edge1.Id);
+            Assert.NotNull(matchedEdge1);
+            Assert.NotNull(matchedEdge1.SourceTag);
+            Assert.NotNull(matchedEdge1.TargetTag);
+            Assert.Single(matchedEdge1.TagAttachments);
+            Assert.NotNull(matchedEdge1.TagAttachments.First().Tag);
         }
     }
 }

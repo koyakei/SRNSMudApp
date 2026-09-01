@@ -101,6 +101,7 @@ builder.Services.AddScoped<IContractExecutorFactory, ContractExecutorFactory>();
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 builder.Services.AddScoped<ITagEdgeService, TagEdgeService>();
+builder.Services.AddScoped<ITagDiagramDataProvider, TagDiagramDataProvider>();
 
 // コマンドハンドラー (Command Pattern) の登録
 builder.Services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();

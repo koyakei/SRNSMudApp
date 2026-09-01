@@ -1,0 +1,299 @@
+@page "/tag-diagram"
+@rendermode InteractiveServer
+
+@using System.Security.Claims
+@using Blazor.Diagrams
+@using Blazor.Diagrams.Core.Models
+@using Blazor.Diagrams.Options
+@using SRNSMudApp.Components.Diagram
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models.Unions
+@using SRNSMudApp.Services
+@using SRNSMudApp.Services.Dialogs
+@using TagEntity = SRNSMudApp.Data.Tag
+
+<PageTitle>Tag Edge Diagram - SRNS</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-3">
+    <div>
+        <MudText Typo="Typo.h5" Class="font-weight-bold d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Hub" Class="mr-2" Color="Color.Primary" />
+            Tag Edge Diagram
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            タグ間の関係（Edge）の可視化、作成・削除、および Edge への意味付けタグ（RightAsset 消費）を管理します。
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2">
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+            Tags: @_tags.Count
+        </MudChip>
+        <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">
+            Edges: @_edges.Count
+        </MudChip>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.AddLink"
+                   OnClick="OpenCreateEdgeDialog"
+                   Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
+            Edge を作成
+        </MudButton>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                       Color="Color.Default"
+                       Title="再読み込み"
+                       OnClick="ReloadDiagramAsync" />
+        <MudIconButton Icon="@Icons.Material.Filled.CenterFocusStrong"
+                       Color="Color.Default"
+                       Title="ズームリセット"
+                       OnClick="ResetZoom" />
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="d-flex diagram-workspace" Style="height: calc(100vh - 220px); min-height: 600px; position: relative; overflow: hidden;">
+        <div class="flex-grow-1" style="height: 100%; position: relative;">
+            <TagDiagramCanvas Diagram="_diagram"
+                              OnEdgeSelected="HandleEdgeSelected"
+                              OnNodeSelected="HandleNodeSelected" />
+        </div>
+
+        @if (_selectedEdge != null)
+        {
+            <div style="height: 100%; z-index: 10;">
+                <TagEdgeInspector Edge="_selectedEdge"
+                                  CurrentUserId="@_currentUserId"
+                                  OnClose="CloseInspector"
+                                  OnDeleteEdge="HandleDeleteEdge"
+                                  OnAttachTag="HandleOpenAttachDialog"
+                                  OnDetachTag="HandleDetachTag" />
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Inject] private ITagDiagramDataProvider DataProvider { get; set; } = null!;
+    [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private BlazorDiagram _diagram = null!;
+    private List<TagEntity> _tags = [];
+    private List<TagEdge> _edges = [];
+    private TagEdge? _selectedEdge;
+    private string _currentUserId = "";
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        InitializeDiagram();
+
+        if (AuthState != null)
+        {
+            var auth = await AuthState;
+            _currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        }
+
+        await ReloadDiagramAsync();
+    }
+
+    private void InitializeDiagram()
+    {
+        var options = new BlazorDiagramOptions
+        {
+            AllowMultiSelection = false,
+            Zoom =
+            {
+                Enabled = true,
+                Minimum = 0.3,
+                Maximum = 2.0
+            }
+        };
+
+        _diagram = new BlazorDiagram(options);
+        _diagram.RegisterComponent<TagNode, TagNodeWidget>();
+    }
+
+    private async Task ReloadDiagramAsync()
+    {
+        _isLoading = true;
+        _selectedEdge = null;
+
+        try
+        {
+            _tags = await DataProvider.LoadAllTagsAsync();
+            var edgeList = await DataProvider.LoadAllEdgesAsync();
+            _edges = edgeList.ToList();
+
+            BuildDiagramElements();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ダイアグラム読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void BuildDiagramElements()
+    {
+        _diagram.Nodes.Clear();
+        _diagram.Links.Clear();
+
+        var nodeMap = new Dictionary<int, TagNode>();
+        int columns = Math.Max(3, (int)Math.Ceiling(Math.Sqrt(_tags.Count * 1.5)));
+
+        for (int i = 0; i < _tags.Count; i++)
+        {
+            var tag = _tags[i];
+            int col = i % columns;
+            int row = i / columns;
+            double x = 80 + (col * 240);
+            double y = 80 + (row * 160);
+
+            var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y));
+            nodeMap[tag.Id] = node;
+            _diagram.Nodes.Add(node);
+        }
+
+        foreach (var edge in _edges)
+        {
+            if (nodeMap.TryGetValue(edge.SourceTagId, out var sourceNode) &&
+                nodeMap.TryGetValue(edge.TargetTagId, out var targetNode))
+            {
+                bool sourceIsLeft = sourceNode.Position.X <= targetNode.Position.X;
+                var sourcePort = sourceNode.GetPort(sourceIsLeft ? PortAlignment.Right : PortAlignment.Left)
+                                 ?? sourceNode.Ports.First();
+                var targetPort = targetNode.GetPort(sourceIsLeft ? PortAlignment.Left : PortAlignment.Right)
+                                 ?? targetNode.Ports.First();
+
+                var link = new TagEdgeLink(edge, sourcePort, targetPort);
+                _diagram.Links.Add(link);
+            }
+        }
+    }
+
+    private void ResetZoom()
+    {
+        _diagram.SetZoom(1.0);
+        _diagram.SetPan(0, 0);
+    }
+
+    private void HandleEdgeSelected(TagEdge? edge)
+    {
+        _selectedEdge = edge;
+    }
+
+    private void HandleNodeSelected(TagEntity? tag)
+    {
+        _selectedEdge = null;
+    }
+
+    private void CloseInspector()
+    {
+        _selectedEdge = null;
+        _diagram.UnselectAll();
+    }
+
+    private async Task OpenCreateEdgeDialog()
+    {
+        var parameters = new DialogParameters<CreateEdgeDialog>
+        {
+            { x => x.AvailableTags, _tags }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogLauncher.ShowAsync<CreateEdgeDialog>("Edge の作成", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is ValueTuple<int, int> edgeData)
+        {
+            var createResult = await DataProvider.CreateEdgeAsync(edgeData.Item1, edgeData.Item2, _currentUserId);
+            switch (createResult)
+            {
+                case Success<TagEdge> s:
+                    Snackbar.Add("Edge を作成しました。", Severity.Success);
+                    await ReloadDiagramAsync();
+                    _selectedEdge = _edges.FirstOrDefault(e => e.Id == s.Value.Id);
+                    break;
+                case Failure f:
+                    Snackbar.Add($"Edge 作成に失敗しました: {f.ErrorMessage}", Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task HandleDeleteEdge(TagEdge edge)
+    {
+        var result = await DataProvider.DeleteEdgeAsync(edge.Id, _currentUserId);
+        switch (result)
+        {
+            case Success<bool>:
+                Snackbar.Add("Edge を削除しました。", Severity.Success);
+                _selectedEdge = null;
+                await ReloadDiagramAsync();
+                break;
+            case Failure f:
+                Snackbar.Add($"Edge 削除に失敗しました: {f.ErrorMessage}", Severity.Error);
+                break;
+        }
+    }
+
+    private async Task HandleOpenAttachDialog(TagEdge edge)
+    {
+        var parameters = new DialogParameters<AttachTagToEdgeDialog>
+        {
+            { x => x.Edge, edge },
+            { x => x.CurrentUserId, _currentUserId },
+            { x => x.AvailableTags, _tags }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogLauncher.ShowAsync<AttachTagToEdgeDialog>("Edge へのタグ紐付け", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is ValueTuple<int, int, int> attachData)
+        {
+            var attachResult = await DataProvider.AttachTagToEdgeAsync(
+                edge.Id, attachData.Item1, attachData.Item2, _currentUserId, attachData.Item3);
+
+            switch (attachResult)
+            {
+                case Success<TagEdgeTagAttachment>:
+                    Snackbar.Add(ContractMessages.TagEdgeTagAttached, Severity.Success);
+                    await ReloadDiagramAsync();
+                    _selectedEdge = _edges.FirstOrDefault(e => e.Id == edge.Id);
+                    break;
+                case Failure f:
+                    Snackbar.Add($"タグ紐付けに失敗しました: {f.ErrorMessage}", Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task HandleDetachTag(TagEdgeTagAttachment attachment)
+    {
+        var result = await DataProvider.DetachTagFromEdgeAsync(attachment.Id, _currentUserId);
+        switch (result)
+        {
+            case Success<bool>:
+                Snackbar.Add(ContractMessages.TagEdgeTagDetachedOrDecreased, Severity.Success);
+                int edgeId = _selectedEdge?.Id ?? attachment.TagEdgeId;
+                await ReloadDiagramAsync();
+                _selectedEdge = _edges.FirstOrDefault(e => e.Id == edgeId);
+                break;
+            case Failure f:
+                Snackbar.Add($"紐付け解除に失敗しました: {f.ErrorMessage}", Severity.Error);
+                break;
+        }
+    }
+}
