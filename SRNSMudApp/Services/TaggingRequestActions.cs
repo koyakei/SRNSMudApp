@@ -43,6 +43,15 @@ public class TaggingRequestActions(
     IDialogLauncher dialogLauncher,
     ISnackbar snackbar) : ITaggingRequestActions
 {
+    private readonly ICommandHandler<ApproveTaggingRequestCommand, Result<string>> _approveHandler =
+        approveHandler ?? throw new ArgumentNullException(nameof(approveHandler));
+    private readonly ICommandHandler<RejectTaggingRequestCommand, Result<bool>> _rejectHandler =
+        rejectHandler ?? throw new ArgumentNullException(nameof(rejectHandler));
+    private readonly IDialogLauncher _dialogLauncher =
+        dialogLauncher ?? throw new ArgumentNullException(nameof(dialogLauncher));
+    private readonly ISnackbar _snackbar =
+        snackbar ?? throw new ArgumentNullException(nameof(snackbar));
+
     public bool CanApprove(TaggingRequestEntity request, string? currentUserId)
     {
         return request.Status switch
@@ -64,7 +73,7 @@ public class TaggingRequestActions(
         try
         {
             var command = new ApproveTaggingRequestCommand(requestId, currentUserId);
-            Result<string> result = await approveHandler.HandleAsync(command);
+            Result<string> result = await _approveHandler.HandleAsync(command);
 
             return result switch
             {
@@ -83,7 +92,7 @@ public class TaggingRequestActions(
     public async Task<bool> RejectViaDialogAsync(int requestId, string currentUserId)
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        IDialogReference dialog = await dialogLauncher.ShowAsync<Components.UI.RejectRequestDialog>("リクエストを却下", options);
+        IDialogReference dialog = await _dialogLauncher.ShowAsync<Components.UI.RejectRequestDialog>("リクエストを却下", options);
         DialogResult? result = await dialog.Result;
 
         if (result is not { Canceled: false })
@@ -95,7 +104,7 @@ public class TaggingRequestActions(
         {
             var comment = result.Data as string;
             var command = new RejectTaggingRequestCommand(requestId, currentUserId, comment);
-            Result<bool> rejectResult = await rejectHandler.HandleAsync(command);
+            Result<bool> rejectResult = await _rejectHandler.HandleAsync(command);
 
             return rejectResult switch
             {
@@ -111,13 +120,13 @@ public class TaggingRequestActions(
 
     private bool NotifySuccess(string message)
     {
-        _ = snackbar.Add(message, Severity.Success);
+        _ = _snackbar.Add(message, Severity.Success);
         return true;
     }
 
     private bool NotifyError(string message)
     {
-        _ = snackbar.Add(message, Severity.Error);
+        _ = _snackbar.Add(message, Severity.Error);
         return false;
     }
 }

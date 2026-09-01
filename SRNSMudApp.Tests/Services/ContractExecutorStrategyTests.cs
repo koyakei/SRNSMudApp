@@ -144,4 +144,20 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         Assert.NotNull(factory.GetExecutor("TestContract"));
         Assert.Null(factory.GetExecutor("other"));
     }
+
+    [Fact]
+    public void ContractExecutorFactory_NullExecutors_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new ContractExecutorFactory(null!));
+    }
+
+    [Fact]
+    public void TaggingContractService_NullParameters_ThrowsArgumentNullException()
+    {
+        var factoryMock = new Mock<IContractExecutorFactory>();
+        using var context = new ApplicationDbContext(SharedDb.Options);
+
+        Assert.Throws<ArgumentNullException>(() => new TaggingContractService(null!, factoryMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new TaggingContractService(context, null!));
+    }
 }

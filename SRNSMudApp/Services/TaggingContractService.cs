@@ -30,6 +30,11 @@ public class TaggingContractService(
     ApplicationDbContext dbContext,
     IContractExecutorFactory executorFactory)
 {
+    private readonly ApplicationDbContext _dbContext =
+        dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly IContractExecutorFactory _executorFactory =
+        executorFactory ?? throw new ArgumentNullException(nameof(executorFactory));
+
     public TaggingContractService(ApplicationDbContext dbContext)
         : this(dbContext, ContractExecutorFactory.CreateDefault(dbContext))
     {
@@ -58,7 +63,7 @@ public class TaggingContractService(
         int proposedWeight = 1,
         string? message = null)
     {
-        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        Item? targetItem = await _dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
         if (targetItem == null)
         {
             return new Failure("対象アイテムが見つかりません。");
@@ -93,8 +98,8 @@ public class TaggingContractService(
             RequestItem = requestItem
         };
 
-        dbContext.TaggingRequestEntities.Add(contract);
-        await dbContext.SaveChangesAsync();
+        _dbContext.TaggingRequestEntities.Add(contract);
+        await _dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
@@ -119,7 +124,7 @@ public class TaggingContractService(
         int proposedWeight = 1,
         string? message = null)
     {
-        TagEdge? targetEdge = await dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
+        TagEdge? targetEdge = await _dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
         if (targetEdge == null)
         {
             return new Failure(ContractMessages.TagEdgeNotFound);
@@ -153,8 +158,8 @@ public class TaggingContractService(
             RequestItem = requestItem
         };
 
-        dbContext.TaggingRequestEntities.Add(contract);
-        await dbContext.SaveChangesAsync();
+        _dbContext.TaggingRequestEntities.Add(contract);
+        await _dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
@@ -186,7 +191,7 @@ public class TaggingContractService(
         TaggingRequestType requestType = TaggingRequestType.Add,
         int proposedWeight = 1)
     {
-        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        Item? targetItem = await _dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
         if (targetItem == null)
         {
             return new Failure("対象アイテムが見つかりません。");
@@ -221,8 +226,8 @@ public class TaggingContractService(
             Payload = new MutualPayload(offeredTargetItemId, offeredTagId),
             RequestItem = requestItem
         };
-        dbContext.TaggingRequestEntities.Add(contract);
-        await dbContext.SaveChangesAsync();
+        _dbContext.TaggingRequestEntities.Add(contract);
+        await _dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
@@ -234,13 +239,13 @@ public class TaggingContractService(
     /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
     public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
     {
-        Item? item = await dbContext.Items.FindAsync(itemId);
+        Item? item = await _dbContext.Items.FindAsync(itemId);
         if (item == null)
         {
             return [];
         }
 
-        return await dbContext.TaggingRequestEntities
+        return await _dbContext.TaggingRequestEntities
             .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
@@ -256,13 +261,13 @@ public class TaggingContractService(
     /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
     public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByEdgeIdAsync(int edgeId)
     {
-        TagEdge? edge = await dbContext.TagEdges.FindAsync(edgeId);
+        TagEdge? edge = await _dbContext.TagEdges.FindAsync(edgeId);
         if (edge == null)
         {
             return [];
         }
 
-        return await dbContext.TaggingRequestEntities
+        return await _dbContext.TaggingRequestEntities
             .Include(r => r.Target).ThenInclude(t => t.TagEdge)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
@@ -283,7 +288,7 @@ public class TaggingContractService(
     /// </returns>
     public virtual async Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
     {
-        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
+        TaggingRequestEntity? entity = await _dbContext.TaggingRequestEntities
                                           .Include(c => c.RequestedTag)
                                           .Include(c => c.ConsumedRightAsset)
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
@@ -308,11 +313,11 @@ public class TaggingContractService(
         Justification = "コントラクト処理の任意の例外を結果ユニオンへ変換するため広く捕捉する")]
     private async Task<Result<string>> ProcessAcceptContractAtomicAsync(TaggingRequestEntity entity, string currentUserId, int? fulfillerAssetId)
     {
-        await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
+        await using IDbContextTransaction transaction = await _dbContext.Database.BeginTransactionAsync();
 
         try
         {
-            IContractExecutor? executor = executorFactory.GetExecutor(entity.ContractType);
+            IContractExecutor? executor = _executorFactory.GetExecutor(entity.ContractType);
             Result<string> executeResult = executor is not null
                 ? await executor.ExecuteAsync(entity, currentUserId, fulfillerAssetId)
                 : new Failure(ContractMessages.UnknownContractType);
@@ -339,7 +344,7 @@ public class TaggingContractService(
     private async Task<Result<string>> CommitAndReturnAsync(IDbContextTransaction transaction, TaggingRequestEntity entity, Success<string> s)
     {
         entity.Status = TradeStatus.Executed;
-        await dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
         return s;
     }
@@ -355,7 +360,7 @@ public class TaggingContractService(
     /// </returns>
     public virtual async Task<Result<string>> CancelContractAsync(int contractId, string currentUserId)
     {
-        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
+        TaggingRequestEntity? entity = await _dbContext.TaggingRequestEntities
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
 
         Result<TaggingRequestEntity> fetchResult = entity switch
@@ -376,7 +381,7 @@ public class TaggingContractService(
     private async Task<Result<string>> ProcessCancelAsync(TaggingRequestEntity entity)
     {
         entity.Status = TradeStatus.Canceled;
-        await dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");
     }
 
@@ -389,7 +394,7 @@ public class TaggingContractService(
         int requestedTagId,
         string tagOwnerUserId)
     {
-        bool autoAccept = await dbContext.Tags
+        bool autoAccept = await _dbContext.Tags
             .AsNoTracking()
             .Where(t => t.Id == requestedTagId)
             .Select(t => t.AutoAcceptIncomingTaggingRequests)

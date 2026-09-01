@@ -174,4 +174,31 @@ public class TaggingRequestActionsTests
         Assert.False(result);
         _snackbarMock.Verify(s => s.Add("却下に失敗しました: boom", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
     }
+
+    [Fact]
+    public async Task Handlers_NullParameters_ThrowArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new ApproveTaggingRequestHandler(null!));
+        Assert.Throws<ArgumentNullException>(() => new RejectTaggingRequestHandler(null!));
+
+        var approveHandler = new ApproveTaggingRequestHandler(_contractServiceMock.Object);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => approveHandler.HandleAsync(null!));
+
+        var rejectHandler = new RejectTaggingRequestHandler(_taggingServiceMock.Object);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => rejectHandler.HandleAsync(null!));
+    }
+
+    [Fact]
+    public void TaggingRequestActions_NullParameters_ThrowArgumentNullException()
+    {
+        var approveHandler = new Mock<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>>().Object;
+        var rejectHandler = new Mock<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>>().Object;
+        var launcher = new Mock<IDialogLauncher>().Object;
+        var snackbar = new Mock<ISnackbar>().Object;
+
+        Assert.Throws<ArgumentNullException>(() => new TaggingRequestActions(null!, rejectHandler, launcher, snackbar));
+        Assert.Throws<ArgumentNullException>(() => new TaggingRequestActions(approveHandler, null!, launcher, snackbar));
+        Assert.Throws<ArgumentNullException>(() => new TaggingRequestActions(approveHandler, rejectHandler, null!, snackbar));
+        Assert.Throws<ArgumentNullException>(() => new TaggingRequestActions(approveHandler, rejectHandler, launcher, null!));
+    }
 }

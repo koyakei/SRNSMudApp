@@ -11,7 +11,9 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Tests.Components.Tag;
@@ -37,7 +39,11 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
         _ctx.Services.RemoveAll<IDialogLauncher>();
         _ctx.Services.AddSingleton(_ => _launcherMock.Object);
         _ctx.Services.AddSingleton<ITaggingRequestActions>(
-            new TaggingRequestActions(null!, null!, _launcherMock.Object, new Mock<ISnackbar>().Object));
+            new TaggingRequestActions(
+                new Mock<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>>().Object,
+                new Mock<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>>().Object,
+                _launcherMock.Object,
+                new Mock<ISnackbar>().Object));
     }
 
     [Fact]

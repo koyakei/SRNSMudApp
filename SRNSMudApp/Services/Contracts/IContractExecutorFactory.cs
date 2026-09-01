@@ -12,4 +12,3 @@ public interface IContractExecutorFactory
     /// <returns>対応するエグゼキューター。存在しない場合は null。</returns>
     IContractExecutor? GetExecutor(string contractType);
 }
-

@@ -9,7 +9,8 @@ namespace SRNSMudApp.Services.Contracts;
 public class ContractExecutorFactory(IEnumerable<IContractExecutor> executors) : IContractExecutorFactory
 {
     private readonly Dictionary<string, IContractExecutor> _executors =
-        executors.ToDictionary(e => e.ContractType, StringComparer.OrdinalIgnoreCase);
+        (executors ?? throw new ArgumentNullException(nameof(executors)))
+        .ToDictionary(e => e.ContractType, StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public IContractExecutor? GetExecutor(string contractType) =>
@@ -29,4 +30,3 @@ public class ContractExecutorFactory(IEnumerable<IContractExecutor> executors) :
             new BountyContractExecutor(dbContext)
         ]);
 }
-

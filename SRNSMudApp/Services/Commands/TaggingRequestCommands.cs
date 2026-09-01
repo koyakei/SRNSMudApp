@@ -25,11 +25,14 @@ public record RejectTaggingRequestCommand(int RequestId, string CurrentUserId, s
 public class ApproveTaggingRequestHandler(TaggingContractService contractService)
     : ICommandHandler<ApproveTaggingRequestCommand, Result<string>>
 {
+    private readonly TaggingContractService _contractService =
+        contractService ?? throw new ArgumentNullException(nameof(contractService));
+
     /// <inheritdoc />
     public async Task<Result<string>> HandleAsync(ApproveTaggingRequestCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return await contractService.AcceptContractAsync(command.RequestId, command.CurrentUserId, command.FulfillerAssetId);
+        return await _contractService.AcceptContractAsync(command.RequestId, command.CurrentUserId, command.FulfillerAssetId);
     }
 }
 
@@ -40,12 +43,14 @@ public class ApproveTaggingRequestHandler(TaggingContractService contractService
 public class RejectTaggingRequestHandler(ITaggingService taggingService)
     : ICommandHandler<RejectTaggingRequestCommand, Result<bool>>
 {
+    private readonly ITaggingService _taggingService =
+        taggingService ?? throw new ArgumentNullException(nameof(taggingService));
+
     /// <inheritdoc />
     public async Task<Result<bool>> HandleAsync(RejectTaggingRequestCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await taggingService.RejectRequestAsync(command.RequestId, command.CurrentUserId, command.Reason);
+        await _taggingService.RejectRequestAsync(command.RequestId, command.CurrentUserId, command.Reason);
         return new Success<bool>(true);
     }
 }
-

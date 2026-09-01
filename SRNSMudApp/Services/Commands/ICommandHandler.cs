@@ -15,4 +15,3 @@ public interface ICommandHandler<in TCommand, TResult>
     /// <returns>実行結果。</returns>
     Task<TResult> HandleAsync(TCommand command, CancellationToken cancellationToken = default);
 }
-
