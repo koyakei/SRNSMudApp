@@ -97,6 +97,7 @@ builder.Services.AddScoped<IContractExecutor, TriggerContractExecutor>();
 builder.Services.AddScoped<IContractExecutor, BountyContractExecutor>();
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
+builder.Services.AddScoped<ITagEdgeService, TagEdgeService>();
 
 // Register TaggingService
 builder.Services.AddTransient<ITaggingService, TaggingService>();
