@@ -14,8 +14,10 @@ using SmartComponents.LocalEmbeddings;
 using SRNSMudApp.Components;
 using SRNSMudApp.Components.Account;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Auth;
+using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Contracts;
 using SRNSMudApp.Services.Dialogs;
 
@@ -95,9 +97,14 @@ builder.Services.AddScoped<IContractExecutor, GratisContractExecutor>();
 builder.Services.AddScoped<IContractExecutor, MutualContractExecutor>();
 builder.Services.AddScoped<IContractExecutor, TriggerContractExecutor>();
 builder.Services.AddScoped<IContractExecutor, BountyContractExecutor>();
+builder.Services.AddScoped<IContractExecutorFactory, ContractExecutorFactory>();
 builder.Services.AddScoped<TaggingContractService>();
 builder.Services.AddScoped<IItemTagService, ItemTagService>();
 builder.Services.AddScoped<ITagEdgeService, TagEdgeService>();
+
+// コマンドハンドラー (Command Pattern) の登録
+builder.Services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();
+builder.Services.AddScoped<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>, RejectTaggingRequestHandler>();
 
 // Register TaggingService
 builder.Services.AddTransient<ITaggingService, TaggingService>();

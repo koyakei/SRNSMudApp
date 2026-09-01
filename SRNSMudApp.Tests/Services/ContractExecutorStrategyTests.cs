@@ -74,7 +74,7 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
             .Setup(e => e.ExecuteAsync(It.IsAny<TaggingRequestEntity>(), user.Id, null))
             .ReturnsAsync(new Success<string>("Custom strategy executed successfully"));
 
-        var service = new TaggingContractService(context, [mockExecutor.Object]);
+        var service = new TaggingContractService(context, new ContractExecutorFactory([mockExecutor.Object]));
 
         var result = await service.AcceptContractAsync(contract.Id, user.Id);
 
@@ -111,10 +111,37 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         context.TaggingRequestEntities.Add(contract);
         await context.SaveChangesAsync();
 
-        var service = new TaggingContractService(context, []);
+        var service = new TaggingContractService(context, new ContractExecutorFactory([]));
 
         var result = await service.AcceptContractAsync(contract.Id, user.Id);
 
         Assert.True(result is Failure failure && failure.ErrorMessage.Contains("未知の契約型"));
+    }
+
+    [Fact]
+    public void ContractExecutorFactory_CreateDefault_ShouldContainAllStandardExecutors()
+    {
+        using var context = new ApplicationDbContext(SharedDb.Options);
+        var factory = ContractExecutorFactory.CreateDefault(context);
+
+        Assert.NotNull(factory.GetExecutor(ContractTypes.Gratis));
+        Assert.NotNull(factory.GetExecutor(ContractTypes.Mutual));
+        Assert.NotNull(factory.GetExecutor(ContractTypes.Trigger));
+        Assert.NotNull(factory.GetExecutor(ContractTypes.Bounty));
+        Assert.Null(factory.GetExecutor("Unknown"));
+    }
+
+    [Fact]
+    public void ContractExecutorFactory_ShouldResolveCaseInsensitively()
+    {
+        var mock = new Mock<IContractExecutor>();
+        mock.Setup(m => m.ContractType).Returns("TestContract");
+
+        var factory = new ContractExecutorFactory([mock.Object]);
+
+        Assert.NotNull(factory.GetExecutor("testcontract"));
+        Assert.NotNull(factory.GetExecutor("TESTCONTRACT"));
+        Assert.NotNull(factory.GetExecutor("TestContract"));
+        Assert.Null(factory.GetExecutor("other"));
     }
 }

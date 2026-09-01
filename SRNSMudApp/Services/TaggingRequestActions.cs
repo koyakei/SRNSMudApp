@@ -1,12 +1,17 @@
 using System.Diagnostics.CodeAnalysis;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using MudBlazor;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Dialogs;
 
+// CA1508: union 型の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
 // IDE0072: enum の網羅的 switch に対する「Populate switch」は解析器の誤検知のため抑制する。
-#pragma warning disable IDE0072
+#pragma warning disable CA1508, IDE0072
 
 namespace SRNSMudApp.Services;
 
@@ -29,12 +34,12 @@ public interface ITaggingRequestActions
 }
 
 /// <summary>
-///     タグ付けリクエストの承認/却下フローの共通実装。
-///     TaggingRequestList / TaggingRequestThreadDialog / NotificationsPage で重複していた処理を集約する (Facade)。
+///     タグ付けリクエストの承認/却下フローの共通実装 (Facade)。
+///     コマンドハンドラー（<see cref="ICommandHandler{TCommand, TResult}" />）へ処理を委譲し、UI 通知を行う。
 /// </summary>
 public class TaggingRequestActions(
-    TaggingContractService taggingContractService,
-    ITaggingService taggingService,
+    ICommandHandler<ApproveTaggingRequestCommand, Result<string>> approveHandler,
+    ICommandHandler<RejectTaggingRequestCommand, Result<bool>> rejectHandler,
     IDialogLauncher dialogLauncher,
     ISnackbar snackbar) : ITaggingRequestActions
 {
@@ -58,14 +63,18 @@ public class TaggingRequestActions(
     {
         try
         {
-            _ = await taggingContractService.AcceptContractAsync(requestId, currentUserId);
-            _ = snackbar.Add("リクエストを承認しました。", Severity.Success);
-            return true;
+            var command = new ApproveTaggingRequestCommand(requestId, currentUserId);
+            Result<string> result = await approveHandler.HandleAsync(command);
+
+            return result switch
+            {
+                Success<string> => NotifySuccess(ContractMessages.ContractApproved),
+                Failure f => NotifyError($"{ContractMessages.ContractApprovalFailedPrefix}{f.ErrorMessage}")
+            };
         }
         catch (Exception ex)
         {
-            _ = snackbar.Add($"承認に失敗しました: {ex.Message}", Severity.Error);
-            return false;
+            return NotifyError($"{ContractMessages.ContractApprovalFailedPrefix}{ex.Message}");
         }
     }
 
@@ -85,14 +94,30 @@ public class TaggingRequestActions(
         try
         {
             var comment = result.Data as string;
-            await taggingService.RejectRequestAsync(requestId, currentUserId, comment);
-            _ = snackbar.Add("リクエストを却下しました。", Severity.Success);
-            return true;
+            var command = new RejectTaggingRequestCommand(requestId, currentUserId, comment);
+            Result<bool> rejectResult = await rejectHandler.HandleAsync(command);
+
+            return rejectResult switch
+            {
+                Success<bool> => NotifySuccess(ContractMessages.ContractRejected),
+                Failure f => NotifyError($"{ContractMessages.ContractRejectionFailedPrefix}{f.ErrorMessage}")
+            };
         }
         catch (Exception ex)
         {
-            _ = snackbar.Add($"却下に失敗しました: {ex.Message}", Severity.Error);
-            return false;
+            return NotifyError($"{ContractMessages.ContractRejectionFailedPrefix}{ex.Message}");
         }
+    }
+
+    private bool NotifySuccess(string message)
+    {
+        _ = snackbar.Add(message, Severity.Success);
+        return true;
+    }
+
+    private bool NotifyError(string message)
+    {
+        _ = snackbar.Add(message, Severity.Error);
+        return false;
     }
 }

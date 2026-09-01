@@ -8,6 +8,7 @@ using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Dialogs;
 
 namespace SRNSMudApp.Tests.Services;
@@ -35,8 +36,8 @@ public class TaggingRequestActionsTests
         var dbContextOptions = new DbContextOptionsBuilder<ApplicationDbContext>().Options;
         _contractServiceMock = new Mock<TaggingContractService>(new Mock<ApplicationDbContext>(dbContextOptions).Object);
         _actions = new TaggingRequestActions(
-            _contractServiceMock.Object,
-            _taggingServiceMock.Object,
+            new ApproveTaggingRequestHandler(_contractServiceMock.Object),
+            new RejectTaggingRequestHandler(_taggingServiceMock.Object),
             _dialogLauncherMock.Object,
             _snackbarMock.Object);
     }
@@ -108,6 +109,19 @@ public class TaggingRequestActionsTests
 
         Assert.False(result);
         _snackbarMock.Verify(s => s.Add("承認に失敗しました: boom", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveAsync_OnContractFailure_ReturnsFalseAndShowsErrorSnackbar()
+    {
+        _ = _contractServiceMock
+            .Setup(s => s.AcceptContractAsync(1, TagOwnerId, It.IsAny<int?>()))
+            .ReturnsAsync(new Failure("権利アセットが不足しています。"));
+
+        var result = await _actions.ApproveAsync(1, TagOwnerId);
+
+        Assert.False(result);
+        _snackbarMock.Verify(s => s.Add("承認に失敗しました: 権利アセットが不足しています。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
     }
 
     // --- RejectViaDialogAsync ---

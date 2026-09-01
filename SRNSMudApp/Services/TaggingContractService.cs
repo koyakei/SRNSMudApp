@@ -4,6 +4,8 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
@@ -26,22 +28,12 @@ namespace SRNSMudApp.Services;
 /// </summary>
 public class TaggingContractService(
     ApplicationDbContext dbContext,
-    IEnumerable<IContractExecutor>? executors = null)
+    IContractExecutorFactory executorFactory)
 {
     public TaggingContractService(ApplicationDbContext dbContext)
-        : this(dbContext, null)
+        : this(dbContext, ContractExecutorFactory.CreateDefault(dbContext))
     {
     }
-
-    private readonly IReadOnlyList<IContractExecutor> _executors =
-        executors?.ToList() is { Count: > 0 } list
-            ? list
-            : [
-                new GratisContractExecutor(dbContext),
-                new MutualContractExecutor(dbContext),
-                new TriggerContractExecutor(dbContext),
-                new BountyContractExecutor(dbContext)
-            ];
 
     /// <summary>
     ///     Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
@@ -110,6 +102,14 @@ public class TaggingContractService(
     /// <summary>
     ///     TagEdge に対する Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
     /// </summary>
+    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
+    /// <param name="tagOwnerUserId">タグ所有者のユーザー ID。</param>
+    /// <param name="tagEdgeId">対象となる TagEdge の ID。</param>
+    /// <param name="requestedTagId">付与または削除を要求するタグの ID。</param>
+    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
+    /// <param name="proposedWeight">提案する重み。</param>
+    /// <param name="message">依頼メッセージ（任意）。</param>
+    /// <returns>作成されたコントラクトエンティティ、または失敗情報。</returns>
     public async Task<Result<TaggingRequestEntity>> ProposeGratisEdgeContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -122,7 +122,7 @@ public class TaggingContractService(
         TagEdge? targetEdge = await dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
         if (targetEdge == null)
         {
-            return new Failure("対象の TagEdge が見つかりません。");
+            return new Failure(ContractMessages.TagEdgeNotFound);
         }
 
         var content = message ?? (requestType switch
@@ -312,10 +312,10 @@ public class TaggingContractService(
 
         try
         {
-            IContractExecutor? executor = _executors.FirstOrDefault(e => e.ContractType == entity.ContractType);
+            IContractExecutor? executor = executorFactory.GetExecutor(entity.ContractType);
             Result<string> executeResult = executor is not null
                 ? await executor.ExecuteAsync(entity, currentUserId, fulfillerAssetId)
-                : new Failure("DBに未知の契約型が存在します。");
+                : new Failure(ContractMessages.UnknownContractType);
 
             return await (executeResult switch
             {

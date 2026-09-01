@@ -37,7 +37,7 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
         _ctx.Services.RemoveAll<IDialogLauncher>();
         _ctx.Services.AddSingleton(_ => _launcherMock.Object);
         _ctx.Services.AddSingleton<ITaggingRequestActions>(
-            new TaggingRequestActions(null!, new Mock<ITaggingService>().Object, _launcherMock.Object, new Mock<ISnackbar>().Object));
+            new TaggingRequestActions(null!, null!, _launcherMock.Object, new Mock<ISnackbar>().Object));
     }
 
     [Fact]

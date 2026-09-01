@@ -9,14 +9,25 @@ namespace SRNSMudApp.Data;
 /// </summary>
 public class TaggableTarget : BaseEntity
 {
+    /// <summary>
+    ///     タグ付け対象のエンティティ種別（"Item", "TagEdge" など）。
+    /// </summary>
     [MaxLength(50)]
-    public string TargetType { get; set; } = string.Empty; // "Item", "TagEdge"
+    public string TargetType { get; set; } = string.Empty;
 
-    // 1:1 ナビゲーションプロパティ
+    /// <summary>
+    ///     対象が <see cref="Item" /> の場合のナビゲーションプロパティ。
+    /// </summary>
     public Item? Item { get; set; }
+
+    /// <summary>
+    ///     対象が <see cref="TagEdge" /> の場合のナビゲーションプロパティ。
+    /// </summary>
     public TagEdge? TagEdge { get; set; }
 
-    // この対象に対するタグ付けリクエスト一覧
+    /// <summary>
+    ///     この対象に対するタグ付けリクエスト一覧。
+    /// </summary>
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<TaggingRequestEntity> TaggingRequests { get; set; } = [];
 }
