@@ -26,7 +26,7 @@ public readonly union RejectAuthorization(AuthorizedToReject, UnauthorizedToReje
 
 public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITaggingService
 {
-    public async Task AddTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
+    public async Task AddTagAsync<T>(int entityId, int tagId) where T : class, IDirectTaggable
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
@@ -55,13 +55,13 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task AddTagAndSaveAsync<T>(ApplicationDbContext context, T entity, Tag tag) where T : class, ITaggable
+    private static async Task AddTagAndSaveAsync<T>(ApplicationDbContext context, T entity, Tag tag) where T : class, IDirectTaggable
     {
         entity.Tags.Add(tag);
         _ = await context.SaveChangesAsync();
     }
 
-    public async Task RemoveTagAsync<T>(int entityId, int tagId) where T : class, ITaggable
+    public async Task RemoveTagAsync<T>(int entityId, int tagId) where T : class, IDirectTaggable
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
 
@@ -81,7 +81,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task RemoveTagAndSaveAsync<T>(ApplicationDbContext context, T entity, Tag tag) where T : class, ITaggable
+    private static async Task RemoveTagAndSaveAsync<T>(ApplicationDbContext context, T entity, Tag tag) where T : class, IDirectTaggable
     {
         _ = entity.Tags.Remove(tag);
         _ = await context.SaveChangesAsync();

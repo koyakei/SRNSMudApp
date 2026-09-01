@@ -263,7 +263,8 @@ public class ItemListDataProvider(
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
             .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.TargetItem)
+            .ThenInclude(r => r.Target)
+            .ThenInclude(t => t.Item)
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
             .AsQueryable();

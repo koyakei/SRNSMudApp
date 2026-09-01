@@ -66,6 +66,12 @@ public class TaggingContractService(
         int proposedWeight = 1,
         string? message = null)
     {
+        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        if (targetItem == null)
+        {
+            return new Failure("対象アイテムが見つかりません。");
+        }
+
         var content = message ?? (requestType switch
         {
             TaggingRequestType.Add => ContractMessages.TagAddRequestSent,
@@ -84,7 +90,61 @@ public class TaggingContractService(
             OwnerId = requesterUserId,
             RequesterUserId = requesterUserId,
             TagOwnerUserId = tagOwnerUserId,
+            TargetId = targetItem.TagTargetId > 0 ? targetItem.TagTargetId : targetItem.TagTarget.Id,
+            Target = targetItem.TagTarget,
             TargetItemId = targetItemId,
+            RequestedTagId = requestedTagId,
+            Status = TradeStatus.Proposed,
+            RequestType = requestType,
+            ProposedWeight = proposedWeight,
+            Payload = new GratisPayload(message ?? ""),
+            RequestItem = requestItem
+        };
+
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
+
+        return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
+    }
+
+    /// <summary>
+    ///     TagEdge に対する Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
+    /// </summary>
+    public async Task<Result<TaggingRequestEntity>> ProposeGratisEdgeContractAsync(
+        string requesterUserId,
+        string tagOwnerUserId,
+        int tagEdgeId,
+        int requestedTagId,
+        TaggingRequestType requestType = TaggingRequestType.Add,
+        int proposedWeight = 1,
+        string? message = null)
+    {
+        TagEdge? targetEdge = await dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
+        if (targetEdge == null)
+        {
+            return new Failure("対象の TagEdge が見つかりません。");
+        }
+
+        var content = message ?? (requestType switch
+        {
+            TaggingRequestType.Add => ContractMessages.TagAddRequestSent,
+            _ => ContractMessages.TagDeleteRequestSent
+        });
+
+        var requestItem = new Item
+        {
+            OwnerId = requesterUserId,
+            Content = content
+        };
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = ContractTypes.Gratis,
+            OwnerId = requesterUserId,
+            RequesterUserId = requesterUserId,
+            TagOwnerUserId = tagOwnerUserId,
+            TargetId = targetEdge.TagTargetId > 0 ? targetEdge.TagTargetId : targetEdge.TagTarget.Id,
+            Target = targetEdge.TagTarget,
             RequestedTagId = requestedTagId,
             Status = TradeStatus.Proposed,
             RequestType = requestType,
@@ -126,6 +186,12 @@ public class TaggingContractService(
         TaggingRequestType requestType = TaggingRequestType.Add,
         int proposedWeight = 1)
     {
+        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        if (targetItem == null)
+        {
+            return new Failure("対象アイテムが見つかりません。");
+        }
+
         var content = requestType switch
         {
             TaggingRequestType.Add => ContractMessages.MutualTagAddRequestSent,
@@ -144,6 +210,8 @@ public class TaggingContractService(
             OwnerId = requesterUserId,
             RequesterUserId = requesterUserId,
             TagOwnerUserId = tagOwnerUserId,
+            TargetId = targetItem.TagTargetId > 0 ? targetItem.TagTargetId : targetItem.TagTarget.Id,
+            Target = targetItem.TagTarget,
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
             ConsumedRightAssetId = consumedRightAssetId,
@@ -166,11 +234,39 @@ public class TaggingContractService(
     /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
     public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
     {
+        Item? item = await dbContext.Items.FindAsync(itemId);
+        if (item == null)
+        {
+            return [];
+        }
+
         return await dbContext.TaggingRequestEntities
-            .Include(r => r.TargetItem)
+            .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
-            .Where(r => r.TargetItemId == itemId)
+            .Where(r => r.TargetId == item.TagTargetId)
+            .OrderByDescending(r => r.CreatedDate)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    ///     指定 TagEdge に紐づくコントラクト一覧を取得する。
+    /// </summary>
+    /// <param name="edgeId">対象 TagEdge の ID。</param>
+    /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
+    public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByEdgeIdAsync(int edgeId)
+    {
+        TagEdge? edge = await dbContext.TagEdges.FindAsync(edgeId);
+        if (edge == null)
+        {
+            return [];
+        }
+
+        return await dbContext.TaggingRequestEntities
+            .Include(r => r.Target).ThenInclude(t => t.TagEdge)
+            .Include(r => r.Owner)
+            .Include(r => r.RequestedTag)
+            .Where(r => r.TargetId == edge.TagTargetId)
             .OrderByDescending(r => r.CreatedDate)
             .ToListAsync();
     }

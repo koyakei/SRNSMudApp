@@ -29,6 +29,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TimelineEvent> TimelineEvents { get; set; } = null!;
     public DbSet<Invitation> Invitations { get; set; } = null!;
     public DbSet<NotificationReadState> NotificationReadStates { get; set; } = null!;
+    public DbSet<TagEdge> TagEdges { get; set; } = null!;
+    public DbSet<TagEdgeTagAttachment> TagEdgeTagAttachments { get; set; } = null!;
+    public DbSet<TaggableTarget> TaggableTargets { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -182,6 +185,84 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.FollowedTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // --- TagEdge / TagEdgeTagAttachment Configuration ---
+        _ = builder.Entity<TagEdge>()
+            .HasOne(e => e.Owner)
+            .WithMany()
+            .HasForeignKey(e => e.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdge>()
+            .HasOne(e => e.SourceTag)
+            .WithMany()
+            .HasForeignKey(e => e.SourceTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdge>()
+            .HasOne(e => e.TargetTag)
+            .WithMany()
+            .HasForeignKey(e => e.TargetTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdge>()
+            .HasIndex(e => new { e.OwnerId, e.SourceTagId, e.TargetTagId })
+            .IsUnique();
+
+        _ = builder.Entity<TagEdgeTagAttachment>()
+            .HasOne(a => a.Owner)
+            .WithMany()
+            .HasForeignKey(a => a.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdgeTagAttachment>()
+            .HasOne(a => a.TagEdge)
+            .WithMany(e => e.TagAttachments)
+            .HasForeignKey(a => a.TagEdgeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<TagEdgeTagAttachment>()
+            .HasOne(a => a.Tag)
+            .WithMany()
+            .HasForeignKey(a => a.TagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdgeTagAttachment>()
+            .HasOne(a => a.ConsumedRightAsset)
+            .WithMany()
+            .HasForeignKey(a => a.ConsumedRightAssetId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagEdgeTagAttachment>()
+            .HasIndex(a => new { a.TagEdgeId, a.TagId })
+            .IsUnique();
+
+        // --- TaggableTarget Configuration ---
+        _ = builder.Entity<TaggableTarget>()
+            .HasOne(t => t.Owner)
+            .WithMany()
+            .HasForeignKey(t => t.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<Item>()
+            .HasOne(i => i.TagTarget)
+            .WithOne(t => t.Item)
+            .HasForeignKey<Item>(i => i.TagTargetId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<Item>()
+            .HasIndex(i => i.TagTargetId)
+            .IsUnique();
+
+        _ = builder.Entity<TagEdge>()
+            .HasOne(e => e.TagTarget)
+            .WithOne(t => t.TagEdge)
+            .HasForeignKey<TagEdge>(e => e.TagTargetId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<TagEdge>()
+            .HasIndex(e => e.TagTargetId)
+            .IsUnique();
+
         // --- TaggingRequestEntity Configuration ---
         _ = builder.Entity<TaggingRequestEntity>()
             .ToTable("TaggingRequestContracts");
@@ -193,11 +274,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(e => e.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Restrict other relationships to avoid multiple cascade paths with Tags/Items
+        // Target (TaggableTarget) relationship with Restrict to avoid multiple cascade paths in SQL Server
         _ = builder.Entity<TaggingRequestEntity>()
-            .HasOne(e => e.TargetItem)
-            .WithMany()
-            .HasForeignKey(e => e.TargetItemId)
+            .HasOne(e => e.Target)
+            .WithMany(t => t.TaggingRequests)
+            .HasForeignKey(e => e.TargetId)
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<TaggingRequestEntity>()
@@ -259,6 +340,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     public override int SaveChanges()
     {
+        EnsureTaggableTargets();
+        CleanupTaggableTargets();
         UpdateTimestamps();
         EnforceTagWeightLimits();
         return base.SaveChanges();
@@ -266,10 +349,129 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        EnsureTaggableTargets();
+        CleanupTaggableTargets();
         UpdateTimestamps();
         ValidateRootTagConstraint();
         await EnforceTagWeightLimitsAsync(cancellationToken);
         return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void CleanupTaggableTargets()
+    {
+        var deletedTaggables = ChangeTracker.Entries<ITaggable>()
+            .Where(e => e.State == EntityState.Deleted)
+            .ToList();
+
+        foreach (var entry in deletedTaggables)
+        {
+            if (entry.Entity.TagTargetId > 0)
+            {
+                var target = TaggableTargets.Local.FirstOrDefault(t => t.Id == entry.Entity.TagTargetId)
+                    ?? TaggableTargets.FirstOrDefault(t => t.Id == entry.Entity.TagTargetId);
+                if (target != null)
+                {
+                    TaggableTargets.Remove(target);
+                }
+            }
+            else if (entry.Entity.TagTarget != null)
+            {
+                TaggableTargets.Remove(entry.Entity.TagTarget);
+            }
+        }
+    }
+
+    private void EnsureTaggableTargets()
+    {
+        var itemEntries = ChangeTracker.Entries<Item>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in itemEntries)
+        {
+            if (entry.Entity.TagTarget == null && entry.Entity.TagTargetId == 0)
+            {
+                entry.Entity.TagTarget = new TaggableTarget
+                {
+                    OwnerId = entry.Entity.OwnerId,
+                    TargetType = "Item"
+                };
+            }
+        }
+
+        var edgeEntries = ChangeTracker.Entries<TagEdge>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in edgeEntries)
+        {
+            if (entry.Entity.TagTarget == null && entry.Entity.TagTargetId == 0)
+            {
+                entry.Entity.TagTarget = new TaggableTarget
+                {
+                    OwnerId = entry.Entity.OwnerId,
+                    TargetType = "TagEdge"
+                };
+            }
+        }
+
+        var requestEntries = ChangeTracker.Entries<TaggingRequestEntity>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in requestEntries)
+        {
+            if (entry.Entity.Target == null && entry.Entity.TargetId == 0)
+            {
+                var targetItem = entry.Entity.TargetItem;
+                if (targetItem != null)
+                {
+                    if (targetItem.TagTarget == null && targetItem.TagTargetId == 0)
+                    {
+                        targetItem.TagTarget = new TaggableTarget
+                        {
+                            OwnerId = targetItem.OwnerId,
+                            TargetType = "Item"
+                        };
+                    }
+
+                    if (targetItem.TagTarget != null)
+                    {
+                        entry.Entity.Target = targetItem.TagTarget;
+                    }
+                    else if (targetItem.TagTargetId > 0)
+                    {
+                        entry.Entity.TargetId = targetItem.TagTargetId;
+                    }
+                }
+                else if (entry.Entity.TargetItemId > 0)
+                {
+                    var item = Items.Local.FirstOrDefault(i => i.Id == entry.Entity.TargetItemId)
+                        ?? Items.FirstOrDefault(i => i.Id == entry.Entity.TargetItemId);
+
+                    if (item != null)
+                    {
+                        if (item.TagTarget == null && item.TagTargetId == 0)
+                        {
+                            item.TagTarget = new TaggableTarget
+                            {
+                                OwnerId = item.OwnerId,
+                                TargetType = "Item"
+                            };
+                        }
+
+                        if (item.TagTarget != null)
+                        {
+                            entry.Entity.Target = item.TagTarget;
+                        }
+                        else if (item.TagTargetId > 0)
+                        {
+                            entry.Entity.TargetId = item.TagTargetId;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void EnforceTagWeightLimits()

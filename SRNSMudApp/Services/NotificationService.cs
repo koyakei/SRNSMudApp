@@ -23,10 +23,10 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
         // 1. Tag Requests targeting the user
         List<TaggingRequestEntity> tagRequests = await context.TaggingRequestEntities!
-            .Include(r => r.TargetItem)
+            .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.RequestedTag)
             .Where(r => r.RequesterUserId != userId &&
-                        (r.TargetItem.OwnerId == userId || r.RequestedTag.OwnerId == userId))
+                        (r.Target.OwnerId == userId || r.RequestedTag.OwnerId == userId))
             .ToListAsync();
 
         // 2. Item Replies targeting the user
@@ -38,14 +38,14 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
         // 3. Rejected requests for the user
         List<TaggingRequestEntity> rejectedRequests = await context.TaggingRequestEntities!
-            .Include(r => r.TargetItem)
+            .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.RequestedTag)
             .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Rejected)
             .ToListAsync();
 
         // 4. Approved requests for the user
         List<TaggingRequestEntity> approvedRequests = await context.TaggingRequestEntities!
-            .Include(r => r.TargetItem)
+            .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.RequestedTag)
             .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Executed)
             .ToListAsync();

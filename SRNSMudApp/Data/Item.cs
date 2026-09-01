@@ -7,8 +7,11 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace SRNSMudApp.Data;
 
-public class Item : BaseEntity
+public class Item : BaseEntity, ITaggable
 {
+    public int TagTargetId { get; set; }
+    public TaggableTarget TagTarget { get; set; } = null!;
+
     [DataType(DataType.MultilineText)] // Dateから修正
     [StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     public string Content { get; set; } = string.Empty;

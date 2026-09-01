@@ -73,7 +73,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         List<TaggingRequestEntity> incomingContracts = await dbContext.TaggingRequestEntities
             .Where(c => c.TagOwnerUserId == userId && c.Status == TradeStatus.Proposed &&
                         (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
-            .Include(c => c.TargetItem)
+            .Include(c => c.Target).ThenInclude(t => t.Item)
             .Include(c => c.RequestedTag)
             .OrderByDescending(c => c.CreatedDate)
             .ToListAsync();
@@ -82,7 +82,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         List<TaggingRequestEntity> outgoingContracts = await dbContext.TaggingRequestEntities
             .Where(c => c.RequesterUserId == userId &&
                         (c.ContractType == "Gratis" || c.ContractType == "Mutual"))
-            .Include(c => c.TargetItem)
+            .Include(c => c.Target).ThenInclude(t => t.Item)
             .Include(c => c.RequestedTag)
             .OrderByDescending(c => c.CreatedDate)
             .ToListAsync();
@@ -131,7 +131,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
         List<TaggingRequestEntity> bounties = await dbContext.TaggingRequestEntities
             .Where(b => b.ContractType == "Bounty")
-            .Include(b => b.TargetItem)
+            .Include(b => b.Target).ThenInclude(t => t.Item)
             .Include(b => b.RequestedTag)
             .Where(b => b.Status == TradeStatus.Proposed)
             .OrderByDescending(b => b.CreatedDate)

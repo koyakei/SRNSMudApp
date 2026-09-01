@@ -63,7 +63,8 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
             .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.TargetItem)
+            .ThenInclude(r => r.Target)
+            .ThenInclude(t => t.Item)
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
             .Where(i => i.TagRelations.Any(tr => tr.TagId == tagId))
@@ -97,7 +98,7 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
             .ToListAsync();
 
         List<TaggingRequestEntity> pendingRequests = await context.TaggingRequestEntities!
-            .Include(r => r.TargetItem)
+            .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
             .Include(r => r.Replies)

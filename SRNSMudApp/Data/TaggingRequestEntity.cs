@@ -6,14 +6,45 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Data;
 
-public class TaggingRequestEntity : BaseEntity, ITaggable
+public class TaggingRequestEntity : BaseEntity, IDirectTaggable
 {
     [MaxLength(50)] public string RequesterUserId { get; set; } = string.Empty;
 
     [MaxLength(50)] public string TagOwnerUserId { get; set; } = string.Empty;
 
-    public int TargetItemId { get; set; }
-    public Item TargetItem { get; set; } = null!;
+    public int TargetId { get; set; }
+    public TaggableTarget Target { get; set; } = null!;
+
+    private int _targetItemId;
+    private Item? _targetItem;
+
+    /// <summary>後方互換性プロパティ（対象が Item の場合、または初期化用）</summary>
+    [NotMapped]
+    public int TargetItemId
+    {
+        get => Target?.Item?.Id ?? _targetItem?.Id ?? _targetItemId;
+        set => _targetItemId = value;
+    }
+
+    /// <summary>後方互換性プロパティ（対象が Item の場合）</summary>
+    [NotMapped]
+    public Item? TargetItem
+    {
+        get => Target?.Item ?? _targetItem;
+        set
+        {
+            _targetItem = value;
+            if (value?.TagTarget != null)
+            {
+                Target = value.TagTarget;
+                TargetId = value.TagTarget.Id;
+            }
+            else if (value != null && value.TagTargetId > 0)
+            {
+                TargetId = value.TagTargetId;
+            }
+        }
+    }
 
     public int RequestedTagId { get; set; }
     public Tag RequestedTag { get; set; } = null!;

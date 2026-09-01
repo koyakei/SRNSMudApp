@@ -550,6 +550,8 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
     {
         await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
         return await context.TaggingRequestEntities!
+            .Include(tr => tr.Target)
+            .ThenInclude(t => t.Item)
             .Include(tr => tr.RequestedTag)
             .Include(tr => tr.Owner) // リクエスト作成者
             .Include(tr => tr.RequestItem)
@@ -562,7 +564,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             .Include(tr => tr.Replies)
             .ThenInclude(r => r.TagRelations) // ItemCard向け
             .ThenInclude(tr => tr.Tag)
-            .Where(tr => tr.TargetItemId == itemId)
+            .Where(tr => tr.Target.Item.Id == itemId)
             .OrderByDescending(tr => tr.CreatedDate)
             .ToListAsync();
     }

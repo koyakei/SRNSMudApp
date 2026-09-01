@@ -7,8 +7,11 @@ namespace SRNSMudApp.Data;
 ///     Edge 自体が何を意味するかは <see cref="TagEdgeTagAttachment" /> を通じて
 ///     複数の Tag を紐付けることで定義する。
 /// </summary>
-public class TagEdge : BaseEntity
+public class TagEdge : BaseEntity, ITaggable
 {
+    public int TagTargetId { get; set; }
+    public TaggableTarget TagTarget { get; set; } = null!;
+
     public int SourceTagId { get; set; }
     public Tag SourceTag { get; set; } = null!;
 
