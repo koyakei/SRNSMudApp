@@ -82,6 +82,17 @@
             </MudChip>
         </div>
         <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.AccountTree" OnClick="() => _isFocusTreeOpen = !_isFocusTreeOpen">
+                ツリー表示
+            </MudButton>
+            <MudOverlay Visible="@_isFocusTreeOpen" OnClick="@(() => _isFocusTreeOpen = false)" AutoClose="true"
+                        DarkBackground="false" />
+            <MudPopover Open="@_isFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                        OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
+                <TagTreePopoverContent TargetTag="@_focusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
+                                       EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
+            </MudPopover>
             <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.AddLink" OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
                        Disabled="@string.IsNullOrEmpty(_currentUserId)">
@@ -110,7 +121,7 @@ else
         @if (_selectedEdge != null)
         {
             <div style="height: 100%; z-index: 10;">
-                <TagEdgeInspector Edge="_selectedEdge" CurrentUserId="@_currentUserId" OnClose="CloseInspector"
+                <TagEdgeInspector Edge="_selectedEdge" AllTags="_tags" CurrentUserId="@_currentUserId" OnClose="CloseInspector"
                                   OnDeleteEdge="HandleDeleteEdge" OnAttachTag="HandleOpenAttachDialog" OnDetachTag="HandleDetachTag" />
             </div>
         }
@@ -134,6 +145,7 @@ else
     private bool _isLoading = true;
     private bool _onlyConnectedTags = true;
     private bool _neighborhoodOnly = false;
+    private bool _isFocusTreeOpen;
     private int _displayedTagsCount = 0;
 
     protected override async Task OnInitializedAsync()
@@ -258,7 +270,9 @@ else
 
             var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y))
             {
-                IsFocused = (_focusedTag != null && tag.Id == _focusedTag.Id)
+                IsFocused = (_focusedTag != null && tag.Id == _focusedTag.Id),
+                AllTags = _tags,
+                RequestFocusTag = FocusTagById
             };
             nodeMap[tag.Id] = node;
             _diagram.Nodes.Add(node);
@@ -281,12 +295,30 @@ else
         }
     }
 
+    private void FocusTagFromHeaderTree(int tagId)
+    {
+        _isFocusTreeOpen = false;
+        FocusTagById(tagId);
+    }
+
+    private void FocusTagById(int tagId)
+    {
+        var tag = _tags.FirstOrDefault(t => t.Id == tagId);
+        switch (tag)
+        {
+            case not null:
+                OnTagFocusedFromSearch(tag);
+                break;
+        }
+    }
+
     private void OnTagFocusedFromSearch(TagEntity? tag)
     {
-        if (tag == null)
+        switch (tag)
         {
-            ClearFocus();
-            return;
+            case null:
+                ClearFocus();
+                return;
         }
 
         _focusedTag = tag;
@@ -294,24 +326,31 @@ else
 
         // ノードが現在のフィルタで表示されていない場合は再ビルドして含める
         var node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
-        if (node == null)
+        switch (node)
         {
-            BuildDiagramElements();
-            node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
+            case null:
+                BuildDiagramElements();
+                node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
+                break;
         }
 
-        if (node != null)
+        switch (node)
         {
-            FocusNodeInDiagram(tag);
+            case not null:
+                FocusNodeInDiagram(tag);
+                break;
         }
+
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void FocusNodeInDiagram(TagEntity tag)
     {
         var targetNode = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
-        if (targetNode == null)
+        switch (targetNode)
         {
-            return;
+            case null:
+                return;
         }
 
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
@@ -322,10 +361,16 @@ else
 
         _diagram.SelectModel(targetNode, unselectOthers: true);
 
-        // キャンバスをパンして画面中央付近に配置
+        // キャンバスをパンして画面中央に配置
         double zoom = _diagram.Zoom;
-        double panX = 400 - (targetNode.Position.X * zoom) - 70;
-        double panY = 260 - (targetNode.Position.Y * zoom) - 30;
+        double containerWidth = _diagram.Container is { Width: > 0 } ? _diagram.Container.Width : 800;
+        double containerHeight = _diagram.Container is { Height: > 0 } ? _diagram.Container.Height : 550;
+
+        double nodeWidth = targetNode.Size is { Width: > 0 } ? targetNode.Size.Width : 160;
+        double nodeHeight = targetNode.Size is { Height: > 0 } ? targetNode.Size.Height : 50;
+
+        double panX = (containerWidth / 2.0) - ((targetNode.Position.X + (nodeWidth / 2.0)) * zoom);
+        double panY = (containerHeight / 2.0) - ((targetNode.Position.Y + (nodeHeight / 2.0)) * zoom);
         _diagram.SetPan(panX, panY);
     }
 
@@ -333,6 +378,7 @@ else
     {
         _focusedTag = null;
         _neighborhoodOnly = false;
+        _isFocusTreeOpen = false;
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
         {
             n.IsFocused = false;

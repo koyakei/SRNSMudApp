@@ -18,7 +18,7 @@
                     </span>
                     <span class="tag-tree-icon" style="font-size: 10px; width: 14px; flex-shrink: 0;">@line.Icon</span>
 
-                    @switch (EnableNavigation)
+                    @switch (OnTagClick.HasDelegate || EnableNavigation)
                     {
                         case true:
                             <span @onclick:stopPropagation="true" class="tag-tree-name tag-link"
@@ -81,6 +81,7 @@
     [Parameter] public string? Style { get; set; }
     [Parameter] public EventCallback<int> OnSwap { get; set; }
     [Parameter] public EventCallback<Tag> OnAddChildTag { get; set; }
+    [Parameter] public EventCallback<int> OnTagClick { get; set; }
 
     private async Task AddChildTagClicked(int tagId)
     {
@@ -153,11 +154,14 @@
         BuildTree();
     }
 
-    private void NavigateToTag(int tagId)
+    private async Task NavigateToTag(int tagId)
     {
-        switch (EnableNavigation)
+        switch (OnTagClick.HasDelegate)
         {
             case true:
+                await OnTagClick.InvokeAsync(tagId);
+                break;
+            case false when EnableNavigation:
                 NavigationManager.NavigateTo($"/TagDetail/{tagId}");
                 break;
         }

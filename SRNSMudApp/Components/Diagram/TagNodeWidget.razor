@@ -1,5 +1,7 @@
+@inject IJSRuntime JS
 @using Blazor.Diagrams.Components.Renderers
 @using Blazor.Diagrams.Core.Models
+@using SRNSMudApp.Components.Tag
 
 <div class="tag-node @(Node.Selected ? "selected" : "") @(Node.IsFocused ? "focused" : "")">
     <div class="tag-node-header d-flex align-center">
@@ -17,15 +19,55 @@
                  Class="ml-2 px-1 tag-weight-chip">
             @Node.Tag.CachedWeight
         </MudChip>
+        <span @onclick:stopPropagation="true">
+            <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                           Class="pa-0 ml-1 tag-tree-button" Title="タグツリーを表示" OnClick="ToggleTree" />
+        </span>
     </div>
     @foreach (var port in Node.Ports)
     {
         <PortRenderer @key="port" Port="port" Class="@GetPortClass(port.Alignment)" />
     }
+
+    <MudOverlay Visible="@_isTreeOpen" OnClick="@(() => _isTreeOpen = false)" AutoClose="true" DarkBackground="false" />
+    <MudPopover Open="@_isTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
+        <TagTreePopoverContent TargetTag="@Node.Tag" AllTags="@Node.AllTags" EnableSwap="false" EnableExpand="true"
+                               EnableNavigation="true" OnTagClick="HandleTagClick" />
+    </MudPopover>
 </div>
 
 @code {
     [Parameter] public TagNode Node { get; set; } = null!;
+
+    private bool _isTreeOpen;
+
+    private async Task ToggleTree()
+    {
+        _isTreeOpen = !_isTreeOpen;
+        switch (_isTreeOpen)
+        {
+            case true:
+                await Task.Yield();
+                try
+                {
+                    await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", ".tag-tree-popover-content #tag-tree-current-line");
+                }
+                catch (JSException)
+                {
+                }
+                catch (InvalidOperationException)
+                {
+                }
+                break;
+        }
+    }
+
+    private void HandleTagClick(int tagId)
+    {
+        _isTreeOpen = false;
+        Node.RequestFocusTag?.Invoke(tagId);
+    }
 
     private static string GetPortClass(PortAlignment alignment) => alignment switch
     {

@@ -68,6 +68,28 @@ public sealed class TagTreePopoverContentTests : IAsyncLifetime
         Assert.Contains("overflow-y: auto", cut.Markup);
     }
 
+    [Fact]
+    public void TagTreePopoverContent_InvokesOnTagClick_WhenTagIsClicked()
+    {
+        // Arrange
+        var rootTag = new TagEntity { Id = 1, Name = "Root", OwnerId = "user-1" };
+        var child1 = new TagEntity { Id = 2, Name = "Child1", ParentTagId = 1, OwnerId = "user-1" };
+        List<TagEntity> allTags = [rootTag, child1];
+        int? clickedTagId = null;
+
+        // Act
+        IRenderedComponent<TagTreePopoverContent> cut = _ctx.Render<TagTreePopoverContent>(parameters => parameters
+            .Add(p => p.TargetTag, child1)
+            .Add(p => p.AllTags, allTags)
+            .Add(p => p.OnTagClick, (int id) => clickedTagId = id));
+
+        var link = cut.FindAll("a.mud-link").First(l => l.TextContent.Contains("Root"));
+        link.Click();
+
+        // Assert
+        Assert.Equal(1, clickedTagId);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

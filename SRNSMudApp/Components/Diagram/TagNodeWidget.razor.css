@@ -3,7 +3,7 @@
     border: 2px solid var(--mud-palette-lines-default, #e0e0e0);
     border-radius: 8px;
     padding: 8px 14px;
-    min-width: 140px;
+    min-width: 160px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     position: relative;
     user-select: none;

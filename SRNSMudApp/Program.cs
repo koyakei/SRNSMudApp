@@ -137,6 +137,13 @@ if (!builder.Environment.IsEnvironment("Testing"))
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
                            throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
+    const string fallbackPassword = "ChangeMe!Passw0rd";
+    var configuredPassword = Environment.GetEnvironmentVariable("MSSQL_SA_PASSWORD");
+    if (!string.IsNullOrWhiteSpace(configuredPassword))
+    {
+        connectionString = connectionString.Replace(fallbackPassword, configuredPassword, StringComparison.Ordinal);
+    }
+
     _ = builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId()),
         ServiceLifetime.Scoped, // DbContext 自体は今まで通り Scoped (Identity用)

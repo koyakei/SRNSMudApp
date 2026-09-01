@@ -2,6 +2,7 @@ using Bunit;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Diagram;
@@ -19,6 +20,7 @@ public class TagEdgeInspectorTests : IAsyncDisposable
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices();
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public async ValueTask DisposeAsync()
@@ -145,5 +147,36 @@ public class TagEdgeInspectorTests : IAsyncDisposable
 
         Assert.NotNull(detached);
         Assert.Equal(101, detached.Id);
+    }
+
+    [Fact]
+    public void WhenTreeButtonClicked_TogglesTreePopover()
+    {
+        var sourceTag = new TagEntity { Id = 1, Name = "SourceAlpha", OwnerId = "owner-1" };
+        var targetTag = new TagEntity { Id = 2, Name = "TargetBeta", OwnerId = "owner-1" };
+        var allTags = new List<TagEntity> { sourceTag, targetTag };
+
+        var edge = new TagEdge
+        {
+            Id = 42,
+            OwnerId = "owner-1",
+            SourceTag = sourceTag,
+            TargetTag = targetTag,
+            TagAttachments = []
+        };
+
+        var cut = _ctx.Render<TagEdgeInspector>(parameters => parameters
+            .Add(p => p.Edge, edge)
+            .Add(p => p.AllTags, allTags)
+            .Add(p => p.CurrentUserId, "owner-1"));
+
+        var treeButtons = cut.FindAll("button").Where(b => b.GetAttribute("title") == "タグツリーを表示").ToList();
+        Assert.NotEmpty(treeButtons);
+
+        // Click first tree button (SourceTag)
+        treeButtons[0].Click();
+
+        // Popover content should be open
+        Assert.Contains("SourceAlpha", cut.Markup);
     }
 }

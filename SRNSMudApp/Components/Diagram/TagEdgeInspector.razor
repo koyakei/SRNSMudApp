@@ -1,4 +1,5 @@
 @using SRNSMudApp.Data
+@using SRNSMudApp.Components.Tag
 
 <MudPaper Elevation="4" Class="pa-4 tag-edge-inspector" Style="width: 360px; height: 100%; overflow-y: auto;">
     <div class="d-flex justify-space-between align-center mb-3">
@@ -20,14 +21,45 @@
         <MudCard Outlined="true" Class="mb-4">
             <MudCardContent>
                 <MudText Typo="Typo.caption" Color="Color.Secondary">関係 (Edge ID: @Edge.Id)</MudText>
-                <div class="d-flex align-center my-2">
-                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
-                        @(Edge.SourceTag?.Name ?? $"Tag#{Edge.SourceTagId}")
-                    </MudChip>
-                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Medium" Class="mx-2" Color="Color.Secondary" />
-                    <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Medium">
-                        @(Edge.TargetTag?.Name ?? $"Tag#{Edge.TargetTagId}")
-                    </MudChip>
+                <div class="d-flex align-center my-2 gap-1">
+                    <div class="d-inline-flex align-center">
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
+                            @(Edge.SourceTag?.Name ?? $"Tag#{Edge.SourceTagId}")
+                        </MudChip>
+                        @if (Edge.SourceTag != null)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                                           Class="pa-0 ml-1" Title="タグツリーを表示" OnClick="@(() => ToggleTree(Edge.SourceTag.Id))" />
+                            <MudOverlay Visible="@(_openTreeTagId == Edge.SourceTag.Id)"
+                                        OnClick="@(() => _openTreeTagId = null)" AutoClose="true" DarkBackground="false" />
+                            <MudPopover Open="@(_openTreeTagId == Edge.SourceTag.Id)" AnchorOrigin="Origin.BottomLeft"
+                                        TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
+                                        Class="tree-popover" Paper="false">
+                                <TagTreePopoverContent TargetTag="@Edge.SourceTag" AllTags="@AllTags" EnableSwap="false"
+                                                       EnableExpand="true" EnableNavigation="true" />
+                            </MudPopover>
+                        }
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Medium" Class="mx-1"
+                             Color="Color.Secondary" />
+                    <div class="d-inline-flex align-center">
+                        <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Medium">
+                            @(Edge.TargetTag?.Name ?? $"Tag#{Edge.TargetTagId}")
+                        </MudChip>
+                        @if (Edge.TargetTag != null)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                                           Class="pa-0 ml-1" Title="タグツリーを表示" OnClick="@(() => ToggleTree(Edge.TargetTag.Id))" />
+                            <MudOverlay Visible="@(_openTreeTagId == Edge.TargetTag.Id)"
+                                        OnClick="@(() => _openTreeTagId = null)" AutoClose="true" DarkBackground="false" />
+                            <MudPopover Open="@(_openTreeTagId == Edge.TargetTag.Id)" AnchorOrigin="Origin.BottomLeft"
+                                        TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
+                                        Class="tree-popover" Paper="false">
+                                <TagTreePopoverContent TargetTag="@Edge.TargetTag" AllTags="@AllTags" EnableSwap="false"
+                                                       EnableExpand="true" EnableNavigation="true" />
+                            </MudPopover>
+                        }
+                    </div>
                 </div>
                 <MudText Typo="Typo.caption" Color="Color.Secondary">作成者: @Edge.OwnerId</MudText>
             </MudCardContent>
@@ -77,6 +109,19 @@
                                     <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Class="ml-2">
                                         W: @attachment.Weight
                                     </MudChip>
+                                    @if (attachment.Tag != null)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                                                       Class="pa-0 ml-1" Title="タグツリーを表示" OnClick="@(() => ToggleTree(attachment.Tag.Id))" />
+                                        <MudOverlay Visible="@(_openTreeTagId == attachment.Tag.Id)"
+                                                    OnClick="@(() => _openTreeTagId = null)" AutoClose="true" DarkBackground="false" />
+                                        <MudPopover Open="@(_openTreeTagId == attachment.Tag.Id)" AnchorOrigin="Origin.BottomLeft"
+                                                    TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
+                                                    Class="tree-popover" Paper="false">
+                                            <TagTreePopoverContent TargetTag="@attachment.Tag" AllTags="@AllTags" EnableSwap="false"
+                                                                   EnableExpand="true" EnableNavigation="true" />
+                                        </MudPopover>
+                                    }
                                 </div>
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
                                     紐付け者: @attachment.OwnerId
@@ -106,6 +151,9 @@
     public string CurrentUserId { get; set; } = "";
 
     [Parameter]
+    public IReadOnlyList<Tag> AllTags { get; set; } = [];
+
+    [Parameter]
     public EventCallback OnClose { get; set; }
 
     [Parameter]
@@ -116,6 +164,13 @@
 
     [Parameter]
     public EventCallback<TagEdgeTagAttachment> OnDetachTag { get; set; }
+
+    private int? _openTreeTagId;
+
+    private void ToggleTree(int tagId)
+    {
+        _openTreeTagId = _openTreeTagId == tagId ? null : tagId;
+    }
 
     private bool CanManageEdge =>
         Edge != null &&

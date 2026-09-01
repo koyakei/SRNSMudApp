@@ -5,6 +5,7 @@
     "**/obj": true
   },
   "dotnet.defaultSolution": "SRNSMudApp.sln",
+  "dotnet.projects.enableFileBasedPrograms": false,
   "dotnetAcquisitionExtension.allowInvalidPaths": true,
   "csharp-dev-tools.roslyn.roslynatorEnabled": true,
   // 2. Database Clientのデフォルト挙動設定
