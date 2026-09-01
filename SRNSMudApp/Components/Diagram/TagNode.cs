@@ -11,6 +11,7 @@ namespace SRNSMudApp.Components.Diagram;
 public class TagNode : NodeModel
 {
     public TagEntity Tag { get; }
+    public bool IsFocused { get; set; }
 
     public TagNode(TagEntity tag, Point? position = null) : base(position)
     {

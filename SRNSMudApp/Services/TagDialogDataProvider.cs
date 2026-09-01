@@ -138,12 +138,17 @@ public class TagDialogDataProvider(
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default)
     {
+        if (token.IsCancellationRequested)
+        {
+            return [];
+        }
+
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags.AsQueryable();
 
         if (string.IsNullOrEmpty(value))
         {
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.OrderBy(t => t.Name).AsNoTracking().Take(50).ToListAsync(token);
         }
 
         try
@@ -152,6 +157,7 @@ public class TagDialogDataProvider(
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
+                .OrderBy(x => x.Name)
                 .AsNoTracking()
                 .ToListAsync(token);
 
@@ -170,14 +176,23 @@ public class TagDialogDataProvider(
                     .Take(50)
             ];
         }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
         catch (Exception ex)
         {
+            if (token.IsCancellationRequested)
+            {
+                return [];
+            }
+
             Console.WriteLine($"Vector search failed: {ex.Message}");
             query = query.Where(x =>
                 x.Name.Contains(value) ||
                 x.Content.Contains(value)
             );
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.OrderBy(x => x.Name).AsNoTracking().Take(50).ToListAsync(token);
         }
     }
 

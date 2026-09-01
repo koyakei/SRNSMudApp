@@ -1,0 +1,85 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+
+<MudAutocomplete T="Tag"
+                 Label="@Label"
+                 Value="Value"
+                 ValueChanged="OnValueChanged"
+                 SearchFunc="@SearchTagsAsync"
+                 ToStringFunc="@(tag => tag == null ? null : tag.Name)"
+                 Placeholder="@Placeholder"
+                 ResetValueOnEmptyText="@ResetValueOnEmptyText"
+                 Clearable="@Clearable"
+                 Variant="@Variant"
+                 Dense="@Dense"
+                 Margin="@Margin"
+                 Class="@Class"
+                 Style="@Style"
+                 MaxItems="@MaxItems">
+
+    <ItemTemplate Context="tag">
+        @if (ItemTemplate != null)
+        {
+            @ItemTemplate(tag)
+        }
+        else
+        {
+            <div class="d-flex flex-column">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+                    <MudText Typo="Typo.body1" Class="font-weight-bold">@tag.Name</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" Class="ml-2 px-1">
+                        @tag.CachedWeight
+                    </MudChip>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(tag.Content))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @tag.Content
+                    </MudText>
+                }
+            </div>
+        }
+    </ItemTemplate>
+
+    <NoItemsTemplate>
+        <MudText Align="Align.Center" Class="px-4 py-2">
+            一致するタグが見つかりません
+        </MudText>
+    </NoItemsTemplate>
+</MudAutocomplete>
+
+@code {
+    [Parameter] public Tag? Value { get; set; }
+    [Parameter] public EventCallback<Tag?> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "タグを検索";
+    [Parameter] public string Placeholder { get; set; } = "タグ名 または 内容を入力...";
+    [Parameter] public Variant Variant { get; set; } = Variant.Text;
+    [Parameter] public bool Dense { get; set; }
+    [Parameter] public Margin Margin { get; set; } = Margin.None;
+    [Parameter] public bool Clearable { get; set; } = true;
+    [Parameter] public bool ResetValueOnEmptyText { get; set; } = true;
+    [Parameter] public int MaxItems { get; set; } = 20;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public Func<string?, CancellationToken, Task<IEnumerable<Tag>>>? CustomSearchFunc { get; set; }
+    [Parameter] public RenderFragment<Tag>? ItemTemplate { get; set; }
+
+    [Inject] private ITagDialogDataProvider TagDialogData { get; set; } = null!;
+
+    private async Task OnValueChanged(Tag? tag)
+    {
+        Value = tag;
+        await ValueChanged.InvokeAsync(tag);
+    }
+
+    private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
+    {
+        if (CustomSearchFunc != null)
+        {
+            return await CustomSearchFunc(value, token);
+        }
+
+        return await TagDialogData.SearchTagsWithFallbackAsync(value, token);
+    }
+}

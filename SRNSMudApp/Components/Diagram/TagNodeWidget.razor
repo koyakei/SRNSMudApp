@@ -1,11 +1,20 @@
 @using Blazor.Diagrams.Components.Renderers
 @using Blazor.Diagrams.Core.Models
 
-<div class="tag-node @(Node.Selected ? "selected" : "")">
+<div class="tag-node @(Node.Selected ? "selected" : "") @(Node.IsFocused ? "focused" : "")">
     <div class="tag-node-header d-flex align-center">
-        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+        @if (Node.IsFocused)
+        {
+            <MudIcon Icon="@Icons.Material.Filled.CenterFocusStrong" Size="Size.Small" Color="Color.Warning" Class="mr-1"
+                     Title="Focused" />
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+        }
         <span class="tag-node-name font-weight-bold">@Node.Tag.Name</span>
-        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" Class="ml-2 px-1 tag-weight-chip">
+        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                 Class="ml-2 px-1 tag-weight-chip">
             @Node.Tag.CachedWeight
         </MudChip>
     </div>

@@ -48,6 +48,11 @@ public partial class ImportTagDataProvider(
         string? value,
         CancellationToken token = default)
     {
+        if (token.IsCancellationRequested)
+        {
+            return [];
+        }
+
         await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags
             .Where(t => t.OwnerId == userId || t.IsSystem || t.OwnerId == "system")
@@ -55,7 +60,7 @@ public partial class ImportTagDataProvider(
 
         if (string.IsNullOrEmpty(value))
         {
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.OrderBy(t => t.Name).AsNoTracking().Take(50).ToListAsync(token);
         }
 
         try
@@ -64,6 +69,7 @@ public partial class ImportTagDataProvider(
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)))
+                .OrderBy(x => x.Name)
                 .AsNoTracking()
                 .ToListAsync(token);
 
@@ -82,11 +88,20 @@ public partial class ImportTagDataProvider(
                     .Take(50)
             ];
         }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
         catch (Exception ex)
         {
+            if (token.IsCancellationRequested)
+            {
+                return [];
+            }
+
             Console.WriteLine($"Vector search failed: {ex.Message}");
             query = query.Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)));
-            return await query.AsNoTracking().Take(50).ToListAsync(token);
+            return await query.OrderBy(x => x.Name).AsNoTracking().Take(50).ToListAsync(token);
         }
     }
 

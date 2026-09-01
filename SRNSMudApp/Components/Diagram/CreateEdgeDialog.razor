@@ -13,26 +13,14 @@
                 始点となるタグ（Source）と終点となるタグ（Target）を選択して、新しい有向エッジを作成します。
             </MudText>
 
-            <MudAutocomplete T="TagEntity"
-                             Label="Source Tag (始点)"
-                             @bind-Value="_sourceTag"
-                             SearchFunc="SearchSourceTags"
-                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
-                             Dense="true"
-                             Variant="Variant.Outlined"
-                             ResetValueOnEmptyText="true"
-                             CoerceText="true"
+            <MudAutocomplete T="TagEntity" Label="Source Tag (始点)" @bind-Value="_sourceTag"
+                             SearchFunc="SearchSourceTags" ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
+                             Dense="true" Variant="Variant.Outlined" ResetValueOnEmptyText="true" CoerceText="true"
                              Required="true" />
 
-            <MudAutocomplete T="TagEntity"
-                             Label="Target Tag (終点)"
-                             @bind-Value="_targetTag"
-                             SearchFunc="SearchTargetTags"
-                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
-                             Dense="true"
-                             Variant="Variant.Outlined"
-                             ResetValueOnEmptyText="true"
-                             CoerceText="true"
+            <MudAutocomplete T="TagEntity" Label="Target Tag (終点)" @bind-Value="_targetTag"
+                             SearchFunc="SearchTargetTags" ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
+                             Dense="true" Variant="Variant.Outlined" ResetValueOnEmptyText="true" CoerceText="true"
                              Required="true" />
 
             @if (_sourceTag != null && _targetTag != null && _sourceTag.Id == _targetTag.Id)
@@ -58,8 +46,19 @@
     [Parameter]
     public IReadOnlyList<TagEntity> AvailableTags { get; set; } = [];
 
+    [Parameter]
+    public TagEntity? InitialSourceTag { get; set; }
+
     private TagEntity? _sourceTag;
     private TagEntity? _targetTag;
+
+    protected override void OnInitialized()
+    {
+        if (InitialSourceTag != null)
+        {
+            _sourceTag = InitialSourceTag;
+        }
+    }
 
     private bool CanSubmit =>
         _sourceTag != null &&

@@ -8,30 +8,7 @@
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
     <MudText Typo="Typo.h5" GutterBottom="true">タグ検索</MudText>
 
-    <MudAutocomplete T="Tag"
-                     Label="タグを検索"
-                     @bind-Value="SelectedTag"
-                     SearchFunc="@SearchTagsAsync"
-                     ToStringFunc="@(tag => tag == null ? null : tag.Name)"
-                     Placeholder="タグ名 または 内容を入力..."
-                     ResetValueOnEmptyText="true"
-                     Clearable="true">
-
-        <ItemTemplate Context="tag">
-            <div class="d-flex flex-column">
-                <MudText Typo="Typo.body1">@tag.Name</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    ウェイト: @tag.CachedWeight | 内容: @tag.Content
-                </MudText>
-            </div>
-        </ItemTemplate>
-
-        <NoItemsTemplate>
-            <MudText Align="Align.Center" Class="px-4 py-2">
-                一致するタグが見つかりません
-            </MudText>
-        </NoItemsTemplate>
-    </MudAutocomplete>
+    <TagAutocomplete @bind-Value="SelectedTag" />
 
     @switch (SelectedTag)
     {
@@ -45,10 +22,4 @@
 
 @code {
     private Tag? SelectedTag { get; set; }
-
-    private async Task<IEnumerable<Tag>> SearchTagsAsync(string? value, CancellationToken token)
-    {
-        return await TagDialogData.SearchTagsWithFallbackAsync(value, token);
-    }
-
 }

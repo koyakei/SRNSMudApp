@@ -1,11 +1,12 @@
 @page "/tag-diagram"
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using System.Security.Claims
 @using Blazor.Diagrams
 @using Blazor.Diagrams.Core.Models
 @using Blazor.Diagrams.Options
 @using SRNSMudApp.Components.Diagram
+@using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Data
 @using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Services
@@ -14,40 +15,85 @@
 
 <PageTitle>Tag Edge Diagram - SRNS</PageTitle>
 
-<div class="d-flex justify-space-between align-center mb-3">
-    <div>
+<div class="d-flex flex-wrap justify-space-between align-center gap-3 mb-3">
+    <div class="d-flex align-center gap-2">
         <MudText Typo="Typo.h5" Class="font-weight-bold d-flex align-center">
             <MudIcon Icon="@Icons.Material.Filled.Hub" Class="mr-2" Color="Color.Primary" />
             Tag Edge Diagram
         </MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">
-            タグ間の関係（Edge）の可視化、作成・削除、および Edge への意味付けタグ（RightAsset 消費）を管理します。
-        </MudText>
     </div>
-    <div class="d-flex align-center gap-2">
+
+    @* 共通化されたタグ検索コンポーネントによるフォーカス UI *@
+    <div style="min-width: 280px; max-width: 380px; flex-grow: 1;">
+        <TagAutocomplete Value="_focusedTag" ValueChanged="OnTagFocusedFromSearch" Label="タグを検索してフォーカス"
+                         Placeholder="タグ名または内容で検索..." Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+    </div>
+
+    <div class="d-flex flex-wrap align-center gap-2">
+        @* 表示過多を防ぐフィルタリング設定 *@
+        <MudSwitch T="bool" Value="_onlyConnectedTags" ValueChanged="OnOnlyConnectedTagsChanged" Color="Color.Primary"
+                   Label="エッジのあるタグのみ" Dense="true" />
+
+        @if (_focusedTag != null)
+        {
+            <MudToggleIconButton Toggled="_neighborhoodOnly" ToggledChanged="OnNeighborhoodOnlyChanged"
+                                 Icon="@Icons.Material.Outlined.FilterCenterFocus" ToggledIcon="@Icons.Material.Filled.FilterCenterFocus"
+                                 Color="Color.Default" ToggledColor="Color.Warning" Title="周辺のみ表示切替" />
+        }
+
         <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
-            Tags: @_tags.Count
+            表示タグ: @_displayedTagsCount / @_tags.Count
         </MudChip>
         <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">
             Edges: @_edges.Count
         </MudChip>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.AddLink"
-                   OnClick="OpenCreateEdgeDialog"
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddLink"
+                   OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
                    Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
             Edge を作成
         </MudButton>
-        <MudIconButton Icon="@Icons.Material.Filled.Refresh"
-                       Color="Color.Default"
-                       Title="再読み込み"
+
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" Title="再読み込み"
                        OnClick="ReloadDiagramAsync" />
-        <MudIconButton Icon="@Icons.Material.Filled.CenterFocusStrong"
-                       Color="Color.Default"
-                       Title="ズームリセット"
+        <MudIconButton Icon="@Icons.Material.Filled.CenterFocusStrong" Color="Color.Default" Title="ズームリセット"
                        OnClick="ResetZoom" />
     </div>
 </div>
+
+@* フォーカス中タグのサマリーバー *@
+@if (_focusedTag != null)
+{
+    <MudPaper Elevation="1"
+              Class="px-3 py-1 mb-2 d-flex flex-wrap align-center justify-space-between gap-2 border-l-4 border-warning">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.CenterFocusStrong" Color="Color.Warning" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                フォーカス中: @_focusedTag.Name
+            </MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
+                Weight: @_focusedTag.CachedWeight
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                出エッジ: @GetOutgoingEdgesCount(_focusedTag.Id) 件
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                入エッジ: @GetIncomingEdgesCount(_focusedTag.Id) 件
+            </MudChip>
+        </div>
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.AddLink" OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
+                       Disabled="@string.IsNullOrEmpty(_currentUserId)">
+                このタグから Edge 作成
+            </MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Close" OnClick="ClearFocus">
+                フォーカス解除
+            </MudButton>
+        </div>
+    </MudPaper>
+}
 
 @if (_isLoading)
 {
@@ -55,22 +101,17 @@
 }
 else
 {
-    <MudPaper Outlined="true" Class="d-flex diagram-workspace" Style="height: calc(100vh - 220px); min-height: 600px; position: relative; overflow: hidden;">
+    <MudPaper Outlined="true" Class="d-flex diagram-workspace"
+              Style="height: calc(100vh - 240px); min-height: 550px; position: relative; overflow: hidden;">
         <div class="flex-grow-1" style="height: 100%; position: relative;">
-            <TagDiagramCanvas Diagram="_diagram"
-                              OnEdgeSelected="HandleEdgeSelected"
-                              OnNodeSelected="HandleNodeSelected" />
+            <TagDiagramCanvas Diagram="_diagram" OnEdgeSelected="HandleEdgeSelected" OnNodeSelected="HandleNodeSelected" />
         </div>
 
         @if (_selectedEdge != null)
         {
             <div style="height: 100%; z-index: 10;">
-                <TagEdgeInspector Edge="_selectedEdge"
-                                  CurrentUserId="@_currentUserId"
-                                  OnClose="CloseInspector"
-                                  OnDeleteEdge="HandleDeleteEdge"
-                                  OnAttachTag="HandleOpenAttachDialog"
-                                  OnDetachTag="HandleDetachTag" />
+                <TagEdgeInspector Edge="_selectedEdge" CurrentUserId="@_currentUserId" OnClose="CloseInspector"
+                                  OnDeleteEdge="HandleDeleteEdge" OnAttachTag="HandleOpenAttachDialog" OnDetachTag="HandleDetachTag" />
             </div>
         }
     </MudPaper>
@@ -88,8 +129,12 @@ else
     private List<TagEntity> _tags = [];
     private List<TagEdge> _edges = [];
     private TagEdge? _selectedEdge;
+    private TagEntity? _focusedTag;
     private string _currentUserId = "";
     private bool _isLoading = true;
+    private bool _onlyConnectedTags = true;
+    private bool _neighborhoodOnly = false;
+    private int _displayedTagsCount = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,23 +189,77 @@ else
         }
     }
 
+    private void OnOnlyConnectedTagsChanged(bool value)
+    {
+        _onlyConnectedTags = value;
+        BuildDiagramElements();
+        if (_focusedTag != null)
+        {
+            FocusNodeInDiagram(_focusedTag);
+        }
+    }
+
+    private void OnNeighborhoodOnlyChanged(bool value)
+    {
+        _neighborhoodOnly = value;
+        BuildDiagramElements();
+        if (_focusedTag != null)
+        {
+            FocusNodeInDiagram(_focusedTag);
+        }
+    }
+
     private void BuildDiagramElements()
     {
         _diagram.Nodes.Clear();
         _diagram.Links.Clear();
 
-        var nodeMap = new Dictionary<int, TagNode>();
-        int columns = Math.Max(3, (int)Math.Ceiling(Math.Sqrt(_tags.Count * 1.5)));
+        // 表示対象タグを決定
+        var connectedTagIds = _edges
+            .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
+            .ToHashSet();
 
-        for (int i = 0; i < _tags.Count; i++)
+        IEnumerable<TagEntity> tagsToDisplay;
+
+        if (_neighborhoodOnly && _focusedTag != null)
         {
-            var tag = _tags[i];
+            // フォーカス中タグと、そのタグに接続するエッジの相手タグのみを表示
+            var neighborIds = _edges
+                .Where(e => e.SourceTagId == _focusedTag.Id || e.TargetTagId == _focusedTag.Id)
+                .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
+                .Append(_focusedTag.Id)
+                .ToHashSet();
+
+            tagsToDisplay = _tags.Where(t => neighborIds.Contains(t.Id));
+        }
+        else if (_onlyConnectedTags)
+        {
+            // エッジに関与しているタグのみ（フォーカス中タグはエッジが無くても例外的に含める）
+            tagsToDisplay = _tags.Where(t => connectedTagIds.Contains(t.Id) || (_focusedTag != null && t.Id == _focusedTag.Id));
+        }
+        else
+        {
+            tagsToDisplay = _tags;
+        }
+
+        var displayList = tagsToDisplay.ToList();
+        _displayedTagsCount = displayList.Count;
+
+        var nodeMap = new Dictionary<int, TagNode>();
+        int columns = Math.Max(3, (int)Math.Ceiling(Math.Sqrt(displayList.Count * 1.5)));
+
+        for (int i = 0; i < displayList.Count; i++)
+        {
+            var tag = displayList[i];
             int col = i % columns;
             int row = i / columns;
             double x = 80 + (col * 240);
             double y = 80 + (row * 160);
 
-            var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y));
+            var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y))
+            {
+                IsFocused = (_focusedTag != null && tag.Id == _focusedTag.Id)
+            };
             nodeMap[tag.Id] = node;
             _diagram.Nodes.Add(node);
         }
@@ -182,6 +281,75 @@ else
         }
     }
 
+    private void OnTagFocusedFromSearch(TagEntity? tag)
+    {
+        if (tag == null)
+        {
+            ClearFocus();
+            return;
+        }
+
+        _focusedTag = tag;
+        _selectedEdge = null;
+
+        // ノードが現在のフィルタで表示されていない場合は再ビルドして含める
+        var node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
+        if (node == null)
+        {
+            BuildDiagramElements();
+            node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
+        }
+
+        if (node != null)
+        {
+            FocusNodeInDiagram(tag);
+        }
+    }
+
+    private void FocusNodeInDiagram(TagEntity tag)
+    {
+        var targetNode = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
+        if (targetNode == null)
+        {
+            return;
+        }
+
+        foreach (var n in _diagram.Nodes.OfType<TagNode>())
+        {
+            n.IsFocused = (n.Tag.Id == tag.Id);
+            n.Refresh();
+        }
+
+        _diagram.SelectModel(targetNode, unselectOthers: true);
+
+        // キャンバスをパンして画面中央付近に配置
+        double zoom = _diagram.Zoom;
+        double panX = 400 - (targetNode.Position.X * zoom) - 70;
+        double panY = 260 - (targetNode.Position.Y * zoom) - 30;
+        _diagram.SetPan(panX, panY);
+    }
+
+    private void ClearFocus()
+    {
+        _focusedTag = null;
+        _neighborhoodOnly = false;
+        foreach (var n in _diagram.Nodes.OfType<TagNode>())
+        {
+            n.IsFocused = false;
+            n.Refresh();
+        }
+        _diagram.UnselectAll();
+
+        // 絞り込み表示を通常状態に再構築
+        BuildDiagramElements();
+    }
+
+    private int GetOutgoingEdgesCount(int tagId) =>
+        _edges.Count(e => e.SourceTagId == tagId);
+
+    private int GetIncomingEdgesCount(int tagId) =>
+        _edges.Count(e => e.TargetTagId == tagId);
+
     private void ResetZoom()
     {
         _diagram.SetZoom(1.0);
@@ -196,6 +364,11 @@ else
     private void HandleNodeSelected(TagEntity? tag)
     {
         _selectedEdge = null;
+        if (tag != null)
+        {
+            _focusedTag = tag;
+            FocusNodeInDiagram(tag);
+        }
     }
 
     private void CloseInspector()
@@ -204,11 +377,12 @@ else
         _diagram.UnselectAll();
     }
 
-    private async Task OpenCreateEdgeDialog()
+    private async Task OpenCreateEdgeDialog(TagEntity? initialSource = null)
     {
         var parameters = new DialogParameters<CreateEdgeDialog>
         {
-            { x => x.AvailableTags, _tags }
+            { x => x.AvailableTags, _tags },
+            { x => x.InitialSourceTag, initialSource }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 

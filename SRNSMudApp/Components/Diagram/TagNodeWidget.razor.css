@@ -20,6 +20,24 @@
     box-shadow: 0 0 0 3px rgba(89, 74, 226, 0.3);
 }
 
+.tag-node.focused {
+    border-color: var(--mud-palette-warning, #ff9800) !important;
+    box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.45), 0 6px 16px rgba(255, 152, 0, 0.25);
+    transform: scale(1.05);
+    z-index: 5;
+    animation: focus-pulse 1.8s infinite alternate ease-in-out;
+}
+
+@keyframes focus-pulse {
+    0% {
+        box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.4), 0 4px 12px rgba(255, 152, 0, 0.2);
+    }
+
+    100% {
+        box-shadow: 0 0 0 6px rgba(255, 152, 0, 0.6), 0 8px 20px rgba(255, 152, 0, 0.35);
+    }
+}
+
 .tag-node-header {
     display: flex;
     align-items: center;
