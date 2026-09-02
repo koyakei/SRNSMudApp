@@ -31,5 +31,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../SRNSMudApp/SRNSMudApp.csproj"/>
+  </ItemGroup>
 
 </Project>

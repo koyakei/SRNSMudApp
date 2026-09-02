@@ -52,7 +52,8 @@
     <MudPopover Open="@_isTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
                 OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
         <TagTreePopoverContent TargetTag="@Node.Tag" AllTags="@Node.AllTags" EnableSwap="false" EnableExpand="true"
-                               EnableNavigation="true" OnTagClick="HandleTagClick" />
+                               EnableNavigation="true" OnTagClick="HandleTagClick" EnableAddChild="true"
+                               OnAddChildTag="HandleAddChildTag" />
     </MudPopover>
 </div>
 
@@ -86,6 +87,15 @@
     {
         _isTreeOpen = false;
         Node.RequestFocusTag?.Invoke(tagId);
+    }
+
+    private async Task HandleAddChildTag(Tag targetTag)
+    {
+        _isTreeOpen = false;
+        if (Node.RequestAddChildTag != null)
+        {
+            await Node.RequestAddChildTag(targetTag);
+        }
     }
 
     private static string GetPortClass(PortAlignment alignment) => alignment switch

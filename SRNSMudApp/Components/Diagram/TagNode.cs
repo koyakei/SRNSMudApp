@@ -36,6 +36,11 @@ public class TagNode : NodeModel
     /// </summary>
     public Action<int>? RequestFocusTag { get; set; }
 
+    /// <summary>
+    ///     ツリーポップオーバー等から子タグ追加を要求するコールバック。
+    /// </summary>
+    public Func<TagEntity, Task>? RequestAddChildTag { get; set; }
+
     public TagNode(TagEntity tag, Point? position = null) : base(position)
     {
         Tag = tag ?? throw new ArgumentNullException(nameof(tag));

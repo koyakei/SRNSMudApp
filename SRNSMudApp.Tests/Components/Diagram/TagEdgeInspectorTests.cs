@@ -6,6 +6,7 @@ using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Diagram;
+using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 
 using TagEntity = SRNSMudApp.Data.Tag;
@@ -15,12 +16,13 @@ namespace SRNSMudApp.Tests.Components.Diagram;
 public class TagEdgeInspectorTests : IAsyncDisposable
 {
     private readonly BunitContext _ctx = new();
+    private readonly IRenderedComponent<MudPopoverProvider> _popoverProvider;
 
     public TagEdgeInspectorTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices();
-        _ = _ctx.Render<MudPopoverProvider>();
+        _popoverProvider = _ctx.Render<MudPopoverProvider>();
     }
 
     public async ValueTask DisposeAsync()
@@ -178,5 +180,41 @@ public class TagEdgeInspectorTests : IAsyncDisposable
 
         // Popover content should be open
         Assert.Contains("SourceAlpha", cut.Markup);
+    }
+
+    [Fact]
+    public async Task WhenAddChildTagClickedInTree_InvokesOnAddChildTagCallback()
+    {
+        var sourceTag = new TagEntity { Id = 1, Name = "SourceAlpha", OwnerId = "owner-1" };
+        var targetTag = new TagEntity { Id = 2, Name = "TargetBeta", OwnerId = "owner-1" };
+        var allTags = new List<TagEntity> { sourceTag, targetTag };
+
+        var edge = new TagEdge
+        {
+            Id = 42,
+            OwnerId = "owner-1",
+            SourceTag = sourceTag,
+            TargetTag = targetTag,
+            TagAttachments = []
+        };
+
+        TagEntity? addedChildParent = null;
+        var cut = _ctx.Render<TagEdgeInspector>(parameters => parameters
+            .Add(p => p.Edge, edge)
+            .Add(p => p.AllTags, allTags)
+            .Add(p => p.CurrentUserId, "owner-1")
+            .Add(p => p.OnAddChildTag, (TagEntity t) => addedChildParent = t));
+
+        var treeButtons = cut.FindAll("button").Where(b => b.GetAttribute("title") == "タグツリーを表示").ToList();
+        Assert.NotEmpty(treeButtons);
+
+        treeButtons[0].Click();
+
+        _popoverProvider.WaitForState(() => _popoverProvider.FindComponents<TagTreePopoverContent>().Count > 0);
+        var popover = _popoverProvider.FindComponent<TagTreePopoverContent>();
+        Assert.True(popover.Instance.EnableAddChild);
+
+        await _popoverProvider.InvokeAsync(() => popover.Instance.OnAddChildTag.InvokeAsync(sourceTag));
+        Assert.Equal(sourceTag, addedChildParent);
     }
 }

@@ -86,7 +86,8 @@
                 <MudPopover Open="@_isFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
                             OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
                     <TagTreePopoverContent TargetTag="@_focusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
-                                           EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
+                                           EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree"
+                                           EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
                 </MudPopover>
                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
                                Class="pa-0" Title="始点タグを解除" OnClick="ClearFirstTag" />
@@ -125,7 +126,8 @@
                     <MudPopover Open="@_isSecondFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
                                 OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
                         <TagTreePopoverContent TargetTag="@_secondFocusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
-                                               EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
+                                               EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree"
+                                               EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
                     </MudPopover>
                     <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
                                    Class="pa-0" Title="終点タグを解除" OnClick="ClearSecondTag" />
@@ -200,7 +202,8 @@ else
         {
             <div style="height: 100%; z-index: 10;">
                 <TagEdgeInspector Edge="_selectedEdge" AllTags="_tags" CurrentUserId="@_currentUserId" OnClose="CloseInspector"
-                                  OnDeleteEdge="HandleDeleteEdge" OnAttachTag="HandleOpenAttachDialog" OnDetachTag="HandleDetachTag" />
+                                  OnDeleteEdge="HandleDeleteEdge" OnAttachTag="HandleOpenAttachDialog" OnDetachTag="HandleDetachTag"
+                                  OnAddChildTag="HandleAddChildTag" />
             </div>
         }
     </MudPaper>
@@ -369,7 +372,8 @@ else
             {
                 FocusRole = role,
                 AllTags = _tags,
-                RequestFocusTag = FocusTagById
+                RequestFocusTag = FocusTagById,
+                RequestAddChildTag = HandleAddChildTag
             };
             nodeMap[tag.Id] = node;
             _diagram.Nodes.Add(node);
@@ -722,6 +726,29 @@ else
             case Failure f:
                 Snackbar.Add($"紐付け解除に失敗しました: {f.ErrorMessage}", Severity.Error);
                 break;
+        }
+    }
+
+    private async Task HandleAddChildTag(TagEntity? parentTag)
+    {
+        if (parentTag == null)
+        {
+            return;
+        }
+
+        _isFocusTreeOpen = false;
+        _isSecondFocusTreeOpen = false;
+
+        var parameters = new DialogParameters { [nameof(TagAddDialog.DefaultParentTag)] = parentTag };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+
+        var dialog = await DialogLauncher.ShowAsync<TagAddDialog>("子タグの追加", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: TagEntity createdTag })
+        {
+            Snackbar.Add($"'{createdTag.Name}' を追加しました。", Severity.Success);
+            await ReloadDiagramAsync();
         }
     }
 }

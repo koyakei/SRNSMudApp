@@ -6,6 +6,7 @@ using Bunit;
 
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Moq;
 
@@ -14,8 +15,10 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.Diagram;
 using SRNSMudApp.Components.Pages;
+using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Dialogs;
 
 using TagEntity = SRNSMudApp.Data.Tag;
 
@@ -26,12 +29,15 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
     private const string TestUserId = "diagram-user-1";
     private readonly BunitContext _ctx = new();
     private readonly Mock<ITagDiagramDataProvider> _dataProviderMock = new();
+    private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
 
     public TagDiagramPageTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _dataProviderMock.Object);
+        _ctx.Services.RemoveAll<IDialogLauncher>();
+        _ = _ctx.Services.AddScoped(_ => _dialogLauncherMock.Object);
         _ctx.Services.AddAuth(TestUserId);
         _ = _ctx.Render<MudPopoverProvider>();
         _ctx.JSInterop.Setup<Rectangle>(invocation => invocation.Identifier.Contains("getBoundingClientRect"))
@@ -141,6 +147,54 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
 
         Assert.Equal(TagFocusRole.Target, swappedNode3.FocusRole);
         Assert.Equal(TagFocusRole.Source, swappedNode4.FocusRole);
+    }
+
+    [Fact]
+    public async Task TagDiagramPage_AssignsRequestAddChildTag_AndOpensTagAddDialogOnInvocation()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "Alpha", OwnerId = TestUserId, CachedWeight = 5 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 1, OwnerId = TestUserId, SourceTag = tag1, TargetTag = tag1 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+
+        var dialogRefMock = new Mock<IDialogReference>();
+        var newTag = new TagEntity { Id = 2, Name = "AlphaChild", OwnerId = TestUserId, ParentTagId = 1 };
+        _ = dialogRefMock.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(newTag));
+
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(
+                typeof(TagAddDialog),
+                "子タグの追加",
+                It.IsAny<DialogParameters>(),
+                It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRefMock.Object);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        var node1 = diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == 1);
+        Assert.NotNull(node1);
+        Assert.NotNull(node1.RequestAddChildTag);
+
+        await cut.InvokeAsync(() => node1.RequestAddChildTag!(tag1));
+
+        // Assert: TagAddDialog が子タグの追加タイトルで起動され、再読み込みが走ること
+        _dialogLauncherMock.Verify(
+            l => l.ShowAsync(
+                typeof(TagAddDialog),
+                "子タグの追加",
+                It.Is<DialogParameters>(dp => dp.Get<TagEntity>(nameof(TagAddDialog.DefaultParentTag)) == tag1),
+                It.IsAny<DialogOptions>()),
+            Times.Once);
+
+        // LoadAllTagsAsync が再読み込みで2回呼ばれていること (初期ロード + 作成後リロード)
+        _dataProviderMock.Verify(p => p.LoadAllTagsAsync(), Times.Exactly(2));
     }
 
     public async ValueTask DisposeAsync()

@@ -36,7 +36,8 @@
                                         TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
                                         Class="tree-popover" Paper="false">
                                 <TagTreePopoverContent TargetTag="@Edge.SourceTag" AllTags="@AllTags" EnableSwap="false"
-                                                       EnableExpand="true" EnableNavigation="true" />
+                                                       EnableExpand="true" EnableNavigation="true"
+                                                       EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
                             </MudPopover>
                         }
                     </div>
@@ -56,7 +57,8 @@
                                         TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
                                         Class="tree-popover" Paper="false">
                                 <TagTreePopoverContent TargetTag="@Edge.TargetTag" AllTags="@AllTags" EnableSwap="false"
-                                                       EnableExpand="true" EnableNavigation="true" />
+                                                       EnableExpand="true" EnableNavigation="true"
+                                                       EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
                             </MudPopover>
                         }
                     </div>
@@ -119,7 +121,8 @@
                                                     TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipAlways"
                                                     Class="tree-popover" Paper="false">
                                             <TagTreePopoverContent TargetTag="@attachment.Tag" AllTags="@AllTags" EnableSwap="false"
-                                                                   EnableExpand="true" EnableNavigation="true" />
+                                                                   EnableExpand="true" EnableNavigation="true"
+                                                                   EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
                                         </MudPopover>
                                     }
                                 </div>
@@ -165,11 +168,23 @@
     [Parameter]
     public EventCallback<TagEdgeTagAttachment> OnDetachTag { get; set; }
 
+    [Parameter]
+    public EventCallback<Tag> OnAddChildTag { get; set; }
+
     private int? _openTreeTagId;
 
     private void ToggleTree(int tagId)
     {
         _openTreeTagId = _openTreeTagId == tagId ? null : tagId;
+    }
+
+    private async Task HandleAddChildTag(Tag targetTag)
+    {
+        _openTreeTagId = null;
+        if (OnAddChildTag.HasDelegate)
+        {
+            await OnAddChildTag.InvokeAsync(targetTag);
+        }
     }
 
     private bool CanManageEdge =>
