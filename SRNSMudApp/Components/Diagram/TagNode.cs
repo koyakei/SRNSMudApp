@@ -6,12 +6,29 @@ using TagEntity = SRNSMudApp.Data.Tag;
 namespace SRNSMudApp.Components.Diagram;
 
 /// <summary>
+///     ダイアグラム上でのタグフォーカスの役割（単一、始点候補、終点候補）。
+/// </summary>
+public enum TagFocusRole
+{
+    None = 0,
+    Source = 1,
+    Target = 2
+}
+
+/// <summary>
 ///     Blazor.Diagrams 上でタグを表すカスタムノードモデル。
 /// </summary>
 public class TagNode : NodeModel
 {
     public TagEntity Tag { get; }
-    public bool IsFocused { get; set; }
+    public TagFocusRole FocusRole { get; set; } = TagFocusRole.None;
+
+    public bool IsFocused
+    {
+        get => FocusRole != TagFocusRole.None;
+        set => FocusRole = value ? (FocusRole == TagFocusRole.None ? TagFocusRole.Source : FocusRole) : TagFocusRole.None;
+    }
+
     public IReadOnlyList<TagEntity> AllTags { get; set; } = [];
 
     /// <summary>

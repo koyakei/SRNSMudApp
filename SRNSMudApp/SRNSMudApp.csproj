@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
+    <RootNamespace>SRNSMudApp</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>preview</LangVersion>
@@ -29,7 +30,7 @@
     <PackageReference Include="NuGet.Protocol" Version="7.6.0" />
     <PackageReference Include="SmartComponents.LocalEmbeddings" Version="0.1.0-preview10148" />
     <PackageReference Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
-    <ProjectReference Include="..\SRNSMudApp.Client\SRNSMudApp.Client.csproj" />
+    <ProjectReference Include="../SRNSMudApp.Client/SRNSMudApp.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="11.0.0-*" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="11.0.0-*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.0-*" />

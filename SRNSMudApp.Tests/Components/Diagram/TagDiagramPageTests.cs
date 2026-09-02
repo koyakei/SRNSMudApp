@@ -67,13 +67,80 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         cut.InvokeAsync(() => node2.RequestFocusTag(1));
 
         // Assert: node1 がフォーカス状態・選択状態になり、パンが計算されて中央に寄せられていること
-        Assert.True(node1.IsFocused);
-        Assert.False(node2.IsFocused);
-        Assert.True(node1.Selected);
+        cut.WaitForState(() => diagram.Nodes.OfType<TagNode>().Any(n => n.Tag.Id == 1 && n.IsFocused));
+        var updatedNode1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        var updatedNode2 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 2);
+
+        Assert.True(updatedNode1.IsFocused);
+        Assert.False(updatedNode2.IsFocused);
+        Assert.True(updatedNode1.Selected);
 
         // node1 は X=80, Width=160 (center=160)。画面幅 800 の中央 (400) に配置するため panX = 400 - 160 = 240
         Assert.Equal(240, diagram.Pan.X);
         Assert.NotEqual(0, diagram.Pan.Y);
+    }
+
+    [Fact]
+    public void TagDiagramPage_FocusesDualUnconnectedNodes_AndIncludesThemWhenOnlyConnectedTagsIsTrue()
+    {
+        // Arrange: tag1-tag2 are connected by an edge. tag3 and tag4 are unconnected.
+        var tag1 = new TagEntity { Id = 1, Name = "Connected1", OwnerId = TestUserId, CachedWeight = 5 };
+        var tag2 = new TagEntity { Id = 2, Name = "Connected2", OwnerId = TestUserId, CachedWeight = 3 };
+        var tag3 = new TagEntity { Id = 3, Name = "UnconnectedA", OwnerId = TestUserId, CachedWeight = 1 };
+        var tag4 = new TagEntity { Id = 4, Name = "UnconnectedB", OwnerId = TestUserId, CachedWeight = 1 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId, SourceTag = tag1, TargetTag = tag2 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1, tag2, tag3, tag4]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // 初期状態: エッジを持つ tag1, tag2 のみがダイアグラムに含まれる
+        Assert.Equal(2, diagram.Nodes.Count);
+        Assert.DoesNotContain(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 3);
+        Assert.DoesNotContain(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 4);
+
+        var node1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+
+        // 1つ目の未接続タグ (tag3) をフォーカス (Source として追加される)
+        cut.InvokeAsync(() => node1.RequestFocusTag!(3));
+
+        // tag3 が例外的に含まれ、ノード数が3になる
+        cut.WaitForState(() => diagram.Nodes.OfType<TagNode>().Any(n => n.Tag.Id == 3));
+        var node3 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 3);
+        Assert.Equal(TagFocusRole.Source, node3.FocusRole);
+
+        // 2つ目の未接続タグ (tag4) をフォーカス (Target として追加される)
+        cut.InvokeAsync(() => node3.RequestFocusTag!(4));
+
+        // tag3 と tag4 の双方が含まれ、ノード数が4になる
+        cut.WaitForState(() => diagram.Nodes.OfType<TagNode>().Any(n => n.Tag.Id == 4));
+        Assert.Equal(4, diagram.Nodes.Count);
+
+        var finalNode3 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 3);
+        var finalNode4 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 4);
+
+        Assert.Equal(TagFocusRole.Source, finalNode3.FocusRole);
+        Assert.Equal(TagFocusRole.Target, finalNode4.FocusRole);
+
+        // サマリーバーに2タグ間の Edge 作成ボタンが表示されていること
+        Assert.Contains("この2つのタグ間に Edge を作成", cut.Markup);
+
+        // 入れ替えボタンをクリックして、Source と Target が入れ替わることを確認
+        var swapButton = cut.FindAll("button").FirstOrDefault(b => b.GetAttribute("title") == "入れ替え");
+        Assert.NotNull(swapButton);
+        swapButton.Click();
+
+        var swappedNode3 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 3);
+        var swappedNode4 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 4);
+
+        Assert.Equal(TagFocusRole.Target, swappedNode3.FocusRole);
+        Assert.Equal(TagFocusRole.Source, swappedNode4.FocusRole);
     }
 
     public async ValueTask DisposeAsync()

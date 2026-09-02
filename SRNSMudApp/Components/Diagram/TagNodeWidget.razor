@@ -3,9 +3,28 @@
 @using Blazor.Diagrams.Core.Models
 @using SRNSMudApp.Components.Tag
 
-<div class="tag-node @(Node.Selected ? "selected" : "") @(Node.IsFocused ? "focused" : "")">
+<div
+    class="tag-node @(Node.Selected ? "selected" : "") @(Node.IsFocused ? "focused" : "") @(Node.FocusRole == TagFocusRole.Source ? "focused-source" : "") @(Node.FocusRole == TagFocusRole.Target ? "focused-target" : "")">
     <div class="tag-node-header d-flex align-center">
-        @if (Node.IsFocused)
+        @if (Node.FocusRole == TagFocusRole.Source)
+        {
+            <MudTooltip Text="始点 (Source)">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                         Class="mr-1 pa-1 font-weight-bold tag-role-chip" Style="height: 20px; min-width: 20px;">
+                    ①
+                </MudChip>
+            </MudTooltip>
+        }
+        else if (Node.FocusRole == TagFocusRole.Target)
+        {
+            <MudTooltip Text="終点 (Target)">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                         Class="mr-1 pa-1 font-weight-bold tag-role-chip" Style="height: 20px; min-width: 20px;">
+                    ②
+                </MudChip>
+            </MudTooltip>
+        }
+        else if (Node.IsFocused)
         {
             <MudIcon Icon="@Icons.Material.Filled.CenterFocusStrong" Size="Size.Small" Color="Color.Warning" Class="mr-1"
                      Title="Focused" />

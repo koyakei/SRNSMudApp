@@ -25,7 +25,8 @@
 
     @* 共通化されたタグ検索コンポーネントによるフォーカス UI *@
     <div style="min-width: 280px; max-width: 380px; flex-grow: 1;">
-        <TagAutocomplete Value="_focusedTag" ValueChanged="OnTagFocusedFromSearch" Label="タグを検索してフォーカス"
+        <TagAutocomplete Value="_focusedTag" ValueChanged="OnTagFocusedFromSearch"
+                         Label="@(_focusedTag == null ? "タグを検索してフォーカス" : "始点タグを変更")"
                          Placeholder="タグ名または内容で検索..." Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
     </div>
 
@@ -34,7 +35,7 @@
         <MudSwitch T="bool" Value="_onlyConnectedTags" ValueChanged="OnOnlyConnectedTagsChanged" Color="Color.Primary"
                    Label="エッジのあるタグのみ" Dense="true" />
 
-        @if (_focusedTag != null)
+        @if (_focusedTag != null || _secondFocusedTag != null)
         {
             <MudToggleIconButton Toggled="_neighborhoodOnly" ToggledChanged="OnNeighborhoodOnlyChanged"
                                  Icon="@Icons.Material.Outlined.FilterCenterFocus" ToggledIcon="@Icons.Material.Filled.FilterCenterFocus"
@@ -49,7 +50,7 @@
         </MudChip>
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddLink"
-                   OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
+                   OnClick="() => OpenCreateEdgeDialog(_focusedTag, _secondFocusedTag)"
                    Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
             Edge を作成
         </MudButton>
@@ -61,43 +62,120 @@
     </div>
 </div>
 
-@* フォーカス中タグのサマリーバー *@
+@* フォーカス中タグのサマリーバー（複数タグ・始点/終点フォーカス対応） *@
 @if (_focusedTag != null)
 {
     <MudPaper Elevation="1"
-              Class="px-3 py-1 mb-2 d-flex flex-wrap align-center justify-space-between gap-2 border-l-4 border-warning">
-        <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@Icons.Material.Filled.CenterFocusStrong" Color="Color.Warning" Size="Size.Small" />
-            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
-                フォーカス中: @_focusedTag.Name
-            </MudText>
-            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
-                Weight: @_focusedTag.CachedWeight
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
-                出エッジ: @GetOutgoingEdgesCount(_focusedTag.Id) 件
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
-                入エッジ: @GetIncomingEdgesCount(_focusedTag.Id) 件
-            </MudChip>
+              Class="px-3 py-2 mb-2 d-flex flex-wrap align-center justify-space-between gap-2 border-l-4 border-warning">
+        <div class="d-flex flex-wrap align-center gap-2">
+            @* 始点タグ (Tag 1) *@
+            <div class="d-flex align-center gap-1">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="font-weight-bold">
+                    ① 始点
+                </MudChip>
+                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                    @_focusedTag.Name
+                </MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
+                    W: @_focusedTag.CachedWeight
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                               Class="pa-0 ml-1" Title="始点タグのツリーを表示" OnClick="() => _isFocusTreeOpen = !_isFocusTreeOpen" />
+                <MudOverlay Visible="@_isFocusTreeOpen" OnClick="@(() => _isFocusTreeOpen = false)" AutoClose="true"
+                            DarkBackground="false" />
+                <MudPopover Open="@_isFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                            OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
+                    <TagTreePopoverContent TargetTag="@_focusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
+                                           EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
+                </MudPopover>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
+                               Class="pa-0" Title="始点タグを解除" OnClick="ClearFirstTag" />
+            </div>
+
+            @* 向き / 反転 (Swap) ボタン *@
+            @if (_secondFocusedTag != null)
+            {
+                <MudTooltip Text="始点と終点を入れ替える">
+                    <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Primary"
+                                   OnClick="SwapFocusedTags" Title="入れ替え" />
+                </MudTooltip>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Color="Color.Secondary" Class="mx-1" />
+            }
+
+            @* 終点タグ (Tag 2) *@
+            @if (_secondFocusedTag != null)
+            {
+                <div class="d-flex align-center gap-1">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" Class="font-weight-bold">
+                        ② 終点
+                    </MudChip>
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                        @_secondFocusedTag.Name
+                    </MudText>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
+                        W: @_secondFocusedTag.CachedWeight
+                    </MudChip>
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
+                                   Class="pa-0 ml-1" Title="終点タグのツリーを表示" OnClick="() => _isSecondFocusTreeOpen = !_isSecondFocusTreeOpen" />
+                    <MudOverlay Visible="@_isSecondFocusTreeOpen" OnClick="@(() => _isSecondFocusTreeOpen = false)" AutoClose="true"
+                                DarkBackground="false" />
+                    <MudPopover Open="@_isSecondFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                                OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
+                        <TagTreePopoverContent TargetTag="@_secondFocusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
+                                               EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
+                    </MudPopover>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
+                                   Class="pa-0" Title="終点タグを解除" OnClick="ClearSecondTag" />
+                </div>
+            }
+            else
+            {
+                <div class="d-flex align-center gap-1">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                        ② 終点: 未選択
+                    </MudChip>
+                    <div style="min-width: 220px; max-width: 280px;">
+                        <TagAutocomplete Value="_secondFocusedTag" ValueChanged="OnSecondTagFocusedFromSearch"
+                                         Label="2つ目のタグを検索 (終点)" Placeholder="タグ名で検索..."
+                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                    </div>
+                </div>
+            }
         </div>
+
         <div class="d-flex align-center gap-2">
-            <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                       StartIcon="@Icons.Material.Filled.AccountTree" OnClick="() => _isFocusTreeOpen = !_isFocusTreeOpen">
-                ツリー表示
-            </MudButton>
-            <MudOverlay Visible="@_isFocusTreeOpen" OnClick="@(() => _isFocusTreeOpen = false)" AutoClose="true"
-                        DarkBackground="false" />
-            <MudPopover Open="@_isFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
-                        OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
-                <TagTreePopoverContent TargetTag="@_focusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
-                                       EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree" />
-            </MudPopover>
-            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                       StartIcon="@Icons.Material.Filled.AddLink" OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
-                       Disabled="@string.IsNullOrEmpty(_currentUserId)">
-                このタグから Edge 作成
-            </MudButton>
+            @if (_secondFocusedTag != null)
+            {
+                var existingEdge = GetExistingEdgeBetween(_focusedTag.Id, _secondFocusedTag.Id);
+                @if (existingEdge != null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@(existingEdge.SourceTagId == _focusedTag.Id ? Color.Info : Color.Warning)" Variant="Variant.Outlined">
+                        @(existingEdge.SourceTagId == _focusedTag.Id ? "既存 Edge あり (①→②)" : "逆方向 Edge あり (②→①)")
+                    </MudChip>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Timeline" OnClick="() => HandleEdgeSelected(existingEdge)">
+                        Edge を選択
+                    </MudButton>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.AddLink"
+                           OnClick="() => OpenCreateEdgeDialog(_focusedTag, _secondFocusedTag)"
+                           Disabled="@string.IsNullOrEmpty(_currentUserId)">
+                    この2つのタグ間に Edge を作成
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.AddLink" OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
+                           Disabled="@string.IsNullOrEmpty(_currentUserId)">
+                    このタグから Edge 作成
+                </MudButton>
+            }
+
             <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.Close" OnClick="ClearFocus">
                 フォーカス解除
@@ -141,11 +219,14 @@ else
     private List<TagEdge> _edges = [];
     private TagEdge? _selectedEdge;
     private TagEntity? _focusedTag;
+    private TagEntity? _secondFocusedTag;
     private string _currentUserId = "";
     private bool _isLoading = true;
     private bool _onlyConnectedTags = true;
     private bool _neighborhoodOnly = false;
     private bool _isFocusTreeOpen;
+    private bool _isSecondFocusTreeOpen;
+    private bool _isProgrammaticSelection;
     private int _displayedTagsCount = 0;
 
     protected override async Task OnInitializedAsync()
@@ -205,20 +286,14 @@ else
     {
         _onlyConnectedTags = value;
         BuildDiagramElements();
-        if (_focusedTag != null)
-        {
-            FocusNodeInDiagram(_focusedTag);
-        }
+        FocusNodesInDiagram();
     }
 
     private void OnNeighborhoodOnlyChanged(bool value)
     {
         _neighborhoodOnly = value;
         BuildDiagramElements();
-        if (_focusedTag != null)
-        {
-            FocusNodeInDiagram(_focusedTag);
-        }
+        FocusNodesInDiagram();
     }
 
     private void BuildDiagramElements()
@@ -233,21 +308,33 @@ else
 
         IEnumerable<TagEntity> tagsToDisplay;
 
-        if (_neighborhoodOnly && _focusedTag != null)
+        if (_neighborhoodOnly && (_focusedTag != null || _secondFocusedTag != null))
         {
-            // フォーカス中タグと、そのタグに接続するエッジの相手タグのみを表示
+            var focusIds = new HashSet<int>();
+            if (_focusedTag != null)
+            {
+                _ = focusIds.Add(_focusedTag.Id);
+            }
+
+            if (_secondFocusedTag != null)
+            {
+                _ = focusIds.Add(_secondFocusedTag.Id);
+            }
+
             var neighborIds = _edges
-                .Where(e => e.SourceTagId == _focusedTag.Id || e.TargetTagId == _focusedTag.Id)
+                .Where(e => focusIds.Contains(e.SourceTagId) || focusIds.Contains(e.TargetTagId))
                 .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
-                .Append(_focusedTag.Id)
+                .Concat(focusIds)
                 .ToHashSet();
 
             tagsToDisplay = _tags.Where(t => neighborIds.Contains(t.Id));
         }
         else if (_onlyConnectedTags)
         {
-            // エッジに関与しているタグのみ（フォーカス中タグはエッジが無くても例外的に含める）
-            tagsToDisplay = _tags.Where(t => connectedTagIds.Contains(t.Id) || (_focusedTag != null && t.Id == _focusedTag.Id));
+            // エッジに関与しているタグ、またはフォーカス中（未接続でも含める）
+            tagsToDisplay = _tags.Where(t => connectedTagIds.Contains(t.Id)
+                || (_focusedTag != null && t.Id == _focusedTag.Id)
+                || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id));
         }
         else
         {
@@ -268,9 +355,19 @@ else
             double x = 80 + (col * 240);
             double y = 80 + (row * 160);
 
+            TagFocusRole role = TagFocusRole.None;
+            if (_focusedTag != null && tag.Id == _focusedTag.Id)
+            {
+                role = TagFocusRole.Source;
+            }
+            else if (_secondFocusedTag != null && tag.Id == _secondFocusedTag.Id)
+            {
+                role = TagFocusRole.Target;
+            }
+
             var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y))
             {
-                IsFocused = (_focusedTag != null && tag.Id == _focusedTag.Id),
+                FocusRole = role,
                 AllTags = _tags,
                 RequestFocusTag = FocusTagById
             };
@@ -298,6 +395,7 @@ else
     private void FocusTagFromHeaderTree(int tagId)
     {
         _isFocusTreeOpen = false;
+        _isSecondFocusTreeOpen = false;
         FocusTagById(tagId);
     }
 
@@ -307,9 +405,34 @@ else
         switch (tag)
         {
             case not null:
-                OnTagFocusedFromSearch(tag);
+                HandleTagSelection(tag);
                 break;
         }
+    }
+
+    private void HandleTagSelection(TagEntity tag)
+    {
+        if (_focusedTag == null)
+        {
+            _focusedTag = tag;
+        }
+        else if (_focusedTag.Id == tag.Id)
+        {
+            // 始点と同じタグの場合は何もしない
+            return;
+        }
+        else if (_secondFocusedTag?.Id == tag.Id)
+        {
+            // 終点と同じタグの場合も何もしない
+            return;
+        }
+        else
+        {
+            // 異なるタグの場合は終点（2つ目）に指定
+            _secondFocusedTag = tag;
+        }
+
+        OnFocusedTagsChanged();
     }
 
     private void OnTagFocusedFromSearch(TagEntity? tag)
@@ -317,71 +440,146 @@ else
         switch (tag)
         {
             case null:
-                ClearFocus();
+                ClearFirstTag();
                 return;
         }
 
-        _focusedTag = tag;
+        if (_focusedTag == null)
+        {
+            _focusedTag = tag;
+        }
+        else if (_focusedTag.Id == tag.Id)
+        {
+            // 変更なし
+        }
+        else if (_secondFocusedTag == null)
+        {
+            _secondFocusedTag = tag;
+        }
+        else
+        {
+            _focusedTag = tag;
+        }
+
+        OnFocusedTagsChanged();
+    }
+
+    private void OnSecondTagFocusedFromSearch(TagEntity? tag)
+    {
+        _secondFocusedTag = tag;
+        OnFocusedTagsChanged();
+    }
+
+    private void OnFocusedTagsChanged()
+    {
         _selectedEdge = null;
-
-        // ノードが現在のフィルタで表示されていない場合は再ビルドして含める
-        var node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
-        switch (node)
-        {
-            case null:
-                BuildDiagramElements();
-                node = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
-                break;
-        }
-
-        switch (node)
-        {
-            case not null:
-                FocusNodeInDiagram(tag);
-                break;
-        }
-
+        BuildDiagramElements();
+        FocusNodesInDiagram();
         _ = InvokeAsync(StateHasChanged);
     }
 
-    private void FocusNodeInDiagram(TagEntity tag)
+    private void FocusNodesInDiagram()
     {
-        var targetNode = _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == tag.Id);
-        switch (targetNode)
+        _isProgrammaticSelection = true;
+        try
         {
-            case null:
-                return;
-        }
+            var node1 = _focusedTag != null
+                ? _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == _focusedTag.Id)
+                : null;
+            var node2 = _secondFocusedTag != null
+                ? _diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == _secondFocusedTag.Id)
+                : null;
 
-        foreach (var n in _diagram.Nodes.OfType<TagNode>())
+            foreach (var n in _diagram.Nodes.OfType<TagNode>())
+            {
+                if (node1 != null && n.Tag.Id == node1.Tag.Id)
+                {
+                    n.FocusRole = TagFocusRole.Source;
+                }
+                else if (node2 != null && n.Tag.Id == node2.Tag.Id)
+                {
+                    n.FocusRole = TagFocusRole.Target;
+                }
+                else
+                {
+                    n.FocusRole = TagFocusRole.None;
+                }
+                n.Refresh();
+            }
+
+            double zoom = _diagram.Zoom;
+            double containerWidth = _diagram.Container is { Width: > 0 } ? _diagram.Container.Width : 800;
+            double containerHeight = _diagram.Container is { Height: > 0 } ? _diagram.Container.Height : 550;
+
+            if (node1 != null && node2 != null)
+            {
+                _diagram.SelectModel(node1, unselectOthers: true);
+                _diagram.SelectModel(node2, unselectOthers: false);
+
+                double nodeWidth = node1.Size is { Width: > 0 } ? node1.Size.Width : 160;
+                double nodeHeight = node1.Size is { Height: > 0 } ? node1.Size.Height : 50;
+
+                double midX = (node1.Position.X + node2.Position.X + nodeWidth) / 2.0;
+                double midY = (node1.Position.Y + node2.Position.Y + nodeHeight) / 2.0;
+
+                double panX = (containerWidth / 2.0) - (midX * zoom);
+                double panY = (containerHeight / 2.0) - (midY * zoom);
+                _diagram.SetPan(panX, panY);
+            }
+            else if (node1 != null)
+            {
+                _diagram.SelectModel(node1, unselectOthers: true);
+
+                double nodeWidth = node1.Size is { Width: > 0 } ? node1.Size.Width : 160;
+                double nodeHeight = node1.Size is { Height: > 0 } ? node1.Size.Height : 50;
+
+                double panX = (containerWidth / 2.0) - ((node1.Position.X + (nodeWidth / 2.0)) * zoom);
+                double panY = (containerHeight / 2.0) - ((node1.Position.Y + (nodeHeight / 2.0)) * zoom);
+                _diagram.SetPan(panX, panY);
+            }
+        }
+        finally
         {
-            n.IsFocused = (n.Tag.Id == tag.Id);
-            n.Refresh();
+            _isProgrammaticSelection = false;
         }
+    }
 
-        _diagram.SelectModel(targetNode, unselectOthers: true);
+    private void SwapFocusedTags()
+    {
+        (_focusedTag, _secondFocusedTag) = (_secondFocusedTag, _focusedTag);
+        OnFocusedTagsChanged();
+    }
 
-        // キャンバスをパンして画面中央に配置
-        double zoom = _diagram.Zoom;
-        double containerWidth = _diagram.Container is { Width: > 0 } ? _diagram.Container.Width : 800;
-        double containerHeight = _diagram.Container is { Height: > 0 } ? _diagram.Container.Height : 550;
+    private void ClearFirstTag()
+    {
+        _focusedTag = _secondFocusedTag;
+        _secondFocusedTag = null;
+        if (_focusedTag == null)
+        {
+            ClearFocus();
+        }
+        else
+        {
+            OnFocusedTagsChanged();
+        }
+    }
 
-        double nodeWidth = targetNode.Size is { Width: > 0 } ? targetNode.Size.Width : 160;
-        double nodeHeight = targetNode.Size is { Height: > 0 } ? targetNode.Size.Height : 50;
-
-        double panX = (containerWidth / 2.0) - ((targetNode.Position.X + (nodeWidth / 2.0)) * zoom);
-        double panY = (containerHeight / 2.0) - ((targetNode.Position.Y + (nodeHeight / 2.0)) * zoom);
-        _diagram.SetPan(panX, panY);
+    private void ClearSecondTag()
+    {
+        _secondFocusedTag = null;
+        OnFocusedTagsChanged();
     }
 
     private void ClearFocus()
     {
         _focusedTag = null;
+        _secondFocusedTag = null;
         _neighborhoodOnly = false;
         _isFocusTreeOpen = false;
+        _isSecondFocusTreeOpen = false;
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
         {
-            n.IsFocused = false;
+            n.FocusRole = TagFocusRole.None;
             n.Refresh();
         }
         _diagram.UnselectAll();
@@ -389,6 +587,11 @@ else
         // 絞り込み表示を通常状態に再構築
         BuildDiagramElements();
     }
+
+    private TagEdge? GetExistingEdgeBetween(int id1, int id2) =>
+        _edges.FirstOrDefault(e =>
+            (e.SourceTagId == id1 && e.TargetTagId == id2) ||
+            (e.SourceTagId == id2 && e.TargetTagId == id1));
 
     private int GetOutgoingEdgesCount(int tagId) =>
         _edges.Count(e => e.SourceTagId == tagId);
@@ -409,11 +612,15 @@ else
 
     private void HandleNodeSelected(TagEntity? tag)
     {
+        if (_isProgrammaticSelection)
+        {
+            return;
+        }
+
         _selectedEdge = null;
         if (tag != null)
         {
-            _focusedTag = tag;
-            FocusNodeInDiagram(tag);
+            HandleTagSelection(tag);
         }
     }
 
@@ -423,12 +630,13 @@ else
         _diagram.UnselectAll();
     }
 
-    private async Task OpenCreateEdgeDialog(TagEntity? initialSource = null)
+    private async Task OpenCreateEdgeDialog(TagEntity? initialSource = null, TagEntity? initialTarget = null)
     {
         var parameters = new DialogParameters<CreateEdgeDialog>
         {
             { x => x.AvailableTags, _tags },
-            { x => x.InitialSourceTag, initialSource }
+            { x => x.InitialSourceTag, initialSource },
+            { x => x.InitialTargetTag, initialTarget }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 

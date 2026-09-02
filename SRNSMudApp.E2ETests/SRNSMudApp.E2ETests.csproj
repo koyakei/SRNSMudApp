@@ -30,7 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SRNSMudApp\SRNSMudApp.csproj"/>
-  </ItemGroup>
+    <ProjectReference Include="../SRNSMudApp/SRNSMudApp.csproj"/>
 
 </Project>
