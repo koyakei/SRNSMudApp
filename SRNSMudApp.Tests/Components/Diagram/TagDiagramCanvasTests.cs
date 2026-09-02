@@ -51,6 +51,40 @@ public class TagDiagramCanvasTests : IAsyncDisposable
     }
 
     [Fact]
+    public void TagEdgeLinkWidget_RendersIntermediateArrows_AtOneThirdAndTwoThirds()
+    {
+        var diagram = new BlazorDiagram();
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var tag2 = new TagEntity { Id = 2, Name = "Target", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var node2 = new TagNode(tag2, new Point(300, 0));
+        diagram.Nodes.Add(node1);
+        diagram.Nodes.Add(node2);
+        var edge = new TagEdge { Id = 1, SourceTagId = 1, TargetTagId = 2, OwnerId = "user1", SourceTag = tag1, TargetTag = tag2 };
+        var link = new TagEdgeLink(edge, node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!, node2.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Left)!);
+        diagram.Links.Add(link);
+
+        var cut = _ctx.Render<TagDiagramCanvas>(parameters => parameters.Add(p => p.Diagram, diagram));
+
+        var arrowsGroup = cut.Find("g.diagram-link-intermediate-arrows");
+        Assert.NotNull(arrowsGroup);
+
+        var arrowPaths = arrowsGroup.QuerySelectorAll("path");
+        Assert.Equal(2, arrowPaths.Length);
+
+        // 矢印の幅はエッジの太さ（2.5）の5倍 = 12.5 (path: M -6.25 ... L 6.25 ...)
+        double expectedArrowWidth = link.Width * 5.0;
+        double expectedHalfWidth = expectedArrowWidth / 2.0;
+        foreach (var path in arrowPaths)
+        {
+            var d = path.GetAttribute("d");
+            Assert.NotNull(d);
+            Assert.Contains($"-{expectedHalfWidth:F2}", d);
+            Assert.Contains($"{expectedHalfWidth:F2}", d);
+        }
+    }
+
+    [Fact]
     public void TagDiagramCanvas_SelectionChanged_InvokesCallbacks()
     {
         var diagram = new BlazorDiagram();
@@ -184,5 +218,63 @@ public class TagDiagramCanvasTests : IAsyncDisposable
         var showChildrenBtn = cut.Find("button.tag-show-children-button");
         Assert.NotNull(showChildrenBtn);
         Assert.True(showChildrenBtn.HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void TagEdgeLink_InitializesWithDirectionArrow_AndThemeColors()
+    {
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var tag2 = new TagEntity { Id = 2, Name = "Target", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var node2 = new TagNode(tag2, new Point(100, 0));
+        var edge = new TagEdge { Id = 1, SourceTagId = 1, TargetTagId = 2, OwnerId = "user1", SourceTag = tag1, TargetTag = tag2 };
+
+        var link = new TagEdgeLink(edge, node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!, node2.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Left)!);
+
+        Assert.NotNull(link.TargetMarker);
+        Assert.Same(TagEdgeLink.DirectionArrow, link.TargetMarker);
+        Assert.Equal(16, link.TargetMarker.Width);
+        Assert.Equal("#594ae2", link.Color);
+        Assert.Equal("#ff4081", link.SelectedColor);
+        Assert.Equal(2.5, link.Width);
+    }
+
+    [Fact]
+    public void TagEdgeLink_UpdateLabels_HasNoLabels_WhenNoAttachments()
+    {
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var tag2 = new TagEntity { Id = 2, Name = "Target", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var node2 = new TagNode(tag2, new Point(100, 0));
+        var edge = new TagEdge { Id = 1, SourceTagId = 1, TargetTagId = 2, OwnerId = "user1", SourceTag = tag1, TargetTag = tag2 };
+
+        var link = new TagEdgeLink(edge, node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!, node2.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Left)!);
+
+        Assert.Empty(link.Labels);
+    }
+
+    [Fact]
+    public void TagEdgeLink_UpdateLabels_ShowsTagNameWithoutArrow_WithAttachments()
+    {
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var tag2 = new TagEntity { Id = 2, Name = "Target", OwnerId = "user1" };
+        var attachedTag = new TagEntity { Id = 3, Name = "CategoryA", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var node2 = new TagNode(tag2, new Point(100, 0));
+        var edge = new TagEdge
+        {
+            Id = 1,
+            SourceTagId = 1,
+            TargetTagId = 2,
+            OwnerId = "user1",
+            SourceTag = tag1,
+            TargetTag = tag2,
+            TagAttachments = [new TagEdgeTagAttachment { Id = 10, TagEdgeId = 1, TagId = 3, Tag = attachedTag, OwnerId = "user1" }]
+        };
+
+        var link = new TagEdgeLink(edge, node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!, node2.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Left)!);
+
+        Assert.Single(link.Labels);
+        Assert.Equal("CategoryA", link.Labels[0].Content);
     }
 }

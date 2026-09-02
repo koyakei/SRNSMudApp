@@ -390,6 +390,36 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         });
     }
 
+    [Fact]
+    public void TagDiagramPage_RendersEdgesWithDirectionArrow_AndDirectionLabels()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "SourceTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var tag2 = new TagEntity { Id = 2, Name = "TargetTag", OwnerId = TestUserId, CachedWeight = 3 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId, SourceTag = tag1, TargetTag = tag2 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1, tag2]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // Assert: エッジに対応する TagEdgeLink が存在し、方向矢印マーカーが設定され、余分な矢印ラベルがないこと
+        var link = diagram.Links.OfType<TagEdgeLink>().FirstOrDefault(l => l.Edge.Id == 101);
+        Assert.NotNull(link);
+        Assert.Same(TagEdgeLink.DirectionArrow, link.TargetMarker);
+        Assert.Empty(link.Labels);
+
+        // 1/3 と 2/3 の位置に中間方向矢印が描画されていること
+        var arrows = cut.Find("g.diagram-link-intermediate-arrows");
+        Assert.NotNull(arrows);
+        Assert.Equal(2, arrows.QuerySelectorAll("path").Length);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

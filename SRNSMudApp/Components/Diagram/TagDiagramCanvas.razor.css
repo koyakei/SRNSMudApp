@@ -1,0 +1,36 @@
+::deep .diagram-link path {
+    stroke: var(--mud-palette-primary, #594ae2);
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+::deep .diagram-link g path {
+    fill: var(--mud-palette-primary, #594ae2);
+    transition: fill 0.2s ease;
+}
+
+::deep .diagram-link.selected path {
+    stroke: var(--mud-palette-secondary, #ff4081) !important;
+}
+
+::deep .diagram-link.selected g path {
+    fill: var(--mud-palette-secondary, #ff4081) !important;
+}
+
+::deep .diagram-link .default-link-label {
+    background-color: var(--mud-palette-primary, #594ae2);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 2px 10px;
+    min-width: unset;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    user-select: none;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+::deep .diagram-link.selected .default-link-label {
+    background-color: var(--mud-palette-secondary, #ff4081) !important;
+}

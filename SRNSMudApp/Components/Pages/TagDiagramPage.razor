@@ -438,6 +438,7 @@ else
 
         _diagram = new BlazorDiagram(options);
         _diagram.RegisterComponent<TagNode, TagNodeWidget>();
+        _diagram.RegisterComponent<TagEdgeLink, TagEdgeLinkWidget>();
     }
 
     private async Task ReloadDiagramAsync(bool preserveExtraVisibleTags = false)
@@ -600,11 +601,25 @@ else
             if (nodeMap.TryGetValue(edge.SourceTagId, out var sourceNode) &&
                 nodeMap.TryGetValue(edge.TargetTagId, out var targetNode))
             {
-                bool sourceIsLeft = sourceNode.Position.X <= targetNode.Position.X;
-                var sourcePort = sourceNode.GetPort(sourceIsLeft ? PortAlignment.Right : PortAlignment.Left)
-                                 ?? sourceNode.Ports.First();
-                var targetPort = targetNode.GetPort(sourceIsLeft ? PortAlignment.Left : PortAlignment.Right)
-                                 ?? targetNode.Ports.First();
+                // 始点ノードと終点ノードの相対位置から最も自然なポート対（上下左右）を選択し、矢印が自然に終点へ向かうようにする
+                double dx = targetNode.Position.X - sourceNode.Position.X;
+                double dy = targetNode.Position.Y - sourceNode.Position.Y;
+                PortAlignment sourceAlignment;
+                PortAlignment targetAlignment;
+
+                if (Math.Abs(dx) >= Math.Abs(dy))
+                {
+                    sourceAlignment = dx >= 0 ? PortAlignment.Right : PortAlignment.Left;
+                    targetAlignment = dx >= 0 ? PortAlignment.Left : PortAlignment.Right;
+                }
+                else
+                {
+                    sourceAlignment = dy >= 0 ? PortAlignment.Bottom : PortAlignment.Top;
+                    targetAlignment = dy >= 0 ? PortAlignment.Top : PortAlignment.Bottom;
+                }
+
+                var sourcePort = sourceNode.GetPort(sourceAlignment) ?? sourceNode.Ports.First();
+                var targetPort = targetNode.GetPort(targetAlignment) ?? targetNode.Ports.First();
 
                 var link = new TagEdgeLink(edge, sourcePort, targetPort);
                 _diagram.Links.Add(link);

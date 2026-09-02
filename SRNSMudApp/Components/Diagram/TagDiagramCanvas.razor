@@ -32,6 +32,7 @@
 
     protected override void OnInitialized()
     {
+        Diagram.RegisterComponent<TagEdgeLink, TagEdgeLinkWidget>(replace: true);
         Diagram.SelectionChanged += HandleSelectionChanged;
     }
 
