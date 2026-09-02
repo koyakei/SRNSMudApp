@@ -151,4 +151,65 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
         var detachRes = await provider.DetachTagFromEdgeAsync(200, "u1");
         Assert.True(detachRes is Success<bool> dts && dts.Value);
     }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsAsync_ShouldAutoIssueRightAsset_WhenUserIsOwnerAndHasNoAssets()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_owner_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag = new Tag { Name = $"OwnerTag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // 初期状態: アセットは 0 件
+            var initialAssets = await dbContext.RightAssets.CountAsync(r => r.TargetTagId == tag.Id);
+            Assert.Equal(0, initialAssets);
+
+            // Act: オーナーが未所持の状態で取得
+            var result = await provider.GetAvailableRightAssetsAsync(userId, tag.Id);
+
+            // Assert: 自動発行されて1件返ること (Amount = 10, IsBurned = false)
+            Assert.Single(result);
+            var issued = result[0];
+            Assert.Equal(userId, issued.OwnerId);
+            Assert.Equal(tag.Id, issued.TargetTagId);
+            Assert.Equal(10, issued.Amount);
+            Assert.False(issued.IsBurned);
+
+            // DB にも保存されていること
+            var dbAssets = await dbContext.RightAssets.Where(r => r.TargetTagId == tag.Id).ToListAsync();
+            Assert.Single(dbAssets);
+            Assert.Equal(issued.Id, dbAssets[0].Id);
+        }
+    }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsAsync_ShouldNotAutoIssue_WhenUserIsNotOwner()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"u_owner_{tid}";
+            var otherUserId = $"u_other_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, otherUserId);
+
+            var tag = new Tag { Name = $"OtherTag_{tid}", OwnerId = ownerId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 非オーナーが未所持の状態で取得
+            var result = await provider.GetAvailableRightAssetsAsync(otherUserId, tag.Id);
+
+            // Assert: 自動発行されず空リストが返ること
+            Assert.Empty(result);
+
+            // DB にもアセットは作成されていないこと
+            var count = await dbContext.RightAssets.CountAsync(r => r.TargetTagId == tag.Id);
+            Assert.Equal(0, count);
+        }
+    }
 }

@@ -38,7 +38,9 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         _ = _ctx.Services.AddScoped(_ => _dataProviderMock.Object);
         _ctx.Services.RemoveAll<IDialogLauncher>();
         _ = _ctx.Services.AddScoped(_ => _dialogLauncherMock.Object);
-        _ctx.Services.AddAuth(TestUserId);
+        var authContext = _ctx.AddAuthorization();
+        authContext.SetAuthorized(TestUserId);
+        authContext.SetClaims(new Claim(ClaimTypes.NameIdentifier, TestUserId));
         _ = _ctx.Render<MudPopoverProvider>();
         _ctx.JSInterop.Setup<Rectangle>(invocation => invocation.Identifier.Contains("getBoundingClientRect"))
             .SetResult(new Rectangle(0, 0, 800, 600));
@@ -237,6 +239,155 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         // 親ノードがフォーカスされていること
         var updatedNode1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
         Assert.True(updatedNode1.IsFocused);
+    }
+
+    [Fact]
+    public async Task TagDiagramPage_EntersEdgeCreationMode_PreservingFocus_AndExpandsChildren()
+    {
+        // Arrange
+        var parentTag = new TagEntity { Id = 1, Name = "ParentTag", OwnerId = TestUserId, CachedWeight = 10 };
+        var child1 = new TagEntity { Id = 2, Name = "ChildA", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 2 };
+        var child2 = new TagEntity { Id = 3, Name = "ChildB", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 3 };
+        var otherTag = new TagEntity { Id = 4, Name = "OtherTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 4, OwnerId = TestUserId, SourceTag = parentTag, TargetTag = otherTag };
+        var asset = new RightAsset { Id = 201, OwnerId = TestUserId, TargetTagId = 1, Amount = 10 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([parentTag, child1, child2, otherTag]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+        _ = _dataProviderMock.Setup(p => p.GetAvailableRightAssetsAsync(TestUserId, 1)).ReturnsAsync([asset]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // parentTag をフォーカス
+        var parentNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        await cut.InvokeAsync(() => parentNode.RequestFocusTag!(1));
+
+        // 初期状態では子タグはエッジを持たないため非表示 (ノード数は 2: parentTag と otherTag)
+        cut.WaitForState(() => cut.Markup.Contains("① 始点"));
+        Assert.Equal(2, diagram.Nodes.Count);
+
+        // 「エッジ作成モード」ボタンをクリック
+        var edgeModeButton = cut.FindAll("button").First(b => b.TextContent.Contains("エッジ作成モード"));
+        await cut.InvokeAsync(() => edgeModeButton.Click());
+
+        // Assert: エッジ作成モードパネルが表示され、子タグ2件が画面上に展開されること
+        cut.WaitForState(() => cut.Markup.Contains("エッジ作成中"));
+        Assert.Contains("ParentTag」の子タグ (2 件)", cut.Markup);
+        Assert.Contains("ChildA", cut.Markup);
+        Assert.Contains("ChildB", cut.Markup);
+
+        // 子タグがダイアグラム上に展開され、ノード数が 4 になっていること
+        Assert.Equal(4, diagram.Nodes.Count);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 2);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 3);
+
+        // 親タグのフォーカスが維持されていること
+        var updatedParentNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        Assert.True(updatedParentNode.IsFocused);
+    }
+
+    [Fact]
+    public async Task TagDiagramPage_SelectsNodesInEdgeCreationMode_WithoutChangingPageFocus()
+    {
+        // Arrange
+        var parentTag = new TagEntity { Id = 1, Name = "ParentTag", OwnerId = TestUserId, CachedWeight = 10 };
+        var child1 = new TagEntity { Id = 2, Name = "ChildA", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 2 };
+        var child2 = new TagEntity { Id = 3, Name = "ChildB", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 3 };
+        var otherTag = new TagEntity { Id = 4, Name = "OtherTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 4, OwnerId = TestUserId, SourceTag = parentTag, TargetTag = otherTag };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([parentTag, child1, child2, otherTag]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+        _ = _dataProviderMock.Setup(p => p.GetAvailableRightAssetsAsync(TestUserId, 1)).ReturnsAsync([]);
+
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // まず親タグをフォーカス
+        var parentNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        await cut.InvokeAsync(() => parentNode.RequestFocusTag!(1));
+        cut.WaitForState(() => cut.Markup.Contains("① 始点"));
+
+        // エッジ作成モードを開始
+        var edgeModeButton = cut.FindAll("button").First(b => b.TextContent.Contains("エッジ作成モード"));
+        await cut.InvokeAsync(() => edgeModeButton.Click());
+        cut.WaitForState(() => cut.Markup.Contains("エッジ作成中"));
+
+        // ダイアグラム上で child1 を選択 -> From にセットされる
+        await cut.InvokeAsync(() => canvas.Instance.OnNodeSelected.InvokeAsync(child1));
+
+        // 続けて child2 を選択 -> To にセットされる
+        await cut.InvokeAsync(() => canvas.Instance.OnNodeSelected.InvokeAsync(child2));
+
+        // Assert: ページ全体のフォーカスは親タグ (ParentTag) のまま維持されていること
+        Assert.Contains("① 始点", cut.Markup);
+        Assert.Contains("ParentTag", cut.Markup);
+
+        // エッジ作成パネル内で From が ChildA、To が ChildB に設定されていること
+        cut.WaitForState(() => cut.Markup.Contains("① ChildA") && cut.Markup.Contains("② ChildB"));
+    }
+
+    [Fact]
+    public async Task TagDiagramPage_CreatesEdgeAndAttachesTag_InEdgeCreationMode()
+    {
+        // Arrange
+        var parentTag = new TagEntity { Id = 1, Name = "ParentTag", OwnerId = TestUserId, CachedWeight = 10 };
+        var child1 = new TagEntity { Id = 2, Name = "ChildA", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 2 };
+        var child2 = new TagEntity { Id = 3, Name = "ChildB", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 3 };
+        var otherTag = new TagEntity { Id = 4, Name = "OtherTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 4, OwnerId = TestUserId, SourceTag = parentTag, TargetTag = otherTag };
+        var asset = new RightAsset { Id = 201, OwnerId = TestUserId, TargetTagId = 1, Amount = 10 };
+        var createdEdge = new TagEdge { Id = 999, SourceTagId = 2, TargetTagId = 3, OwnerId = TestUserId, SourceTag = child1, TargetTag = child2 };
+        var createdAttachment = new TagEdgeTagAttachment { Id = 501, TagEdgeId = 999, TagId = 1, OwnerId = TestUserId, Weight = 1 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([parentTag, child1, child2, otherTag]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+        _ = _dataProviderMock.Setup(p => p.GetAvailableRightAssetsAsync(TestUserId, 1)).ReturnsAsync([asset]);
+        _ = _dataProviderMock.Setup(p => p.CreateEdgeAsync(2, 3, TestUserId))
+            .ReturnsAsync(new SRNSMudApp.Models.Unions.Success<TagEdge>(createdEdge));
+        _ = _dataProviderMock.Setup(p => p.AttachTagToEdgeAsync(999, 1, 201, TestUserId, 1))
+            .ReturnsAsync(new SRNSMudApp.Models.Unions.Success<TagEdgeTagAttachment>(createdAttachment));
+
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // 親タグをフォーカス
+        var parentNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        await cut.InvokeAsync(() => parentNode.RequestFocusTag!(1));
+        cut.WaitForState(() => cut.Markup.Contains("① 始点"));
+
+        // エッジ作成モードを開始
+        var edgeModeButton = cut.FindAll("button").First(b => b.TextContent.Contains("エッジ作成モード"));
+        await cut.InvokeAsync(() => edgeModeButton.Click());
+        cut.WaitForState(() => cut.Markup.Contains("エッジ作成中"));
+
+        // ダイアグラム上で child1, child2 を選択
+        await cut.InvokeAsync(() => canvas.Instance.OnNodeSelected.InvokeAsync(child1));
+        await cut.InvokeAsync(() => canvas.Instance.OnNodeSelected.InvokeAsync(child2));
+
+        // 「決定（エッジを作成）」ボタンをクリック
+        cut.WaitForState(() => cut.FindAll("button").Any(b => b.TextContent.Contains("決定（エッジを作成）") && !b.HasAttribute("disabled")));
+        var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("決定（エッジを作成）"));
+
+        await cut.InvokeAsync(() => submitButton.Click());
+
+        // Assert: CreateEdgeAsync(2, 3) と AttachTagToEdgeAsync(999, 1, 201) が呼ばれること
+        cut.WaitForAssertion(() =>
+        {
+            _dataProviderMock.Verify(p => p.CreateEdgeAsync(2, 3, TestUserId), Times.Once);
+            _dataProviderMock.Verify(p => p.AttachTagToEdgeAsync(999, 1, 201, TestUserId, 1), Times.Once);
+        });
     }
 
     public async ValueTask DisposeAsync()

@@ -15,17 +15,9 @@
                 対象 Edge: <strong>@Edge.SourceTag?.Name</strong> → <strong>@Edge.TargetTag?.Name</strong>
             </MudAlert>
 
-            <MudAutocomplete T="TagEntity"
-                             Label="紐付けるタグ"
-                             Value="_selectedTag"
-                             ValueChanged="OnTagSelected"
-                             SearchFunc="SearchTags"
-                             ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")"
-                             Dense="true"
-                             Variant="Variant.Outlined"
-                             ResetValueOnEmptyText="true"
-                             CoerceText="true"
-                             Required="true" />
+            <MudAutocomplete T="TagEntity" Label="紐付けるタグ" Value="_selectedTag" ValueChanged="OnTagSelected"
+                             SearchFunc="SearchTags" ToStringFunc="@(t => t == null ? "" : $"{t.Name} (ID: {t.Id})")" Dense="true"
+                             Variant="Variant.Outlined" ResetValueOnEmptyText="true" CoerceText="true" Required="true" />
 
             @if (_isLoadingAssets)
             {
@@ -41,12 +33,15 @@
                 }
                 else
                 {
-                    <MudSelect T="RightAsset"
-                               Label="消費する RightAsset"
-                               @bind-Value="_selectedAsset"
-                               Variant="Variant.Outlined"
-                               Dense="true"
-                               Required="true">
+                    @if (_isOwnerTag)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            タグ「@_selectedTag.Name」のオーナーであるため、RightAsset を利用できます（自動発行対応済み）。
+                        </MudAlert>
+                    }
+
+                    <MudSelect T="RightAsset" Label="消費する RightAsset" @bind-Value="_selectedAsset" Variant="Variant.Outlined"
+                               Dense="true" Required="true">
                         @foreach (var asset in _availableAssets)
                         {
                             <MudSelectItem Value="@asset">
@@ -55,13 +50,8 @@
                         }
                     </MudSelect>
 
-                    <MudNumericField T="int"
-                                     Label="付与 Weight"
-                                     @bind-Value="_weight"
-                                     Min="1"
-                                     Max="@(_selectedAsset?.Amount ?? 1)"
-                                     Variant="Variant.Outlined"
-                                     Dense="true" />
+                    <MudNumericField T="int" Label="付与 Weight" @bind-Value="_weight" Min="1"
+                                     Max="@(_selectedAsset?.Amount ?? 1)" Variant="Variant.Outlined" Dense="true" />
 
                     <MudAlert Severity="Severity.Normal" Dense="true">
                         紐付けを行うと RightAsset が消費されます。紐付け解除時も RightAsset は返還されません（不可逆消費仕様）。
@@ -72,10 +62,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">キャンセル</MudButton>
-        <MudButton Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   OnClick="Submit"
-                   Disabled="@(!CanSubmit)">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!CanSubmit)">
             紐付け実行
         </MudButton>
     </DialogActions>
@@ -102,6 +89,11 @@
     private List<RightAsset> _availableAssets = [];
     private int _weight = 1;
     private bool _isLoadingAssets;
+
+    private bool _isOwnerTag =>
+        _selectedTag != null &&
+        !string.IsNullOrWhiteSpace(CurrentUserId) &&
+        _selectedTag.OwnerId == CurrentUserId;
 
     private bool CanSubmit =>
         _selectedTag != null &&

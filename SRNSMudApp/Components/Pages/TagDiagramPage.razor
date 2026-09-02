@@ -49,6 +49,14 @@
             Edges: @_edges.Count
         </MudChip>
 
+        <MudButton Variant="@(_isEdgeCreationMode ? Variant.Filled : Variant.Outlined)"
+                   Color="@(_isEdgeCreationMode ? Color.Warning : Color.Primary)"
+                   StartIcon="@Icons.Material.Filled.AltRoute"
+                   OnClick="ToggleEdgeCreationModeAsync"
+                   Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
+            @(_isEdgeCreationMode ? "エッジ作成中" : "エッジ作成モード")
+        </MudButton>
+
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddLink"
                    OnClick="() => OpenCreateEdgeDialog(_focusedTag, _secondFocusedTag)"
                    Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
@@ -56,7 +64,7 @@
         </MudButton>
 
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" Title="再読み込み"
-                       OnClick="ReloadDiagramAsync" />
+                       OnClick="() => ReloadDiagramAsync()" />
         <MudIconButton Icon="@Icons.Material.Filled.CenterFocusStrong" Color="Color.Default" Title="ズームリセット"
                        OnClick="ResetZoom" />
     </div>
@@ -190,10 +198,156 @@
                 </MudButton>
             }
 
+            <MudButton Variant="@(_isEdgeCreationMode ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_isEdgeCreationMode ? Color.Warning : Color.Primary)" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.AltRoute" OnClick="ToggleEdgeCreationModeAsync"
+                       Disabled="@string.IsNullOrEmpty(_currentUserId)">
+                @(_isEdgeCreationMode ? "エッジ作成中" : "エッジ作成モード")
+            </MudButton>
+
             <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.Close" OnClick="ClearFocus">
                 フォーカス解除
             </MudButton>
+        </div>
+    </MudPaper>
+}
+
+@* エッジ作成モードパネル（現在フォーカスを維持したまま子タグ同士・タグ間のエッジを形成・タグ付け） *@
+@if (_isEdgeCreationMode)
+{
+    <MudPaper Elevation="2" Class="px-3 py-3 mb-2 border-l-4 border-warning surface-card">
+        <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.AltRoute" Color="Color.Warning" Size="Size.Medium" />
+                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                    エッジ作成モード
+                    @if (_focusedTag != null)
+                    {
+                        <span class="text-secondary font-weight-normal ml-2" style="font-size: 0.85rem;">
+                            （フォーカス: <strong>@_focusedTag.Name</strong> を維持中）
+                        </span>
+                    }
+                </MudText>
+            </div>
+            <div class="d-flex align-center gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Check"
+                           OnClick="CreateEdgeInModeAsync"
+                           Disabled="@(!CanCreateEdgeInMode)">
+                    決定（エッジを作成）
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Close"
+                           OnClick="ExitEdgeCreationMode">
+                    モード終了
+                </MudButton>
+            </div>
+        </div>
+
+        @* フォーカス中タグの子タグがあればクイック選択チップを表示 *@
+        @if (_focusedTag != null)
+        {
+            var childTags = GetChildTags(_focusedTag.Id);
+            @if (childTags.Count > 0)
+            {
+                <div class="d-flex flex-wrap align-center gap-1 mb-3 pa-2 rounded" style="background: var(--mud-palette-background-grey);">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-weight-bold mr-1">
+                        「@_focusedTag.Name」の子タグ (@childTags.Count 件):
+                    </MudText>
+                    @foreach (var child in childTags)
+                    {
+                        var isSrc = _edgeCreationSourceTag?.Id == child.Id;
+                        var isTgt = _edgeCreationTargetTag?.Id == child.Id;
+                        <MudMenu Dense="true" Size="Size.Small" AnchorOrigin="Origin.BottomCenter">
+                            <ActivatorContent>
+                                <MudChip T="string" Size="Size.Small"
+                                         Variant="@(isSrc || isTgt ? Variant.Filled : Variant.Outlined)"
+                                         Color="@(isSrc ? Color.Warning : isTgt ? Color.Info : Color.Default)"
+                                         Class="cursor-pointer">
+                                    @(isSrc ? $"① {child.Name}" : isTgt ? $"② {child.Name}" : child.Name)
+                                </MudChip>
+                            </ActivatorContent>
+                            <ChildContent>
+                                <MudMenuItem Icon="@Icons.Material.Filled.ArrowRightAlt" IconColor="Color.Warning"
+                                             OnClick="() => SelectChildAsSource(child)">
+                                    From (始点) に設定
+                                </MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowLeft" IconColor="Color.Info"
+                                             OnClick="() => SelectChildAsTarget(child)">
+                                    To (終点) に設定
+                                </MudMenuItem>
+                            </ChildContent>
+                        </MudMenu>
+                    }
+                </div>
+            }
+        }
+
+        <div class="d-flex flex-wrap align-center gap-3">
+            @* From (始点) 選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="font-weight-bold">
+                    From
+                </MudChip>
+                <TagAutocomplete Value="_edgeCreationSourceTag" ValueChanged="OnEdgeCreationSourceChanged"
+                                 Label="始点タグ (From)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+            </div>
+
+            @* 入替ボタン *@
+            <MudTooltip Text="始点と終点を入れ替え">
+                <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Default"
+                               OnClick="SwapEdgeCreationTags" Disabled="@(_edgeCreationSourceTag == null && _edgeCreationTargetTag == null)" />
+            </MudTooltip>
+
+            @* To (終点) 選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" Class="font-weight-bold">
+                    To
+                </MudChip>
+                <TagAutocomplete Value="_edgeCreationTargetTag" ValueChanged="OnEdgeCreationTargetChanged"
+                                 Label="終点タグ (To)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+            </div>
+
+            @* エッジにタグ付けするタグの選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 240px; max-width: 320px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Class="font-weight-bold">
+                    Tag
+                </MudChip>
+                <TagAutocomplete Value="_edgeCreationAttachTag" ValueChanged="OnEdgeCreationAttachTagChanged"
+                                 Label="エッジにタグ付け (任意)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                @if (_edgeCreationAttachTag != null)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" Size="Size.Small" Color="Color.Default"
+                                   OnClick="() => OnEdgeCreationAttachTagChanged(null)" Title="タグ付けをクリア" />
+                }
+            </div>
+
+            @* RightAsset と Weight の指定（タグ付けタグが選択されている場合） *@
+            @if (_edgeCreationAttachTag != null)
+            {
+                @if (_isLoadingAttachAssets)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_edgeCreationAvailableAssets.Count > 0)
+                {
+                    <div class="d-flex align-center gap-1" style="min-width: 140px; max-width: 180px;">
+                        <MudNumericField T="int" Label="Weight" @bind-Value="_edgeCreationWeight"
+                                         Min="1" Max="@(_edgeCreationAttachAsset?.Amount ?? 1)"
+                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                    </div>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">
+                        （所有 RightAsset なし: タグ付けなしで作成）
+                    </MudText>
+                }
+            }
         </div>
     </MudPaper>
 }
@@ -245,6 +399,17 @@ else
     private int _displayedTagsCount = 0;
     private readonly HashSet<int> _extraVisibleTagIds = [];
 
+    // エッジ作成モード関連の内部状態
+    private bool _isEdgeCreationMode;
+    private TagEntity? _edgeCreationSourceTag;
+    private TagEntity? _edgeCreationTargetTag;
+    private TagEntity? _edgeCreationAttachTag;
+    private RightAsset? _edgeCreationAttachAsset;
+    private List<RightAsset> _edgeCreationAvailableAssets = [];
+    private int _edgeCreationWeight = 1;
+    private bool _isLoadingAttachAssets;
+    private bool _isSelectingTargetInEdgeMode;
+
     protected override async Task OnInitializedAsync()
     {
         InitializeDiagram();
@@ -275,8 +440,9 @@ else
         _diagram.RegisterComponent<TagNode, TagNodeWidget>();
     }
 
-    private async Task ReloadDiagramAsync()
+    private async Task ReloadDiagramAsync(bool preserveExtraVisibleTags = false)
     {
+        var preservedExtraIds = preserveExtraVisibleTags ? _extraVisibleTagIds.ToHashSet() : null;
         _isLoading = true;
         _selectedEdge = null;
         _extraVisibleTagIds.Clear();
@@ -286,6 +452,14 @@ else
             _tags = await DataProvider.LoadAllTagsAsync();
             var edgeList = await DataProvider.LoadAllEdgesAsync();
             _edges = edgeList.ToList();
+
+            if (preservedExtraIds != null)
+            {
+                foreach (var id in preservedExtraIds)
+                {
+                    _extraVisibleTagIds.Add(id);
+                }
+            }
 
             BuildDiagramElements();
         }
@@ -624,6 +798,7 @@ else
         _isFocusTreeOpen = false;
         _isSecondFocusTreeOpen = false;
         _extraVisibleTagIds.Clear();
+        ExitEdgeCreationMode();
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
         {
             n.FocusRole = TagFocusRole.None;
@@ -709,10 +884,28 @@ else
         }
 
         _selectedEdge = null;
-        if (tag != null)
+        if (tag == null)
         {
-            HandleTagSelection(tag);
+            return;
         }
+
+        if (_isEdgeCreationMode)
+        {
+            // エッジ作成モード時は、現在のフォーカスを維持したまま From / To に割り当て
+            if (!_isSelectingTargetInEdgeMode || _edgeCreationSourceTag == null)
+            {
+                _edgeCreationSourceTag = tag;
+                _isSelectingTargetInEdgeMode = true;
+            }
+            else
+            {
+                _edgeCreationTargetTag = tag;
+            }
+
+            return;
+        }
+
+        HandleTagSelection(tag);
     }
 
     private void CloseInspector()
@@ -836,6 +1029,225 @@ else
         {
             Snackbar.Add($"'{createdTag.Name}' を追加しました。", Severity.Success);
             await ReloadDiagramAsync();
+        }
+    }
+
+    /// <summary>
+    ///     指定された親タグの子タグ一覧を取得する。
+    /// </summary>
+    private List<TagEntity> GetChildTags(int parentId) =>
+        _tags.Where(t => t.ParentTagId == parentId).ToList();
+
+    /// <summary>
+    ///     エッジ作成モードの切り替え。
+    /// </summary>
+    private async Task ToggleEdgeCreationModeAsync()
+    {
+        if (_isEdgeCreationMode)
+        {
+            ExitEdgeCreationMode();
+        }
+        else
+        {
+            await EnterEdgeCreationModeAsync();
+        }
+    }
+
+    /// <summary>
+    ///     エッジ作成モードを開始する。
+    ///     現在フォーカス中のタグのフォーカスは維持したまま、子タグが存在する場合は画面上に展開し、
+    ///     フォーカス中タグをエッジに紐付ける意味付けタグの初期値として設定する。
+    /// </summary>
+    private async Task EnterEdgeCreationModeAsync()
+    {
+        _isEdgeCreationMode = true;
+        _isSelectingTargetInEdgeMode = false;
+        _edgeCreationSourceTag = null;
+        _edgeCreationTargetTag = null;
+
+        if (_focusedTag != null)
+        {
+            // 子タグがまだ展開されていなければ画面上に展開
+            var children = _tags.Where(t => t.ParentTagId == _focusedTag.Id).ToList();
+            if (children.Count > 0)
+            {
+                bool addedAny = false;
+                foreach (var child in children)
+                {
+                    if (_extraVisibleTagIds.Add(child.Id))
+                    {
+                        addedAny = true;
+                    }
+                }
+
+                if (addedAny)
+                {
+                    BuildDiagramElements();
+                    FocusNodesInDiagram();
+                }
+            }
+
+            await SetEdgeCreationAttachTagAsync(_focusedTag);
+        }
+        else
+        {
+            _edgeCreationAttachTag = null;
+            _edgeCreationAttachAsset = null;
+            _edgeCreationAvailableAssets.Clear();
+        }
+    }
+
+    /// <summary>
+    ///     エッジ作成モードを終了し、作業状態をリセットする。
+    /// </summary>
+    private void ExitEdgeCreationMode()
+    {
+        _isEdgeCreationMode = false;
+        _edgeCreationSourceTag = null;
+        _edgeCreationTargetTag = null;
+        _edgeCreationAttachTag = null;
+        _edgeCreationAttachAsset = null;
+        _edgeCreationAvailableAssets.Clear();
+        _isSelectingTargetInEdgeMode = false;
+    }
+
+    private void SelectChildAsSource(TagEntity child)
+    {
+        _edgeCreationSourceTag = child;
+        _isSelectingTargetInEdgeMode = true;
+    }
+
+    private void SelectChildAsTarget(TagEntity child)
+    {
+        _edgeCreationTargetTag = child;
+    }
+
+    private void SwapEdgeCreationTags()
+    {
+        (_edgeCreationSourceTag, _edgeCreationTargetTag) = (_edgeCreationTargetTag, _edgeCreationSourceTag);
+    }
+
+    private void OnEdgeCreationSourceChanged(TagEntity? tag)
+    {
+        _edgeCreationSourceTag = tag;
+        if (tag != null)
+        {
+            _isSelectingTargetInEdgeMode = true;
+        }
+    }
+
+    private void OnEdgeCreationTargetChanged(TagEntity? tag)
+    {
+        _edgeCreationTargetTag = tag;
+    }
+
+    private async Task OnEdgeCreationAttachTagChanged(TagEntity? tag)
+    {
+        await SetEdgeCreationAttachTagAsync(tag);
+    }
+
+    /// <summary>
+    ///     エッジに紐付ける意味付けタグの変更時に利用可能 RightAsset を取得する。
+    /// </summary>
+    private async Task SetEdgeCreationAttachTagAsync(TagEntity? tag)
+    {
+        _edgeCreationAttachTag = tag;
+        _edgeCreationAttachAsset = null;
+        _edgeCreationAvailableAssets.Clear();
+
+        if (tag == null || string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            return;
+        }
+
+        _isLoadingAttachAssets = true;
+        try
+        {
+            _edgeCreationAvailableAssets = await DataProvider.GetAvailableRightAssetsAsync(_currentUserId, tag.Id);
+            _edgeCreationAttachAsset = _edgeCreationAvailableAssets.FirstOrDefault();
+            _edgeCreationWeight = 1;
+        }
+        finally
+        {
+            _isLoadingAttachAssets = false;
+        }
+    }
+
+    /// <summary>
+    ///     エッジ作成モードで決定ボタンが押下可能か判定する。
+    /// </summary>
+    private bool CanCreateEdgeInMode =>
+        !string.IsNullOrEmpty(_currentUserId) &&
+        _edgeCreationSourceTag != null &&
+        _edgeCreationTargetTag != null &&
+        _edgeCreationSourceTag.Id != _edgeCreationTargetTag.Id &&
+        !_isLoadingAttachAssets;
+
+    /// <summary>
+    ///     エッジ作成モードにおいて、From と To を結ぶ Edge を作成し、
+    ///     意味付けタグが指定されていればタグ紐付け（RightAsset 消費）を実行する。
+    ///     処理完了後も現在のフォーカス状態を維持する。
+    /// </summary>
+    private async Task CreateEdgeInModeAsync()
+    {
+        if (!CanCreateEdgeInMode)
+        {
+            return;
+        }
+
+        var sourceTag = _edgeCreationSourceTag!;
+        var targetTag = _edgeCreationTargetTag!;
+
+        var createResult = await DataProvider.CreateEdgeAsync(sourceTag.Id, targetTag.Id, _currentUserId);
+        switch (createResult)
+        {
+            case Success<TagEdge> s:
+                var createdEdge = s.Value;
+                Snackbar.Add($"Edge（{sourceTag.Name} → {targetTag.Name}）を作成しました。", Severity.Success);
+
+                // エッジへの意味付けタグ付与が指定されていて利用可能アセットがある場合
+                if (_edgeCreationAttachTag != null && _edgeCreationAttachAsset != null)
+                {
+                    var attachResult = await DataProvider.AttachTagToEdgeAsync(
+                        createdEdge.Id, _edgeCreationAttachTag.Id, _edgeCreationAttachAsset.Id, _currentUserId, _edgeCreationWeight);
+
+                    switch (attachResult)
+                    {
+                        case Success<TagEdgeTagAttachment>:
+                            Snackbar.Add($"エッジにタグ「{_edgeCreationAttachTag.Name}」を紐付けました。", Severity.Success);
+                            break;
+                        case Failure f:
+                            Snackbar.Add($"エッジ作成は成功しましたが、タグ紐付けに失敗しました: {f.ErrorMessage}", Severity.Warning);
+                            break;
+                    }
+                }
+
+                // 現在のフォーカスと展開中タグを維持したままダイアグラムを再読み込み
+                var savedFocus = _focusedTag;
+                var savedSecondFocus = _secondFocusedTag;
+
+                await ReloadDiagramAsync(preserveExtraVisibleTags: true);
+
+                _focusedTag = savedFocus;
+                _secondFocusedTag = savedSecondFocus;
+                _selectedEdge = _edges.FirstOrDefault(e => e.Id == createdEdge.Id);
+
+                // 続けて別の子タグ同士のエッジを作成できるように From / To をリセット
+                _edgeCreationSourceTag = null;
+                _edgeCreationTargetTag = null;
+                _isSelectingTargetInEdgeMode = false;
+
+                if (_edgeCreationAttachTag != null)
+                {
+                    await SetEdgeCreationAttachTagAsync(_edgeCreationAttachTag);
+                }
+
+                FocusNodesInDiagram();
+                break;
+
+            case Failure f:
+                Snackbar.Add($"Edge 作成に失敗しました: {f.ErrorMessage}", Severity.Error);
+                break;
         }
     }
 }

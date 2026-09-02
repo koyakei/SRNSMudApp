@@ -36,11 +36,33 @@ public class TagDiagramDataProvider(
     public async Task<List<RightAsset>> GetAvailableRightAssetsAsync(string userId, int targetTagId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.RightAssets
+        var assets = await context.RightAssets
             .Where(r => r.OwnerId == userId && r.TargetTagId == targetTagId && !r.IsBurned && r.Amount > 0)
             .OrderByDescending(r => r.Amount)
             .AsNoTracking()
             .ToListAsync();
+
+        if (assets.Count == 0 && !string.IsNullOrWhiteSpace(userId))
+        {
+            var tag = await context.Tags.FindAsync(targetTagId);
+            if (tag != null && tag.OwnerId == userId)
+            {
+                // タグオーナー自身で未消費 RightAsset が存在しない場合、自動的に新規 RightAsset を発行して付与
+                var newAsset = new RightAsset
+                {
+                    OwnerId = userId,
+                    TargetTagId = targetTagId,
+                    Amount = 10,
+                    IsBurned = false,
+                    Status = new NotBurned()
+                };
+                _ = context.RightAssets.Add(newAsset);
+                _ = await context.SaveChangesAsync();
+                assets.Add(newAsset);
+            }
+        }
+
+        return assets;
     }
 
     /// <inheritdoc />
