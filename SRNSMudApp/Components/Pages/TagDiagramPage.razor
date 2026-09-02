@@ -79,6 +79,12 @@
                 <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
                     W: @_focusedTag.CachedWeight
                 </MudChip>
+                <MudTooltip Text="@(GetChildTagsCount(_focusedTag.Id) > 0 ? $"子タグ ({GetChildTagsCount(_focusedTag.Id)}件) を画面上に表示" : "子タグはありません")">
+                    <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Warning"
+                                   Class="pa-0 ml-1" Title="子タグを画面上に表示"
+                                   Disabled="@(GetChildTagsCount(_focusedTag.Id) == 0)"
+                                   OnClick="() => HandleShowChildNodes(_focusedTag)" />
+                </MudTooltip>
                 <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
                                Class="pa-0 ml-1" Title="始点タグのツリーを表示" OnClick="() => _isFocusTreeOpen = !_isFocusTreeOpen" />
                 <MudOverlay Visible="@_isFocusTreeOpen" OnClick="@(() => _isFocusTreeOpen = false)" AutoClose="true"
@@ -119,6 +125,12 @@
                     <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
                         W: @_secondFocusedTag.CachedWeight
                     </MudChip>
+                    <MudTooltip Text="@(GetChildTagsCount(_secondFocusedTag.Id) > 0 ? $"子タグ ({GetChildTagsCount(_secondFocusedTag.Id)}件) を画面上に表示" : "子タグはありません")">
+                        <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Info"
+                                       Class="pa-0 ml-1" Title="子タグを画面上に表示"
+                                       Disabled="@(GetChildTagsCount(_secondFocusedTag.Id) == 0)"
+                                       OnClick="() => HandleShowChildNodes(_secondFocusedTag)" />
+                    </MudTooltip>
                     <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
                                    Class="pa-0 ml-1" Title="終点タグのツリーを表示" OnClick="() => _isSecondFocusTreeOpen = !_isSecondFocusTreeOpen" />
                     <MudOverlay Visible="@_isSecondFocusTreeOpen" OnClick="@(() => _isSecondFocusTreeOpen = false)" AutoClose="true"
@@ -231,6 +243,7 @@ else
     private bool _isSecondFocusTreeOpen;
     private bool _isProgrammaticSelection;
     private int _displayedTagsCount = 0;
+    private readonly HashSet<int> _extraVisibleTagIds = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,6 +279,7 @@ else
     {
         _isLoading = true;
         _selectedEdge = null;
+        _extraVisibleTagIds.Clear();
 
         try
         {
@@ -301,6 +315,10 @@ else
 
     private void BuildDiagramElements()
     {
+        // 既存ノードの位置を退避して可能な限りレイアウトを維持
+        var existingPositions = _diagram.Nodes.OfType<TagNode>()
+            .ToDictionary(n => n.Tag.Id, n => n.Position);
+
         _diagram.Nodes.Clear();
         _diagram.Links.Clear();
 
@@ -328,16 +346,18 @@ else
                 .Where(e => focusIds.Contains(e.SourceTagId) || focusIds.Contains(e.TargetTagId))
                 .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
                 .Concat(focusIds)
+                .Concat(_extraVisibleTagIds)
                 .ToHashSet();
 
             tagsToDisplay = _tags.Where(t => neighborIds.Contains(t.Id));
         }
         else if (_onlyConnectedTags)
         {
-            // エッジに関与しているタグ、またはフォーカス中（未接続でも含める）
+            // エッジに関与しているタグ、フォーカス中、または子タグ展開で明示的に追加されたタグ
             tagsToDisplay = _tags.Where(t => connectedTagIds.Contains(t.Id)
                 || (_focusedTag != null && t.Id == _focusedTag.Id)
-                || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id));
+                || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id)
+                || _extraVisibleTagIds.Contains(t.Id));
         }
         else
         {
@@ -350,13 +370,34 @@ else
         var nodeMap = new Dictionary<int, TagNode>();
         int columns = Math.Max(3, (int)Math.Ceiling(Math.Sqrt(displayList.Count * 1.5)));
 
+        // 新規配置する子ノード用のオフセット管理
+        var childOffsets = new Dictionary<int, int>();
+
         for (int i = 0; i < displayList.Count; i++)
         {
             var tag = displayList[i];
-            int col = i % columns;
-            int row = i / columns;
-            double x = 80 + (col * 240);
-            double y = 80 + (row * 160);
+            Blazor.Diagrams.Core.Geometry.Point position;
+
+            if (existingPositions.TryGetValue(tag.Id, out var prevPos))
+            {
+                position = new Blazor.Diagrams.Core.Geometry.Point(prevPos.X, prevPos.Y);
+            }
+            else if (tag.ParentTagId != null && existingPositions.TryGetValue(tag.ParentTagId.Value, out var parentPos))
+            {
+                int order = childOffsets.TryGetValue(tag.ParentTagId.Value, out int cur) ? cur : 0;
+                childOffsets[tag.ParentTagId.Value] = order + 1;
+                double offsetX = (order - 1) * 200.0;
+                double offsetY = 120.0;
+                position = new Blazor.Diagrams.Core.Geometry.Point(Math.Max(20, parentPos.X + offsetX), Math.Max(20, parentPos.Y + offsetY));
+            }
+            else
+            {
+                int col = i % columns;
+                int row = i / columns;
+                double x = 80 + (col * 240);
+                double y = 80 + (row * 160);
+                position = new Blazor.Diagrams.Core.Geometry.Point(x, y);
+            }
 
             TagFocusRole role = TagFocusRole.None;
             if (_focusedTag != null && tag.Id == _focusedTag.Id)
@@ -368,12 +409,13 @@ else
                 role = TagFocusRole.Target;
             }
 
-            var node = new TagNode(tag, new Blazor.Diagrams.Core.Geometry.Point(x, y))
+            var node = new TagNode(tag, position)
             {
                 FocusRole = role,
                 AllTags = _tags,
                 RequestFocusTag = FocusTagById,
-                RequestAddChildTag = HandleAddChildTag
+                RequestAddChildTag = HandleAddChildTag,
+                RequestShowChildNodes = HandleShowChildNodes
             };
             nodeMap[tag.Id] = node;
             _diagram.Nodes.Add(node);
@@ -581,6 +623,7 @@ else
         _neighborhoodOnly = false;
         _isFocusTreeOpen = false;
         _isSecondFocusTreeOpen = false;
+        _extraVisibleTagIds.Clear();
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
         {
             n.FocusRole = TagFocusRole.None;
@@ -590,6 +633,50 @@ else
 
         // 絞り込み表示を通常状態に再構築
         BuildDiagramElements();
+    }
+
+    private int GetChildTagsCount(int tagId) =>
+        _tags.Count(t => t.ParentTagId == tagId);
+
+    private void HandleShowChildNodes(TagEntity parentTag)
+    {
+        var children = _tags.Where(t => t.ParentTagId == parentTag.Id).ToList();
+        if (children.Count == 0)
+        {
+            Snackbar.Add($"'{parentTag.Name}' に子タグはありません。", Severity.Info);
+            return;
+        }
+
+        int newlyAdded = 0;
+        foreach (var child in children)
+        {
+            if (_extraVisibleTagIds.Add(child.Id))
+            {
+                newlyAdded++;
+            }
+        }
+
+        if (_focusedTag == null)
+        {
+            _focusedTag = parentTag;
+        }
+        else if (_focusedTag.Id != parentTag.Id && _secondFocusedTag == null)
+        {
+            _secondFocusedTag = parentTag;
+        }
+
+        BuildDiagramElements();
+        FocusNodesInDiagram();
+        _ = InvokeAsync(StateHasChanged);
+
+        if (newlyAdded > 0)
+        {
+            Snackbar.Add($"'{parentTag.Name}' の子タグ ({newlyAdded}件) を画面上に表示しました。", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add($"'{parentTag.Name}' の子タグはすでに画面上に表示されています。", Severity.Info);
+        }
     }
 
     private TagEdge? GetExistingEdgeBetween(int id1, int id2) =>

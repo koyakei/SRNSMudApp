@@ -35,9 +35,17 @@
         }
         <span class="tag-node-name font-weight-bold">@Node.Tag.Name</span>
         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
-                 Class="ml-2 px-1 tag-weight-chip">
+                 Class="ml-1 px-1 tag-weight-chip">
             @Node.Tag.CachedWeight
         </MudChip>
+        <span @onclick:stopPropagation="true">
+            <MudTooltip Text="@(Node.ChildCount > 0 ? $"子タグ ({Node.ChildCount}件) を画面上に表示" : "子タグはありません")">
+                <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small"
+                               Color="@(Node.IsFocused ? Color.Warning : Color.Primary)" Class="pa-0 ml-1 tag-show-children-button"
+                               Title="@(Node.ChildCount > 0 ? $"子タグ ({Node.ChildCount}件) を画面上に表示" : "子タグはありません")"
+                               Disabled="@(Node.ChildCount == 0)" OnClick="HandleShowChildNodes" />
+            </MudTooltip>
+        </span>
         <span @onclick:stopPropagation="true">
             <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
                            Class="pa-0 ml-1 tag-tree-button" Title="タグツリーを表示" OnClick="ToggleTree" />
@@ -87,6 +95,11 @@
     {
         _isTreeOpen = false;
         Node.RequestFocusTag?.Invoke(tagId);
+    }
+
+    private void HandleShowChildNodes()
+    {
+        Node.RequestShowChildNodes?.Invoke(Node.Tag);
     }
 
     private async Task HandleAddChildTag(Tag targetTag)

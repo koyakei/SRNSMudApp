@@ -129,4 +129,60 @@ public class TagDiagramCanvasTests : IAsyncDisposable
         // Assert: RequestFocusTag was invoked with parentTag.Id
         Assert.Equal(10, requestedTagId);
     }
+
+    [Fact]
+    public void TagNodeWidget_RendersShowChildrenButton_AndInvokesCallback()
+    {
+        var diagram = new BlazorDiagram();
+        var parentTag = new TagEntity { Id = 10, Name = "ParentTag", OwnerId = "user1" };
+        var childTag = new TagEntity { Id = 20, Name = "ChildTag", ParentTagId = 10, OwnerId = "user1" };
+        var allTags = new List<TagEntity> { parentTag, childTag };
+        TagEntity? requestedParent = null;
+
+        var node = new TagNode(parentTag, new Point(20, 20))
+        {
+            AllTags = allTags,
+            RequestShowChildNodes = tag => requestedParent = tag
+        };
+        diagram.Nodes.Add(node);
+
+        var cut = _ctx.Render<TagNodeWidget>(parameters => parameters
+            .Add(p => p.Node, node)
+            .AddCascadingValue(diagram));
+
+        // Verify the SubdirectoryArrowRight button is rendered and enabled
+        var showChildrenBtn = cut.Find("button.tag-show-children-button");
+        Assert.NotNull(showChildrenBtn);
+        Assert.False(showChildrenBtn.HasAttribute("disabled"));
+
+        // Click the button
+        showChildrenBtn.Click();
+
+        // Assert: callback was invoked with parentTag
+        Assert.NotNull(requestedParent);
+        Assert.Equal(10, requestedParent.Id);
+    }
+
+    [Fact]
+    public void TagNodeWidget_ShowChildrenButton_IsDisabled_WhenNoChildren()
+    {
+        var diagram = new BlazorDiagram();
+        var leafTag = new TagEntity { Id = 10, Name = "LeafTag", OwnerId = "user1" };
+        var allTags = new List<TagEntity> { leafTag };
+
+        var node = new TagNode(leafTag, new Point(20, 20))
+        {
+            AllTags = allTags
+        };
+        diagram.Nodes.Add(node);
+
+        var cut = _ctx.Render<TagNodeWidget>(parameters => parameters
+            .Add(p => p.Node, node)
+            .AddCascadingValue(diagram));
+
+        // Verify the button is disabled
+        var showChildrenBtn = cut.Find("button.tag-show-children-button");
+        Assert.NotNull(showChildrenBtn);
+        Assert.True(showChildrenBtn.HasAttribute("disabled"));
+    }
 }

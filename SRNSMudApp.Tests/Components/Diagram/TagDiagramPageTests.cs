@@ -197,6 +197,48 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         _dataProviderMock.Verify(p => p.LoadAllTagsAsync(), Times.Exactly(2));
     }
 
+    [Fact]
+    public void TagDiagramPage_DisplaysChildNodesInDiagram_WhenRequestShowChildNodesInvoked()
+    {
+        // Arrange
+        var parentTag = new TagEntity { Id = 1, Name = "Parent", OwnerId = TestUserId, CachedWeight = 10 };
+        var otherTag = new TagEntity { Id = 2, Name = "Other", OwnerId = TestUserId, CachedWeight = 5 };
+        var childTag = new TagEntity { Id = 3, Name = "Child", OwnerId = TestUserId, ParentTagId = 1, CachedWeight = 2 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId, SourceTag = parentTag, TargetTag = otherTag };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([parentTag, otherTag, childTag]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // 初期状態: エッジを持つ parentTag, otherTag のみ表示され、childTag は表示されない
+        Assert.Equal(2, diagram.Nodes.Count);
+        Assert.DoesNotContain(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 3);
+
+        var node1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        Assert.NotNull(node1.RequestShowChildNodes);
+        Assert.Equal(1, node1.ChildCount);
+
+        // node1 の子タグ表示コールバックを呼び出す
+        cut.InvokeAsync(() => node1.RequestShowChildNodes(parentTag));
+
+        // Assert: childTag がダイアグラムに追加され、ノード数が 3 になること
+        cut.WaitForState(() => diagram.Nodes.OfType<TagNode>().Any(n => n.Tag.Id == 3));
+        Assert.Equal(3, diagram.Nodes.Count);
+
+        var childNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 3);
+        Assert.Equal("Child", childNode.Tag.Name);
+
+        // 親ノードがフォーカスされていること
+        var updatedNode1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        Assert.True(updatedNode1.IsFocused);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

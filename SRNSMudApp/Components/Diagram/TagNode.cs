@@ -41,6 +41,16 @@ public class TagNode : NodeModel
     /// </summary>
     public Func<TagEntity, Task>? RequestAddChildTag { get; set; }
 
+    /// <summary>
+    ///     子タグをダイアグラムノードとして画面上に表示することを要求するコールバック。
+    /// </summary>
+    public Action<TagEntity>? RequestShowChildNodes { get; set; }
+
+    /// <summary>
+    ///     このノードが持つ子タグの件数を取得する。
+    /// </summary>
+    public int ChildCount => AllTags.Count(t => t.ParentTagId == Tag.Id);
+
     public TagNode(TagEntity tag, Point? position = null) : base(position)
     {
         Tag = tag ?? throw new ArgumentNullException(nameof(tag));
