@@ -28,6 +28,18 @@ window.jqTreeInterop = {
             lastChecked = this;
         });
 
+        const createAddChildButton = (nodeId) => {
+            const $btn = $('<span class="add-child-btn mud-icon-root mud-svg-icon mud-primary-text" style="cursor:pointer; margin-left:8px; vertical-align:middle; width: 1.25em; height: 1.25em; display:inline-block;" title="子タグを追加">' +
+                '<svg focusable="false" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>' +
+                '</span>');
+            $btn.on('click', function (e) {
+                e.stopPropagation();
+                // noinspection JSUnresolvedReference
+                window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('AddChildTagByNodeId', nodeId);
+            });
+            return $btn;
+        };
+
         $tree.tree({
             data,
             autoOpen: true,
@@ -35,9 +47,10 @@ window.jqTreeInterop = {
             /** @public */
             // noinspection JSUnusedGlobalSymbols
             onCreateLi(node, $li) {
-                // jqtree-titleの前にチェックボックスを挿入
                 if (isLoggedIn) {
-                    $li.find('.jqtree-title').before('<input type="checkbox" class="tag-checkbox" data-id="' + node.id + '" style="margin-right: 8px; cursor: pointer;" />');
+                    const $title = $li.find('.jqtree-title');
+                    $title.before('<input type="checkbox" class="tag-checkbox" data-id="' + node.id + '" style="margin-right: 8px; cursor: pointer;" />');
+                    $title.after(createAddChildButton(node.id));
                 }
             }
         });
@@ -48,29 +61,14 @@ window.jqTreeInterop = {
                 $tree.tree('selectNode', node);
                 const $nodeLi = $(node.element);
                 if ($nodeLi.length) {
-                    $nodeLi[0].scrollIntoView({behavior: 'smooth', block: 'center'});
+                    $nodeLi[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             }
         }
 
         $tree.on('tree.select', function (event) {
-            $tree.find('.add-child-btn').remove();
-            if (event.node && isLoggedIn) {
-                const nodeId = event.node.id;
-                const $title = $(event.node.element).find('.jqtree-title');
-                const btnHtml = '<span class="add-child-btn mud-icon-root mud-svg-icon mud-primary-text" style="cursor:pointer; margin-left:8px; vertical-align:middle; width: 1.25em; height: 1.25em; display:inline-block;" title="子タグを追加">' +
-                    '<svg focusable="false" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>' +
-                    '</span>';
-                const $btn = $(btnHtml);
-                $btn.on('click', function (e) {
-                    e.stopPropagation();
-                    // noinspection JSUnresolvedReference
-                    window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('AddChildTagByNodeId', nodeId);
-                });
-                $title.after($btn);
-            }
-
-            // Notify C# of the selection change to update the URL query
+            // Notify C# of the selection change to update the URL query.
+            // Child buttons are rendered per node in onCreateLi so they remain visible across all tags.
             const selectedNodeId = event.node ? event.node.id : null;
             // noinspection JSUnresolvedReference
             window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('OnNodeSelected', selectedNodeId);
@@ -114,7 +112,6 @@ window.jqTreeInterop = {
         const $tree = $('#' + elementId);
         if ($tree.length) {
             $tree.tree('loadData', data);
-            $tree.find('.add-child-btn').remove();
         }
     },
     destroy(elementId) {

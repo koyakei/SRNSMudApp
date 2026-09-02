@@ -1,3 +1,5 @@
+using System.IO;
+
 using Bunit;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -80,6 +82,19 @@ public sealed class TagTreeTests : IAsyncLifetime
         Assert.Contains("\"children\":", treeDataJson);
         Assert.Contains($"\"id\":{child1.Id}", treeDataJson);
         Assert.Contains($"\"id\":{child2.Id}", treeDataJson);
+    }
+
+    [Fact]
+    public void JqTreeInteropScript_AddsChildButtonToEachNodeTitle()
+    {
+        var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "SRNSMudApp", "wwwroot", "js", "jqTreeInterop.js"));
+
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("onCreateLi(node, $li)", script);
+        Assert.Contains("createAddChildButton", script);
+        Assert.Contains("$title.after(createAddChildButton(node.id))", script);
+        Assert.Contains("add-child-btn", script);
     }
 
     public async Task DisposeAsync()
