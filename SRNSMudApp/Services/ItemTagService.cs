@@ -42,6 +42,8 @@ public readonly union WeightComparisonState(SameWeight, DifferentWeight);
 
 public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private static AuthorizationState CheckAuth(bool isAuthorized, string unauthMessage) =>
         isAuthorized switch
         {
@@ -58,7 +60,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> AddTagToItemAsync(int itemId, int tagId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         Tag? tagFromDb = await context.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
         var tagOption = Option<Tag>.Create(tagFromDb);
@@ -125,7 +127,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> RemoveTagRelationAsync(int relationId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagRelation? relation = await context.TagRelations.FindAsync(relationId);
         var relationOption = Option<TagRelation>.Create(relation);
@@ -188,7 +190,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
         var entityOption = Option<TagRelation>.Create(entity);
@@ -254,7 +256,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> SetTagWeightAsync(int relationId, int newWeight, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
         var entityOption = Option<TagRelation>.Create(entity);
@@ -319,7 +321,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagRelation? entity = await context.TagRelations.FindAsync(relationId);
         var entityOption = Option<TagRelation>.Create(entity);
@@ -365,7 +367,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> AddTagToTagAsync(int targetTagId, int tagId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         var alreadyExists = await context.TagRelationToTags.AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == tagId);
 
@@ -425,7 +427,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<string?> RemoveTagToTagRelationAsync(int relationId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
         var entityOption = Option<TagRelationToTag>.Create(entity);
@@ -521,7 +523,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     private async Task<string?> ExecuteSetParentTagAsync(int parentTagId, int childTagId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? entity = await context.Tags.FindAsync(childTagId);
         var entityOption = Option<Tag>.Create(entity);
 
@@ -548,7 +550,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.TaggingRequestEntities!
             .Include(tr => tr.Target)
             .ThenInclude(t => t.Item)
@@ -571,7 +573,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var reply = new Item
         {
             TaggingRequestEntityId = requestId,
@@ -592,7 +594,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Items!
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
@@ -604,7 +606,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         List<TagRelation> inheritedRelations = await context.TagRelations
             .Where(tr => tr.ItemId == parentItemId)

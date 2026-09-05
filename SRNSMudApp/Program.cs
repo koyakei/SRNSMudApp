@@ -14,12 +14,9 @@ using SmartComponents.LocalEmbeddings;
 using SRNSMudApp.Components;
 using SRNSMudApp.Components.Account;
 using SRNSMudApp.Data;
-using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Extensions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Auth;
-using SRNSMudApp.Services.Commands;
-using SRNSMudApp.Services.Contracts;
-using SRNSMudApp.Services.Dialogs;
 
 #endregion
 
@@ -44,75 +41,14 @@ builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("AuthRa
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
-// Dialog 起動の抽象化 (単体テスト用モック差し替えポイント)
-builder.Services.AddScoped<IDialogLauncher, DialogLauncher>();
+// UI DataProvider 群の登録 (Provider Pattern による UI/DbContext 分離)
+builder.Services.AddDataProviders();
 
-// TagCard のデータアクセス分離
-builder.Services.AddScoped<ITagCardDataProvider, TagCardDataProvider>();
+// 契約 Strategy / Factory およびコマンドハンドラーの登録 (Strategy, Factory, Command Pattern)
+builder.Services.AddContractAndCommandServices();
 
-// ItemCard のデータアクセス分離
-builder.Services.AddScoped<IItemCardDataProvider, ItemCardDataProvider>();
-
-// ItemList のデータアクセス分離
-builder.Services.AddScoped<IItemListDataProvider, ItemListDataProvider>();
-
-// ItemList の JSON エクスポート構築分離
-builder.Services.AddScoped<IItemListExportService, ItemListExportService>();
-
-// TagTree のデータアクセス分離
-builder.Services.AddScoped<ITagTreeDataProvider, TagTreeDataProvider>();
-
-// TagTable のデータアクセス分離
-builder.Services.AddScoped<ITagTableDataProvider, TagTableDataProvider>();
-
-// Home のデータアクセス分離
-builder.Services.AddScoped<IHomeDataProvider, HomeDataProvider>();
-
-// NotificationsPage のデータアクセス分離
-builder.Services.AddScoped<INotificationsDataProvider, NotificationsDataProvider>();
-
-// ImportTag のデータアクセス分離
-builder.Services.AddScoped<IImportTagDataProvider, ImportTagDataProvider>();
-
-// ItemDetail のデータアクセス分離
-builder.Services.AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>();
-
-// TagAddDialog のデータアクセス分離
-builder.Services.AddScoped<ITagDialogDataProvider, TagDialogDataProvider>();
-
-// TagDetail のデータアクセス分離
-builder.Services.AddScoped<ITagDetailDataProvider, TagDetailDataProvider>();
-
-// Contract 系のデータアクセス分離
-builder.Services.AddScoped<IContractDataProvider, ContractDataProvider>();
-
-// User 系のデータアクセス分離
-builder.Services.AddScoped<IUserDataProvider, UserDataProvider>();
-
-// 管理・インポート系のデータアクセス分離
-builder.Services.AddScoped<IAdminDataProvider, AdminDataProvider>();
-
-// 契約実行 Strategy (IContractExecutor) の登録
-builder.Services.AddScoped<IContractExecutor, GratisContractExecutor>();
-builder.Services.AddScoped<IContractExecutor, MutualContractExecutor>();
-builder.Services.AddScoped<IContractExecutor, TriggerContractExecutor>();
-builder.Services.AddScoped<IContractExecutor, BountyContractExecutor>();
-builder.Services.AddScoped<IContractExecutorFactory, ContractExecutorFactory>();
-builder.Services.AddScoped<TaggingContractService>();
-builder.Services.AddScoped<IItemTagService, ItemTagService>();
-builder.Services.AddScoped<ITagEdgeService, TagEdgeService>();
-builder.Services.AddScoped<ITagDiagramDataProvider, TagDiagramDataProvider>();
-
-// コマンドハンドラー (Command Pattern) の登録
-builder.Services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();
-builder.Services.AddScoped<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>, RejectTaggingRequestHandler>();
-
-// Register TaggingService
-builder.Services.AddTransient<ITaggingService, TaggingService>();
-builder.Services.AddScoped<ITaggingRequestActions, TaggingRequestActions>();
-builder.Services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
-
-builder.Services.AddScoped<INotificationService, NotificationService>();
+// ドメインサービス・ダイアログ抽象化の登録
+builder.Services.AddTaggingAndDomainServices();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -217,7 +153,10 @@ using (IServiceScope scope = app.Services.CreateScope())
                     Email = "system@example.com",
                     EmailConfirmed = true
                 };
-                _ = await userManager.CreateAsync(systemUser, "SystemPassword123!");
+                var systemPassword = Environment.GetEnvironmentVariable("SYSTEM_USER_INITIAL_PASSWORD")
+                    ?? builder.Configuration["SystemUser:InitialPassword"]
+                    ?? "SystemPassword123!";
+                _ = await userManager.CreateAsync(systemUser, systemPassword);
             }
 
             if (!await db.Tags.AnyAsync(t => t.Name == Tag.RootTagName))

@@ -17,9 +17,12 @@ namespace SRNSMudApp.Services;
 
 public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFactory) : INotificationService
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
     public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(string userId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         // 1. Tag Requests targeting the user
         List<TaggingRequestEntity> tagRequests = await context.TaggingRequestEntities!
@@ -82,7 +85,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         NotificationReadState? existing = await context.NotificationReadStates!
             .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
