@@ -85,6 +85,19 @@ public class TagDiagramCanvasTests : IAsyncDisposable
     }
 
     [Fact]
+    public void TagEdgeLinkWidget_PathNotReady_DoesNotRenderIntermediateArrows()
+    {
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var edge = new TagEdge { Id = 1, SourceTagId = 1, TargetTagId = 2, OwnerId = "user1" };
+        var link = new TagEdgeLink(edge, node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!);
+
+        var cut = _ctx.Render<TagEdgeLinkWidget>(parameters => parameters.Add(p => p.Link, link));
+
+        Assert.Empty(cut.FindAll("g.diagram-link-intermediate-arrows"));
+    }
+
+    [Fact]
     public void TagDiagramCanvas_SelectionChanged_InvokesCallbacks()
     {
         var diagram = new BlazorDiagram();
@@ -276,5 +289,15 @@ public class TagDiagramCanvasTests : IAsyncDisposable
 
         Assert.Single(link.Labels);
         Assert.Equal("CategoryA", link.Labels[0].Content);
+    }
+
+    [Fact]
+    public void TagEdgeLink_NullEdge_ThrowsArgumentNullException()
+    {
+        var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };
+        var node1 = new TagNode(tag1, new Point(0, 0));
+        var port = node1.GetPort(Blazor.Diagrams.Core.Models.PortAlignment.Right)!;
+
+        Assert.Throws<ArgumentNullException>(() => new TagEdgeLink(null!, port));
     }
 }

@@ -21,21 +21,20 @@ public class TagEdgeLink : LinkModel
     public TagEdgeLink(TagEdge edge, PortModel sourcePort, PortModel? targetPort = null)
         : base(sourcePort, targetPort)
     {
-        Edge = edge ?? throw new ArgumentNullException(nameof(edge));
-        Color = "#594ae2"; // MudBlazor Primary
+        ArgumentNullException.ThrowIfNull(edge);
         SelectedColor = "#ff4081"; // MudBlazor Secondary
         Width = 2.5;
         TargetMarker = DirectionArrow;
         UpdateLabels();
     }
 
-    public void UpdateLabels()
+    /// <summary>
     {
         Labels.Clear();
         if (Edge.TagAttachments.Count > 0)
         {
             var text = string.Join(", ", Edge.TagAttachments.Select(a => a.Tag?.Name ?? $"Tag#{a.TagId}"));
-            Labels.Add(new LinkLabelModel(this, text));
+    Labels.Add(new LinkLabelModel(this, text));
         }
     }
 }

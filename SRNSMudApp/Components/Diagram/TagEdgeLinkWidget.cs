@@ -12,6 +12,9 @@ namespace SRNSMudApp.Components.Diagram;
 /// </summary>
 public class TagEdgeLinkWidget : LinkWidget
 {
+    private const double ArrowWidthRatio = 5.0;
+    private const double ArrowHalfHeightRatio = 0.35;
+
 #pragma warning disable IDE1006 // LinkWidget.BuildRenderTree の引数名 __builder に一致させるため
     protected override void BuildRenderTree(RenderTreeBuilder __builder)
 #pragma warning restore IDE1006
@@ -31,9 +34,9 @@ public class TagEdgeLinkWidget : LinkWidget
         double angle23 = Math.Atan2(p23.TangentY, p23.TangentX) * 180.0 / Math.PI;
 
         // エッジの線の太さの 5 倍の幅の矢印
-        double arrowWidth = Link.Width * 5.0;
+        double arrowWidth = Link.Width * ArrowWidthRatio;
         double halfWidth = arrowWidth / 2.0;
-        double halfHeight = arrowWidth * 0.35;
+        double halfHeight = arrowWidth * ArrowHalfHeightRatio;
 
         string arrowPath = string.Create(
             CultureInfo.InvariantCulture,
