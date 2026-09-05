@@ -19,7 +19,7 @@ public partial class LinkPreviewService
 
     public LinkPreviewService(HttpClient httpClient)
     {
-        _httpClient = httpClient;
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "SRNSMudApp-LinkPreviewBot/1.0");
     }
 

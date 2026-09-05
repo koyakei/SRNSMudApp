@@ -15,8 +15,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     Gratis（無償タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     タグオーナーが RightAsset を発行・消費し、対象アイテムへタグを付与または解除する。
 /// </summary>
-public class GratisContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
+public class GratisContractExecutor(
+    ApplicationDbContext dbContext,
+    TimeProvider? timeProvider = null) : IContractExecutor
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     public string ContractType => ContractTypes.Gratis;
 
     public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
@@ -45,7 +49,7 @@ public class GratisContractExecutor(ApplicationDbContext dbContext) : IContractE
     private Task<Result<int>> UpdateConsumedAsset(RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
-        asset.Status = new Burned(DateTime.UtcNow);
+        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult<Result<int>>(new Success<int>(assetId));
     }
@@ -57,7 +61,7 @@ public class GratisContractExecutor(ApplicationDbContext dbContext) : IContractE
             OwnerId = ownerId,
             TargetTagId = targetTagId,
             IsBurned = true,
-            Status = new Burned(DateTime.UtcNow)
+            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();

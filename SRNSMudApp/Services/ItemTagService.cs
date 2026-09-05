@@ -40,6 +40,10 @@ public record DifferentWeight;
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
 public readonly union WeightComparisonState(SameWeight, DifferentWeight);
 
+/// <summary>
+///     アイテムとタグの関連付け（TagRelation）、タグ間の関連付け（TagRelationToTag）、
+///     およびタグ付けリクエストに対する返信・タイムラインイベント・ウェイト台帳の管理を担当するドメインサービス。
+/// </summary>
 public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
@@ -103,26 +107,31 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         _ = await context.SaveChangesAsync();
 
-        var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight++;
+        ProcessTagWeightAddition(context, tagFromDb, newRelation.Id, itemId, currentUserId);
+
+        _ = await context.SaveChangesAsync();
+        return null;
+    }
+
+    private static void ProcessTagWeightAddition(ApplicationDbContext context, Tag tag, int relationId, int itemId, string currentUserId)
+    {
+        var prevWeight = tag.CachedWeight;
+        tag.CachedWeight++;
 
         _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
-            TagId = tagFromDb.Id,
-            TagNameSnapshot = tagFromDb.Name,
+            TagId = tag.Id,
+            TagNameSnapshot = tag.Name,
             ItemId = itemId,
             SourceType = "TagRelationInsert",
-            SourceId = newRelation.Id,
+            SourceId = relationId,
             PreviousWeight = prevWeight,
-            NewWeight = tagFromDb.CachedWeight,
+            NewWeight = tag.CachedWeight,
             Delta = 1,
             IsOwnerAction = true,
             Reason = "タグの新規追加",
             OwnerId = currentUserId
         });
-
-        _ = await context.SaveChangesAsync();
-        return null;
     }
 
     public async Task<string?> RemoveTagRelationAsync(int relationId, string currentUserId)

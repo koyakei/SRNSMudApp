@@ -338,6 +338,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .OnDelete(DeleteBehavior.Restrict);
     }
 
+    /// <summary>
+    ///     同期的な変更保存処理。
+    ///     TaggableTarget の整合性維持、タイムスタンプ更新、およびタグウェイト制限のドメイン不変条件を自動適用する。
+    /// </summary>
     public override int SaveChanges()
     {
         EnsureTaggableTargets();
@@ -347,6 +351,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         return base.SaveChanges();
     }
 
+    /// <summary>
+    ///     非同期的な変更保存処理。
+    ///     TaggableTarget の自動生成/削除、タイムスタンプ更新、ルートタグ制約、およびタグウェイト制限のドメイン不変条件を自動適用する。
+    /// </summary>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         EnsureTaggableTargets();

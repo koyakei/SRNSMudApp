@@ -64,6 +64,9 @@ public interface IItemListExportService
 /// </summary>
 public sealed class ItemListExportService(LinkPreviewService linkPreviewService) : IItemListExportService
 {
+    private readonly LinkPreviewService _linkPreviewService =
+        linkPreviewService ?? throw new ArgumentNullException(nameof(linkPreviewService));
+
     private const int MaxLinkPreviewsPerItem = 3;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -150,7 +153,7 @@ public sealed class ItemListExportService(LinkPreviewService linkPreviewService)
         IEnumerable<string> urls = ItemCardViewModel.ExtractUrls(content).Take(MaxLinkPreviewsPerItem);
         ExportLinkPreviewDto?[] previews = await Task.WhenAll(urls.Select(async url =>
         {
-            LinkPreviewData preview = await linkPreviewService.GetPreviewAsync(url);
+            LinkPreviewData preview = await _linkPreviewService.GetPreviewAsync(url);
             return preview.IsSuccess ? ToDto(preview) : null;
         }));
 

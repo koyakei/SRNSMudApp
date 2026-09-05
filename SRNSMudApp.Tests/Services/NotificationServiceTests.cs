@@ -1,3 +1,5 @@
+using Moq;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
@@ -175,5 +177,63 @@ public class NotificationServiceTests
         Assert.Equal("Alice", dto.ActorName);
         Assert.Equal("/ItemDetail/20", dto.TargetUrl.ToHref());
         Assert.True(dto.Kind is ItemReplyNotification);
+    }
+
+    [Fact]
+    public async Task GetUserNotificationsAsync_CallsDataProvider_AndAggregatesInDescendingOrder()
+    {
+        // Arrange
+        var mockProvider = new Moq.Mock<INotificationsDataProvider>();
+        var rawData = new NotificationRawData(
+            TagRequests:
+            [
+                new TaggingRequestEntity
+                {
+                    Id = 1,
+                    RequestType = TaggingRequestType.Add,
+                    TargetItemId = 10,
+                    RequestedTagId = 20,
+                    ProposedWeight = 1,
+                    Status = TradeStatus.Proposed,
+                    CreatedDate = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+                    OwnerId = "user1",
+                    RequestedTag = new Tag { Name = "Tag1", OwnerId = "user2" },
+                    RequesterUserId = "user1",
+                    TagOwnerUserId = "user2"
+                }
+            ],
+            ItemReplies: [],
+            RejectedRequests: [],
+            ApprovedRequests: [],
+            RequestReplies: [],
+            ReadStates: []
+        );
+
+        mockProvider.Setup(p => p.GetNotificationRawDataAsync("user2", Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rawData);
+
+        var service = new NotificationService(mockProvider.Object);
+
+        // Act
+        IReadOnlyList<NotificationDto> results = await service.GetUserNotificationsAsync("user2");
+
+        // Assert
+        Assert.Single(results);
+        Assert.Equal(1, results[0].SourceId);
+        mockProvider.Verify(p => p.GetNotificationRawDataAsync("user2", Moq.It.IsAny<CancellationToken>()), Moq.Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkAsReadAsync_DelegatesToDataProvider()
+    {
+        // Arrange
+        var mockProvider = new Moq.Mock<INotificationsDataProvider>();
+        var service = new NotificationService(mockProvider.Object);
+
+        // Act
+        await service.MarkAsReadAsync("user1", 42, "TagRequest");
+
+        // Assert
+        mockProvider.Verify(p => p.MarkAsReadAsync("user1", 42, "TagRequest", Moq.It.IsAny<CancellationToken>()), Moq.Times.Once);
     }
 }

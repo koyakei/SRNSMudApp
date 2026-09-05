@@ -26,6 +26,9 @@ public interface ISystemTagEnsurer
 /// </summary>
 public class SystemTagEnsurer(IHomeDataProvider homeData) : ISystemTagEnsurer
 {
+    private readonly IHomeDataProvider _homeData =
+        homeData ?? throw new ArgumentNullException(nameof(homeData));
+
     public async Task<(SystemTagIds VoteIds, ReactionTagIds ReactionIds, bool Refetch)> EnsureAllAsync(
         string? userId,
         SystemTagIds currentVote,
@@ -36,7 +39,7 @@ public class SystemTagEnsurer(IHomeDataProvider homeData) : ISystemTagEnsurer
             return (currentVote, currentReaction, false);
         }
 
-        SystemTagsResult result = await homeData.EnsureSystemTagsAsync(userId);
+        SystemTagsResult result = await _homeData.EnsureSystemTagsAsync(userId);
 
         return result.Created
             ? (currentVote, currentReaction, true)
@@ -52,7 +55,7 @@ public class SystemTagEnsurer(IHomeDataProvider homeData) : ISystemTagEnsurer
             return (current, false);
         }
 
-        SystemTagsResult result = await homeData.EnsureSystemTagsAsync(userId);
+        SystemTagsResult result = await _homeData.EnsureSystemTagsAsync(userId);
 
         return result.Created
             ? (current, true)

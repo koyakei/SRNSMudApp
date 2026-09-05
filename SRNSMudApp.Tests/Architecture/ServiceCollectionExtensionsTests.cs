@@ -85,9 +85,15 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void NotificationService_ThrowsArgumentNullException_WhenDbFactoryIsNull()
+    public void NotificationService_ThrowsArgumentNullException_WhenDataProviderIsNull()
     {
         Assert.Throws<ArgumentNullException>(() => new NotificationService(null!));
+    }
+
+    [Fact]
+    public void TagEdgeService_ThrowsArgumentNullException_WhenDbFactoryIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => new TagEdgeService(null!));
     }
 
     [Fact]
@@ -105,6 +111,15 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new TagTreeDataProvider(null!));
         Assert.Throws<ArgumentNullException>(() => new TagDetailDataProvider(null!));
         Assert.Throws<ArgumentNullException>(() => new TaggingService(null!));
+        Assert.Throws<ArgumentNullException>(() => new ImportTagDataProvider(null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new ImportTagDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new ItemListDataProvider(null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemListDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new TagDialogDataProvider(null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagDialogDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new ItemListExportService(null!));
+        Assert.Throws<ArgumentNullException>(() => new SystemTagEnsurer(null!));
+        Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(null!));
     }
 
     [Fact]

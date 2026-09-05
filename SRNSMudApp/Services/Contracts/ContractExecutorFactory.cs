@@ -21,12 +21,13 @@ public class ContractExecutorFactory(IEnumerable<IContractExecutor> executors) :
     ///     主に DI コンテナ外の単体テストなどで利用される。
     /// </summary>
     /// <param name="dbContext">データベースコンテキスト。</param>
+    /// <param name="timeProvider">時刻プロバイダー（任意）。</param>
     /// <returns>デフォルト構成の <see cref="ContractExecutorFactory" />。</returns>
-    public static ContractExecutorFactory CreateDefault(ApplicationDbContext dbContext) =>
+    public static ContractExecutorFactory CreateDefault(ApplicationDbContext dbContext, TimeProvider? timeProvider = null) =>
         new([
-            new GratisContractExecutor(dbContext),
-            new MutualContractExecutor(dbContext),
-            new TriggerContractExecutor(dbContext),
-            new BountyContractExecutor(dbContext)
+            new GratisContractExecutor(dbContext, timeProvider),
+            new MutualContractExecutor(dbContext, timeProvider),
+            new TriggerContractExecutor(dbContext, timeProvider),
+            new BountyContractExecutor(dbContext, timeProvider)
         ]);
 }

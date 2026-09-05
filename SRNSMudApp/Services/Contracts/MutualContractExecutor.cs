@@ -13,8 +13,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     Mutual（相互タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     依頼者と承認者が互いに RightAsset を消費し、双方のアイテムにタグを付与または解除する。
 /// </summary>
-public class MutualContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
+public class MutualContractExecutor(
+    ApplicationDbContext dbContext,
+    TimeProvider? timeProvider = null) : IContractExecutor
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     public string ContractType => ContractTypes.Mutual;
 
     public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
@@ -36,7 +40,7 @@ public class MutualContractExecutor(ApplicationDbContext dbContext) : IContractE
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
         consumedAsset.IsBurned = true;
-        consumedAsset.Status = new Burned(DateTime.UtcNow);
+        consumedAsset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets!.Update(consumedAsset);
 
         var offeredTagAsset = new RightAsset
@@ -44,7 +48,7 @@ public class MutualContractExecutor(ApplicationDbContext dbContext) : IContractE
             OwnerId = contract.RequesterUserId,
             TargetTagId = contract.Payload is MutualPayload m2 ? m2.OfferedTagId : 0,
             IsBurned = true,
-            Status = new Burned(DateTime.UtcNow)
+            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets!.Add(offeredTagAsset);
 

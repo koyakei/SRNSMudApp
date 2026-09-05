@@ -9,10 +9,13 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
 
-public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagEdgeService
+public class TagEdgeService(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    TimeProvider? timeProvider = null) : ITagEdgeService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     private const string LedgerSourceTypeInsert = "TagEdgeTagAttachmentInsert";
     private const string LedgerSourceTypeDelete = "TagEdgeTagAttachmentDelete";
@@ -110,12 +113,12 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return await (assetCheck switch
         {
             Failure f => Task.FromResult<Result<TagEdgeTagAttachment>>(f),
-            Success<RightAsset> s => ExecuteAttachAsync(context, edge, tag, s.Value, currentUserId, weight)
+            Success<RightAsset> s => ExecuteAttachAsync(context, edge, tag, s.Value, currentUserId, weight, _timeProvider)
         });
     }
 
     private static async Task<Result<TagEdgeTagAttachment>> ExecuteAttachAsync(
-        ApplicationDbContext context, TagEdge edge, Tag tag, RightAsset rightAsset, string currentUserId, int weight)
+        ApplicationDbContext context, TagEdge edge, Tag tag, RightAsset rightAsset, string currentUserId, int weight, TimeProvider timeProvider)
     {
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync();
         try
@@ -124,7 +127,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             if (rightAsset.Amount <= 0)
             {
                 rightAsset.IsBurned = true;
-                rightAsset.Status = new Burned(DateTime.UtcNow);
+                rightAsset.Status = new Burned(timeProvider.GetUtcNow().UtcDateTime);
             }
             _ = context.RightAssets.Update(rightAsset);
 

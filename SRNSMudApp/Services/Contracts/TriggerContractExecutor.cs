@@ -13,8 +13,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     Trigger/PublicOffer コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     依頼者自身が RightAsset を消費してコントラクトを実行し、対象アイテムへタグを付与または解除する。
 /// </summary>
-public class TriggerContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
+public class TriggerContractExecutor(
+    ApplicationDbContext dbContext,
+    TimeProvider? timeProvider = null) : IContractExecutor
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     public string ContractType => ContractTypes.Trigger;
 
     public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
@@ -82,7 +86,7 @@ public class TriggerContractExecutor(ApplicationDbContext dbContext) : IContract
     private Task<int> UpdateTriggerConsumedAssetAsync(RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
-        asset.Status = new Burned(DateTime.UtcNow);
+        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult(assetId);
     }
@@ -94,7 +98,7 @@ public class TriggerContractExecutor(ApplicationDbContext dbContext) : IContract
             OwnerId = offer.OwnerId,
             TargetTagId = offer.OfferedTagId,
             IsBurned = true,
-            Status = new Burned(DateTime.UtcNow)
+            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(ownerAsset);
         _ = await dbContext.SaveChangesAsync();

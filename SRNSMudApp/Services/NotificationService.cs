@@ -1,13 +1,6 @@
-using Microsoft.EntityFrameworkCore;
-
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
-
-// CA1508: union 型 (Option<T> / CheckAuth 結果など) の網羅的パターンマッチでは、先行アームの後の
-// Some / エラー型アームが静的に「常に真」とみなされるが、網羅性確保のためアームは必須。
-// 解析器の誤検知のため、ファイル単位で抑制する。
-#pragma warning disable CA1508
 
 // IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する「Populate switch」は、
 // 全ケース列挙済み・default 併記済みでも解消されない解析器の誤検知のため抑制する。
@@ -15,64 +8,26 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
 
-public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFactory) : INotificationService
+/// <summary>
+///     通知の DTO 構築および集約ロジックを担当するドメインサービス。
+///     データアクセスは INotificationsDataProvider に委譲し、本クラスは純粋なビジネス/変換ロジックに集中する。
+/// </summary>
+public class NotificationService(INotificationsDataProvider dataProvider) : INotificationService
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
-        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly INotificationsDataProvider _dataProvider =
+        dataProvider ?? throw new ArgumentNullException(nameof(dataProvider));
 
     public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(string userId)
     {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-
-        // 1. Tag Requests targeting the user
-        List<TaggingRequestEntity> tagRequests = await context.TaggingRequestEntities!
-            .Include(r => r.Target).ThenInclude(t => t.Item)
-            .Include(r => r.RequestedTag)
-            .Where(r => r.RequesterUserId != userId &&
-                        (r.Target.OwnerId == userId || r.RequestedTag.OwnerId == userId))
-            .ToListAsync();
-
-        // 2. Item Replies targeting the user
-        List<Item> itemReplies = await context.Items!
-            .Include(i => i.ParentItem)
-            .Include(i => i.Owner)
-            .Where(i => i.ParentItemId != 0 && i.ParentItem!.OwnerId == userId && i.OwnerId != userId)
-            .ToListAsync();
-
-        // 3. Rejected requests for the user
-        List<TaggingRequestEntity> rejectedRequests = await context.TaggingRequestEntities!
-            .Include(r => r.Target).ThenInclude(t => t.Item)
-            .Include(r => r.RequestedTag)
-            .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Rejected)
-            .ToListAsync();
-
-        // 4. Approved requests for the user
-        List<TaggingRequestEntity> approvedRequests = await context.TaggingRequestEntities!
-            .Include(r => r.Target).ThenInclude(t => t.Item)
-            .Include(r => r.RequestedTag)
-            .Where(r => r.RequesterUserId == userId && r.Status == TradeStatus.Executed)
-            .ToListAsync();
-
-        // 5. Replies to the user's requests
-        List<Item> requestReplies = await context.Items!
-            .Include(i => i.TaggingRequest)
-            .Include(i => i.Owner)
-            .Where(i => i.TaggingRequestEntityId != 0 &&
-                        i.TaggingRequest!.RequesterUserId == userId &&
-                        i.OwnerId != userId)
-            .ToListAsync();
-
-        List<NotificationReadState> readStates = await context.NotificationReadStates!
-            .Where(n => n.UserId == userId)
-            .ToListAsync();
+        NotificationRawData raw = await _dataProvider.GetNotificationRawDataAsync(userId);
 
         // 純粋な変換は宣言的に構築し、最後にソートする (mainRules: 再代入撲滅 / modern-csharp: Prefer LINQ)
         IEnumerable<NotificationDto> notifications =
-            BuildTagRequestNotifications(tagRequests, readStates)
-                .Concat(BuildRejectedRequestNotifications(rejectedRequests, readStates))
-                .Concat(BuildApprovedRequestNotifications(approvedRequests, readStates))
-                .Concat(BuildReplyNotifications(itemReplies, readStates, "ItemReply"))
-                .Concat(BuildReplyNotifications(requestReplies, readStates, "RequestReply"));
+            BuildTagRequestNotifications(raw.TagRequests, raw.ReadStates)
+                .Concat(BuildRejectedRequestNotifications(raw.RejectedRequests, raw.ReadStates))
+                .Concat(BuildApprovedRequestNotifications(raw.ApprovedRequests, raw.ReadStates))
+                .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply"))
+                .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply"));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
@@ -83,33 +38,8 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         return notifications.Count(n => !n.IsRead);
     }
 
-    public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-
-        NotificationReadState? existing = await context.NotificationReadStates!
-            .FirstOrDefaultAsync(n => n.UserId == userId && n.SourceId == sourceId && n.SourceType == sourceType);
-
-        var option = Option<NotificationReadState>.Create(existing);
-        await (option switch
-        {
-            None => AddNewReadStateAsync(context, userId, sourceId, sourceType),
-            Some<NotificationReadState> => Task.CompletedTask,
-            null => Task.CompletedTask
-        });
-    }
-
-    private static async Task AddNewReadStateAsync(ApplicationDbContext context, string userId, int sourceId, string sourceType)
-    {
-        _ = context.NotificationReadStates.Add(new NotificationReadState
-        {
-            UserId = userId,
-            SourceId = sourceId,
-            SourceType = sourceType,
-            ReadAt = DateTimeOffset.UtcNow
-        });
-        _ = await context.SaveChangesAsync();
-    }
+    public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType) =>
+        await _dataProvider.MarkAsReadAsync(userId, sourceId, sourceType);
 
     internal static string GetRequestTypeLabel(TaggingRequestType? type) => type switch
     {
@@ -118,13 +48,13 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         _ => "不明"
     };
 
-    internal static bool IsRead(List<NotificationReadState> readStates, int sourceId, string sourceType) =>
+    internal static bool IsRead(IReadOnlyList<NotificationReadState> readStates, int sourceId, string sourceType) =>
         readStates.Any(rs => rs.SourceId == sourceId && rs.SourceType == sourceType);
 
     /// <summary>自分宛てのタグ付けリクエストから通知 DTO を生成する。</summary>
     internal static IEnumerable<NotificationDto> BuildTagRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
-        List<NotificationReadState> readStates) =>
+        IReadOnlyList<NotificationReadState> readStates) =>
         requests.Select(req => new NotificationDto
         {
             SourceId = req.Id,
@@ -149,7 +79,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
     /// <summary>リクエスタ自身の却下済みリクエストから通知 DTO を生成する。</summary>
     internal static IEnumerable<NotificationDto> BuildRejectedRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
-        List<NotificationReadState> readStates) =>
+        IReadOnlyList<NotificationReadState> readStates) =>
         requests.Select(req =>
         {
             var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
@@ -181,7 +111,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
     /// <summary>リクエスタ自身の承認済みリクエストから通知 DTO を生成する。</summary>
     internal static IEnumerable<NotificationDto> BuildApprovedRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
-        List<NotificationReadState> readStates) =>
+        IReadOnlyList<NotificationReadState> readStates) =>
         requests.Select(req => new NotificationDto
         {
             SourceId = req.Id,
@@ -204,7 +134,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
 
     /// <summary>リプライ / リクエスト返信から通知 DTO を生成する。</summary>
     internal static IEnumerable<NotificationDto> BuildReplyNotifications(
-        IEnumerable<Item> replies, List<NotificationReadState> readStates, string sourceType) =>
+        IEnumerable<Item> replies, IReadOnlyList<NotificationReadState> readStates, string sourceType) =>
         replies.Select(reply =>
         {
             var ownerName = reply.Owner?.UserName ?? "不明なユーザー";

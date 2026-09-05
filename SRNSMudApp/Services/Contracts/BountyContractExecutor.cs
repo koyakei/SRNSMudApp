@@ -13,8 +13,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     Bounty コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     タグオーナーが報酬（バウンティ）を設定し、実行者が RightAsset を提供してタグを付与または解除する。
 /// </summary>
-public class BountyContractExecutor(ApplicationDbContext dbContext) : IContractExecutor
+public class BountyContractExecutor(
+    ApplicationDbContext dbContext,
+    TimeProvider? timeProvider = null) : IContractExecutor
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     public string ContractType => ContractTypes.Bounty;
 
     public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
@@ -61,7 +65,7 @@ public class BountyContractExecutor(ApplicationDbContext dbContext) : IContractE
     private Result<int> ConsumeFulfillerAsset(RightAsset asset)
     {
         asset.IsBurned = true;
-        asset.Status = new Burned(DateTime.UtcNow);
+        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return new Success<int>(asset.Id);
     }
@@ -73,7 +77,7 @@ public class BountyContractExecutor(ApplicationDbContext dbContext) : IContractE
             OwnerId = fulfillerUserId,
             TargetTagId = requestedTagId,
             IsBurned = true,
-            Status = new Burned(DateTime.UtcNow)
+            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();
