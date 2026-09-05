@@ -18,16 +18,21 @@ public class ContractExecutorFactory(IEnumerable<IContractExecutor> executors) :
 
     /// <summary>
     ///     デフォルトの全コントラクトエグゼキューター（Gratis, Mutual, Trigger, Bounty）を含むファクトリを生成する。
-    ///     主に DI コンテナ外の単体テストなどで利用される。
+    ///     エグゼキューターはステートレスであるため、DbContext は不要。
     /// </summary>
-    /// <param name="dbContext">データベースコンテキスト。</param>
     /// <param name="timeProvider">時刻プロバイダー（任意）。</param>
     /// <returns>デフォルト構成の <see cref="ContractExecutorFactory" />。</returns>
-    public static ContractExecutorFactory CreateDefault(ApplicationDbContext dbContext, TimeProvider? timeProvider = null) =>
+    public static ContractExecutorFactory CreateDefault(TimeProvider? timeProvider = null) =>
         new([
-            new GratisContractExecutor(dbContext, timeProvider),
-            new MutualContractExecutor(dbContext, timeProvider),
-            new TriggerContractExecutor(dbContext, timeProvider),
-            new BountyContractExecutor(dbContext, timeProvider)
+            new GratisContractExecutor(timeProvider),
+            new MutualContractExecutor(timeProvider),
+            new TriggerContractExecutor(timeProvider),
+            new BountyContractExecutor(timeProvider)
         ]);
+
+    /// <summary>
+    ///     後方互換性のためのオーバーロード。
+    /// </summary>
+    public static ContractExecutorFactory CreateDefault(ApplicationDbContext dbContext, TimeProvider? timeProvider = null) =>
+        CreateDefault(timeProvider);
 }

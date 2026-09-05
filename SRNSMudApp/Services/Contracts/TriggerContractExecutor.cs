@@ -12,17 +12,20 @@ namespace SRNSMudApp.Services.Contracts;
 /// <summary>
 ///     Trigger/PublicOffer コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     依頼者自身が RightAsset を消費してコントラクトを実行し、対象アイテムへタグを付与または解除する。
+///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class TriggerContractExecutor(
-    ApplicationDbContext dbContext,
     TimeProvider? timeProvider = null) : IContractExecutor
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public string ContractType => ContractTypes.Trigger;
 
-    public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(contract);
+
         var targetOfferId = contract.Payload is PublicOfferPayload p ? p.TargetPublicTradeOfferId : 0;
         PublicTradeOffer? offer = await dbContext.PublicTradeOffers
                                      .FirstOrDefaultAsync(o => o.Id == targetOfferId);
@@ -37,11 +40,11 @@ public class TriggerContractExecutor(
         return await (offerResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<PublicTradeOffer> s => ProcessTriggerWithOfferAsync(contract, s.Value)
+            Success<PublicTradeOffer> s => ProcessTriggerWithOfferAsync(dbContext, contract, s.Value)
         });
     }
 
-    private async Task<Result<string>> ProcessTriggerWithOfferAsync(TaggingRequestEntity contract, PublicTradeOffer offer)
+    private async Task<Result<string>> ProcessTriggerWithOfferAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer)
     {
         Result<RightAsset?> assetValidation = (offer.RequiredAssetAmount > 0) switch
         {
@@ -52,7 +55,7 @@ public class TriggerContractExecutor(
         return await (assetValidation switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<RightAsset?> s => ProcessTriggerAssetActionAsync(contract, offer, s.Value)
+            Success<RightAsset?> s => ProcessTriggerAssetActionAsync(dbContext, contract, offer, s.Value)
         });
     }
 
@@ -67,23 +70,23 @@ public class TriggerContractExecutor(
         };
     }
 
-    private async Task<Result<string>> ProcessTriggerAssetActionAsync(TaggingRequestEntity contract, PublicTradeOffer offer, RightAsset? validatedAsset)
+    private async Task<Result<string>> ProcessTriggerAssetActionAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, RightAsset? validatedAsset)
     {
         var consumedAssetId = await (validatedAsset switch
         {
-            not null => UpdateTriggerConsumedAssetAsync(validatedAsset, contract.ConsumedRightAssetId!.Value),
-            null => CreateTriggerOwnerAssetAsync(offer)
+            not null => UpdateTriggerConsumedAssetAsync(dbContext, validatedAsset, contract.ConsumedRightAssetId!.Value),
+            null => CreateTriggerOwnerAssetAsync(dbContext, offer)
         });
 
         return await (contract.RequestType switch
         {
-            TaggingRequestType.Add => ProcessTriggerAddAsync(contract, offer, consumedAssetId),
-            TaggingRequestType.Remove => ProcessTriggerRemoveAsync(contract, offer, consumedAssetId),
+            TaggingRequestType.Add => ProcessTriggerAddAsync(dbContext, contract, offer, consumedAssetId),
+            TaggingRequestType.Remove => ProcessTriggerRemoveAsync(dbContext, contract, offer, consumedAssetId),
             _ => Task.FromResult<Result<string>>(new Failure("無効なリクエストタイプです。"))
         });
     }
 
-    private Task<int> UpdateTriggerConsumedAssetAsync(RightAsset asset, int assetId)
+    private Task<int> UpdateTriggerConsumedAssetAsync(ApplicationDbContext dbContext, RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
         asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
@@ -91,7 +94,7 @@ public class TriggerContractExecutor(
         return Task.FromResult(assetId);
     }
 
-    private async Task<int> CreateTriggerOwnerAssetAsync(PublicTradeOffer offer)
+    private async Task<int> CreateTriggerOwnerAssetAsync(ApplicationDbContext dbContext, PublicTradeOffer offer)
     {
         var ownerAsset = new RightAsset
         {
@@ -105,7 +108,7 @@ public class TriggerContractExecutor(
         return ownerAsset.Id;
     }
 
-    private async Task<Result<string>> ProcessTriggerAddAsync(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId)
+    private static async Task<Result<string>> ProcessTriggerAddAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId)
     {
         var newRelation = new TagRelation
         {
@@ -127,11 +130,11 @@ public class TriggerContractExecutor(
         return tagResult switch
         {
             Failure f => f,
-            Success<Tag> s => CompleteTriggerAdd(contract, offer, consumedAssetId, s.Value, newRelation)
+            Success<Tag> s => CompleteTriggerAdd(dbContext, contract, offer, consumedAssetId, s.Value, newRelation)
         };
     }
 
-    private Result<string> CompleteTriggerAdd(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation newRelation)
+    private static Result<string> CompleteTriggerAdd(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation newRelation)
     {
         var prevWeight = tag.CachedWeight;
         tag.CachedWeight += contract.ProposedWeight;
@@ -166,7 +169,7 @@ public class TriggerContractExecutor(
         return new Success<string>("公開オファーを実行しました。");
     }
 
-    private async Task<Result<string>> ProcessTriggerRemoveAsync(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId)
+    private static async Task<Result<string>> ProcessTriggerRemoveAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId)
     {
         TagRelation? relation = await dbContext.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == offer.OfferedTagId);
@@ -174,11 +177,11 @@ public class TriggerContractExecutor(
         return await (relation switch
         {
             null => Task.FromResult<Result<string>>(new Success<string>("削除対象が存在しません。")),
-            var r => ProcessTriggerRemoveRelationAsync(contract, offer, consumedAssetId, r)
+            var r => ProcessTriggerRemoveRelationAsync(dbContext, contract, offer, consumedAssetId, r)
         });
     }
 
-    private async Task<Result<string>> ProcessTriggerRemoveRelationAsync(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, TagRelation relation)
+    private static async Task<Result<string>> ProcessTriggerRemoveRelationAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, TagRelation relation)
     {
         var prevWeight = relation.Weight;
         _ = dbContext.TagRelations.Remove(relation);
@@ -193,11 +196,11 @@ public class TriggerContractExecutor(
         return tagResult switch
         {
             Failure f => f,
-            Success<Tag> s => CompleteTriggerRemove(contract, offer, consumedAssetId, s.Value, relation, prevWeight)
+            Success<Tag> s => CompleteTriggerRemove(dbContext, contract, offer, consumedAssetId, s.Value, relation, prevWeight)
         };
     }
 
-    private Result<string> CompleteTriggerRemove(TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation relation, int prevWeight)
+    private static Result<string> CompleteTriggerRemove(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation relation, int prevWeight)
     {
         var previousWeight = tag.CachedWeight;
         tag.CachedWeight -= prevWeight;

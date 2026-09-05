@@ -29,7 +29,7 @@ public sealed class DuplicateTaggingRequestCancelTests : IAsyncLifetime
     private readonly BunitContext _ctx = new();
     private readonly Mock<IContractDataProvider> _contractDataMock = new();
     private readonly Mock<ITaggingRequestActions> _actionsMock = new();
-    private readonly Mock<TaggingContractService> _contractServiceMock;
+    private readonly Mock<ITaggingContractService> _contractServiceMock = new();
 
     public DuplicateTaggingRequestCancelTests()
     {
@@ -38,9 +38,6 @@ public sealed class DuplicateTaggingRequestCancelTests : IAsyncLifetime
         _ = _ctx.Services.AddScoped(_ => _contractDataMock.Object);
         _ = _ctx.Services.AddScoped(_ => _actionsMock.Object);
         _ctx.Services.AddAuthorizationCore();
-
-        var dummyOptions = new Microsoft.EntityFrameworkCore.DbContextOptions<ApplicationDbContext>();
-        _contractServiceMock = new Mock<TaggingContractService>(new ApplicationDbContext(dummyOptions));
         _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
 
         var authState = BunitTestSetup.CreateAuthState(UserBId);

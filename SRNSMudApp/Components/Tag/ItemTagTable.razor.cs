@@ -29,7 +29,7 @@ public partial class ItemTagTable
     [Parameter] public EventCallback<string?> SearchStringChanged { get; set; }
 
     [Inject] private IUserDataProvider UserDataProvider { get; set; } = null!;
-    [Inject] private TaggingContractService TaggingContractService { get; set; } = null!;
+    [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
 
     private ApplicationUser? _selectedTargetUser;

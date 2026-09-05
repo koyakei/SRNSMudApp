@@ -98,6 +98,7 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
         Assert.True(cancelResult is Success<string>, cancelResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
 
         // Assert
+        dbContext.ChangeTracker.Clear();
         TaggingRequestEntity? updatedContract = await dbContext.TaggingRequestEntities.FindAsync(contract.Id);
         Assert.Equal(TradeStatus.Canceled, updatedContract!.Status);
     }
@@ -132,6 +133,7 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
         Assert.True(cancelResult is Success<string>, cancelResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
 
         // Assert
+        dbContext.ChangeTracker.Clear();
         TaggingRequestEntity? updatedContract = await dbContext.TaggingRequestEntities.FindAsync(contract.Id);
         Assert.Equal(TradeStatus.Canceled, updatedContract!.Status);
     }

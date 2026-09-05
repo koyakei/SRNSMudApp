@@ -58,7 +58,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IContractExecutor, TriggerContractExecutor>();
         services.AddScoped<IContractExecutor, BountyContractExecutor>();
         services.AddScoped<IContractExecutorFactory, ContractExecutorFactory>();
-        services.AddScoped<TaggingContractService>();
+        services.AddScoped<ITaggingContractService, TaggingContractService>();
+        services.AddScoped<TaggingContractService>(sp => (TaggingContractService)sp.GetRequiredService<ITaggingContractService>());
 
         // コマンドハンドラー (Command Pattern) の登録
         services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();
@@ -80,6 +81,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDialogLauncher, DialogLauncher>();
 
         // エクスポート・通知・タグ関連ドメインサービス
+        services.AddScoped<ITimelineRecorder, TimelineRecorder>();
+        services.AddScoped<ITagWeightLedgerService, TagWeightLedgerService>();
         services.AddScoped<IItemListExportService, ItemListExportService>();
         services.AddScoped<IItemTagService, ItemTagService>();
         services.AddScoped<ITagEdgeService, TagEdgeService>();
@@ -92,6 +95,9 @@ public static class ServiceCollectionExtensions
 
         // テスト時に時刻固定を可能にする TimeProvider 抽象化
         services.AddSingleton(TimeProvider.System);
+
+        // EF Core SaveChangesInterceptor
+        services.AddSingleton<Data.Interceptors.ApplicationDbSaveChangesInterceptor>();
 
         return services;
     }

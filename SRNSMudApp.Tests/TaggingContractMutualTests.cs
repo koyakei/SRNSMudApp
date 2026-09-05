@@ -51,6 +51,7 @@ public class TaggingContractMutualTests : TaggingContractTestBase
         Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
 
         // Assert
+        dbContext.ChangeTracker.Clear();
         var assetIsBurned = await dbContext.RightAssets.AnyAsync(a => a.Id == rightAssetA.Id && a.IsBurned);
         Assert.True(assetIsBurned);
 

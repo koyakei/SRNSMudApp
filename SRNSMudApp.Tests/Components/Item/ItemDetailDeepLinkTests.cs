@@ -26,16 +26,13 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
 
     private readonly BunitContext _ctx = new();
     private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
-    private readonly Mock<TaggingContractService> _contractServiceMock;
+    private readonly Mock<ITaggingContractService> _contractServiceMock = new();
 
     public ItemDetailDeepLinkTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _itemDetailDataMock.Object);
-
-        var dummyOptions = new Microsoft.EntityFrameworkCore.DbContextOptions<ApplicationDbContext>();
-        _contractServiceMock = new Mock<TaggingContractService>(new ApplicationDbContext(dummyOptions));
         _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
 
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();

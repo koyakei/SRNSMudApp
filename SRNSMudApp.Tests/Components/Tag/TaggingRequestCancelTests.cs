@@ -22,7 +22,7 @@ public sealed class TaggingRequestCancelTests : IAsyncLifetime
     private const string UserId = "user-1";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<TaggingContractService> _contractServiceMock;
+    private readonly Mock<ITaggingContractService> _contractServiceMock = new();
     private int _onDataChangedCount;
 
     public TaggingRequestCancelTests()
@@ -35,9 +35,6 @@ public sealed class TaggingRequestCancelTests : IAsyncLifetime
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
-
-        var dummyOptions = new DbContextOptions<ApplicationDbContext>();
-        _contractServiceMock = new Mock<TaggingContractService>(new ApplicationDbContext(dummyOptions));
         _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
     }
 

@@ -1,5 +1,10 @@
+using Microsoft.EntityFrameworkCore;
+
+using Moq;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Contracts;
 
 namespace SRNSMudApp.Tests.TestSupport;
 
@@ -43,7 +48,21 @@ public abstract class TaggingContractTestBase : IAsyncLifetime
     {
         var tid = Guid.NewGuid().ToString("N")[..8];
         var ctx = new ApplicationDbContext(SharedDb.Options);
-        var svc = new TaggingContractService(ctx);
+        var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
+        mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new ApplicationDbContext(SharedDb.Options));
+        var svc = new TaggingContractService(mockDbFactory.Object, ContractExecutorFactory.CreateDefault());
         return new TaggingTestScope(ctx, svc, tid);
+    }
+
+    /// <summary>
+    /// 指定されたファクトリを用いてテストスコープを生成する。
+    /// </summary>
+    protected IDbContextFactory<ApplicationDbContext> CreateDbContextFactory()
+    {
+        var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
+        mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new ApplicationDbContext(SharedDb.Options));
+        return mockDbFactory.Object;
     }
 }

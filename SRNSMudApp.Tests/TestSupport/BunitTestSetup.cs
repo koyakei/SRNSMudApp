@@ -84,7 +84,7 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<ITaggingService>().Object)
             .AddScoped(_ => new Mock<ITagEmbeddingService>().Object)
             .AddScoped(_ => new Mock<INotificationService>().Object)
-            .AddScoped(_ => new Mock<TaggingContractService>(dummyContext).Object)
+            .AddScoped(_ => new Mock<ITaggingContractService>().Object)
             .AddScoped(_ => new Mock<ITaggingRequestActions>().Object)
             .AddScoped(_ => new Mock<ISystemTagEnsurer>().Object)
             .AddScoped(_ => new Mock<IDialogLauncher>().Object)

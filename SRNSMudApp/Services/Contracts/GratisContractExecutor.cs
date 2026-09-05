@@ -14,21 +14,24 @@ namespace SRNSMudApp.Services.Contracts;
 /// <summary>
 ///     Gratis（無償タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     タグオーナーが RightAsset を発行・消費し、対象アイテムへタグを付与または解除する。
+///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class GratisContractExecutor(
-    ApplicationDbContext dbContext,
     TimeProvider? timeProvider = null) : IContractExecutor
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public string ContractType => ContractTypes.Gratis;
 
-    public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(contract);
+
         Result<int> assetProcessResult = await (contract.ConsumedRightAsset switch
         {
-            not null => UpdateConsumedAsset(contract.ConsumedRightAsset, contract.ConsumedRightAssetId!.Value),
-            null => CreateNewRightAsset(contract.TagOwnerUserId, contract.RequestedTagId)
+            not null => UpdateConsumedAsset(dbContext, contract.ConsumedRightAsset, contract.ConsumedRightAssetId!.Value),
+            null => CreateNewRightAsset(dbContext, contract.TagOwnerUserId, contract.RequestedTagId)
         });
 
         var consumedAssetId = assetProcessResult switch
@@ -42,11 +45,11 @@ public class GratisContractExecutor(
         return await (requestedTag switch
         {
             null => Task.FromResult<Result<string>>(new Failure(ContractMessages.TagNotFound)),
-            var tag => ProcessGratisTagActionAsync(contract, tag, consumedAssetId, currentUserId)
+            var tag => ProcessGratisTagActionAsync(dbContext, contract, tag, consumedAssetId, currentUserId)
         });
     }
 
-    private Task<Result<int>> UpdateConsumedAsset(RightAsset asset, int assetId)
+    private Task<Result<int>> UpdateConsumedAsset(ApplicationDbContext dbContext, RightAsset asset, int assetId)
     {
         asset.IsBurned = true;
         asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
@@ -54,7 +57,7 @@ public class GratisContractExecutor(
         return Task.FromResult<Result<int>>(new Success<int>(assetId));
     }
 
-    private async Task<Result<int>> CreateNewRightAsset(string ownerId, int targetTagId)
+    private async Task<Result<int>> CreateNewRightAsset(ApplicationDbContext dbContext, string ownerId, int targetTagId)
     {
         var rightAsset = new RightAsset
         {
@@ -68,7 +71,7 @@ public class GratisContractExecutor(
         return new Success<int>(rightAsset.Id);
     }
 
-    private async Task<Result<string>> ProcessGratisTagActionAsync(TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId)
+    private static async Task<Result<string>> ProcessGratisTagActionAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId)
     {
         TaggableTarget? target = contract.Target ?? await dbContext.TaggableTargets
             .Include(t => t.Item)
@@ -80,23 +83,23 @@ public class GratisContractExecutor(
             int edgeId = target.TagEdge?.Id ?? await dbContext.TagEdges.Where(e => e.TagTargetId == target.Id).Select(e => e.Id).FirstOrDefaultAsync();
             return await (contract.RequestType switch
             {
-                TaggingRequestType.Add => ProcessGratisAddEdgeAsync(contract, tag, edgeId, consumedAssetId, executorUserId),
-                TaggingRequestType.Remove => ProcessGratisRemoveOrDecreaseEdgeAsync(contract, tag, edgeId, consumedAssetId, executorUserId, true),
-                TaggingRequestType.DecreaseWeight => ProcessGratisRemoveOrDecreaseEdgeAsync(contract, tag, edgeId, consumedAssetId, executorUserId, false),
+                TaggingRequestType.Add => ProcessGratisAddEdgeAsync(dbContext, contract, tag, edgeId, consumedAssetId, executorUserId),
+                TaggingRequestType.Remove => ProcessGratisRemoveOrDecreaseEdgeAsync(dbContext, contract, tag, edgeId, consumedAssetId, executorUserId, true),
+                TaggingRequestType.DecreaseWeight => ProcessGratisRemoveOrDecreaseEdgeAsync(dbContext, contract, tag, edgeId, consumedAssetId, executorUserId, false),
                 _ => Task.FromResult<Result<string>>(new Failure(ContractMessages.InvalidRequestType))
             });
         }
 
         return await (contract.RequestType switch
         {
-            TaggingRequestType.Add => ProcessGratisAddAsync(contract, tag, consumedAssetId, executorUserId),
-            TaggingRequestType.Remove => ProcessGratisRemoveOrDecreaseAsync(contract, tag, consumedAssetId, executorUserId, true),
-            TaggingRequestType.DecreaseWeight => ProcessGratisRemoveOrDecreaseAsync(contract, tag, consumedAssetId, executorUserId, false),
+            TaggingRequestType.Add => ProcessGratisAddAsync(dbContext, contract, tag, consumedAssetId, executorUserId),
+            TaggingRequestType.Remove => ProcessGratisRemoveOrDecreaseAsync(dbContext, contract, tag, consumedAssetId, executorUserId, true),
+            TaggingRequestType.DecreaseWeight => ProcessGratisRemoveOrDecreaseAsync(dbContext, contract, tag, consumedAssetId, executorUserId, false),
             _ => Task.FromResult<Result<string>>(new Failure(ContractMessages.InvalidRequestType))
         });
     }
 
-    private async Task<Result<string>> ProcessGratisAddEdgeAsync(TaggingRequestEntity contract, Tag tag, int edgeId, int consumedAssetId, string executorUserId)
+    private static async Task<Result<string>> ProcessGratisAddEdgeAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, int edgeId, int consumedAssetId, string executorUserId)
     {
         var newAttachment = new TagEdgeTagAttachment
         {
@@ -133,7 +136,7 @@ public class GratisContractExecutor(
         return new Success<string>(ContractMessages.TagEdgeTagAttached);
     }
 
-    private async Task<Result<string>> ProcessGratisRemoveOrDecreaseEdgeAsync(TaggingRequestEntity contract, Tag tag, int edgeId, int consumedAssetId, string executorUserId, bool isRemove)
+    private static async Task<Result<string>> ProcessGratisRemoveOrDecreaseEdgeAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, int edgeId, int consumedAssetId, string executorUserId, bool isRemove)
     {
         var attachment = await dbContext.TagEdgeTagAttachments
             .FirstOrDefaultAsync(a => a.TagEdgeId == edgeId && a.TagId == contract.RequestedTagId);
@@ -179,7 +182,7 @@ public class GratisContractExecutor(
         return new Success<string>(ContractMessages.TagEdgeTagDetachedOrDecreased);
     }
 
-    private async Task<Result<string>> ProcessGratisAddAsync(TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId)
+    private static async Task<Result<string>> ProcessGratisAddAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId)
     {
         var newRelation = new TagRelation
         {
@@ -224,7 +227,7 @@ public class GratisContractExecutor(
         return new Success<string>("タグを追加しました。");
     }
 
-    private async Task<Result<string>> ProcessGratisRemoveOrDecreaseAsync(TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId, bool isRemove)
+    private static async Task<Result<string>> ProcessGratisRemoveOrDecreaseAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, int consumedAssetId, string executorUserId, bool isRemove)
     {
         TagRelation? relation = await dbContext.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
@@ -232,11 +235,11 @@ public class GratisContractExecutor(
         return await (relation switch
         {
             null => Task.FromResult<Result<string>>(new Failure(ContractMessages.TagRelationNotFound)),
-            var r => ProcessRelationDecreaseAsync(contract, tag, r, consumedAssetId, executorUserId, isRemove)
+            var r => ProcessRelationDecreaseAsync(dbContext, contract, tag, r, consumedAssetId, executorUserId, isRemove)
         });
     }
 
-    private Task<Result<string>> ProcessRelationDecreaseAsync(TaggingRequestEntity contract, Tag tag, TagRelation relation, int consumedAssetId, string executorUserId, bool isRemove)
+    private static Task<Result<string>> ProcessRelationDecreaseAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag tag, TagRelation relation, int consumedAssetId, string executorUserId, bool isRemove)
     {
         var prevWeight = relation.Weight;
         var delta = isRemove ? -prevWeight : -contract.ProposedWeight;

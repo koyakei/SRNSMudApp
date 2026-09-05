@@ -40,7 +40,7 @@ public partial class ItemDetail
     [Inject] private IItemDetailDataProvider DetailData { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
-    [Inject] private TaggingContractService TaggingContractService { get; set; } = null!;
+    [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private ITaggingService TaggingService { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
 

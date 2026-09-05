@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 using Moq;
 
 using SRNSMudApp.Data;
@@ -25,12 +27,10 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
     [Fact]
     public void Executors_ShouldExposeExpectedContractTypes()
     {
-        using var context = new ApplicationDbContext(SharedDb.Options);
-
-        var gratis = new GratisContractExecutor(context);
-        var mutual = new MutualContractExecutor(context);
-        var trigger = new TriggerContractExecutor(context);
-        var bounty = new BountyContractExecutor(context);
+        var gratis = new GratisContractExecutor();
+        var mutual = new MutualContractExecutor();
+        var trigger = new TriggerContractExecutor();
+        var bounty = new BountyContractExecutor();
 
         Assert.Equal(ContractTypes.Gratis, gratis.ContractType);
         Assert.Equal(ContractTypes.Mutual, mutual.ContractType);
@@ -71,15 +71,15 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         var mockExecutor = new Mock<IContractExecutor>();
         mockExecutor.Setup(e => e.ContractType).Returns("CustomStrategy");
         mockExecutor
-            .Setup(e => e.ExecuteAsync(It.IsAny<TaggingRequestEntity>(), user.Id, null))
+            .Setup(e => e.ExecuteAsync(It.IsAny<ApplicationDbContext>(), It.IsAny<TaggingRequestEntity>(), user.Id, null))
             .ReturnsAsync(new Success<string>("Custom strategy executed successfully"));
 
-        var service = new TaggingContractService(context, new ContractExecutorFactory([mockExecutor.Object]));
+        var service = new TaggingContractService(CreateDbContextFactory(), new ContractExecutorFactory([mockExecutor.Object]));
 
         var result = await service.AcceptContractAsync(contract.Id, user.Id);
 
         Assert.True(result is Success<string> success && success.Value == "Custom strategy executed successfully");
-        mockExecutor.Verify(e => e.ExecuteAsync(It.Is<TaggingRequestEntity>(c => c.Id == contract.Id), user.Id, null), Times.Once);
+        mockExecutor.Verify(e => e.ExecuteAsync(It.IsAny<ApplicationDbContext>(), It.Is<TaggingRequestEntity>(c => c.Id == contract.Id), user.Id, null), Times.Once);
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         context.TaggingRequestEntities.Add(contract);
         await context.SaveChangesAsync();
 
-        var service = new TaggingContractService(context, new ContractExecutorFactory([]));
+        var service = new TaggingContractService(CreateDbContextFactory(), new ContractExecutorFactory([]));
 
         var result = await service.AcceptContractAsync(contract.Id, user.Id);
 
@@ -121,8 +121,7 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
     [Fact]
     public void ContractExecutorFactory_CreateDefault_ShouldContainAllStandardExecutors()
     {
-        using var context = new ApplicationDbContext(SharedDb.Options);
-        var factory = ContractExecutorFactory.CreateDefault(context);
+        var factory = ContractExecutorFactory.CreateDefault();
 
         Assert.NotNull(factory.GetExecutor(ContractTypes.Gratis));
         Assert.NotNull(factory.GetExecutor(ContractTypes.Mutual));
@@ -155,9 +154,9 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
     public void TaggingContractService_NullParameters_ThrowsArgumentNullException()
     {
         var factoryMock = new Mock<IContractExecutorFactory>();
-        using var context = new ApplicationDbContext(SharedDb.Options);
+        var dbFactory = CreateDbContextFactory();
 
         Assert.Throws<ArgumentNullException>(() => new TaggingContractService(null!, factoryMock.Object));
-        Assert.Throws<ArgumentNullException>(() => new TaggingContractService(context, null!));
+        Assert.Throws<ArgumentNullException>(() => new TaggingContractService(dbFactory, null!));
     }
 }

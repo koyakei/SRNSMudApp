@@ -31,7 +31,7 @@ public sealed class NotificationsPageTests : IAsyncLifetime
     private readonly Mock<INotificationsDataProvider> _notifDataMock = new();
     private readonly Mock<ITaggingRequestActions> _actionsMock = new();
     private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
-    private readonly Mock<TaggingContractService> _contractServiceMock;
+    private readonly Mock<ITaggingContractService> _contractServiceMock = new();
 
     public NotificationsPageTests()
     {
@@ -41,9 +41,6 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         _ = _ctx.Services.AddScoped(_ => _notifDataMock.Object);
         _ = _ctx.Services.AddScoped(_ => _actionsMock.Object);
         _ = _ctx.Services.AddScoped(_ => _dialogLauncherMock.Object);
-
-        var dummyOptions = new Microsoft.EntityFrameworkCore.DbContextOptions<ApplicationDbContext>();
-        _contractServiceMock = new Mock<TaggingContractService>(new ApplicationDbContext(dummyOptions));
         _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
 
         _ctx.Services.AddAuthorizationCore();

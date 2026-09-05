@@ -12,17 +12,20 @@ namespace SRNSMudApp.Services.Contracts;
 /// <summary>
 ///     Mutual（相互タグ付け）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     依頼者と承認者が互いに RightAsset を消費し、双方のアイテムにタグを付与または解除する。
+///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class MutualContractExecutor(
-    ApplicationDbContext dbContext,
     TimeProvider? timeProvider = null) : IContractExecutor
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public string ContractType => ContractTypes.Mutual;
 
-    public async Task<Result<string>> ExecuteAsync(TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(contract);
+
         Result<RightAsset> assetValidation = contract.ConsumedRightAsset switch
         {
             null => new Failure("相互タグ付けには対価のアセットが必要です。"),
@@ -32,11 +35,11 @@ public class MutualContractExecutor(
         return await (assetValidation switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<RightAsset> s => ProcessMutualWithAssetAsync(contract, s.Value, currentUserId)
+            Success<RightAsset> s => ProcessMutualWithAssetAsync(dbContext, contract, s.Value, currentUserId)
         });
     }
 
-    private async Task<Result<string>> ProcessMutualWithAssetAsync(TaggingRequestEntity contract, RightAsset consumedAsset, string executorUserId)
+    private async Task<Result<string>> ProcessMutualWithAssetAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, RightAsset consumedAsset, string executorUserId)
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
         consumedAsset.IsBurned = true;
@@ -65,27 +68,27 @@ public class MutualContractExecutor(
         return await (fetchResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<(Tag req, Tag off)> s => ProcessMutualTagsAsync(contract, s.Value.req, s.Value.off, requesterAssetId, offeredTagAsset, executorUserId)
+            Success<(Tag req, Tag off)> s => ProcessMutualTagsAsync(dbContext, contract, s.Value.req, s.Value.off, requesterAssetId, offeredTagAsset, executorUserId)
         });
     }
 
-    private async Task<Result<string>> ProcessMutualTagsAsync(TaggingRequestEntity contract, Tag requestedTag, Tag offeredTag, int requesterAssetId, RightAsset offeredTagAsset, string executorUserId)
+    private static async Task<Result<string>> ProcessMutualTagsAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, Tag offeredTag, int requesterAssetId, RightAsset offeredTagAsset, string executorUserId)
     {
         Result<string> processResult = await (contract.RequestType switch
         {
-            TaggingRequestType.Add => ProcessMutualAddAsync(contract, requestedTag, requesterAssetId, executorUserId),
-            TaggingRequestType.Remove => ProcessMutualRemoveAsync(contract, requestedTag, requesterAssetId, executorUserId),
+            TaggingRequestType.Add => ProcessMutualAddAsync(dbContext, contract, requestedTag, requesterAssetId, executorUserId),
+            TaggingRequestType.Remove => ProcessMutualRemoveAsync(dbContext, contract, requestedTag, requesterAssetId, executorUserId),
             _ => Task.FromResult<Result<string>>(new Failure("無効なリクエストタイプです。"))
         });
 
         return await (processResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<string> => ProcessMutualOfferedAsync(contract, offeredTag, offeredTagAsset, executorUserId)
+            Success<string> => ProcessMutualOfferedAsync(dbContext, contract, offeredTag, offeredTagAsset, executorUserId)
         });
     }
 
-    private async Task<Result<string>> ProcessMutualAddAsync(TaggingRequestEntity contract, Tag requestedTag, int requesterAssetId, string executorUserId)
+    private static async Task<Result<string>> ProcessMutualAddAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, int requesterAssetId, string executorUserId)
     {
         var relation1 = new TagRelation
         {
@@ -130,7 +133,7 @@ public class MutualContractExecutor(
         return new Success<string>("追加完了");
     }
 
-    private async Task<Result<string>> ProcessMutualRemoveAsync(TaggingRequestEntity contract, Tag requestedTag, int requesterAssetId, string executorUserId)
+    private static async Task<Result<string>> ProcessMutualRemoveAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, int requesterAssetId, string executorUserId)
     {
         TagRelation? relation1Remove = await dbContext.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
@@ -144,11 +147,11 @@ public class MutualContractExecutor(
         return removeResult switch
         {
             Failure f => f,
-            Success<TagRelation> s => ProcessMutualRemoveRelation(contract, requestedTag, s.Value, requesterAssetId, executorUserId)
+            Success<TagRelation> s => ProcessMutualRemoveRelation(dbContext, contract, requestedTag, s.Value, requesterAssetId, executorUserId)
         };
     }
 
-    private Result<string> ProcessMutualRemoveRelation(TaggingRequestEntity contract, Tag requestedTag, TagRelation relation, int requesterAssetId, string executorUserId)
+    private static Result<string> ProcessMutualRemoveRelation(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, TagRelation relation, int requesterAssetId, string executorUserId)
     {
         var prevWeight = relation.Weight;
         _ = dbContext.TagRelations.Remove(relation);
@@ -186,7 +189,7 @@ public class MutualContractExecutor(
         return new Success<string>("削除完了");
     }
 
-    private async Task<Result<string>> ProcessMutualOfferedAsync(TaggingRequestEntity contract, Tag offeredTag, RightAsset offeredTagAsset, string executorUserId)
+    private static async Task<Result<string>> ProcessMutualOfferedAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag offeredTag, RightAsset offeredTagAsset, string executorUserId)
     {
         if (contract.Payload is not MutualPayload mutualPayload)
         {

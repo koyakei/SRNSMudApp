@@ -22,10 +22,10 @@ public record RejectTaggingRequestCommand(int RequestId, string CurrentUserId, s
 ///     タグ付けリクエスト承認コマンドのハンドラー。
 /// </summary>
 /// <param name="contractService">契約処理サービス。</param>
-public class ApproveTaggingRequestHandler(TaggingContractService contractService)
+public class ApproveTaggingRequestHandler(ITaggingContractService contractService)
     : ICommandHandler<ApproveTaggingRequestCommand, Result<string>>
 {
-    private readonly TaggingContractService _contractService =
+    private readonly ITaggingContractService _contractService =
         contractService ?? throw new ArgumentNullException(nameof(contractService));
 
     /// <inheritdoc />

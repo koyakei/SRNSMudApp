@@ -85,6 +85,7 @@ public class TaggingContractProposeTests : TaggingContractTestBase
             _ => throw new InvalidOperationException("Expected Success")
         };
 
+        dbContext.ChangeTracker.Clear();
         TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
             .FirstOrDefaultAsync(c => c.Id == contract.Id);
         Assert.NotNull(saved);

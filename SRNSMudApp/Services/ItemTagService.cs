@@ -44,10 +44,17 @@ public readonly union WeightComparisonState(SameWeight, DifferentWeight);
 ///     アイテムとタグの関連付け（TagRelation）、タグ間の関連付け（TagRelationToTag）、
 ///     およびタグ付けリクエストに対する返信・タイムラインイベント・ウェイト台帳の管理を担当するドメインサービス。
 /// </summary>
-public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemTagService
+public class ItemTagService(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    ITimelineRecorder? timelineRecorder = null,
+    ITagWeightLedgerService? tagWeightLedgerService = null) : IItemTagService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly ITimelineRecorder _timelineRecorder =
+        timelineRecorder ?? new TimelineRecorder();
+    private readonly ITagWeightLedgerService _tagWeightLedgerService =
+        tagWeightLedgerService ?? new TagWeightLedgerService();
     private static AuthorizationState CheckAuth(bool isAuthorized, string unauthMessage) =>
         isAuthorized switch
         {
@@ -81,7 +88,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ProcessAddTagRelation(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
+    private async Task<string?> ProcessAddTagRelation(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
     {
         var alreadyExists = await context.TagRelations.AnyAsync(tr => tr.ItemId == itemId && tr.TagId == tagId);
         return await (CheckTagRelation(alreadyExists) switch
@@ -91,47 +98,19 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ExecuteAddTagRelationAsync(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
+    private async Task<string?> ExecuteAddTagRelationAsync(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
     {
         var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
         _ = context.TagRelations.Add(newRelation);
 
-        _ = context.TimelineEvents.Add(new TimelineEvent
-        {
-            OwnerId = currentUserId,
-            Target = new ItemTarget(itemId),
-            FollowedTagId = tagId,
-            EventType = "Insert",
-            NewWeight = 1
-        });
+        _timelineRecorder.RecordTagRelationAdded(context, currentUserId, itemId, tagId, 1);
 
         _ = await context.SaveChangesAsync();
 
-        ProcessTagWeightAddition(context, tagFromDb, newRelation.Id, itemId, currentUserId);
+        _tagWeightLedgerService.RecordItemTagWeightChange(context, tagFromDb, itemId, "TagRelationInsert", newRelation.Id, 1, "タグの新規追加", currentUserId);
 
         _ = await context.SaveChangesAsync();
         return null;
-    }
-
-    private static void ProcessTagWeightAddition(ApplicationDbContext context, Tag tag, int relationId, int itemId, string currentUserId)
-    {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight++;
-
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tag.Id,
-            TagNameSnapshot = tag.Name,
-            ItemId = itemId,
-            SourceType = "TagRelationInsert",
-            SourceId = relationId,
-            PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
-            Delta = 1,
-            IsOwnerAction = true,
-            Reason = "タグの新規追加",
-            OwnerId = currentUserId
-        });
     }
 
     public async Task<string?> RemoveTagRelationAsync(int relationId, string currentUserId)
@@ -153,48 +132,21 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
+    private async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
     {
-        _ = context.TimelineEvents.Add(new TimelineEvent
-        {
-            OwnerId = currentUserId,
-            Target = new ItemTarget(relation.ItemId),
-            FollowedTagId = relation.TagId,
-            EventType = "Delete",
-            PreviousWeight = relation.Weight
-        });
+        _timelineRecorder.RecordTagRelationDeleted(context, currentUserId, relation.ItemId, relation.TagId, relation.Weight);
 
         Tag? tag = await context.Tags.FindAsync(relation.TagId);
         var tagOption = Option<Tag>.Create(tag);
 
         if (tagOption is Some<Tag> someTag)
         {
-            ProcessTagWeightRemoval(context, someTag.Value, relation, currentUserId);
+            _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, relation.ItemId, "TagRelationDelete", relation.Id, -relation.Weight, "タグの削除", currentUserId);
         }
 
         _ = context.Remove(relation);
         _ = await context.SaveChangesAsync();
         return null;
-    }
-
-    private static void ProcessTagWeightRemoval(ApplicationDbContext context, Tag tag, TagRelation relation, string currentUserId)
-    {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight -= relation.Weight;
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tag.Id,
-            TagNameSnapshot = tag.Name,
-            ItemId = relation.ItemId,
-            SourceType = "TagRelationDelete",
-            SourceId = relation.Id,
-            PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
-            Delta = -relation.Weight,
-            IsOwnerAction = true,
-            Reason = "タグの削除",
-            OwnerId = currentUserId
-        });
     }
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
@@ -216,7 +168,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<UpdateWeightResult> ExecuteUpdateTagWeightAsync(ApplicationDbContext context, TagRelation entity, int delta, string currentUserId)
+    private async Task<UpdateWeightResult> ExecuteUpdateTagWeightAsync(ApplicationDbContext context, TagRelation entity, int delta, string currentUserId)
     {
         entity.Weight += delta;
         entity.UpdatedDate = DateTime.UtcNow;
@@ -233,34 +185,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return UpdateWeightResult.Success;
     }
 
-    private static void ProcessTagWeightUpdate(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
+    private void ProcessTagWeightUpdate(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
     {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tag.Id,
-            TagNameSnapshot = tag.Name,
-            ItemId = entity.ItemId,
-            SourceType = "TagRelationUpdate",
-            SourceId = entity.Id,
-            PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
-            Delta = delta,
-            IsOwnerAction = true,
-            Reason = "ユーザーによる直接ウェイト変更",
-            OwnerId = currentUserId
-        });
+        _tagWeightLedgerService.RecordItemTagWeightChange(context, tag, entity.ItemId, "TagRelationUpdate", entity.Id, delta, "ユーザーによる直接ウェイト変更", currentUserId);
 
-        _ = context.TimelineEvents.Add(new TimelineEvent
-        {
-            OwnerId = currentUserId,
-            Target = new ItemTarget(entity.ItemId),
-            FollowedTagId = entity.TagId,
-            EventType = "Update",
-            PreviousWeight = entity.Weight - delta,
-            NewWeight = entity.Weight
-        });
+        _timelineRecorder.RecordTagRelationUpdated(context, currentUserId, entity.ItemId, entity.TagId, entity.Weight - delta, entity.Weight);
     }
 
     public async Task<string?> SetTagWeightAsync(int relationId, int newWeight, string currentUserId)
@@ -290,7 +219,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ExecuteSetTagWeightAsync(ApplicationDbContext context, TagRelation entity, int newWeight, string currentUserId)
+    private async Task<string?> ExecuteSetTagWeightAsync(ApplicationDbContext context, TagRelation entity, int newWeight, string currentUserId)
     {
         var delta = newWeight - entity.Weight;
         entity.Weight = newWeight;
@@ -301,31 +230,11 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
         if (tagOption is Some<Tag> someTag)
         {
-            ProcessTagWeightSet(context, someTag.Value, entity, delta, currentUserId);
+            _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, entity.ItemId, "TagRelationUpdate", entity.Id, delta, "ユーザーによる直接ウェイト一括変更", currentUserId);
         }
 
         _ = await context.SaveChangesAsync();
         return null;
-    }
-
-    private static void ProcessTagWeightSet(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
-    {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tag.Id,
-            TagNameSnapshot = tag.Name,
-            ItemId = entity.ItemId,
-            SourceType = "TagRelationUpdate",
-            SourceId = entity.Id,
-            PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
-            Delta = delta,
-            IsOwnerAction = true,
-            Reason = "ユーザーによる直接ウェイト一括変更",
-            OwnerId = currentUserId
-        });
     }
 
     public async Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId)
@@ -387,7 +296,7 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ExecuteAddTagToTagAsync(ApplicationDbContext context, int targetTagId, int tagId, string currentUserId)
+    private async Task<string?> ExecuteAddTagToTagAsync(ApplicationDbContext context, int targetTagId, int tagId, string currentUserId)
     {
         var newRelation = new TagRelationToTag
         {
@@ -411,26 +320,9 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         return null;
     }
 
-    private static async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int targetTagId, string currentUserId)
+    private async Task ExecuteAddTagToTagLedgerAsync(ApplicationDbContext context, Tag tagFromDb, int targetTagId, string currentUserId)
     {
-        var prevWeight = tagFromDb.CachedWeight;
-        tagFromDb.CachedWeight++;
-
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tagFromDb.Id,
-            TagNameSnapshot = tagFromDb.Name,
-            TargetTagId = targetTagId,
-            SourceType = "TagRelationToTagInsert",
-            SourceId = null,
-            PreviousWeight = prevWeight,
-            NewWeight = tagFromDb.CachedWeight,
-            Delta = 1,
-            IsOwnerAction = true,
-            Reason = "タグの新規追加",
-            OwnerId = currentUserId
-        });
-
+        _tagWeightLedgerService.RecordTagToTagWeightChange(context, tagFromDb, targetTagId, "TagRelationToTagInsert", null, 1, "タグの新規追加", currentUserId);
         _ = await context.SaveChangesAsync();
     }
 
@@ -453,40 +345,19 @@ public class ItemTagService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         });
     }
 
-    private static async Task<string?> ExecuteRemoveTagToTagRelationAsync(ApplicationDbContext context, TagRelationToTag entity, string currentUserId)
+    private async Task<string?> ExecuteRemoveTagToTagRelationAsync(ApplicationDbContext context, TagRelationToTag entity, string currentUserId)
     {
         Tag? tag = await context.Tags.FindAsync(entity.TagId);
         var tagOption = Option<Tag>.Create(tag);
 
         if (tagOption is Some<Tag> someTag)
         {
-            ProcessTagToTagWeightRemoval(context, someTag.Value, entity, currentUserId);
+            _tagWeightLedgerService.RecordTagToTagWeightChange(context, someTag.Value, entity.TargetTagId, "TagRelationToTagDelete", null, -entity.Weight, "タグの関連付け解除", currentUserId);
         }
 
         _ = context.Remove(entity);
         _ = await context.SaveChangesAsync();
         return null;
-    }
-
-    private static void ProcessTagToTagWeightRemoval(ApplicationDbContext context, Tag tag, TagRelationToTag entity, string currentUserId)
-    {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight -= entity.Weight;
-
-        _ = context.TagWeightLedgers.Add(new TagWeightLedger
-        {
-            TagId = tag.Id,
-            TagNameSnapshot = tag.Name,
-            TargetTagId = entity.TargetTagId,
-            SourceType = "TagRelationToTagDelete",
-            SourceId = null,
-            PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
-            Delta = -entity.Weight,
-            IsOwnerAction = true,
-            Reason = "タグの関連付け解除",
-            OwnerId = currentUserId
-        });
     }
 
     public async Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Tag> allTagsForCycleCheck)

@@ -176,6 +176,7 @@ public class TaggingContractGratisTests : TaggingContractTestBase
         Assert.False(relationExists);
 
         // 契約ステータスが Executed になる
+        dbContext.ChangeTracker.Clear();
         TaggingRequestEntity? updatedContract = await dbContext.TaggingRequestEntities.FindAsync(contract.Id);
         Assert.Equal(TradeStatus.Executed, updatedContract!.Status);
 

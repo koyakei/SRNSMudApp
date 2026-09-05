@@ -22,19 +22,15 @@ public class TaggingRequestActionsTests
     private const string TagOwnerId = "tag-owner";
     private const string RequesterId = "requester";
 
-    private readonly Mock<TaggingContractService> _contractServiceMock = null!;
+    private readonly Mock<ITaggingContractService> _contractServiceMock = new();
     private readonly Mock<ITaggingService> _taggingServiceMock = new();
     private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
     private readonly Mock<IDialogReference> _dialogReferenceMock = new();
     private readonly Mock<ISnackbar> _snackbarMock = new();
-    private readonly TaggingRequestActions _actions = null!;
+    private readonly TaggingRequestActions _actions;
 
     public TaggingRequestActionsTests()
     {
-        // TaggingContractService は具象クラスのため、未使用の依存をモックして生成する
-        // （AcceptContractAsync 自体はこのテストでモック対象）
-        var dbContextOptions = new DbContextOptionsBuilder<ApplicationDbContext>().Options;
-        _contractServiceMock = new Mock<TaggingContractService>(new Mock<ApplicationDbContext>(dbContextOptions).Object);
         _actions = new TaggingRequestActions(
             new ApproveTaggingRequestHandler(_contractServiceMock.Object),
             new RejectTaggingRequestHandler(_taggingServiceMock.Object),

@@ -4,8 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-using Microsoft.Extensions.DependencyInjection;
-
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
@@ -25,37 +23,24 @@ namespace SRNSMudApp.Services;
 /// <summary>
 ///     タグ付けコントラクト（Gratis / Mutual / Trigger / Bounty）の提案・承認・キャンセルを調整するサービス。
 ///     実際の承認ロジックは <see cref="IContractExecutor" /> 実装へ委譲する（Strategy パターン）。
-///     各 <see cref="IContractExecutor" /> と同一のトランザクション境界（Unit of Work）を共有し、
-///     エンティティの変更追跡とアトミックな確定を一括して行うため、Scoped な <see cref="ApplicationDbContext" /> を直接受け取る設計としている。
+///     各操作において <see cref="IDbContextFactory{TContext}" /> より短寿命なコンテキストを生成し、
+///     Blazor Server での並行アクセス競合を防ぎつつ適切なトランザクション境界を管理する。
 /// </summary>
 public class TaggingContractService(
-    ApplicationDbContext dbContext,
-    IContractExecutorFactory executorFactory)
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    IContractExecutorFactory executorFactory) : ITaggingContractService
 {
-    private readonly ApplicationDbContext _dbContext =
-        dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IContractExecutorFactory _executorFactory =
         executorFactory ?? throw new ArgumentNullException(nameof(executorFactory));
 
-    public TaggingContractService(ApplicationDbContext dbContext)
-        : this(dbContext, ContractExecutorFactory.CreateDefault(dbContext))
+    public TaggingContractService(IDbContextFactory<ApplicationDbContext> dbFactory)
+        : this(dbFactory, ContractExecutorFactory.CreateDefault())
     {
     }
 
-    /// <summary>
-    ///     Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
-    /// </summary>
-    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
-    /// <param name="tagOwnerUserId">タグオーナーのユーザー ID。</param>
-    /// <param name="targetItemId">タグ付けの対象アイテム ID。</param>
-    /// <param name="requestedTagId">付与・解除を要求するタグの ID。</param>
-    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
-    /// <param name="proposedWeight">提案する Weight 値（省略時は 1）。</param>
-    /// <param name="message">依頼時のメッセージ（省略時はデフォルトメッセージを使用）。</param>
-    /// <returns>
-    ///     成功した場合は <see cref="Success{T}" />（作成された契約エンティティ）、
-    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
-    /// </returns>
+    /// <inheritdoc />
     public async Task<Result<TaggingRequestEntity>> ProposeGratisContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -65,7 +50,8 @@ public class TaggingContractService(
         int proposedWeight = 1,
         string? message = null)
     {
-        Item? targetItem = await _dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
         if (targetItem == null)
         {
             return new Failure("対象アイテムが見つかりません。");
@@ -100,23 +86,13 @@ public class TaggingContractService(
             RequestItem = requestItem
         };
 
-        _dbContext.TaggingRequestEntities.Add(contract);
-        await _dbContext.SaveChangesAsync();
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
 
-    /// <summary>
-    ///     TagEdge に対する Gratis コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
-    /// </summary>
-    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
-    /// <param name="tagOwnerUserId">タグ所有者のユーザー ID。</param>
-    /// <param name="tagEdgeId">対象となる TagEdge の ID。</param>
-    /// <param name="requestedTagId">付与または削除を要求するタグの ID。</param>
-    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
-    /// <param name="proposedWeight">提案する重み。</param>
-    /// <param name="message">依頼メッセージ（任意）。</param>
-    /// <returns>作成されたコントラクトエンティティ、または失敗情報。</returns>
+    /// <inheritdoc />
     public async Task<Result<TaggingRequestEntity>> ProposeGratisEdgeContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -126,7 +102,8 @@ public class TaggingContractService(
         int proposedWeight = 1,
         string? message = null)
     {
-        TagEdge? targetEdge = await _dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        TagEdge? targetEdge = await dbContext.TagEdges.Include(e => e.TagTarget).FirstOrDefaultAsync(e => e.Id == tagEdgeId);
         if (targetEdge == null)
         {
             return new Failure(ContractMessages.TagEdgeNotFound);
@@ -160,28 +137,13 @@ public class TaggingContractService(
             RequestItem = requestItem
         };
 
-        _dbContext.TaggingRequestEntities.Add(contract);
-        await _dbContext.SaveChangesAsync();
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
 
-    /// <summary>
-    ///     Mutual コントラクトを提案する。タグの <c>AutoAcceptIncomingTaggingRequests</c> が有効な場合は即時承認される。
-    /// </summary>
-    /// <param name="requesterUserId">依頼者のユーザー ID。</param>
-    /// <param name="tagOwnerUserId">タグオーナーのユーザー ID。</param>
-    /// <param name="targetItemId">タグ付けの対象アイテム ID。</param>
-    /// <param name="requestedTagId">付与・解除を要求するタグの ID。</param>
-    /// <param name="offeredTargetItemId">依頼者が提供するアイテムの ID。</param>
-    /// <param name="offeredTagId">依頼者が提供するタグの ID。</param>
-    /// <param name="consumedRightAssetId">依頼者が消費する RightAsset の ID。</param>
-    /// <param name="requestType">付与 (<see cref="TaggingRequestType.Add" />) または解除要求の種別。</param>
-    /// <param name="proposedWeight">提案する Weight 値（省略時は 1）。</param>
-    /// <returns>
-    ///     成功した場合は <see cref="Success{T}" />（作成された契約エンティティ）、
-    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
-    /// </returns>
+    /// <inheritdoc />
     public async Task<Result<TaggingRequestEntity>> ProposeMutualContractAsync(
         string requesterUserId,
         string tagOwnerUserId,
@@ -193,7 +155,8 @@ public class TaggingContractService(
         TaggingRequestType requestType = TaggingRequestType.Add,
         int proposedWeight = 1)
     {
-        Item? targetItem = await _dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        Item? targetItem = await dbContext.Items.Include(i => i.TagTarget).FirstOrDefaultAsync(i => i.Id == targetItemId);
         if (targetItem == null)
         {
             return new Failure("対象アイテムが見つかりません。");
@@ -228,26 +191,23 @@ public class TaggingContractService(
             Payload = new MutualPayload(offeredTargetItemId, offeredTagId),
             RequestItem = requestItem
         };
-        _dbContext.TaggingRequestEntities.Add(contract);
-        await _dbContext.SaveChangesAsync();
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
 
         return await TryAutoAcceptAsync(contract, requestedTagId, tagOwnerUserId);
     }
 
-    /// <summary>
-    ///     指定アイテムに紐づくコントラクト一覧を取得する。
-    /// </summary>
-    /// <param name="itemId">対象アイテムの ID。</param>
-    /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
+    /// <inheritdoc />
     public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByItemIdAsync(int itemId)
     {
-        Item? item = await _dbContext.Items.FindAsync(itemId);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        Item? item = await dbContext.Items.FindAsync(itemId);
         if (item == null)
         {
             return [];
         }
 
-        return await _dbContext.TaggingRequestEntities
+        return await dbContext.TaggingRequestEntities
             .Include(r => r.Target).ThenInclude(t => t.Item)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
@@ -256,20 +216,17 @@ public class TaggingContractService(
             .ToListAsync();
     }
 
-    /// <summary>
-    ///     指定 TagEdge に紐づくコントラクト一覧を取得する。
-    /// </summary>
-    /// <param name="edgeId">対象 TagEdge の ID。</param>
-    /// <returns>コントラクトエンティティの読み取り専用リスト。</returns>
+    /// <inheritdoc />
     public virtual async Task<IReadOnlyList<TaggingRequestEntity>> GetRequestsByEdgeIdAsync(int edgeId)
     {
-        TagEdge? edge = await _dbContext.TagEdges.FindAsync(edgeId);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        TagEdge? edge = await dbContext.TagEdges.FindAsync(edgeId);
         if (edge == null)
         {
             return [];
         }
 
-        return await _dbContext.TaggingRequestEntities
+        return await dbContext.TaggingRequestEntities
             .Include(r => r.Target).ThenInclude(t => t.TagEdge)
             .Include(r => r.Owner)
             .Include(r => r.RequestedTag)
@@ -278,22 +235,28 @@ public class TaggingContractService(
             .ToListAsync();
     }
 
-    /// <summary>
-    ///     指定コントラクトを承認・実行する。実行処理は <see cref="IContractExecutor" /> に委譲する。
-    /// </summary>
-    /// <param name="contractId">承認するコントラクトの ID。</param>
-    /// <param name="currentUserId">承認操作を実行しているユーザーの ID。</param>
-    /// <param name="fulfillerAssetId">バウンティ契約で使用する実行者 RightAsset の ID（省略可能）。</param>
-    /// <returns>
-    ///     成功した場合は <see cref="Success{T}" />（成功メッセージ）、
-    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
-    /// </returns>
+    /// <inheritdoc />
     public virtual async Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null)
     {
-        TaggingRequestEntity? entity = await _dbContext.TaggingRequestEntities
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
+                                          .Include(c => c.Target).ThenInclude(t => t.Item)
+                                          .Include(c => c.Target).ThenInclude(t => t.TagEdge)
                                           .Include(c => c.RequestedTag)
                                           .Include(c => c.ConsumedRightAsset)
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
+
+        if (entity != null && entity.TargetItemId == 0 && entity.TargetId > 0)
+        {
+            var itemId = await dbContext.Items
+                .Where(i => i.TagTargetId == entity.TargetId)
+                .Select(i => i.Id)
+                .FirstOrDefaultAsync();
+            if (itemId > 0)
+            {
+                entity.TargetItemId = itemId;
+            }
+        }
 
         Result<TaggingRequestEntity> preCheckResult = entity switch
         {
@@ -307,27 +270,31 @@ public class TaggingContractService(
         return await (preCheckResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<TaggingRequestEntity> s => ProcessAcceptContractAtomicAsync(s.Value, currentUserId, fulfillerAssetId)
+            Success<TaggingRequestEntity> s => ProcessAcceptContractAtomicAsync(dbContext, s.Value, currentUserId, fulfillerAssetId)
         });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "コントラクト処理の任意の例外を結果ユニオンへ変換するため広く捕捉する")]
-    private async Task<Result<string>> ProcessAcceptContractAtomicAsync(TaggingRequestEntity entity, string currentUserId, int? fulfillerAssetId)
+    private async Task<Result<string>> ProcessAcceptContractAtomicAsync(
+        ApplicationDbContext dbContext,
+        TaggingRequestEntity entity,
+        string currentUserId,
+        int? fulfillerAssetId)
     {
-        await using IDbContextTransaction transaction = await _dbContext.Database.BeginTransactionAsync();
+        await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
 
         try
         {
             IContractExecutor? executor = _executorFactory.GetExecutor(entity.ContractType);
             Result<string> executeResult = executor is not null
-                ? await executor.ExecuteAsync(entity, currentUserId, fulfillerAssetId)
+                ? await executor.ExecuteAsync(dbContext, entity, currentUserId, fulfillerAssetId)
                 : new Failure(ContractMessages.UnknownContractType);
 
             return await (executeResult switch
             {
                 Failure f => RollbackAndReturnAsync(transaction, f),
-                Success<string> s => CommitAndReturnAsync(transaction, entity, s)
+                Success<string> s => CommitAndReturnAsync(dbContext, transaction, entity, s)
             });
         }
         catch (Exception ex)
@@ -343,26 +310,23 @@ public class TaggingContractService(
         return f;
     }
 
-    private async Task<Result<string>> CommitAndReturnAsync(IDbContextTransaction transaction, TaggingRequestEntity entity, Success<string> s)
+    private static async Task<Result<string>> CommitAndReturnAsync(
+        ApplicationDbContext dbContext,
+        IDbContextTransaction transaction,
+        TaggingRequestEntity entity,
+        Success<string> s)
     {
         entity.Status = TradeStatus.Executed;
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
         return s;
     }
 
-    /// <summary>
-    ///     指定コントラクトをキャンセル（または拒否）する。
-    /// </summary>
-    /// <param name="contractId">キャンセルするコントラクトの ID。</param>
-    /// <param name="currentUserId">キャンセル操作を実行しているユーザーの ID。</param>
-    /// <returns>
-    ///     成功した場合は <see cref="Success{T}" />（成功メッセージ）、
-    ///     失敗した場合は <see cref="Failure" />（エラーメッセージ）。
-    /// </returns>
+    /// <inheritdoc />
     public virtual async Task<Result<string>> CancelContractAsync(int contractId, string currentUserId)
     {
-        TaggingRequestEntity? entity = await _dbContext.TaggingRequestEntities
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
                                           .FirstOrDefaultAsync(c => c.Id == contractId);
 
         Result<TaggingRequestEntity> fetchResult = entity switch
@@ -376,14 +340,14 @@ public class TaggingContractService(
         return await (fetchResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<TaggingRequestEntity> s => ProcessCancelAsync(s.Value)
+            Success<TaggingRequestEntity> s => ProcessCancelAsync(dbContext, s.Value)
         });
     }
 
-    private async Task<Result<string>> ProcessCancelAsync(TaggingRequestEntity entity)
+    private static async Task<Result<string>> ProcessCancelAsync(ApplicationDbContext dbContext, TaggingRequestEntity entity)
     {
         entity.Status = TradeStatus.Canceled;
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");
     }
 
@@ -396,7 +360,8 @@ public class TaggingContractService(
         int requestedTagId,
         string tagOwnerUserId)
     {
-        bool autoAccept = await _dbContext.Tags
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        bool autoAccept = await dbContext.Tags
             .AsNoTracking()
             .Where(t => t.Id == requestedTagId)
             .Select(t => t.AutoAcceptIncomingTaggingRequests)

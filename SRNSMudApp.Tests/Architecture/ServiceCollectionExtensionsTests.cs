@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Data.Interceptors;
 using SRNSMudApp.Extensions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Commands;
@@ -47,6 +48,7 @@ public class ServiceCollectionExtensionsTests
 
         // Assert: 契約 Strategy, Factory, Command ハンドラーが登録されていることを検証
         Assert.Contains(services, d => d.ServiceType == typeof(IContractExecutorFactory) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ITaggingContractService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(TaggingContractService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Equal(4, services.Count(d => d.ServiceType == typeof(IContractExecutor)));
     }
@@ -66,6 +68,9 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(ITagEdgeService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITaggingService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(INotificationService) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ITimelineRecorder) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ITagWeightLedgerService) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ApplicationDbSaveChangesInterceptor) && d.Lifetime == ServiceLifetime.Singleton);
     }
 
     [Fact]

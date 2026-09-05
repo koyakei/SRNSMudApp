@@ -30,7 +30,7 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
-    [Inject] private TaggingContractService TaggingContractService { get; set; } = null!;
+    [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
     [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
 
