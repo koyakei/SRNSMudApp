@@ -41,9 +41,11 @@ public interface IHomeDataProvider
 
 public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IHomeDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<List<int>> GetFollowedTagIdsAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         return await db.UserTagFollows!
             .Where(f => f.OwnerId == userId)
             .Select(f => f.TagId)
@@ -117,7 +119,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         int count,
         CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         IQueryable<TimelineEvent> query = db.TimelineEvents!
             .Where(e => followedTagIds.Contains(e.FollowedTagId));

@@ -45,17 +45,21 @@ public class TagDialogDataProvider(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ITagEmbeddingService tagEmbeddingService) : ITagDialogDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly ITagEmbeddingService _tagEmbeddingService =
+        tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
     public async Task<List<Tag>> GetAllTagsAsync()
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.Tags.AsNoTracking().ToListAsync();
     }
 
     public async Task<List<Tag>> SearchTagsAsync(string searchText)
     {
-        var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
+        var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
 
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
 
         List<Tag> textMatches = await dbContext.Tags
             .Where(x => x.Name.Contains(searchText) || x.Content.Contains(searchText))
@@ -80,7 +84,7 @@ public class TagDialogDataProvider(
 
     public async Task<Tag?> FindTagByNameAsync(string tagName)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
@@ -91,7 +95,7 @@ public class TagDialogDataProvider(
         try
         {
             ReadOnlyMemory<float> embedding =
-                await tagEmbeddingService.GenerateEmbeddingAsync($"{newTag.Name} {newTag.Content}");
+                await _tagEmbeddingService.GenerateEmbeddingAsync($"{newTag.Name} {newTag.Content}");
             newTag.Embedding = embedding.ToArray();
         }
         catch (Exception ex)
@@ -99,7 +103,7 @@ public class TagDialogDataProvider(
             Console.WriteLine($"Embedding generation failed: {ex.Message}");
         }
 
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         await EnsureParentNodeAsync(dbContext, newTag);
         _ = dbContext.Tags.Add(newTag);
         _ = await dbContext.SaveChangesAsync();
@@ -198,7 +202,7 @@ public class TagDialogDataProvider(
 
     public async Task<List<Tag>> GetTagsWithDetailsAsync()
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.Tags
             .Include(t => t.Owner)
             .Include(t => t.TargetTagRelations)
@@ -209,7 +213,7 @@ public class TagDialogDataProvider(
     }
     public async Task CreateTagWithoutEmbeddingAsync(Tag newTag)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         await EnsureParentNodeAsync(dbContext, newTag);
         _ = dbContext.Tags.Add(newTag);
         _ = await dbContext.SaveChangesAsync();

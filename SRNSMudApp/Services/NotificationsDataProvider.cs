@@ -25,6 +25,9 @@ public interface INotificationsDataProvider
 public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     : INotificationsDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
     /// <inheritdoc />
     public async Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default)
     {
@@ -36,7 +39,7 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 break;
         }
 
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
         return await context.Items
             .AsNoTracking()
             .Include(i => i.Owner)

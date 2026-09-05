@@ -34,9 +34,11 @@ public interface ITagTreeDataProvider
 
 public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagTreeDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<List<Tag>> LoadTagsAsync()
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags
             .Where(t => !Tag.VoteTagNames.Contains(t.Name) && !Tag.ReactionTagNames.Contains(t.Name))
             .OrderBy(t => t.Node)
@@ -46,7 +48,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task<TagTreeDeleteResult> DeleteTagsAsync(string userId, IReadOnlyList<int> selectedIds)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
             await context.Database.BeginTransactionAsync();
 
@@ -148,7 +150,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task AddTagAsync(Tag tag)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         if (tag.Name != Tag.RootTagName && !tag.ParentTagId.HasValue)
         {
@@ -188,7 +190,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task<bool> UpdateParentAsync(int tagId, int? parentTagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
         if (tagToUpdate is null)
         {

@@ -55,13 +55,15 @@ public interface IItemCardDataProvider
 
 public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemCardDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<ItemVoteResult> ToggleItemVoteAsync(
         int itemId,
         string userId,
         int goodTagId,
         int targetWeight)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<TagRelation> relations = await context.TagRelations
             .Where(tr => tr.ItemId == itemId && tr.OwnerId == userId)
             .ToListAsync();
@@ -208,7 +210,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         int reactionTagId,
         int targetWeight)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TagRelation? existingRelation = await context.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == reactionTagId);
         Tag? tag = await context.Tags.FindAsync(reactionTagId);
@@ -349,7 +351,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<Tag> EnsureReactionTagAsync(string userId, string reactionTagName)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tag = await context.Tags.FirstOrDefaultAsync(t =>
             t.OwnerId == userId && t.Name == reactionTagName && t.IsSystem);
 
@@ -373,7 +375,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task DeleteItemAsync(int itemId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Item? item = await context.Items.FindAsync(itemId);
         if (item is not null)
         {
@@ -384,13 +386,13 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<Tag?> GetTagWithOwnerAsync(int tagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags.Include(t => t.Owner).FirstOrDefaultAsync(t => t.Id == tagId);
     }
 
     public async Task<TagRelation?> AddFreeTagRelationAsync(int itemId, int tagId, string userId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         // DbContext の CreateFreeTagRelationAsync を使用:
         // - RightAsset の自動発行・消費
@@ -408,7 +410,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         _ = context.Items.Add(item);
 
         switch (initialTagIds is { Count: > 0 })
@@ -435,7 +437,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     }
     public async Task<bool> UpdateItemContentAsync(int itemId, string content)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Item? itemToUpdate = await context.Items.FindAsync(itemId);
         if (itemToUpdate is null)
         {

@@ -35,9 +35,11 @@ public interface ITagDetailDataProvider
 
 public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagDetailDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<TagDetailPageData> GetTagDetailAsync(int tagId, string? currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tag = await context.Tags
             .Include(t => t.Owner)
             .AsNoTracking()
@@ -119,7 +121,7 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
 
     public async Task<bool> ToggleFollowAsync(int tagId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         UserTagFollow? followRecord = await context.UserTagFollows!
             .FirstOrDefaultAsync(utf => utf.TagId == tagId && utf.OwnerId == currentUserId);
 

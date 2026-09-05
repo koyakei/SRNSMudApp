@@ -38,6 +38,11 @@ public partial class ImportTagDataProvider(
     IDbContextFactory<ApplicationDbContext> dbContextFactory,
     ITagEmbeddingService tagEmbeddingService) : IImportTagDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbContextFactory =
+        dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+    private readonly ITagEmbeddingService _tagEmbeddingService =
+        tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
+
     [GeneratedRegex(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$")]
     private static partial Regex TagNameRegex();
 
@@ -53,7 +58,7 @@ public partial class ImportTagDataProvider(
             return [];
         }
 
-        await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync(token);
+        await using ApplicationDbContext dbContext = await _dbContextFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags
             .Where(t => t.OwnerId == userId || t.IsSystem || t.OwnerId == "system")
             .AsQueryable();
@@ -65,7 +70,7 @@ public partial class ImportTagDataProvider(
 
         try
         {
-            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value!)).ToArray();
+            var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(value!)).ToArray();
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)))
@@ -113,7 +118,7 @@ public partial class ImportTagDataProvider(
         string csvContent,
         bool asSystem = false)
     {
-        await using ApplicationDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         var lines = csvContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
 
@@ -185,7 +190,7 @@ public partial class ImportTagDataProvider(
 
                             try
                             {
-                                ReadOnlyMemory<float> embedding = await tagEmbeddingService.GenerateEmbeddingAsync(tagName);
+                                ReadOnlyMemory<float> embedding = await _tagEmbeddingService.GenerateEmbeddingAsync(tagName);
                                 newTag.Embedding = embedding.ToArray();
                             }
                             catch (Exception ex)

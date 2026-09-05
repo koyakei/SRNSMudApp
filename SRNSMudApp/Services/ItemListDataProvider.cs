@@ -72,9 +72,13 @@ public class ItemListDataProvider(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ITagEmbeddingService tagEmbeddingService) : IItemListDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly ITagEmbeddingService _tagEmbeddingService =
+        tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
     public async Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         HierarchyId? ancestorNode = await context.Tags
             .Where(t => t.Id == ancestorTagId)
@@ -101,7 +105,7 @@ public class ItemListDataProvider(
             return [];
         }
 
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
             .AsNoTracking()
             .Where(t => ids.Contains(t.Id))
@@ -117,7 +121,7 @@ public class ItemListDataProvider(
             return [];
         }
 
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
             .AsNoTracking()
             .Where(t => names.Contains(t.Name))
@@ -127,7 +131,7 @@ public class ItemListDataProvider(
 
     public async Task<Tag?> FindTagByNameAsync(string tagName)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
@@ -141,7 +145,7 @@ public class ItemListDataProvider(
         List<string> tagNames = [];
         try
         {
-            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
+            var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
 
             List<Tag> textMatches = await context.Tags
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
@@ -255,7 +259,7 @@ public class ItemListDataProvider(
         IReadOnlyList<ItemListFilter> filters,
         IReadOnlyList<ItemListSort> sorts)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         IQueryable<Item> query = context.Items
             .AsNoTracking()
             .Include(i => i.Owner)
@@ -360,7 +364,7 @@ public class ItemListDataProvider(
 
     public async Task<ItemListExportData> LoadExportDataAsync(IReadOnlyList<int> itemIds)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Dictionary<int, Tag> allTags = await context.Tags.ToDictionaryAsync(t => t.Id);
 
         List<TagRelation> itemTags = await context.TagRelations

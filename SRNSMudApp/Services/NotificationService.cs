@@ -111,18 +111,18 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         _ = await context.SaveChangesAsync();
     }
 
-    private static string GetRequestTypeLabel(TaggingRequestType? type) => type switch
+    internal static string GetRequestTypeLabel(TaggingRequestType? type) => type switch
     {
         TaggingRequestType.Add => "追加",
         TaggingRequestType.DecreaseWeight => "削除",
         _ => "不明"
     };
 
-    private static bool IsRead(List<NotificationReadState> readStates, int sourceId, string sourceType) =>
+    internal static bool IsRead(List<NotificationReadState> readStates, int sourceId, string sourceType) =>
         readStates.Any(rs => rs.SourceId == sourceId && rs.SourceType == sourceType);
 
     /// <summary>自分宛てのタグ付けリクエストから通知 DTO を生成する。</summary>
-    private static IEnumerable<NotificationDto> BuildTagRequestNotifications(
+    internal static IEnumerable<NotificationDto> BuildTagRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
         List<NotificationReadState> readStates) =>
         requests.Select(req => new NotificationDto
@@ -147,7 +147,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         });
 
     /// <summary>リクエスタ自身の却下済みリクエストから通知 DTO を生成する。</summary>
-    private static IEnumerable<NotificationDto> BuildRejectedRequestNotifications(
+    internal static IEnumerable<NotificationDto> BuildRejectedRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
         List<NotificationReadState> readStates) =>
         requests.Select(req =>
@@ -179,7 +179,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         });
 
     /// <summary>リクエスタ自身の承認済みリクエストから通知 DTO を生成する。</summary>
-    private static IEnumerable<NotificationDto> BuildApprovedRequestNotifications(
+    internal static IEnumerable<NotificationDto> BuildApprovedRequestNotifications(
         IEnumerable<TaggingRequestEntity> requests,
         List<NotificationReadState> readStates) =>
         requests.Select(req => new NotificationDto
@@ -203,7 +203,7 @@ public class NotificationService(IDbContextFactory<ApplicationDbContext> dbFacto
         });
 
     /// <summary>リプライ / リクエスト返信から通知 DTO を生成する。</summary>
-    private static IEnumerable<NotificationDto> BuildReplyNotifications(
+    internal static IEnumerable<NotificationDto> BuildReplyNotifications(
         IEnumerable<Item> replies, List<NotificationReadState> readStates, string sourceType) =>
         replies.Select(reply =>
         {

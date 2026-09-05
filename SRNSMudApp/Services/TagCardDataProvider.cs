@@ -44,9 +44,11 @@ public interface ITagCardDataProvider
 
 public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagCardDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<List<TagRelationToTag>> GetUserVoteRelationsAsync(int tagId, string userId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.TagRelationToTags
             .Where(tr => tr.TargetTagId == tagId && tr.OwnerId == userId)
             .ToListAsync();
@@ -58,7 +60,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int targetSystemTagId,
         int oppositeSystemTagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<TagRelationToTag> relations = await context.TagRelationToTags
             .Where(tr => tr.TargetTagId == tagId && tr.OwnerId == userId)
             .ToListAsync();
@@ -94,7 +96,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int selectedTagId,
         string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == selectedTagId);
 
@@ -149,7 +151,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
     public async Task<TagCardOperationResult> RemoveRelationAsync(int relationId, string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
             .FirstOrDefaultAsync(tr => tr.Id == relationId);
         switch (entity)
@@ -197,7 +199,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int delta,
         string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
         if (entity is null)
         {
@@ -217,7 +219,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int newWeight,
         string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(relationId);
         if (entity is null)
         {
@@ -239,7 +241,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int newTagId,
         string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == newTagId);
 
@@ -266,7 +268,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         int parentTagId,
         string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? entity = await context.Tags.FindAsync(childTagId);
         switch (entity)
         {

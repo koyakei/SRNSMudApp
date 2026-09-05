@@ -32,10 +32,13 @@ public interface IItemDetailDataProvider
 public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     : IItemDetailDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
     /// <inheritdoc />
     public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
         Item? item = await context.Items
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)

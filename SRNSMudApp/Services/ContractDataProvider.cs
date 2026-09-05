@@ -65,9 +65,11 @@ public interface IContractDataProvider
 
 public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IContractDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<ContractManagementPageData> GetContractsAsync(string userId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
 
         // Incoming: User is the Tag Owner, and contract is Proposed
         List<TaggingRequestEntity> incomingContracts = await dbContext.TaggingRequestEntities
@@ -92,7 +94,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<List<RightAsset>> GetAvailableRightAssetsAsync(string userId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.RightAssets
             .Include(a => a.TargetTag)
             .Where(a => a.OwnerId == userId && !a.IsBurned)
@@ -127,7 +129,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<BountyBoardData> GetActiveBountiesAsync()
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
 
         List<TaggingRequestEntity> bounties = await dbContext.TaggingRequestEntities
             .Where(b => b.ContractType == "Bounty")
@@ -155,7 +157,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<List<PublicTradeOffer>> GetActivePublicOffersAsync()
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.PublicTradeOffers!
             .Include(o => o.OfferedTag)
             .Include(o => o.Owner)
@@ -167,7 +169,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<bool> DeactivatePublicOfferAsync(int offerId, string userId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         PublicTradeOffer? entity = await dbContext.PublicTradeOffers!.FindAsync(offerId);
         switch (entity != null && entity.OwnerId == userId)
         {
@@ -198,21 +200,21 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task CreatePublicOfferAsync(PublicTradeOffer offer)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         _ = dbContext.PublicTradeOffers!.Add(offer);
         _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task CreateBountyAsync(TaggingRequestEntity bounty)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         _ = dbContext.TaggingRequestEntities.Add(bounty);
         _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         _ = dbContext.TaggingRequestEntities.Add(triggerContract);
         _ = await dbContext.SaveChangesAsync();
     }
@@ -222,7 +224,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         int? targetTagId = null,
         int? minAmount = null)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         IQueryable<RightAsset> query = dbContext.RightAssets
             .Include(a => a.TargetTag)
             .Where(a => a.OwnerId == userId && !a.IsBurned);
@@ -242,7 +244,7 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<RightAsset?> GetRightAssetByIdAsync(int assetId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.RightAssets.Include(a => a.TargetTag).FirstOrDefaultAsync(a => a.Id == assetId);
     }
 }

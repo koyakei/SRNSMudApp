@@ -26,9 +26,12 @@ public readonly union RejectAuthorization(AuthorizedToReject, UnauthorizedToReje
 
 public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITaggingService
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
     public async Task AddTagAsync<T>(int entityId, int tagId) where T : class, IDirectTaggable
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         T? entity = await context.Set<T>().Include(e => e.Tags).FirstOrDefaultAsync(e => e.Id == entityId);
         Tag? tag = await context.Tags.FindAsync(tagId);
@@ -63,7 +66,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task RemoveTagAsync<T>(int entityId, int tagId) where T : class, IDirectTaggable
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         T? entity = await context.Set<T>().Include(e => e.Tags).FirstOrDefaultAsync(e => e.Id == entityId);
 
@@ -89,7 +92,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task RejectRequestAsync(int requestId, string rejectUserId, string? comment)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TaggingRequestEntity request = await context.TaggingRequestEntities!.FirstOrDefaultAsync(r => r.Id == requestId) switch
         {
             { } req => req,

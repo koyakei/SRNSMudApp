@@ -90,6 +90,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
         services.AddScoped<INotificationService, NotificationService>();
 
+        // テスト時に時刻固定を可能にする TimeProvider 抽象化
+        services.AddSingleton(TimeProvider.System);
+
         return services;
     }
 }

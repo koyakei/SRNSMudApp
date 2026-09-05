@@ -25,6 +25,8 @@ namespace SRNSMudApp.Services;
 /// <summary>
 ///     タグ付けコントラクト（Gratis / Mutual / Trigger / Bounty）の提案・承認・キャンセルを調整するサービス。
 ///     実際の承認ロジックは <see cref="IContractExecutor" /> 実装へ委譲する（Strategy パターン）。
+///     各 <see cref="IContractExecutor" /> と同一のトランザクション境界（Unit of Work）を共有し、
+///     エンティティの変更追跡とアトミックな確定を一括して行うため、Scoped な <see cref="ApplicationDbContext" /> を直接受け取る設計としている。
 /// </summary>
 public class TaggingContractService(
     ApplicationDbContext dbContext,

@@ -65,11 +65,17 @@ public class TaggingRequestEntity : BaseEntity, IDirectTaggable
     // Rejection Information
     public string RejectionInfoJson { get; set; } = string.Empty;
 
+    /// <summary>RejectionInfo union の JSON シリアライズ/デシリアライズ用オプション</summary>
+    private static readonly JsonSerializerOptions RejectionJsonOptions = new()
+    {
+        Converters = { new RejectionInfoConverter() }
+    };
+
     [NotMapped]
     public RejectionInfo Rejection
     {
-        get => string.IsNullOrEmpty(RejectionInfoJson) ? new NoRejection() : JsonSerializer.Deserialize<RejectionInfo>(RejectionInfoJson);
-        set => RejectionInfoJson = JsonSerializer.Serialize(value);
+        get => string.IsNullOrEmpty(RejectionInfoJson) ? new NoRejection() : JsonSerializer.Deserialize<RejectionInfo>(RejectionInfoJson, RejectionJsonOptions);
+        set => RejectionInfoJson = JsonSerializer.Serialize(value, RejectionJsonOptions);
     }
 
     // --- Merged Subclass Properties ---

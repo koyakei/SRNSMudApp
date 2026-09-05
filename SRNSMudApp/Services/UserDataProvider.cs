@@ -41,9 +41,11 @@ public interface IUserDataProvider
 
 public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IUserDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<UserDetailPageData> GetUserDetailAsync(string userId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         ApplicationUser? user =
             await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
@@ -109,12 +111,12 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
 
     public async Task<List<ApplicationUser>> GetAllUsersAsync()
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.Users.AsNoTracking().ToListAsync();
     }
     public async Task<ApplicationUser?> FindUserByIdAsync(string userId)
     {
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         return await dbContext.Users.FindAsync(userId);
     }
 }

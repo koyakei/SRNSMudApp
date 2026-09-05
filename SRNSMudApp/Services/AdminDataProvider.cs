@@ -26,9 +26,11 @@ public interface IAdminDataProvider
 
 public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IAdminDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<int> ImportItemsWithTagsAsync(string userId, IReadOnlyList<string[]> linesToProcess)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
             await context.Database.BeginTransactionAsync();
         try
@@ -105,7 +107,7 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
 
     public async Task<List<Invitation>> GetInvitationsAsync()
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Invitations!
             .OrderByDescending(i => i.CreatedDate)
             .ToListAsync();
@@ -113,14 +115,14 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
 
     public async Task CreateInvitationAsync(Invitation invitation)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         _ = context.Invitations!.Add(invitation);
         _ = await context.SaveChangesAsync();
     }
 
     public async Task DeleteInvitationAsync(Invitation invitation)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         _ = context.Invitations!.Remove(invitation);
         _ = await context.SaveChangesAsync();
     }

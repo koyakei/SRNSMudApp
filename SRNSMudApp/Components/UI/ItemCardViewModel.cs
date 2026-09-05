@@ -9,18 +9,6 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Components.UI;
 
-public class RequestInfo
-{
-    public bool IsTaggingRequest { get; set; }
-    public TaggingRequestType? RequestType { get; set; }
-    public int? ProposedWeight { get; set; }
-    public int? TargetItemId { get; set; }
-    public string? TargetItemContent { get; set; }
-    public int? TargetTagId { get; set; }
-    public string? TargetTagName { get; set; }
-    public TradeStatus? Status { get; set; }
-}
-
 /// <summary>
 ///     ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。

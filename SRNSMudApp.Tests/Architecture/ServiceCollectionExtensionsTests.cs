@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using SRNSMudApp.Data;
 using SRNSMudApp.Extensions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Commands;
@@ -87,5 +88,47 @@ public class ServiceCollectionExtensionsTests
     public void NotificationService_ThrowsArgumentNullException_WhenDbFactoryIsNull()
     {
         Assert.Throws<ArgumentNullException>(() => new NotificationService(null!));
+    }
+
+    [Fact]
+    public void DataProviders_ThrowArgumentNullException_WhenDbFactoryIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => new TagTableDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new AdminDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new ContractDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new ItemDetailDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new UserDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new HomeDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new NotificationsDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new TagCardDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new TagTreeDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new TagDetailDataProvider(null!));
+        Assert.Throws<ArgumentNullException>(() => new TaggingService(null!));
+    }
+
+    [Fact]
+    public void RequestInfo_InitializesCorrectlyAsRecord()
+    {
+        var info = new global::SRNSMudApp.Components.UI.RequestInfo
+        {
+            IsTaggingRequest = true,
+            ProposedWeight = 5,
+            TargetItemId = 10,
+            TargetItemContent = "Item Content",
+            TargetTagId = 20,
+            TargetTagName = "TagName",
+            Status = TradeStatus.Proposed,
+            RequestType = TaggingRequestType.Add
+        };
+
+        Assert.True(info.IsTaggingRequest);
+        Assert.Equal(5, info.ProposedWeight);
+        Assert.Equal(10, info.TargetItemId);
+        Assert.Equal("Item Content", info.TargetItemContent);
+        Assert.Equal(20, info.TargetTagId);
+        Assert.Equal("TagName", info.TargetTagName);
+        Assert.Equal(TradeStatus.Proposed, info.Status);
+        Assert.Equal(TaggingRequestType.Add, info.RequestType);
     }
 }

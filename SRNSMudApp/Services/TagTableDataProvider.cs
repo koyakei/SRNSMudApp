@@ -28,15 +28,17 @@ public interface ITagTableDataProvider
 
 public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagTableDataProvider
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     public async Task<List<Tag>> GetAllTagsAsync()
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags.AsNoTracking().ToListAsync();
     }
 
     public async Task<TagCardOperationResult> AddRelationAsync(int targetTagId, int selectedTagId, string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var alreadyExists = await context.TagRelationToTags
             .AnyAsync(tr => tr.TargetTagId == targetTagId && tr.TagId == selectedTagId);
         if (alreadyExists)
@@ -82,7 +84,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<TagCardOperationResult> RemoveRelationAsync(int relationId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
             .FirstOrDefaultAsync(tr => tr.Id == relationId);
         if (entity is null)
@@ -118,7 +120,7 @@ public class TagTableDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task<bool> DeleteTagAsync(int tagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tagToDelete = await context.Tags.FindAsync(tagId);
         switch (tagToDelete)
         {
