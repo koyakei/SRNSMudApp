@@ -1,0 +1,168 @@
+@using SRNSMudApp.Components.Tag
+@using SRNSMudApp.Data
+@using TagEntity = SRNSMudApp.Data.Tag
+
+@if (IsEdgeCreationMode)
+{
+    <MudPaper Elevation="2" Class="px-3 py-3 mb-2 border-l-4 border-warning surface-card">
+        <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.AltRoute" Color="Color.Warning" Size="Size.Medium" />
+                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                    エッジ作成モード
+                    @if (FocusedTag != null)
+                    {
+                        <span class="text-secondary font-weight-normal ml-2" style="font-size: 0.85rem;">
+                            （フォーカス: <strong>@FocusedTag.Name</strong> を維持中）
+                        </span>
+                    }
+                </MudText>
+            </div>
+            <div class="d-flex align-center gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Check"
+                           OnClick="() => OnCreateEdge.InvokeAsync()"
+                           Disabled="@(!CanCreateEdge)">
+                    決定（エッジを作成）
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Close"
+                           OnClick="() => OnExitMode.InvokeAsync()">
+                    モード終了
+                </MudButton>
+            </div>
+        </div>
+
+        @* フォーカス中タグの子タグがあればクイック選択チップを表示 *@
+        @if (FocusedTag != null)
+        {
+            var childTags = GetChildTags(FocusedTag.Id);
+            @if (childTags.Count > 0)
+            {
+                <div class="d-flex flex-wrap align-center gap-1 mb-3 pa-2 rounded" style="background: var(--mud-palette-background-grey);">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-weight-bold mr-1">
+                        「@FocusedTag.Name」の子タグ (@childTags.Count 件):
+                    </MudText>
+                    @foreach (var child in childTags)
+                    {
+                        var isSrc = SourceTag?.Id == child.Id;
+                        var isTgt = TargetTag?.Id == child.Id;
+                        <MudMenu Dense="true" Size="Size.Small" AnchorOrigin="Origin.BottomCenter">
+                            <ActivatorContent>
+                                <MudChip T="string" Size="Size.Small"
+                                         Variant="@(isSrc || isTgt ? Variant.Filled : Variant.Outlined)"
+                                         Color="@(isSrc ? Color.Warning : isTgt ? Color.Info : Color.Default)"
+                                         Class="cursor-pointer">
+                                    @(isSrc ? $"① {child.Name}" : isTgt ? $"② {child.Name}" : child.Name)
+                                </MudChip>
+                            </ActivatorContent>
+                            <ChildContent>
+                                <MudMenuItem Icon="@Icons.Material.Filled.ArrowRightAlt" IconColor="Color.Warning"
+                                             OnClick="() => OnSelectChildAsSource.InvokeAsync(child)">
+                                    From (始点) に設定
+                                </MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowLeft" IconColor="Color.Info"
+                                             OnClick="() => OnSelectChildAsTarget.InvokeAsync(child)">
+                                    To (終点) に設定
+                                </MudMenuItem>
+                            </ChildContent>
+                        </MudMenu>
+                    }
+                </div>
+            }
+        }
+
+        <div class="d-flex flex-wrap align-center gap-3">
+            @* From (始点) 選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="font-weight-bold">
+                    From
+                </MudChip>
+                <TagAutocomplete Value="SourceTag" ValueChanged="tag => OnSourceTagChanged.InvokeAsync(tag)"
+                                 Label="始点タグ (From)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+            </div>
+
+            @* 入替ボタン *@
+            <MudTooltip Text="始点と終点を入れ替え">
+                <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Default"
+                               OnClick="() => OnSwapTags.InvokeAsync()" Disabled="@(SourceTag == null && TargetTag == null)" />
+            </MudTooltip>
+
+            @* To (終点) 選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" Class="font-weight-bold">
+                    To
+                </MudChip>
+                <TagAutocomplete Value="TargetTag" ValueChanged="tag => OnTargetTagChanged.InvokeAsync(tag)"
+                                 Label="終点タグ (To)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+            </div>
+
+            @* エッジにタグ付けするタグの選択 *@
+            <div class="d-flex align-center gap-1" style="min-width: 240px; max-width: 320px;">
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Class="font-weight-bold">
+                    Tag
+                </MudChip>
+                <TagAutocomplete Value="AttachTag" ValueChanged="tag => OnAttachTagChanged.InvokeAsync(tag)"
+                                 Label="エッジにタグ付け (任意)" Placeholder="タグを選択..."
+                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                @if (AttachTag != null)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" Size="Size.Small" Color="Color.Default"
+                                   OnClick="() => OnAttachTagChanged.InvokeAsync(null)" Title="タグ付けをクリア" />
+                }
+            </div>
+
+            @* RightAsset と Weight の指定（タグ付けタグが選択されている場合） *@
+            @if (AttachTag != null)
+            {
+                @if (IsLoadingAttachAssets)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (AvailableAssets.Count > 0)
+                {
+                    <div class="d-flex align-center gap-1" style="min-width: 140px; max-width: 180px;">
+                        <MudNumericField T="int" Label="Weight" Value="Weight" ValueChanged="w => OnWeightChanged.InvokeAsync(w)"
+                                         Min="1" Max="@(AttachAsset?.Amount ?? 1)"
+                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                    </div>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">
+                        （所有 RightAsset なし: タグ付けなしで作成）
+                    </MudText>
+                }
+            }
+        </div>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public bool IsEdgeCreationMode { get; set; }
+    [Parameter] public TagEntity? FocusedTag { get; set; }
+    [Parameter] public IReadOnlyList<TagEntity> AllTags { get; set; } = [];
+    [Parameter] public TagEntity? SourceTag { get; set; }
+    [Parameter] public TagEntity? TargetTag { get; set; }
+    [Parameter] public TagEntity? AttachTag { get; set; }
+    [Parameter] public RightAsset? AttachAsset { get; set; }
+    [Parameter] public IReadOnlyList<RightAsset> AvailableAssets { get; set; } = [];
+    [Parameter] public int Weight { get; set; } = 1;
+    [Parameter] public bool IsLoadingAttachAssets { get; set; }
+    [Parameter] public bool CanCreateEdge { get; set; }
+
+    [Parameter] public EventCallback OnCreateEdge { get; set; }
+    [Parameter] public EventCallback OnExitMode { get; set; }
+    [Parameter] public EventCallback<TagEntity?> OnSourceTagChanged { get; set; }
+    [Parameter] public EventCallback<TagEntity?> OnTargetTagChanged { get; set; }
+    [Parameter] public EventCallback<TagEntity?> OnAttachTagChanged { get; set; }
+    [Parameter] public EventCallback<int> OnWeightChanged { get; set; }
+    [Parameter] public EventCallback OnSwapTags { get; set; }
+    [Parameter] public EventCallback<TagEntity> OnSelectChildAsSource { get; set; }
+    [Parameter] public EventCallback<TagEntity> OnSelectChildAsTarget { get; set; }
+
+    private List<TagEntity> GetChildTags(int parentTagId) =>
+        AllTags.Where(t => t.ParentTagId == parentTagId).OrderBy(t => t.Name).ToList();
+}

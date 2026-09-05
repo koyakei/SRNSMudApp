@@ -34,4 +34,10 @@ public interface ITagEdgeService
 
     /// <summary>全 Edge を関連タグおよび紐付けタグを含めて取得する。</summary>
     Task<IReadOnlyList<TagEdge>> GetAllEdgesAsync();
+
+    /// <summary>
+    ///     指定ユーザーが指定タグに対して所有している未消費の RightAsset 一覧を取得する。
+    ///     タグオーナー自身で未消費 RightAsset が存在しない場合、自動的に新規 RightAsset を発行して付与する。
+    /// </summary>
+    Task<List<RightAsset>> GetAvailableRightAssetsAsync(string userId, int targetTagId);
 }

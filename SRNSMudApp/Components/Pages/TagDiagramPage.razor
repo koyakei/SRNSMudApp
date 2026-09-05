@@ -71,286 +71,45 @@
 </div>
 
 @* フォーカス中タグのサマリーバー（複数タグ・始点/終点フォーカス対応） *@
-@if (_focusedTag != null)
-{
-    <MudPaper Elevation="1"
-              Class="px-3 py-2 mb-2 d-flex flex-wrap align-center justify-space-between gap-2 border-l-4 border-warning">
-        <div class="d-flex flex-wrap align-center gap-2">
-            @* 始点タグ (Tag 1) *@
-            <div class="d-flex align-center gap-1">
-                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="font-weight-bold">
-                    ① 始点
-                </MudChip>
-                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
-                    @_focusedTag.Name
-                </MudText>
-                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
-                    W: @_focusedTag.CachedWeight
-                </MudChip>
-                <MudTooltip Text="@(GetChildTagsCount(_focusedTag.Id) > 0 ? $"子タグ ({GetChildTagsCount(_focusedTag.Id)}件) を画面上に表示" : "子タグはありません")">
-                    <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Warning"
-                                   Class="pa-0 ml-1" Title="子タグを画面上に表示"
-                                   Disabled="@(GetChildTagsCount(_focusedTag.Id) == 0)"
-                                   OnClick="() => HandleShowChildNodes(_focusedTag)" />
-                </MudTooltip>
-                <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
-                               Class="pa-0 ml-1" Title="始点タグのツリーを表示" OnClick="() => _isFocusTreeOpen = !_isFocusTreeOpen" />
-                <MudOverlay Visible="@_isFocusTreeOpen" OnClick="@(() => _isFocusTreeOpen = false)" AutoClose="true"
-                            DarkBackground="false" />
-                <MudPopover Open="@_isFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
-                            OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
-                    <TagTreePopoverContent TargetTag="@_focusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
-                                           EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree"
-                                           EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
-                </MudPopover>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
-                               Class="pa-0" Title="始点タグを解除" OnClick="ClearFirstTag" />
-            </div>
-
-            @* 向き / 反転 (Swap) ボタン *@
-            @if (_secondFocusedTag != null)
-            {
-                <MudTooltip Text="始点と終点を入れ替える">
-                    <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Primary"
-                                   OnClick="SwapFocusedTags" Title="入れ替え" />
-                </MudTooltip>
-            }
-            else
-            {
-                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Color="Color.Secondary" Class="mx-1" />
-            }
-
-            @* 終点タグ (Tag 2) *@
-            @if (_secondFocusedTag != null)
-            {
-                <div class="d-flex align-center gap-1">
-                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" Class="font-weight-bold">
-                        ② 終点
-                    </MudChip>
-                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
-                        @_secondFocusedTag.Name
-                    </MudText>
-                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">
-                        W: @_secondFocusedTag.CachedWeight
-                    </MudChip>
-                    <MudTooltip Text="@(GetChildTagsCount(_secondFocusedTag.Id) > 0 ? $"子タグ ({GetChildTagsCount(_secondFocusedTag.Id)}件) を画面上に表示" : "子タグはありません")">
-                        <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Info"
-                                       Class="pa-0 ml-1" Title="子タグを画面上に表示"
-                                       Disabled="@(GetChildTagsCount(_secondFocusedTag.Id) == 0)"
-                                       OnClick="() => HandleShowChildNodes(_secondFocusedTag)" />
-                    </MudTooltip>
-                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
-                                   Class="pa-0 ml-1" Title="終点タグのツリーを表示" OnClick="() => _isSecondFocusTreeOpen = !_isSecondFocusTreeOpen" />
-                    <MudOverlay Visible="@_isSecondFocusTreeOpen" OnClick="@(() => _isSecondFocusTreeOpen = false)" AutoClose="true"
-                                DarkBackground="false" />
-                    <MudPopover Open="@_isSecondFocusTreeOpen" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
-                                OverflowBehavior="OverflowBehavior.FlipAlways" Class="tree-popover" Paper="false">
-                        <TagTreePopoverContent TargetTag="@_secondFocusedTag" AllTags="@_tags" EnableSwap="false" EnableExpand="true"
-                                               EnableNavigation="true" OnTagClick="FocusTagFromHeaderTree"
-                                               EnableAddChild="true" OnAddChildTag="HandleAddChildTag" />
-                    </MudPopover>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
-                                   Class="pa-0" Title="終点タグを解除" OnClick="ClearSecondTag" />
-                </div>
-            }
-            else
-            {
-                <div class="d-flex align-center gap-1">
-                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
-                        ② 終点: 未選択
-                    </MudChip>
-                    <div style="min-width: 220px; max-width: 280px;">
-                        <TagAutocomplete Value="_secondFocusedTag" ValueChanged="OnSecondTagFocusedFromSearch"
-                                         Label="2つ目のタグを検索 (終点)" Placeholder="タグ名で検索..."
-                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
-                    </div>
-                </div>
-            }
-        </div>
-
-        <div class="d-flex align-center gap-2">
-            @if (_secondFocusedTag != null)
-            {
-                var existingEdge = GetExistingEdgeBetween(_focusedTag.Id, _secondFocusedTag.Id);
-                @if (existingEdge != null)
-                {
-                    <MudChip T="string" Size="Size.Small" Color="@(existingEdge.SourceTagId == _focusedTag.Id ? Color.Info : Color.Warning)" Variant="Variant.Outlined">
-                        @(existingEdge.SourceTagId == _focusedTag.Id ? "既存 Edge あり (①→②)" : "逆方向 Edge あり (②→①)")
-                    </MudChip>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Timeline" OnClick="() => HandleEdgeSelected(existingEdge)">
-                        Edge を選択
-                    </MudButton>
-                }
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.AddLink"
-                           OnClick="() => OpenCreateEdgeDialog(_focusedTag, _secondFocusedTag)"
-                           Disabled="@string.IsNullOrEmpty(_currentUserId)">
-                    この2つのタグ間に Edge を作成
-                </MudButton>
-            }
-            else
-            {
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.AddLink" OnClick="() => OpenCreateEdgeDialog(_focusedTag)"
-                           Disabled="@string.IsNullOrEmpty(_currentUserId)">
-                    このタグから Edge 作成
-                </MudButton>
-            }
-
-            <MudButton Variant="@(_isEdgeCreationMode ? Variant.Filled : Variant.Outlined)"
-                       Color="@(_isEdgeCreationMode ? Color.Warning : Color.Primary)" Size="Size.Small"
-                       StartIcon="@Icons.Material.Filled.AltRoute" OnClick="ToggleEdgeCreationModeAsync"
-                       Disabled="@string.IsNullOrEmpty(_currentUserId)">
-                @(_isEdgeCreationMode ? "エッジ作成中" : "エッジ作成モード")
-            </MudButton>
-
-            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
-                       StartIcon="@Icons.Material.Filled.Close" OnClick="ClearFocus">
-                フォーカス解除
-            </MudButton>
-        </div>
-    </MudPaper>
-}
+<TagDiagramFocusBar FocusedTag="_focusedTag"
+                    SecondFocusedTag="_secondFocusedTag"
+                    AllTags="_tags"
+                    Edges="_edges"
+                    IsEdgeCreationMode="_isEdgeCreationMode"
+                    CurrentUserId="@_currentUserId"
+                    OnClearFirstTag="ClearFirstTag"
+                    OnClearSecondTag="ClearSecondTag"
+                    OnClearFocus="ClearFocus"
+                    OnSwapFocusedTags="SwapFocusedTags"
+                    OnShowChildNodes="HandleShowChildNodes"
+                    OnFocusTagFromTree="FocusTagFromHeaderTree"
+                    OnAddChildTag="HandleAddChildTag"
+                    OnToggleEdgeCreationMode="ToggleEdgeCreationModeAsync"
+                    OnOpenCreateEdgeDialog="args => OpenCreateEdgeDialog(args.Source, args.Target)"
+                    OnSelectEdge="HandleEdgeSelected"
+                    OnSecondTagFocusedFromSearch="OnSecondTagFocusedFromSearch" />
 
 @* エッジ作成モードパネル（現在フォーカスを維持したまま子タグ同士・タグ間のエッジを形成・タグ付け） *@
-@if (_isEdgeCreationMode)
-{
-    <MudPaper Elevation="2" Class="px-3 py-3 mb-2 border-l-4 border-warning surface-card">
-        <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-2">
-            <div class="d-flex align-center gap-2">
-                <MudIcon Icon="@Icons.Material.Filled.AltRoute" Color="Color.Warning" Size="Size.Medium" />
-                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
-                    エッジ作成モード
-                    @if (_focusedTag != null)
-                    {
-                        <span class="text-secondary font-weight-normal ml-2" style="font-size: 0.85rem;">
-                            （フォーカス: <strong>@_focusedTag.Name</strong> を維持中）
-                        </span>
-                    }
-                </MudText>
-            </div>
-            <div class="d-flex align-center gap-2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.Check"
-                           OnClick="CreateEdgeInModeAsync"
-                           Disabled="@(!CanCreateEdgeInMode)">
-                    決定（エッジを作成）
-                </MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.Close"
-                           OnClick="ExitEdgeCreationMode">
-                    モード終了
-                </MudButton>
-            </div>
-        </div>
-
-        @* フォーカス中タグの子タグがあればクイック選択チップを表示 *@
-        @if (_focusedTag != null)
-        {
-            var childTags = GetChildTags(_focusedTag.Id);
-            @if (childTags.Count > 0)
-            {
-                <div class="d-flex flex-wrap align-center gap-1 mb-3 pa-2 rounded" style="background: var(--mud-palette-background-grey);">
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-weight-bold mr-1">
-                        「@_focusedTag.Name」の子タグ (@childTags.Count 件):
-                    </MudText>
-                    @foreach (var child in childTags)
-                    {
-                        var isSrc = _edgeCreationSourceTag?.Id == child.Id;
-                        var isTgt = _edgeCreationTargetTag?.Id == child.Id;
-                        <MudMenu Dense="true" Size="Size.Small" AnchorOrigin="Origin.BottomCenter">
-                            <ActivatorContent>
-                                <MudChip T="string" Size="Size.Small"
-                                         Variant="@(isSrc || isTgt ? Variant.Filled : Variant.Outlined)"
-                                         Color="@(isSrc ? Color.Warning : isTgt ? Color.Info : Color.Default)"
-                                         Class="cursor-pointer">
-                                    @(isSrc ? $"① {child.Name}" : isTgt ? $"② {child.Name}" : child.Name)
-                                </MudChip>
-                            </ActivatorContent>
-                            <ChildContent>
-                                <MudMenuItem Icon="@Icons.Material.Filled.ArrowRightAlt" IconColor="Color.Warning"
-                                             OnClick="() => SelectChildAsSource(child)">
-                                    From (始点) に設定
-                                </MudMenuItem>
-                                <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowLeft" IconColor="Color.Info"
-                                             OnClick="() => SelectChildAsTarget(child)">
-                                    To (終点) に設定
-                                </MudMenuItem>
-                            </ChildContent>
-                        </MudMenu>
-                    }
-                </div>
-            }
-        }
-
-        <div class="d-flex flex-wrap align-center gap-3">
-            @* From (始点) 選択 *@
-            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
-                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="font-weight-bold">
-                    From
-                </MudChip>
-                <TagAutocomplete Value="_edgeCreationSourceTag" ValueChanged="OnEdgeCreationSourceChanged"
-                                 Label="始点タグ (From)" Placeholder="タグを選択..."
-                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
-            </div>
-
-            @* 入替ボタン *@
-            <MudTooltip Text="始点と終点を入れ替え">
-                <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" Color="Color.Default"
-                               OnClick="SwapEdgeCreationTags" Disabled="@(_edgeCreationSourceTag == null && _edgeCreationTargetTag == null)" />
-            </MudTooltip>
-
-            @* To (終点) 選択 *@
-            <div class="d-flex align-center gap-1" style="min-width: 220px; max-width: 280px;">
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled" Class="font-weight-bold">
-                    To
-                </MudChip>
-                <TagAutocomplete Value="_edgeCreationTargetTag" ValueChanged="OnEdgeCreationTargetChanged"
-                                 Label="終点タグ (To)" Placeholder="タグを選択..."
-                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
-            </div>
-
-            @* エッジにタグ付けするタグの選択 *@
-            <div class="d-flex align-center gap-1" style="min-width: 240px; max-width: 320px;">
-                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Class="font-weight-bold">
-                    Tag
-                </MudChip>
-                <TagAutocomplete Value="_edgeCreationAttachTag" ValueChanged="OnEdgeCreationAttachTagChanged"
-                                 Label="エッジにタグ付け (任意)" Placeholder="タグを選択..."
-                                 Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
-                @if (_edgeCreationAttachTag != null)
-                {
-                    <MudIconButton Icon="@Icons.Material.Filled.Clear" Size="Size.Small" Color="Color.Default"
-                                   OnClick="() => OnEdgeCreationAttachTagChanged(null)" Title="タグ付けをクリア" />
-                }
-            </div>
-
-            @* RightAsset と Weight の指定（タグ付けタグが選択されている場合） *@
-            @if (_edgeCreationAttachTag != null)
-            {
-                @if (_isLoadingAttachAssets)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
-                }
-                else if (_edgeCreationAvailableAssets.Count > 0)
-                {
-                    <div class="d-flex align-center gap-1" style="min-width: 140px; max-width: 180px;">
-                        <MudNumericField T="int" Label="Weight" @bind-Value="_edgeCreationWeight"
-                                         Min="1" Max="@(_edgeCreationAttachAsset?.Amount ?? 1)"
-                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
-                    </div>
-                }
-                else
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Warning">
-                        （所有 RightAsset なし: タグ付けなしで作成）
-                    </MudText>
-                }
-            }
-        </div>
-    </MudPaper>
-}
+<TagEdgeCreationPanel IsEdgeCreationMode="_isEdgeCreationMode"
+                      FocusedTag="_focusedTag"
+                      AllTags="_tags"
+                      SourceTag="_edgeCreationSourceTag"
+                      TargetTag="_edgeCreationTargetTag"
+                      AttachTag="_edgeCreationAttachTag"
+                      AttachAsset="_edgeCreationAttachAsset"
+                      AvailableAssets="_edgeCreationAvailableAssets"
+                      Weight="_edgeCreationWeight"
+                      IsLoadingAttachAssets="_isLoadingAttachAssets"
+                      CanCreateEdge="CanCreateEdgeInMode"
+                      OnCreateEdge="CreateEdgeInModeAsync"
+                      OnExitMode="ExitEdgeCreationMode"
+                      OnSourceTagChanged="OnEdgeCreationSourceChanged"
+                      OnTargetTagChanged="OnEdgeCreationTargetChanged"
+                      OnAttachTagChanged="OnEdgeCreationAttachTagChanged"
+                      OnWeightChanged="w => _edgeCreationWeight = w"
+                      OnSwapTags="SwapEdgeCreationTags"
+                      OnSelectChildAsSource="SelectChildAsSource"
+                      OnSelectChildAsTarget="SelectChildAsTarget" />
 
 @if (_isLoading)
 {
@@ -393,8 +152,6 @@ else
     private bool _isLoading = true;
     private bool _onlyConnectedTags = true;
     private bool _neighborhoodOnly = false;
-    private bool _isFocusTreeOpen;
-    private bool _isSecondFocusTreeOpen;
     private bool _isProgrammaticSelection;
     private int _displayedTagsCount = 0;
     private readonly HashSet<int> _extraVisibleTagIds = [];
@@ -627,12 +384,8 @@ else
         }
     }
 
-    private void FocusTagFromHeaderTree(int tagId)
-    {
-        _isFocusTreeOpen = false;
-        _isSecondFocusTreeOpen = false;
+    private void FocusTagFromHeaderTree(int tagId) =>
         FocusTagById(tagId);
-    }
 
     private void FocusTagById(int tagId)
     {
@@ -810,8 +563,6 @@ else
         _focusedTag = null;
         _secondFocusedTag = null;
         _neighborhoodOnly = false;
-        _isFocusTreeOpen = false;
-        _isSecondFocusTreeOpen = false;
         _extraVisibleTagIds.Clear();
         ExitEdgeCreationMode();
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
@@ -1030,9 +781,6 @@ else
         {
             return;
         }
-
-        _isFocusTreeOpen = false;
-        _isSecondFocusTreeOpen = false;
 
         var parameters = new DialogParameters { [nameof(TagAddDialog.DefaultParentTag)] = parentTag };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };

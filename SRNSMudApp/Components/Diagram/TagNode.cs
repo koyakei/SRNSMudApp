@@ -53,7 +53,8 @@ public class TagNode : NodeModel
 
     public TagNode(TagEntity tag, Point? position = null) : base(position)
     {
-        Tag = tag ?? throw new ArgumentNullException(nameof(tag));
+        ArgumentNullException.ThrowIfNull(tag);
+        Tag = tag;
         _ = AddPort(PortAlignment.Left);
         _ = AddPort(PortAlignment.Right);
         _ = AddPort(PortAlignment.Top);

@@ -11,12 +11,15 @@ namespace SRNSMudApp.Services;
 
 public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagEdgeService
 {
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
+        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
     private const string LedgerSourceTypeInsert = "TagEdgeTagAttachmentInsert";
     private const string LedgerSourceTypeDelete = "TagEdgeTagAttachmentDelete";
 
     public async Task<Result<TagEdge>> CreateEdgeAsync(int sourceTagId, int targetTagId, string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         Tag? sourceTag = await context.Tags.FindAsync(sourceTagId);
         Tag? targetTag = await context.Tags.FindAsync(targetTagId);
@@ -46,7 +49,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Result<bool>> DeleteEdgeAsync(int edgeId, string ownerId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagEdge? edge = await context.TagEdges.FindAsync(edgeId);
         if (edge is null)
@@ -72,7 +75,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             return new Failure("weight は 1 以上を指定してください。");
         }
 
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagEdge? edge = await context.TagEdges.FindAsync(edgeId);
         if (edge is null)
@@ -168,7 +171,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<Result<bool>> DetachTagFromEdgeAsync(int attachmentId, string currentUserId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         TagEdgeTagAttachment? attachment = await context.TagEdgeTagAttachments
             .Include(a => a.Tag)
@@ -213,7 +216,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<IReadOnlyList<TagEdge>> GetEdgesForTagAsync(int tagId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.TagEdges
             .Include(e => e.SourceTag)
             .Include(e => e.TargetTag)
@@ -224,7 +227,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<IReadOnlyList<TagEdgeTagAttachment>> GetAttachmentsForEdgeAsync(int edgeId)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.TagEdgeTagAttachments
             .Include(a => a.Tag)
             .Where(a => a.TagEdgeId == edgeId)
@@ -234,7 +237,7 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
 
     public async Task<IReadOnlyList<TagEdge>> GetAllEdgesAsync()
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.TagEdges
             .Include(e => e.SourceTag)
             .Include(e => e.TargetTag)
@@ -242,5 +245,38 @@ public class TagEdgeService(IDbContextFactory<ApplicationDbContext> dbFactory) :
                 .ThenInclude(a => a.Tag)
             .AsNoTracking()
             .ToListAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<List<RightAsset>> GetAvailableRightAssetsAsync(string userId, int targetTagId)
+    {
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        var assets = await context.RightAssets
+            .Where(r => r.OwnerId == userId && r.TargetTagId == targetTagId && !r.IsBurned && r.Amount > 0)
+            .OrderByDescending(r => r.Amount)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (assets.Count == 0 && !string.IsNullOrWhiteSpace(userId))
+        {
+            var tag = await context.Tags.FindAsync(targetTagId);
+            if (tag != null && tag.OwnerId == userId)
+            {
+                // タグオーナー自身で未消費 RightAsset が存在しない場合、自動的に新規 RightAsset を発行して付与
+                var newAsset = new RightAsset
+                {
+                    OwnerId = userId,
+                    TargetTagId = targetTagId,
+                    Amount = 10,
+                    IsBurned = false,
+                    Status = new NotBurned()
+                };
+                _ = context.RightAssets.Add(newAsset);
+                _ = await context.SaveChangesAsync();
+                assets.Add(newAsset);
+            }
+        }
+
+        return assets;
     }
 }

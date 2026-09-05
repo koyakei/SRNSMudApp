@@ -22,6 +22,8 @@ public class TagEdgeLink : LinkModel
         : base(sourcePort, targetPort)
     {
         ArgumentNullException.ThrowIfNull(edge);
+        Edge = edge;
+        Color = "#594ae2"; // MudBlazor Primary
         SelectedColor = "#ff4081"; // MudBlazor Secondary
         Width = 2.5;
         TargetMarker = DirectionArrow;
@@ -29,12 +31,15 @@ public class TagEdgeLink : LinkModel
     }
 
     /// <summary>
+    ///     紐付けられているタグ一覧をもとにリンクのラベル表示を更新する。
+    /// </summary>
+    public void UpdateLabels()
     {
         Labels.Clear();
         if (Edge.TagAttachments.Count > 0)
         {
             var text = string.Join(", ", Edge.TagAttachments.Select(a => a.Tag?.Name ?? $"Tag#{a.TagId}"));
-    Labels.Add(new LinkLabelModel(this, text));
+            Labels.Add(new LinkLabelModel(this, text));
         }
     }
 }

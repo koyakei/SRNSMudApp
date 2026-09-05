@@ -89,40 +89,20 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetAvailableRightAssetsAsync_ShouldReturnOnlyValidUnburnedAssets()
+    public async Task GetAvailableRightAssetsAsync_ShouldDelegateToTagEdgeService()
     {
-        var (dbContext, provider, _, tid) = CreateScope();
-        await using (dbContext)
+        var (_, provider, edgeServiceMock, _) = CreateScope();
+        var fakeAssets = new List<RightAsset>
         {
-            var userId = $"u_{tid}";
-            var otherUser = $"other_{tid}";
-            await dbContext.SeedUsersAsync(userId, otherUser);
+            new() { Id = 1, OwnerId = "u1", TargetTagId = 10, Amount = 5 }
+        };
+        edgeServiceMock.Setup(s => s.GetAvailableRightAssetsAsync("u1", 10)).ReturnsAsync(fakeAssets);
 
-            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
-            var otherTag = new Tag { Name = $"OtherTag_{tid}", OwnerId = userId };
-            dbContext.Tags.AddRange(tag, otherTag);
-            await dbContext.SaveChangesAsync();
+        var result = await provider.GetAvailableRightAssetsAsync("u1", 10);
 
-            var validAsset1 = new RightAsset { OwnerId = userId, TargetTagId = tag.Id, Amount = 5, IsBurned = false };
-            var validAsset2 = new RightAsset { OwnerId = userId, TargetTagId = tag.Id, Amount = 10, IsBurned = false };
-            var burnedAsset = new RightAsset { OwnerId = userId, TargetTagId = tag.Id, Amount = 3, IsBurned = true };
-            var zeroAmountAsset = new RightAsset { OwnerId = userId, TargetTagId = tag.Id, Amount = 0, IsBurned = false };
-            var otherUserAsset = new RightAsset { OwnerId = otherUser, TargetTagId = tag.Id, Amount = 5, IsBurned = false };
-            var otherTagAsset = new RightAsset { OwnerId = userId, TargetTagId = otherTag.Id, Amount = 5, IsBurned = false };
-
-            dbContext.RightAssets.AddRange(validAsset1, validAsset2, burnedAsset, zeroAmountAsset, otherUserAsset, otherTagAsset);
-            await dbContext.SaveChangesAsync();
-
-            var result = await provider.GetAvailableRightAssetsAsync(userId, tag.Id);
-
-            Assert.Equal(2, result.Count);
-            Assert.Equal(10, result[0].Amount); // Ordered by Amount descending
-            Assert.Equal(5, result[1].Amount);
-            Assert.DoesNotContain(result, r => r.Id == burnedAsset.Id);
-            Assert.DoesNotContain(result, r => r.Id == zeroAmountAsset.Id);
-            Assert.DoesNotContain(result, r => r.Id == otherUserAsset.Id);
-            Assert.DoesNotContain(result, r => r.Id == otherTagAsset.Id);
-        }
+        Assert.Single(result);
+        Assert.Equal(1, result[0].Id);
+        edgeServiceMock.Verify(s => s.GetAvailableRightAssetsAsync("u1", 10), Times.Once);
     }
 
     [Fact]
@@ -150,66 +130,5 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
 
         var detachRes = await provider.DetachTagFromEdgeAsync(200, "u1");
         Assert.True(detachRes is Success<bool> dts && dts.Value);
-    }
-
-    [Fact]
-    public async Task GetAvailableRightAssetsAsync_ShouldAutoIssueRightAsset_WhenUserIsOwnerAndHasNoAssets()
-    {
-        var (dbContext, provider, _, tid) = CreateScope();
-        await using (dbContext)
-        {
-            var userId = $"u_owner_{tid}";
-            await dbContext.SeedUsersAsync(userId);
-
-            var tag = new Tag { Name = $"OwnerTag_{tid}", OwnerId = userId };
-            dbContext.Tags.Add(tag);
-            await dbContext.SaveChangesAsync();
-
-            // 初期状態: アセットは 0 件
-            var initialAssets = await dbContext.RightAssets.CountAsync(r => r.TargetTagId == tag.Id);
-            Assert.Equal(0, initialAssets);
-
-            // Act: オーナーが未所持の状態で取得
-            var result = await provider.GetAvailableRightAssetsAsync(userId, tag.Id);
-
-            // Assert: 自動発行されて1件返ること (Amount = 10, IsBurned = false)
-            Assert.Single(result);
-            var issued = result[0];
-            Assert.Equal(userId, issued.OwnerId);
-            Assert.Equal(tag.Id, issued.TargetTagId);
-            Assert.Equal(10, issued.Amount);
-            Assert.False(issued.IsBurned);
-
-            // DB にも保存されていること
-            var dbAssets = await dbContext.RightAssets.Where(r => r.TargetTagId == tag.Id).ToListAsync();
-            Assert.Single(dbAssets);
-            Assert.Equal(issued.Id, dbAssets[0].Id);
-        }
-    }
-
-    [Fact]
-    public async Task GetAvailableRightAssetsAsync_ShouldNotAutoIssue_WhenUserIsNotOwner()
-    {
-        var (dbContext, provider, _, tid) = CreateScope();
-        await using (dbContext)
-        {
-            var ownerId = $"u_owner_{tid}";
-            var otherUserId = $"u_other_{tid}";
-            await dbContext.SeedUsersAsync(ownerId, otherUserId);
-
-            var tag = new Tag { Name = $"OtherTag_{tid}", OwnerId = ownerId };
-            dbContext.Tags.Add(tag);
-            await dbContext.SaveChangesAsync();
-
-            // Act: 非オーナーが未所持の状態で取得
-            var result = await provider.GetAvailableRightAssetsAsync(otherUserId, tag.Id);
-
-            // Assert: 自動発行されず空リストが返ること
-            Assert.Empty(result);
-
-            // DB にもアセットは作成されていないこと
-            var count = await dbContext.RightAssets.CountAsync(r => r.TargetTagId == tag.Id);
-            Assert.Equal(0, count);
-        }
     }
 }
