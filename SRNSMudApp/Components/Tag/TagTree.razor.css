@@ -1,3 +1,20 @@
 .tree-container {
     min-height: 200px;
 }
+
+::deep .pending-move-node>.jqtree-element {
+    opacity: 0.85;
+    background-color: rgba(255, 152, 0, 0.08);
+    border: 1px dashed var(--mud-palette-warning, #ff9800);
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+::deep .pending-move-title {
+    font-style: italic;
+    color: var(--mud-palette-text-secondary, #757575);
+}
+
+::deep .cancel-move-btn:hover {
+    transform: scale(1.15);
+}

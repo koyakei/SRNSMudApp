@@ -1,4 +1,5 @@
 using SRNSMudApp.Components.Tag;
+using SRNSMudApp.Models;
 
 using TagEntity = SRNSMudApp.Data.Tag;
 
@@ -369,5 +370,50 @@ public class TagTreeViewModelTests
         Assert.Contains("\"id\":2", json);
         Assert.Contains("\"id\":3", json);
         Assert.Contains("\"children\":", json);
+    }
+
+    [Fact]
+    public void SerializeTreeData_WithPendingMoves_AppendsPendingMoveNodeUnderParent()
+    {
+        List<TagEntity> tags =
+        [
+            NewTag(1, "Parent", "user1")
+        ];
+
+        List<PendingTagMoveDto> pendingMoves =
+        [
+            new(RequestId: 42, TagId: 99, TagName: "RequestedChild", NewParentTagId: 1, RequesterUserId: CurrentUserId, TagOwnerUserId: "user2")
+        ];
+
+        var json = TagTreeViewModel.SerializeTreeData(tags, pendingMoves, CurrentUserId);
+
+        Assert.NotNull(json);
+        Assert.Contains("\"id\":\"move-req-42\"", json);
+        Assert.Contains("\"name\":\"RequestedChild\"", json);
+        Assert.Contains("\"isPendingMove\":true", json);
+        Assert.Contains("\"requestId\":42", json);
+        Assert.Contains("\"targetTagId\":99", json);
+        Assert.Contains("\"canCancel\":true", json);
+        Assert.Contains("\"children\":", json);
+    }
+
+    [Fact]
+    public void SerializeTreeData_WithPendingMoves_WhenDifferentUser_SetsCanCancelFalse()
+    {
+        List<TagEntity> tags =
+        [
+            NewTag(1, "Parent", "user1")
+        ];
+
+        List<PendingTagMoveDto> pendingMoves =
+        [
+            new(RequestId: 43, TagId: 99, TagName: "RequestedChild", NewParentTagId: 1, RequesterUserId: "other-user", TagOwnerUserId: "another-user")
+        ];
+
+        var json = TagTreeViewModel.SerializeTreeData(tags, pendingMoves, CurrentUserId);
+
+        Assert.NotNull(json);
+        Assert.Contains("\"id\":\"move-req-43\"", json);
+        Assert.Contains("\"canCancel\":false", json);
     }
 }

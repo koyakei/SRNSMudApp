@@ -2,6 +2,8 @@
 
 using System.Text.Json;
 
+using SRNSMudApp.Models;
+
 #endregion
 
 namespace SRNSMudApp.Components.Tag;
@@ -52,8 +54,25 @@ public static class TagTreeViewModel
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
     public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Data.Tag> filteredTags)
         => BuildTreeDataInternal(parentId, filteredTags as IReadOnlyCollection<Data.Tag> ?? [.. filteredTags], []);
+    public static IReadOnlyList<object> BuildTreeData(
+        int? parentId,
+        IEnumerable<Data.Tag> filteredTags,
+        IReadOnlyList<PendingTagMoveDto>? pendingMoves = null,
+        string? currentUserId = null)
+        => BuildTreeDataInternal(
+            parentId,
+            filteredTags as IReadOnlyCollection<Data.Tag> ?? [.. filteredTags],
+            pendingMoves ?? [],
+            currentUserId,
+            []);
 
     private static List<object> BuildTreeDataInternal(int? parentId, IReadOnlyCollection<Data.Tag> tagList, HashSet<int> visitedInPath)
+    private static List<object> BuildTreeDataInternal(
+        int? parentId,
+        IReadOnlyCollection<Data.Tag> tagList,
+        IReadOnlyList<PendingTagMoveDto> pendingMoves,
+        string? currentUserId,
+        HashSet<int> visitedInPath)
     {
         List<object> result = [];
         List<Data.Tag> children;
@@ -85,6 +104,7 @@ public static class TagTreeViewModel
 
             HashSet<int> nextVisited = [.. visitedInPath, child.Id];
             List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, nextVisited);
+            List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, pendingMoves, currentUserId, nextVisited);
             switch (nodeChildren.Count)
             {
                 case 0:
@@ -106,12 +126,35 @@ public static class TagTreeViewModel
             });
         }
 
+        // 移動申請中のノードをこの親ノード直下に生やす
+        IEnumerable<PendingTagMoveDto> matchingMoves = pendingMoves.Where(m => m.NewParentTagId == parentId);
+        foreach (PendingTagMoveDto move in matchingMoves)
+        {
+            var canCancel = !string.IsNullOrEmpty(currentUserId) &&
+                            (currentUserId == move.RequesterUserId || currentUserId == move.TagOwnerUserId);
+
+            result.Add(new
+            {
+                id = $"move-req-{move.RequestId}",
+                name = move.TagName,
+                isPendingMove = true,
+                requestId = move.RequestId,
+                targetTagId = move.TagId,
+                canCancel
+            });
+        }
+
         return result;
     }
 
     public static string SerializeTreeData(IEnumerable<Data.Tag> filteredTags)
+    public static string SerializeTreeData(
+        IEnumerable<Data.Tag> filteredTags,
+        IReadOnlyList<PendingTagMoveDto>? pendingMoves = null,
+        string? currentUserId = null)
     {
         IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags);
+        IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags, pendingMoves, currentUserId);
         return JsonSerializer.Serialize(treeData, CachedSerializerOptions);
     }
 

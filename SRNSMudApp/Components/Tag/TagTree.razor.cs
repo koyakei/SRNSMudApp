@@ -9,6 +9,7 @@ using Microsoft.JSInterop;
 using MudBlazor;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
@@ -34,6 +35,7 @@ public partial class TagTree : IAsyncDisposable
     private const string TreeContainerId = "jqtree-container";
 
     private List<Data.Tag> _tags = [];
+    private List<PendingTagMoveDto> _pendingMoves = [];
     private string? _searchText;
     private DotNetObjectReference<TagTree>? _dotNetRef;
     private bool _isTreeInitialized;
@@ -62,6 +64,7 @@ public partial class TagTree : IAsyncDisposable
         try
         {
             _tags = await TagTreeData.LoadTagsAsync();
+            _pendingMoves = await TagTreeData.LoadPendingTagMovesAsync();
         }
         catch (Exception ex)
         {
@@ -93,7 +96,8 @@ public partial class TagTree : IAsyncDisposable
 
     private IEnumerable<Data.Tag> GetFilteredTags() => TagTreeViewModel.FilterTags(_tags, _searchText, _currentUserId);
 
-    private string GetSerializedTreeData() => TagTreeViewModel.SerializeTreeData(GetFilteredTags());
+    private string GetSerializedTreeData() =>
+        TagTreeViewModel.SerializeTreeData(GetFilteredTags(), _pendingMoves, _currentUserId);
 
     /// <summary>初期化済みの場合、jqTree 側のデータを現在のフィルタ結果で差し替える。</summary>
     private async Task ReloadTreeDataAsync()
@@ -278,6 +282,7 @@ public partial class TagTree : IAsyncDisposable
 
         if (newParentTagId == movedItem.ParentTagId)
         {
+            await ReloadTreeDataAsync();
             return;
         }
 
@@ -286,7 +291,7 @@ public partial class TagTree : IAsyncDisposable
         {
             if (string.IsNullOrEmpty(_currentUserId))
             {
-                await RejectTreeMoveAsync("ログインしていないため、変更依頼リクエストを送信できません。", Severity.Warning);
+                await RejectTreeMoveAsync("ログインしていないため、移動リクエストを送信できません。", Severity.Warning);
                 return;
             }
 
@@ -298,10 +303,11 @@ public partial class TagTree : IAsyncDisposable
                 switch (requestResult)
                 {
                     case Success<TaggingRequestEntity>:
-                        _ = Snackbar.Add($"タグ「{movedItem.Name}」の配置変更リクエストを送信しました。", Severity.Success);
+                        _ = Snackbar.Add($"タグ「{movedItem.Name}」の移動リクエストが通りました。", Severity.Success);
+                        await LoadDataAsync();
                         break;
                     case Failure f:
-                        _ = Snackbar.Add($"配置変更リクエストの送信に失敗しました: {f.ErrorMessage}", Severity.Error);
+                        _ = Snackbar.Add($"移動リクエストの送信に失敗しました: {f.ErrorMessage}", Severity.Error);
                         break;
                     default:
                         break;
@@ -309,7 +315,7 @@ public partial class TagTree : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _ = Snackbar.Add($"配置変更リクエスト送信中にエラーが発生しました: {ex.Message}", Severity.Error);
+                _ = Snackbar.Add($"移動リクエスト送信中にエラーが発生しました: {ex.Message}", Severity.Error);
             }
 
             StateHasChanged();
@@ -323,7 +329,7 @@ public partial class TagTree : IAsyncDisposable
         {
             if (await TagTreeData.UpdateParentAsync(movedItem.Id, movedItem.ParentTagId))
             {
-                _ = Snackbar.Add("タグ構造を更新しました。", Severity.Success);
+                _ = Snackbar.Add($"タグ「{movedItem.Name}」の移動リクエストが通りました。", Severity.Success);
             }
         }
         catch (Exception ex)
@@ -345,6 +351,40 @@ public partial class TagTree : IAsyncDisposable
     {
         var uri = NavigationManager.GetUriWithQueryParameter("tagId", nodeId);
         NavigationManager.NavigateTo(uri, false, true);
+    }
+
+    [JSInvokable]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    public async Task CancelMoveRequest(int requestId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            Result<string> result = await TagTreeData.CancelTagMoveAsync(requestId, _currentUserId);
+            switch (result)
+            {
+                case Success<string> s:
+                    _ = Snackbar.Add(s.Value, Severity.Info);
+                    await LoadDataAsync();
+                    StateHasChanged();
+                    await ReloadTreeDataAsync();
+                    break;
+                case Failure f:
+                    _ = Snackbar.Add($"キャンセルに失敗しました: {f.ErrorMessage}", Severity.Error);
+                    break;
+                default:
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = Snackbar.Add($"キャンセル処理中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

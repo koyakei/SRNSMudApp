@@ -130,6 +130,91 @@ public class TagTreeDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task LoadPendingTagMovesAsync_ReturnsProposedMoveRequestsOnly()
+    {
+        var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
+        await using (context)
+        {
+            var otherUserId = $"other_{tid}";
+            await context.SeedUsersAsync(otherUserId);
+
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = otherUserId };
+            var parentTag = new Tag { Name = $"Parent_{tid}", OwnerId = systemUserId };
+            context.Tags.AddRange(tag, parentTag);
+            _ = await context.SaveChangesAsync();
+
+            Result<TaggingRequestEntity> reqResult = await provider.RequestTagMoveAsync(testUserId, tag.Id, parentTag.Id);
+            Assert.True(reqResult is Success<TaggingRequestEntity>);
+
+            List<PendingTagMoveDto> moves = await provider.LoadPendingTagMovesAsync();
+
+            PendingTagMoveDto? matching = moves.FirstOrDefault(m => m.TagId == tag.Id);
+            Assert.NotNull(matching);
+            Assert.Equal(parentTag.Id, matching.NewParentTagId);
+            Assert.Equal(testUserId, matching.RequesterUserId);
+            Assert.Equal(otherUserId, matching.TagOwnerUserId);
+            Assert.Equal(tag.Name, matching.TagName);
+        }
+    }
+
+    [Fact]
+    public async Task CancelTagMoveAsync_UpdatesStatusToCanceled_WhenAuthorized()
+    {
+        var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
+        await using (context)
+        {
+            var otherUserId = $"other_{tid}";
+            await context.SeedUsersAsync(otherUserId);
+
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = otherUserId };
+            var parentTag = new Tag { Name = $"Parent_{tid}", OwnerId = systemUserId };
+            context.Tags.AddRange(tag, parentTag);
+            _ = await context.SaveChangesAsync();
+
+            Result<TaggingRequestEntity> reqResult = await provider.RequestTagMoveAsync(testUserId, tag.Id, parentTag.Id);
+            if (reqResult is not Success<TaggingRequestEntity> s)
+            {
+                Assert.Fail("Failed to create move request");
+                return;
+            }
+
+            Result<string> cancelResult = await provider.CancelTagMoveAsync(s.Value.Id, testUserId);
+            Assert.True(cancelResult is Success<string>);
+
+            TaggingRequestEntity? inDb = await context.TaggingRequestEntities.FirstOrDefaultAsync(r => r.Id == s.Value.Id);
+            Assert.NotNull(inDb);
+            Assert.Equal(TradeStatus.Canceled, inDb.Status);
+        }
+    }
+
+    [Fact]
+    public async Task CancelTagMoveAsync_ReturnsFailure_WhenUnauthorized()
+    {
+        var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
+        await using (context)
+        {
+            var otherUserId = $"other_{tid}";
+            var thirdUserId = $"third_{tid}";
+            await context.SeedUsersAsync(otherUserId, thirdUserId);
+
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = otherUserId };
+            var parentTag = new Tag { Name = $"Parent_{tid}", OwnerId = systemUserId };
+            context.Tags.AddRange(tag, parentTag);
+            _ = await context.SaveChangesAsync();
+
+            Result<TaggingRequestEntity> reqResult = await provider.RequestTagMoveAsync(testUserId, tag.Id, parentTag.Id);
+            if (reqResult is not Success<TaggingRequestEntity> s)
+            {
+                Assert.Fail("Failed to create move request");
+                return;
+            }
+
+            Result<string> cancelResult = await provider.CancelTagMoveAsync(s.Value.Id, thirdUserId);
+            Assert.True(cancelResult is Failure);
+        }
+    }
+
     private sealed class SingleContextDbFactory(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

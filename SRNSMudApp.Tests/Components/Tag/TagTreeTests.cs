@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Tag;
@@ -144,6 +145,102 @@ public sealed class TagTreeTests : IAsyncLifetime
         // Assert
         _treeDataMock.Verify(d => d.RequestTagMoveAsync("test-user-id", 2, 3), Times.Once);
         _treeDataMock.Verify(d => d.UpdateParentAsync(It.IsAny<int>(), It.IsAny<int?>()), Times.Never);
+        ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("移動リクエストが通りました"));
+    }
+
+    [Fact]
+    public async Task OnTreeMove_WhenTagOwnedByCurrentUser_DirectlyUpdatesAndShowsSnackbar()
+    {
+        // Arrange
+        SRNSMudApp.Data.Tag rootTag = new() { Id = 1, Name = "Root", IsSystem = false, OwnerId = "system" };
+        SRNSMudApp.Data.Tag ownTag = new()
+        {
+            Id = 2,
+            Name = "OwnTag",
+            ParentTagId = 1,
+            IsSystem = false,
+            OwnerId = "test-user-id"
+        };
+        SRNSMudApp.Data.Tag targetTag = new()
+        {
+            Id = 3,
+            Name = "TargetTag",
+            ParentTagId = 1,
+            IsSystem = false,
+            OwnerId = "other-user-id"
+        };
+
+        _ = _treeDataMock
+            .Setup(d => d.LoadTagsAsync())
+            .ReturnsAsync([rootTag, ownTag, targetTag]);
+
+        _ = _treeDataMock
+            .Setup(d => d.UpdateParentAsync(2, 3))
+            .ReturnsAsync(true);
+
+        System.Security.Claims.Claim[] claims = [new(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id")];
+        System.Security.Claims.ClaimsIdentity identity = new(claims, "test");
+        Microsoft.AspNetCore.Components.Authorization.AuthenticationState authState = new(new System.Security.Claims.ClaimsPrincipal(identity));
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(authState)));
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        // Act: move ownTag under targetTag ("inside")
+        await component.InvokeAsync(() => component.Instance.OnTreeMove(2, 3, "inside"));
+
+        // Assert
+        _treeDataMock.Verify(d => d.UpdateParentAsync(2, 3), Times.Once);
+        _treeDataMock.Verify(d => d.RequestTagMoveAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int?>()), Times.Never);
+        ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("移動リクエストが通りました"));
+    }
+
+    [Fact]
+    public void JqTreeInteropScript_ContainsCancelButtonAndPendingMoveSupport()
+    {
+        var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "SRNSMudApp", "wwwroot", "js", "jqTreeInterop.js"));
+
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("createCancelButton", script);
+        Assert.Contains("isPendingMove", script);
+        Assert.Contains("pending-move-node", script);
+        Assert.Contains("CancelMoveRequest", script);
+    }
+
+    [Fact]
+    public async Task CancelMoveRequest_WhenCalled_InvokesCancelTagMoveAsyncAndReloadsTree()
+    {
+        // Arrange
+        _treeDataMock
+            .Setup(d => d.CancelTagMoveAsync(99, "test-user-id"))
+            .ReturnsAsync(new Success<string>("移動リクエストをキャンセルしました。"));
+
+        _treeDataMock
+            .Setup(d => d.LoadTagsAsync())
+            .ReturnsAsync([]);
+
+        _treeDataMock
+            .Setup(d => d.LoadPendingTagMovesAsync())
+            .ReturnsAsync([]);
+
+        System.Security.Claims.Claim[] claims = [new(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id")];
+        System.Security.Claims.ClaimsIdentity identity = new(claims, "test");
+        Microsoft.AspNetCore.Components.Authorization.AuthenticationState authState = new(new System.Security.Claims.ClaimsPrincipal(identity));
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>(parameters => parameters
+            .AddCascadingValue(Task.FromResult(authState)));
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        // Act
+        await component.InvokeAsync(() => component.Instance.CancelMoveRequest(99));
+
+        // Assert
+        _treeDataMock.Verify(d => d.CancelTagMoveAsync(99, "test-user-id"), Times.Once);
+        ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("キャンセルしました"));
     }
 
     public async Task DisposeAsync()

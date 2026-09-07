@@ -16,7 +16,7 @@ public class NotificationServiceTests
     [Theory]
     [InlineData(TaggingRequestType.Add, "追加")]
     [InlineData(TaggingRequestType.DecreaseWeight, "削除")]
-    [InlineData(TaggingRequestType.Move, "位置変更")]
+    [InlineData(TaggingRequestType.Move, "移動")]
     [InlineData(null, "不明")]
     public void GetRequestTypeLabel_ReturnsExpectedJapaneseText(TaggingRequestType? type, string expected)
     {
@@ -55,7 +55,7 @@ public class NotificationServiceTests
         NotificationDto dto = dtos[0];
         Assert.Equal(20, dto.SourceId);
         Assert.Equal("/tag-tree?tagId=200", dto.TargetUrl.ToHref());
-        Assert.Contains("Rustの位置変更リクエストが届いています。", dto.Message);
+        Assert.Contains("Rustの移動リクエストが届いています。", dto.Message);
         Assert.True(dto.Kind is TagRequestNotification);
     }
 

@@ -55,7 +55,7 @@ public static class RequestInfoAlertViewModel
         var text = requestType switch
         {
             TaggingRequestType.Remove => "タグ削除リクエスト",
-            TaggingRequestType.Move => "タグ位置変更リクエスト",
+            TaggingRequestType.Move => "タグ移動リクエスト",
             _ => "タグ追加リクエスト"
         };
 

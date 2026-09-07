@@ -65,7 +65,7 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
         TaggingRequestType.Add => "追加",
         TaggingRequestType.DecreaseWeight => "削除",
         TaggingRequestType.Remove => "削除",
-        TaggingRequestType.Move => "位置変更",
+        TaggingRequestType.Move => "移動",
         _ => "不明"
     };
 

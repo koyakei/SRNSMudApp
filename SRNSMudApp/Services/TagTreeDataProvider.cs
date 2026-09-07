@@ -35,6 +35,12 @@ public interface ITagTreeDataProvider
 
     /// <summary>他人のタグの位置変更リクエストを送信する。</summary>
     Task<Result<TaggingRequestEntity>> RequestTagMoveAsync(string requesterUserId, int tagId, int? newParentTagId);
+
+    /// <summary>承認待ち（Proposed）のタグ移動リクエスト一覧を取得する。</summary>
+    Task<List<PendingTagMoveDto>> LoadPendingTagMovesAsync();
+
+    /// <summary>移動リクエストをキャンセルする。</summary>
+    Task<Result<string>> CancelTagMoveAsync(int requestId, string currentUserId);
 }
 
 public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagTreeDataProvider
@@ -300,5 +306,67 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         _ = await context.SaveChangesAsync();
 
         return new Success<TaggingRequestEntity>(contract);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code",
+        Justification = "Union pattern matching false positive")]
+    public async Task<List<PendingTagMoveDto>> LoadPendingTagMovesAsync()
+    {
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        List<TaggingRequestEntity> requests = await context.TaggingRequestEntities
+            .Include(r => r.RequestedTag)
+            .Where(r => r.ContractType == ContractTypes.Move && r.Status == TradeStatus.Proposed)
+            .AsNoTracking()
+            .ToListAsync();
+
+        List<PendingTagMoveDto> dtos = [];
+        foreach (TaggingRequestEntity req in requests)
+        {
+            if (req.Payload is TagMovePayload payload)
+            {
+                dtos.Add(new PendingTagMoveDto(
+                    req.Id,
+                    req.RequestedTagId,
+                    req.RequestedTag?.Name ?? "不明なタグ",
+                    payload.NewParentTagId,
+                    req.RequesterUserId,
+                    req.TagOwnerUserId));
+            }
+        }
+
+        return dtos;
+    }
+
+    public async Task<Result<string>> CancelTagMoveAsync(int requestId, string currentUserId)
+    {
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return new Failure("ログインが必要です。");
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        TaggingRequestEntity? request = await context.TaggingRequestEntities
+            .FirstOrDefaultAsync(r => r.Id == requestId);
+
+        if (request is null)
+        {
+            return new Failure("対象のリクエストが見つかりません。");
+        }
+
+        if (request.Status != TradeStatus.Proposed)
+        {
+            return new Failure("承認待ち状態のリクエストのみキャンセルできます。");
+        }
+
+        if (request.RequesterUserId != currentUserId && request.TagOwnerUserId != currentUserId)
+        {
+            return new Failure("リクエストをキャンセルする権限がありません。");
+        }
+
+        request.Status = TradeStatus.Canceled;
+        request.UpdatedDate = DateTime.UtcNow;
+        _ = await context.SaveChangesAsync();
+
+        return new Success<string>("移動リクエストをキャンセルしました。");
     }
 }
