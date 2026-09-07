@@ -122,6 +122,7 @@
 
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+        NotificationService.NotificationsChanged += OnNotificationsChanged;
         await UpdateUnreadCountAsync();
     }
 
@@ -132,11 +133,30 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private async void OnNotificationsChanged(object? sender, EventArgs e)
+    {
+        await UpdateUnreadCountAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsNotificationsPage()
+    {
+        var relative = currentUrl ?? NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        return relative.Trim('/').Equals("notifications", StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task UpdateUnreadCountAsync()
     {
         if (!string.IsNullOrEmpty(currentUserId))
         {
-            _unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
+            if (IsNotificationsPage())
+            {
+                _unreadNotificationCount = 0;
+            }
+            else
+            {
+                _unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
+            }
         }
         else
         {
@@ -147,6 +167,7 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        NotificationService.NotificationsChanged -= OnNotificationsChanged;
     }
 
 }

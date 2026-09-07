@@ -93,13 +93,30 @@ public sealed class ItemListFocusTests : IAsyncLifetime
 
         cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
 
-        // フォーカス状態にする
-        cut.Find("#item-card-1").Click();
-        cut.WaitForAssertion(() => Assert.Contains("focus=1", navigationManager.Uri));
-
         IElement authorLink = cut.Find($"#item-card-1 a[href='/User/UserDetail/{UserId}']");
         Assert.Equal($"/User/UserDetail/{UserId}", authorLink.GetAttribute("href"));
         Assert.DoesNotContain("focusItem", authorLink.GetAttribute("href"));
+    }
+
+    [Fact]
+    public void ItemCardClick_NavigatesToItemDetail()
+    {
+        var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
+        List<SRNSMudApp.Data.Item> items = [item1];
+
+        _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/");
+
+        IRenderedComponent<ResourceList> cut =
+            _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, items));
+
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
+
+        cut.Find("#item-card-1").Click();
+        cut.WaitForAssertion(() => Assert.Contains("/ItemDetail/1", navigationManager.Uri));
     }
 
     public async Task DisposeAsync()
@@ -168,16 +185,13 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
             .Setup(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new TagSuggestion(null, TagName, null)]);
 
-        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
-
-        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/Item/ItemList?focus=1");
 
-        // Act 1: アイテムをクリックしてフォーカス
-        cut.Find("#item-card-1").Click();
-        cut.WaitForAssertion(() => Assert.Contains("focus=1", navigationManager.Uri));
+        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
 
-        // Act 2: タグ検索を実行
+        // Act: タグ検索を実行
         IRenderedComponent<MudAutocomplete<TagSuggestion>> autocomplete =
             cut.FindComponents<MudAutocomplete<TagSuggestion>>()[0];
         await cut.InvokeAsync(() => autocomplete.Instance.ValueChanged.InvokeAsync(new TagSuggestion(null, TagName, null)));
@@ -189,6 +203,31 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
             Assert.Contains($"f=name:{TagName}", uri);
             Assert.Contains("focus=1", uri);
         });
+    }
+
+    [Fact]
+    public void ClickingItemCardInItemList_NavigatesToItemDetail()
+    {
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
+        var item1 = new SRNSMudApp.Data.Item
+        {
+            Id = 1,
+            Content = "Navigate item 1",
+            OwnerId = UserId,
+            Owner = new ApplicationUser { Id = UserId, UserName = "tagfocus_user" },
+            TagRelations = [new TagRelation { TagId = 10, Tag = tag, ItemId = 1, OwnerId = UserId, Weight = 1 }]
+        };
+
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
+            .ReturnsAsync(new ItemListPageData([item1], []));
+
+        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+
+        cut.Find("#item-card-1").Click();
+        cut.WaitForAssertion(() => Assert.Contains("/ItemDetail/1", navigationManager.Uri));
     }
 
     public async Task DisposeAsync()

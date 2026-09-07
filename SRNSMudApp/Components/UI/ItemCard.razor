@@ -1,12 +1,15 @@
 @using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Models
 
-<MudCard id="@($"item-card-{Item.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Item.Id))" Outlined="true"
-         Class="rounded-xl scroll-observe-target" Style="@GetItemCardStyle()">
+<MudCard id="@($"item-card-{Item.Id}")" @onclick="HandleCardClickAsync" Outlined="true"
+         Class="@($"rounded-xl scroll-observe-target {(EnableNavigation ? "cursor-pointer" : "")}")"
+         Style="@GetItemCardStyle()">
     <MudCardContent Class="pa-4">
         <div class="d-flex align-start">
-            <VoteButtons Score="GetItemScore()" IsUpvoted="IsItemUpvoted()" IsDownvoted="IsItemDownvoted()"
-                         OnUpvoteClicked="UpvoteItemAsync" OnDownvoteClicked="DownvoteItemAsync" />
+            <div @onclick:stopPropagation="true">
+                <VoteButtons Score="GetItemScore()" IsUpvoted="IsItemUpvoted()" IsDownvoted="IsItemDownvoted()"
+                             OnUpvoteClicked="UpvoteItemAsync" OnDownvoteClicked="DownvoteItemAsync" />
+            </div>
 
             <div class="flex-1">
                 @{
@@ -20,15 +23,17 @@
                         var canApprove = !string.IsNullOrEmpty(CurrentUserId) && Item.AsRequestOf?.TagOwnerUserId ==
                         CurrentUserId && requestInfo.Status == TradeStatus.Proposed;
 
-                        <RequestInfoAlert RequestInfo="requestInfo" CanCancel="canCancel" CanApprove="canApprove"
-                                          OnCancel="CancelTaggingRequestAsync" OnApprove="ApproveTaggingRequestAsync" />
+                        <div @onclick:stopPropagation="true">
+                            <RequestInfoAlert RequestInfo="requestInfo" CanCancel="canCancel" CanApprove="canApprove"
+                                              OnCancel="CancelTaggingRequestAsync" OnApprove="ApproveTaggingRequestAsync" />
+                        </div>
                         break;
                     case false:
                         break;
                 }
 
                 <div class="d-flex justify-space-between align-start">
-                    <div>
+                    <div class="flex-grow-1">
                         @* 本文・URL プレビュー・メタ情報は表示専用子コンポーネントへ委譲 *@
                         <ItemCardContent ItemId="Item.Id" LoadPreview="PreviewService.GetPreviewAsync"
                                          Content="@Item.Content" OwnerId="@Item.OwnerId" OwnerUserName="@(Item.Owner?.UserName)"
@@ -38,7 +43,7 @@
                     @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
                     {
                         case true:
-                            <div class="d-flex">
+                            <div class="d-flex" @onclick:stopPropagation="true">
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
                                                OnClick="EditItemAsync" title="このアイテムを編集" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
@@ -50,24 +55,31 @@
                     }
                 </div>
 
-                <ItemTagChipList Item="Item" CurrentUserId="@CurrentUserId" AllTags="AllTags"
-                                 AllTagRelationsToTags="AllTagRelationsToTags" HighlightEvents="HighlightEvents"
-                                 TaggingRequests="_taggingRequests" OnDataChanged="OnDataChanged"
-                                 OnAddTagClicked="OnAddTagClicked" />
+                <div @onclick:stopPropagation="true">
+                    <ItemTagChipList Item="Item" CurrentUserId="@CurrentUserId" AllTags="AllTags"
+                                     AllTagRelationsToTags="AllTagRelationsToTags" HighlightEvents="HighlightEvents"
+                                     TaggingRequests="_taggingRequests" OnDataChanged="OnDataChanged"
+                                     OnAddTagClicked="OnAddTagClicked" />
+                </div>
 
-                <ReactionBar ItemId="@Item.Id" ShinjiScore="@GetReactionScore("真実")" ZenScore="@GetReactionScore("善")"
-                             BiScore="@GetReactionScore("美")" IsShinjiUpvoted="@IsItemReactionUpvoted("真実")"
-                             IsShinjiDownvoted="@IsItemReactionDownvoted("真実")" IsZenUpvoted="@IsItemReactionUpvoted("善")"
-                             IsZenDownvoted="@IsItemReactionDownvoted("善")" IsBiUpvoted="@IsItemReactionUpvoted("美")"
-                             IsBiDownvoted="@IsItemReactionDownvoted("美")" OnReactionVoteClicked="VoteReactionAsync" />
+                <div @onclick:stopPropagation="true">
+                    <ReactionBar ItemId="@Item.Id" ShinjiScore="@GetReactionScore("真実")"
+                                 ZenScore="@GetReactionScore("善")" BiScore="@GetReactionScore("美")"
+                                 IsShinjiUpvoted="@IsItemReactionUpvoted("真実")"
+                                 IsShinjiDownvoted="@IsItemReactionDownvoted("真実")" IsZenUpvoted="@IsItemReactionUpvoted("善")"
+                                 IsZenDownvoted="@IsItemReactionDownvoted("善")" IsBiUpvoted="@IsItemReactionUpvoted("美")"
+                                 IsBiDownvoted="@IsItemReactionDownvoted("美")" OnReactionVoteClicked="VoteReactionAsync" />
+                </div>
 
                 @* リプライスレッド (表示専用子コンポーネント。リプライの描画はテンプレートで委譲) *@
-                <ItemReplyThread ItemId="Item.Id" IsExpanded="_isRepliesExpanded" Replies="_replies"
-                                 ReplyCount="_replyCount" ReplyTemplate="ReplyTemplate" NewReplyContent="@_newReplyContent"
-                                 NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
-                                 IsSubmittingReply="_isSubmittingReply" TargetCandidates="@GetReplyTargetCandidates()"
-                                 SelectedTargetUserIds="_selectedTargetUserIds" OnTargetToggled="HandleTargetUserToggled"
-                                 OnToggleReplies="ToggleRepliesAsync" OnSubmitReply="SubmitReplyAsync" />
+                <div @onclick:stopPropagation="true">
+                    <ItemReplyThread ItemId="Item.Id" IsExpanded="_isRepliesExpanded" Replies="_replies"
+                                     ReplyCount="_replyCount" ReplyTemplate="ReplyTemplate" NewReplyContent="@_newReplyContent"
+                                     NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
+                                     IsSubmittingReply="_isSubmittingReply" TargetCandidates="@GetReplyTargetCandidates()"
+                                     SelectedTargetUserIds="_selectedTargetUserIds" OnTargetToggled="HandleTargetUserToggled"
+                                     OnToggleReplies="ToggleRepliesAsync" OnSubmitReply="SubmitReplyAsync" />
+                </div>
             </div>
         </div>
     </MudCardContent>

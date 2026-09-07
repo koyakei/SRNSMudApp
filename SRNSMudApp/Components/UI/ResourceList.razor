@@ -10,19 +10,12 @@
         <MudStack Spacing="3">
             @foreach (var item in Items)
             {
-                <SRNSMudApp.Components.UI.ItemCard Item="@item"
-                                                       AllTags="@_allTags"
-                                                       AllTagRelationsToTags="@_allTagRelationsToTags"
-                                                       CurrentUserId="@_currentUserId"
-                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                       CurrentUserBadTagId="@_currentUserBadTagId"
-                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
-                                                       CurrentUserZenTagId="@_currentUserZenTagId"
-                                                       CurrentUserBiTagId="@_currentUserBiTagId"
-                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                       OnDataChanged="NotifyChangedAsync"
-                                                       IsFocused="@(_focusItemId == item.Id)"
-                                                       OnFocus="SetFocusItem"/>
+                <SRNSMudApp.Components.UI.ItemCard Item="@item" AllTags="@_allTags" AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                   CurrentUserId="@_currentUserId" CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                   CurrentUserBadTagId="@_currentUserBadTagId" CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                   CurrentUserZenTagId="@_currentUserZenTagId" CurrentUserBiTagId="@_currentUserBiTagId"
+                                                   OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="NotifyChangedAsync"
+                                                   IsFocused="@(_focusItemId == item.Id)" OnFocus="SetFocusItem" EnableNavigation="EnableItemNavigation" />
             }
         </MudStack>
         break;
@@ -35,15 +28,10 @@
         <MudStack Spacing="3" Class="@(Items.Any() ? "mt-4" : "")">
             @foreach (var tag in Tags)
             {
-                <SRNSMudApp.Components.UI.TagCard Tag="@tag"
-                                                      AllTags="@_allTags"
-                                                      CurrentUserId="@_currentUserId"
-                                                      CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                      CurrentUserBadTagId="@_currentUserBadTagId"
-                                                      OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                      OnDataChanged="NotifyChangedAsync"
-                                                      IsFocused="@(_focusTagId == tag.Id)"
-                                                      OnFocus="SetFocusTag"/>
+                <SRNSMudApp.Components.UI.TagCard Tag="@tag" AllTags="@_allTags" CurrentUserId="@_currentUserId"
+                                                  CurrentUserGoodTagId="@_currentUserGoodTagId" CurrentUserBadTagId="@_currentUserBadTagId"
+                                                  OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="NotifyChangedAsync"
+                                                  IsFocused="@(_focusTagId == tag.Id)" OnFocus="SetFocusTag" />
             }
         </MudStack>
         break;

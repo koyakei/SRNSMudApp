@@ -9,42 +9,299 @@
             <div>
                 <div class="d-flex align-center mb-4">
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2"/>
+                                   OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2" />
                     <MudText Typo="Typo.h5">アイテム詳細</MudText>
                 </div>
 
                 <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"
-                         ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
+                         KeepPanelsAlive="true" ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
                     <MudTabPanel Text="詳細 (Details)">
-                        <SRNSMudApp.Components.UI.ResourceList Items="new List<Item> { data.Item }"
-                                                                    EnableUrlUpdate="false"
-                                                                    OnDataChanged="LoadDataAsync"/>
+                        <div class="item-thread-container mb-6">
+                            @* ===== 1. 親方向 (Ancestors / Parents) ===== *@
+                            @switch (data.Ancestors.Count > 0)
+                            {
+                                case true:
+                                    <div class="ancestors-thread mb-2">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                 Class="mb-1 d-block font-weight-bold">
+                                            スレッドの親アイテム
+                                        </MudText>
+                                        @switch (data.Ancestors.Count > AncestorsThreshold && !_isAncestorsExpanded)
+                                        {
+                                            case true:
+                                                @* 先頭（最古）アイテム *@
+                                                <div class="ancestor-card-container position-relative">
+                                                    <SRNSMudApp.Components.UI.ItemCard Item="@data.Ancestors[0]" AllTags="@_allTags"
+                                                                                       AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                       CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                       CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                                       CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                                       EnableNavigation="true" />
+                                                    <div class="thread-vertical-line my-1 ml-6"
+                                                         style="width: 2px; height: 16px; background-color: var(--mud-palette-divider);">
+                                                    </div>
+                                                </div>
+                                                @* 中間折りたたみ展開ボタン *@
+                                                <div class="d-flex align-center my-2 pl-3">
+                                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                                               StartIcon="@Icons.Material.Filled.UnfoldMore"
+                                                               OnClick="@(() => _isAncestorsExpanded = true)"
+                                                               data-testid="expand-ancestors-btn">
+                                                        前の返信をもっと見る (@(data.Ancestors.Count - 2) 件)
+                                                    </MudButton>
+                                                </div>
+                                                @* 直前親アイテム *@
+                                                <div class="ancestor-card-container position-relative">
+                                                    <SRNSMudApp.Components.UI.ItemCard Item="@data.Ancestors[^1]" AllTags="@_allTags"
+                                                                                       AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                       CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                       CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                                       CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                                       EnableNavigation="true" />
+                                                    <div class="thread-vertical-line my-1 ml-6"
+                                                         style="width: 2px; height: 16px; background-color: var(--mud-palette-divider);">
+                                                    </div>
+                                                </div>
+                                                break;
+                                            case false:
+                                                @foreach (var ancestor in data.Ancestors)
+                                                {
+                                                    <div class="ancestor-card-container position-relative">
+                                                        <SRNSMudApp.Components.UI.ItemCard Item="@ancestor" AllTags="@_allTags"
+                                                                                           AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                           CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                           CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                                           CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                                           EnableNavigation="true" />
+                                                        <div class="thread-vertical-line my-1 ml-6"
+                                                             style="width: 2px; height: 16px; background-color: var(--mud-palette-divider);">
+                                                        </div>
+                                                    </div>
+                                                }
+                                                break;
+                                        }
+                                    </div>
+                                    break;
+                                case false:
+                                    break;
+                            }
 
+                            @* ===== 2. 兄弟方向および選択中アイテム (Siblings & Focused Item in Chronological Order) ===== *@
+                            @{
+                                var siblingReplies = data.Siblings.Concat([data.Item]).OrderBy(i => i.CreatedDate).ToList();
+                                var itemIndex = siblingReplies.FindIndex(i => i.Id == data.Item.Id);
+                                var earlierSiblings = itemIndex > 0 ? siblingReplies.Take(itemIndex).ToList() : [];
+                                var laterSiblings = itemIndex >= 0 && itemIndex < siblingReplies.Count - 1 ?
+                            siblingReplies.Skip(itemIndex + 1).ToList() : [];
+
+                                var visibleEarlierSiblings = (earlierSiblings.Count > EarlierSiblingsThreshold &&
+                            !_isEarlierSiblingsExpanded)
+                                    ? earlierSiblings.TakeLast(EarlierSiblingsThreshold).ToList()
+                                    : earlierSiblings;
+
+                                var visibleLaterSiblings = (laterSiblings.Count > LaterSiblingsThreshold &&
+                            !_isLaterSiblingsExpanded)
+                                    ? laterSiblings.Take(LaterSiblingsThreshold).ToList()
+                                    : laterSiblings;
+
+                                var visibleReplies = (data.Replies.Count > RepliesThreshold && !_isRepliesExpanded)
+                                    ? data.Replies.Take(RepliesThreshold).ToList()
+                                    : data.Replies;
+                            }
+                            <div class="thread-replies-timeline d-flex flex-column gap-3">
+                                @* 過去兄弟の折りたたみ展開ボタン *@
+                                @switch (earlierSiblings.Count > EarlierSiblingsThreshold &&
+                                !_isEarlierSiblingsExpanded)
+                                {
+                                    case true:
+                                        <div class="d-flex justify-center my-1">
+                                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.KeyboardDoubleArrowUp"
+                                                       OnClick="@(() => _isEarlierSiblingsExpanded = true)"
+                                                       data-testid="expand-earlier-siblings-btn">
+                                                過去の兄弟リプライをもっと見る (@(earlierSiblings.Count - EarlierSiblingsThreshold) 件)
+                                            </MudButton>
+                                        </div>
+                                        break;
+                                    case false:
+                                        break;
+                                }
+
+                                @* 過去の兄弟アイテム *@
+                                @foreach (var sibling in visibleEarlierSiblings)
+                                {
+                                    <div class="sibling-card-container">
+                                        <SRNSMudApp.Components.UI.ItemCard Item="@sibling" AllTags="@_allTags"
+                                                                           AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                           CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                           CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                           CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                           EnableNavigation="true" />
+                                    </div>
+                                }
+
+                                @* 現在選択中のアイテム (Focused Item) *@
+                                <div class="current-focused-item my-2" id="@($"current-focused-item-{data.Item.Id}")">
+                                    <SRNSMudApp.Components.UI.ItemCard Item="@data.Item" AllTags="@_allTags"
+                                                                       AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                       CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                       CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                       CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                       IsFocused="true" EnableNavigation="false" />
+
+                                    @* リプライ入力欄 (Reply Input Form) *@
+                                    <div class="reply-input-section my-3 pa-3 rounded-lg"
+                                         style="background-color: var(--mud-palette-background-grey);">
+                                        <MudText Typo="Typo.subtitle2" Class="mb-1">このアイテムにリプライ</MudText>
+                                        <div class="d-flex align-end gap-2">
+                                            <MudTextField @bind-Value="_newReplyText" Label="リプライを入力..."
+                                                          Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"
+                                                          Immediate="true" Class="flex-grow-1"
+                                                          data-testid="item-detail-reply-input" />
+                                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                       OnClick="SubmitReplyAsync"
+                                                       Disabled="@(string.IsNullOrWhiteSpace(_newReplyText) || _isSubmittingReply)"
+                                                       data-testid="item-detail-reply-submit">
+                                                @switch (_isSubmittingReply)
+                                                {
+                                                    case true:
+                                                        <MudProgressCircular Size="Size.Small" Indeterminate="true"
+                                                                             Class="mr-1" />
+                                                        break;
+                                                    case false:
+                                                        break;
+                                                }
+                                                返信
+                                            </MudButton>
+                                        </div>
+                                    </div>
+
+                                    @* 子方向 (Replies / Children) *@
+                                    <div class="replies-section mt-3 mb-2">
+                                        <div class="d-flex align-center mb-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small"
+                                                     Class="mr-1" Color="Color.Primary" />
+                                            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                                                リプライ (@data.Replies.Count)
+                                            </MudText>
+                                        </div>
+                                        @switch (data.Replies.Count)
+                                        {
+                                            case 0:
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pl-2">
+                                                    リプライはまだありません
+                                                </MudText>
+                                                break;
+                                            default:
+                                                <div class="d-flex flex-column gap-3 pl-3"
+                                                     style="border-left: 2px solid var(--mud-palette-divider);">
+                                                    @foreach (var reply in visibleReplies)
+                                                    {
+                                                        <SRNSMudApp.Components.UI.ItemCard Item="@reply" AllTags="@_allTags"
+                                                                                           AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                                                           CurrentUserId="@_currentUserId"
+                                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                           CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                           CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                                           CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                                           OnDataChanged="LoadDataAsync" EnableNavigation="true" />
+                                                    }
+                                                    @switch (data.Replies.Count > RepliesThreshold && !_isRepliesExpanded)
+                                                    {
+                                                        case true:
+                                                            <div class="d-flex justify-center mt-2">
+                                                                <MudButton Variant="Variant.Text" Color="Color.Primary"
+                                                                           Size="Size.Small" StartIcon="@Icons.Material.Filled.ExpandMore"
+                                                                           OnClick="@(() => _isRepliesExpanded = true)"
+                                                                           data-testid="expand-replies-btn">
+                                                                    返信をもっと見る (他 @(data.Replies.Count - RepliesThreshold) 件)
+                                                                </MudButton>
+                                                            </div>
+                                                            break;
+                                                        case false:
+                                                            break;
+                                                    }
+                                                </div>
+                                                break;
+                                        }
+                                    </div>
+                                </div>
+
+                                @* 未来の兄弟アイテム *@
+                                @foreach (var sibling in visibleLaterSiblings)
+                                {
+                                    <div class="sibling-card-container">
+                                        <SRNSMudApp.Components.UI.ItemCard Item="@sibling" AllTags="@_allTags"
+                                                                           AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                           CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                           CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                           CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync" OnDataChanged="LoadDataAsync"
+                                                                           EnableNavigation="true" />
+                                    </div>
+                                }
+
+                                @* 未来兄弟の折りたたみ展開ボタン *@
+                                @switch (laterSiblings.Count > LaterSiblingsThreshold && !_isLaterSiblingsExpanded)
+                                {
+                                    case true:
+                                        <div class="d-flex justify-center my-1">
+                                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.KeyboardDoubleArrowDown"
+                                                       OnClick="@(() => _isLaterSiblingsExpanded = true)"
+                                                       data-testid="expand-later-siblings-btn">
+                                                新しい兄弟リプライをもっと見る (@(laterSiblings.Count - LaterSiblingsThreshold) 件)
+                                            </MudButton>
+                                        </div>
+                                        break;
+                                    case false:
+                                        break;
+                                }
+                            </div>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="タグ管理 (Tag Management)">
+                        <MudText Typo="Typo.h6" Class="mb-3">タグ一覧</MudText>
                         @switch (data.Item.TagRelations)
                         {
                             case not null:
-                                <SRNSMudApp.Components.Tag.ItemTagTable
-                                    TagRelations="@data.Item.TagRelations"
-                                    Item="@data.Item"
-                                    CurrentUserId="@_currentUserId"
-                                    AllTags="@_allTags"
-                                    AllTagRelationsToTags="@_allTagRelationsToTags"
-                                    SearchString="@_searchQuery"
-                                    SearchStringChanged="OnSearchStringChanged"
-                                    OnDataChanged="LoadDataAsync"/>
+                                <SRNSMudApp.Components.Tag.ItemTagTable TagRelations="@data.Item.TagRelations" Item="@data.Item"
+                                                                        CurrentUserId="@_currentUserId" AllTags="@_allTags"
+                                                                        AllTagRelationsToTags="@_allTagRelationsToTags" SearchString="@_searchQuery"
+                                                                        SearchStringChanged="OnSearchStringChanged" OnDataChanged="LoadDataAsync" />
                                 break;
                         }
-                    </MudTabPanel>
 
-                    <MudTabPanel Text="関連リクエスト (Related Requests)">
+                        <MudDivider Class="my-6" />
+                        <MudText Typo="Typo.h6" Class="mb-3">タグ付与依頼 (関連リクエスト)</MudText>
                         @switch (!data.Requests.Any())
                         {
                             case true:
                                 <MudText Typo="Typo.body1" Color="Color.Default">関連するリクエストはありません。</MudText>
                                 break;
                             case false:
-                                <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Requests" OnRequestChanged="LoadDataAsync"
-                                                                              SelectedRequest="_selectedRequest"
+                                <SRNSMudApp.Components.Tag.TaggingRequestList Requests="@data.Requests"
+                                                                              OnRequestChanged="LoadDataAsync" SelectedRequest="_selectedRequest"
                                                                               SelectedRequestChanged="OnSelectedRequestChanged">
                                     <RejectButtonTemplate Context="request">
                                         <MudButton Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"

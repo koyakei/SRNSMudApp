@@ -23,6 +23,9 @@ public interface INotificationsDataProvider
 
     /// <summary>通知を既読として記録する。</summary>
     Task MarkAsReadAsync(string userId, int sourceId, string sourceType, CancellationToken cancellationToken = default);
+
+    /// <summary>指定された複数の通知を一括で既読として記録する。</summary>
+    Task MarkAllAsReadAsync(string userId, IEnumerable<(int SourceId, string SourceType)> items, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -145,6 +148,39 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 SourceType = sourceType,
                 ReadAt = DateTimeOffset.UtcNow
             });
+            _ = await context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task MarkAllAsReadAsync(string userId, IEnumerable<(int SourceId, string SourceType)> items, CancellationToken cancellationToken = default)
+    {
+        var itemList = items.ToList();
+        if (itemList.Count == 0)
+        {
+            return;
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        List<NotificationReadState> existing = await context.NotificationReadStates
+            .Where(n => n.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        List<NotificationReadState> toAdd = [.. itemList
+            .Where(item => !existing.Any(e => e.SourceId == item.SourceId && e.SourceType == item.SourceType))
+            .Select(item => new NotificationReadState
+            {
+                UserId = userId,
+                SourceId = item.SourceId,
+                SourceType = item.SourceType,
+                ReadAt = now
+            })];
+
+        if (toAdd.Count > 0)
+        {
+            context.NotificationReadStates.AddRange(toAdd);
             _ = await context.SaveChangesAsync(cancellationToken);
         }
     }

@@ -13,7 +13,15 @@ public sealed record ItemDetailPageData(
     Item Item,
     IReadOnlyList<Tag> AllTags,
     IReadOnlyList<TagRelationToTag> AllTagRelationsToTags,
-    IReadOnlyList<TagWeightLedger> Ledgers);
+    IReadOnlyList<TagWeightLedger> Ledgers,
+    IReadOnlyList<Item>? Ancestors = null,
+    IReadOnlyList<Item>? Replies = null,
+    IReadOnlyList<Item>? Siblings = null)
+{
+    public IReadOnlyList<Item> Ancestors { get; init; } = Ancestors ?? [];
+    public IReadOnlyList<Item> Replies { get; init; } = Replies ?? [];
+    public IReadOnlyList<Item> Siblings { get; init; } = Siblings ?? [];
+}
 
 /// <summary>
 ///     ItemDetail コンポーネント用のデータアクセスを分離するインターフェース。
@@ -35,11 +43,8 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
 
-    /// <inheritdoc />
-    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        Item? item = await context.Items
+    private static IQueryable<Item> IncludeItemDetails(IQueryable<Item> query) =>
+        query
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
@@ -54,12 +59,51 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .ThenInclude(t => t.Item)
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
-            .AsNoTracking()
+            .Include(i => i.NotificationRecipients)
+            .AsNoTracking();
+
+    /// <inheritdoc />
+    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default)
+    {
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        Item? item = await IncludeItemDetails(context.Items)
             .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
         if (item is null)
         {
             return null;
+        }
+
+        // 親方向 (祖先スレッド): ルートから直前の親までを時系列順に取得
+        List<Item> ancestors = [];
+        var currentParentId = item.ParentItemId;
+        HashSet<int> visitedParentIds = [itemId];
+        while (currentParentId.HasValue && visitedParentIds.Add(currentParentId.Value))
+        {
+            Item? parent = await IncludeItemDetails(context.Items)
+                .FirstOrDefaultAsync(i => i.Id == currentParentId.Value, cancellationToken);
+            if (parent is null)
+            {
+                break;
+            }
+            ancestors.Insert(0, parent);
+            currentParentId = parent.ParentItemId;
+        }
+
+        // 子方向 (リプライ一覧)
+        List<Item> replies = await IncludeItemDetails(context.Items)
+            .Where(i => i.ParentItemId == itemId)
+            .OrderBy(i => i.CreatedDate)
+            .ToListAsync(cancellationToken);
+
+        // 兄弟方向 (同一親への他のリプライ)
+        List<Item> siblings = [];
+        if (item.ParentItemId.HasValue)
+        {
+            siblings = await IncludeItemDetails(context.Items)
+                .Where(i => i.ParentItemId == item.ParentItemId.Value && i.Id != itemId)
+                .OrderBy(i => i.CreatedDate)
+                .ToListAsync(cancellationToken);
         }
 
         List<TagWeightLedger> ledgers = await context.TagWeightLedgers
@@ -75,6 +119,6 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         List<TagRelationToTag> allTagRelationsToTags =
             await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync(cancellationToken);
 
-        return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers);
+        return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings);
     }
 }

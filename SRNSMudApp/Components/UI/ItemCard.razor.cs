@@ -34,11 +34,13 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
     [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
     [Parameter][EditorRequired] public Data.Item Item { get; set; } = null!;
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
+    [Parameter] public bool EnableNavigation { get; set; } = true;
     [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
@@ -70,6 +72,7 @@ public partial class ItemCard : IAsyncDisposable
         builder.AddAttribute(10, nameof(AllTagRelationsToTags), AllTagRelationsToTags);
         builder.AddAttribute(11, nameof(HighlightEvents), HighlightEvents);
         builder.AddAttribute(12, nameof(OnEnsureSystemTags), OnEnsureSystemTags);
+        builder.AddAttribute(13, nameof(EnableNavigation), true);
         builder.CloseComponent();
     };
 
@@ -147,6 +150,24 @@ public partial class ItemCard : IAsyncDisposable
         if (elementId == $"item-card-{Item.Id}")
         {
             _ = OnFocus.InvokeAsync(Item.Id);
+        }
+    }
+
+    private async Task HandleCardClickAsync()
+    {
+        if (OnFocus.HasDelegate)
+        {
+            await OnFocus.InvokeAsync(Item.Id);
+        }
+
+        if (EnableNavigation)
+        {
+            var currentPath = new Uri(NavigationManager.Uri).AbsolutePath;
+            var targetPath = $"/ItemDetail/{Item.Id}";
+            if (!string.Equals(currentPath, targetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                NavigationManager.NavigateTo(targetPath);
+            }
         }
     }
 

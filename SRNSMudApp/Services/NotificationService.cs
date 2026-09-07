@@ -38,8 +38,27 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
         return notifications.Count(n => !n.IsRead);
     }
 
-    public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType) =>
+    public event EventHandler? NotificationsChanged;
+
+    public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
+    {
         await _dataProvider.MarkAsReadAsync(userId, sourceId, sourceType);
+        NotificationsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async Task MarkAllAsReadAsync(string userId)
+    {
+        IReadOnlyList<NotificationDto> notifications = await GetUserNotificationsAsync(userId);
+        List<(int SourceId, string SourceType)> unreadItems = [.. notifications
+            .Where(n => !n.IsRead)
+            .Select(n => (n.SourceId, n.Kind.SourceType))];
+
+        if (unreadItems.Count > 0)
+        {
+            await _dataProvider.MarkAllAsReadAsync(userId, unreadItems);
+            NotificationsChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     internal static string GetRequestTypeLabel(TaggingRequestType? type) => type switch
     {
@@ -148,6 +167,8 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 ? "リクエスト"
                 : (currentUserId != null && reply.ParentItem?.OwnerId != currentUserId ? "参加しているアイテム" : "アイテム");
 
+            var targetItemId = isRequestReply ? relatedItemId : reply.Id;
+
             return new NotificationDto
             {
                 SourceId = reply.Id,
@@ -164,7 +185,7 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                     ),
                 Message = $"{ownerName}さんがあなたの{targetLabel}に{(isRequestReply ? "返信" : "リプライ")}しました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{relatedItemId}"),
+                TargetUrl = new RelativeUrl($"/ItemDetail/{targetItemId}"),
                 IsRead = IsRead(readStates, reply.Id, sourceType),
                 ActorName = ownerName,
                 AssociatedItemId = reply.Id

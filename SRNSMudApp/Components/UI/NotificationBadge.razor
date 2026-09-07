@@ -24,6 +24,7 @@
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
+        NotificationService.NotificationsChanged += OnNotificationsChanged;
         await RefreshUnreadCountAsync();
     }
 
@@ -31,6 +32,18 @@
     {
         await RefreshUnreadCountAsync();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnNotificationsChanged(object? sender, EventArgs e)
+    {
+        await RefreshUnreadCountAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsNotificationsPage()
+    {
+        var relative = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        return relative.Trim('/').Equals("notifications", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task RefreshUnreadCountAsync()
@@ -44,7 +57,14 @@
                 switch (_userId)
                 {
                     case not null:
-                        _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
+                        if (IsNotificationsPage())
+                        {
+                            _unreadCount = 0;
+                        }
+                        else
+                        {
+                            _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
+                        }
                         break;
                 }
                 break;
@@ -58,5 +78,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        NotificationService.NotificationsChanged -= OnNotificationsChanged;
     }
 }

@@ -3,11 +3,13 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 
 using MudBlazor;
 
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
@@ -31,7 +33,13 @@ public partial class ItemDetail
     // CA1002: Requests はリクエスト却下時に要素削除するため List のままとする。
     [SuppressMessage("Design", "CA1034:Do not nest type. Alternatively, change its accessibility so that it is not externally visible.")]
     [SuppressMessage("Design", "CA1002:Do not expose generic lists")]
-    public record ItemDetailData(Data.Item Item, List<TaggingRequestEntity> Requests, IReadOnlyList<TagWeightLedger> Ledgers);
+    public record ItemDetailData(
+        Data.Item Item,
+        List<TaggingRequestEntity> Requests,
+        IReadOnlyList<TagWeightLedger> Ledgers,
+        IReadOnlyList<Data.Item> Ancestors,
+        IReadOnlyList<Data.Item> Replies,
+        IReadOnlyList<Data.Item> Siblings);
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -42,13 +50,36 @@ public partial class ItemDetail
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private ITaggingService TaggingService { get; set; } = null!;
+    [Inject] private IItemTagService ItemTagService { get; set; } = null!;
+    [Inject] private ISystemTagEnsurer SystemTagEnsurer { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private const int AncestorsThreshold = 4;
+    private const int EarlierSiblingsThreshold = 4;
+    private const int LaterSiblingsThreshold = 2;
+    private const int RepliesThreshold = 3;
+
+    private bool _hasScrolledToFocus;
+    private bool _isAncestorsExpanded;
+    private bool _isEarlierSiblingsExpanded;
+    private bool _isLaterSiblingsExpanded;
+    private bool _isRepliesExpanded;
 
     private AsyncPageState<ItemDetailData> _pageState = new Loading();
 
     private string _currentUserId = "";
     private IReadOnlyList<Data.Tag> _allTags = [];
     private IReadOnlyList<TagRelationToTag> _allTagRelationsToTags = [];
+
+    private int? _currentUserGoodTagId;
+    private int? _currentUserBadTagId;
+    private int? _currentUserShinjiTagId;
+    private int? _currentUserZenTagId;
+    private int? _currentUserBiTagId;
+
+    private string _newReplyText = "";
+    private bool _isSubmittingReply;
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? ActiveTabQuery { get; set; }
@@ -93,12 +124,38 @@ public partial class ItemDetail
         _searchQuery = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        switch (_pageState)
+        {
+            case Loaded<ItemDetailData> when !_hasScrolledToFocus:
+                _hasScrolledToFocus = true;
+                try
+                {
+                    await JS.InvokeVoidAsync("contentOverflowHelper.scrollToElement", $"#item-card-{ItemId}, #current-focused-item-{ItemId}");
+                }
+                catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+                {
+                    // 静的プリレンダリング時や切断時の例外は無視する
+                }
+                break;
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "データ取得時に発生した例外をエラー状態として画面表示するために広く捕捉する")]
     private async Task LoadDataAsync()
     {
         try
         {
+            _hasScrolledToFocus = false;
+            _isAncestorsExpanded = false;
+            _isEarlierSiblingsExpanded = false;
+            _isLaterSiblingsExpanded = false;
+            _isRepliesExpanded = false;
+
             _pageState = new Loading();
 #pragma warning disable BL0012
             // ローディングスピナーを即座に描画させるため意図的に呼び出す
@@ -134,6 +191,18 @@ public partial class ItemDetail
             _allTags = data.AllTags;
             _allTagRelationsToTags = data.AllTagRelationsToTags;
 
+            if (!string.IsNullOrEmpty(_currentUserId))
+            {
+                SystemTagIds systemTags = ResourceListViewModel.FindSystemTags(_allTags, _currentUserId);
+                _currentUserGoodTagId = systemTags.GoodTagId;
+                _currentUserBadTagId = systemTags.BadTagId;
+
+                ReactionTagIds reactionTags = ResourceListViewModel.FindReactionTags(_allTags, _currentUserId);
+                _currentUserShinjiTagId = reactionTags.ShinjiTagId;
+                _currentUserZenTagId = reactionTags.ZenTagId;
+                _currentUserBiTagId = reactionTags.BiTagId;
+            }
+
             // タグ一覧取得後に TagId ベースのフィルタ文字列を解決する
             var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
             FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
@@ -142,11 +211,66 @@ public partial class ItemDetail
                 _searchQuery = TagFilterQueryCodec.ToSearchString(filter, _allTags);
             }
 
-            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(data.Item, requests ?? [], data.Ledgers));
+            _pageState = new Loaded<ItemDetailData>(new ItemDetailData(
+                data.Item,
+                requests ?? [],
+                data.Ledgers,
+                data.Ancestors,
+                data.Replies,
+                data.Siblings));
         }
         catch (Exception ex)
         {
             _pageState = new Failed(ex);
+        }
+    }
+
+    public async Task EnsureSystemTagsExistAsync()
+    {
+        (SystemTagIds voteIds, ReactionTagIds reactionIds, var refetch) = await SystemTagEnsurer.EnsureAllAsync(
+            _currentUserId,
+            new SystemTagIds(_currentUserGoodTagId, _currentUserBadTagId),
+            new ReactionTagIds(_currentUserShinjiTagId, _currentUserZenTagId, _currentUserBiTagId));
+
+        _currentUserGoodTagId = voteIds.GoodTagId;
+        _currentUserBadTagId = voteIds.BadTagId;
+        _currentUserShinjiTagId = reactionIds.ShinjiTagId;
+        _currentUserZenTagId = reactionIds.ZenTagId;
+        _currentUserBiTagId = reactionIds.BiTagId;
+
+        if (refetch)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task SubmitReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newReplyText) || string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        _isSubmittingReply = true;
+        try
+        {
+            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(ItemId, _newReplyText, _currentUserId);
+            if (addedReply is not null)
+            {
+                _newReplyText = "";
+                _ = Snackbar.Add("リプライを送信しました。", Severity.Success);
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = Snackbar.Add($"リプライの送信に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingReply = false;
         }
     }
 
@@ -205,6 +329,11 @@ public partial class ItemDetail
         _activeTabIndex = index;
         ActiveTabQuery = ItemDetailQueryState.FromTabIndex(index);
         UpdateUrlQuery();
+
+        if (index == 0)
+        {
+            _hasScrolledToFocus = false;
+        }
     }
 
     private void OnSearchStringChanged(string? search)

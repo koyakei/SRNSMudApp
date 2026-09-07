@@ -81,6 +81,44 @@ public class ItemDetailDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task GetItemDetailAsync_ReturnsAncestorsRepliesAndSiblings()
+    {
+        var (db, sut, _, userId, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var rootItem = new SRNSMudApp.Data.Item { Content = $"root_{tid}", OwnerId = userId };
+            db.Items.Add(rootItem);
+            await db.SaveChangesAsync();
+
+            var child1 = new SRNSMudApp.Data.Item { Content = $"child1_{tid}", OwnerId = userId, ParentItemId = rootItem.Id };
+            var child2 = new SRNSMudApp.Data.Item { Content = $"child2_sibling_{tid}", OwnerId = userId, ParentItemId = rootItem.Id };
+            db.Items.AddRange(child1, child2);
+            await db.SaveChangesAsync();
+
+            var grandchild = new SRNSMudApp.Data.Item { Content = $"grandchild_{tid}", OwnerId = userId, ParentItemId = child1.Id };
+            db.Items.Add(grandchild);
+            await db.SaveChangesAsync();
+
+            ItemDetailPageData? result = await sut.GetItemDetailAsync(child1.Id);
+
+            Assert.NotNull(result);
+            Assert.Equal(child1.Id, result.Item.Id);
+
+            // 親方向 (Ancestors)
+            Assert.Single(result.Ancestors);
+            Assert.Equal(rootItem.Id, result.Ancestors[0].Id);
+
+            // 子方向 (Replies)
+            Assert.Single(result.Replies);
+            Assert.Equal(grandchild.Id, result.Replies[0].Id);
+
+            // 兄弟方向 (Siblings)
+            Assert.Single(result.Siblings);
+            Assert.Equal(child2.Id, result.Siblings[0].Id);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

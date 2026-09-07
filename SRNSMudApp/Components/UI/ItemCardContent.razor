@@ -6,10 +6,8 @@
 @implements IAsyncDisposable
 
 <div>
-    <div id="@($"item-content-{ItemId}")"
-         class="@($"resource-content {(!_isExpanded ? "line-clamp-2" : "")}")">
-        <MudText Typo="Typo.subtitle1"
-                 Class="font-inherit" Style="white-space: pre-wrap;">
+    <div id="@($"item-content-{ItemId}")" class="@($"resource-content {(!_isExpanded ? "line-clamp-2" : "")}")">
+        <MudText Typo="Typo.subtitle1" Class="font-inherit" Style="white-space: pre-wrap;">
             @DisplayContent
         </MudText>
     </div>
@@ -17,10 +15,10 @@
     @switch (_urls.Any())
     {
         case true:
-            <div class="d-flex flex-column gap-2 mb-2 mt-2">
+            <div class="d-flex flex-column gap-2 mb-2 mt-2" @onclick:stopPropagation="true">
                 @foreach (var url in _urls.Take(3))
                 {
-                    <UrlPreviewCard Url="@url" LoadPreview="@LoadPreview"/>
+                    <UrlPreviewCard Url="@url" LoadPreview="@LoadPreview" />
                 }
             </div>
             break;
@@ -29,23 +27,22 @@
     @switch (_isOverflowing)
     {
         case true:
-            <MudLink OnClick="ToggleExpand" Color="Color.Primary"
-                     Typo="Typo.body2" Underline="Underline.Hover" Class="cursor-pointer">
-                @(_isExpanded switch { true => "閉じる", false => "もっと見る" })
-            </MudLink>
+            <span @onclick:stopPropagation="true">
+                <MudLink OnClick="ToggleExpand" Color="Color.Primary" Typo="Typo.body2" Underline="Underline.Hover"
+                         Class="cursor-pointer">
+                    @(_isExpanded switch { true => "閉じる", false => "もっと見る" })
+                </MudLink>
+            </span>
             break;
     }
 
-    <MudText Typo="Typo.caption" Color="Color.Secondary"
-             Class="mb-2 mt-2 d-block">
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2 mt-2 d-block">
         投稿者:
         @switch (string.IsNullOrEmpty(OwnerId))
         {
             case false:
                 <span @onclick:stopPropagation="true">
-                    <MudLink Href="@($"/User/UserDetail/{OwnerId}")"
-                             Color="Color.Inherit"
-                             Underline="Underline.Hover">
+                    <MudLink Href="@($"/User/UserDetail/{OwnerId}")" Color="Color.Inherit" Underline="Underline.Hover">
                         @OwnerUserName
                     </MudLink>
                 </span>
@@ -57,8 +54,7 @@
         <span class="mx-1">|</span>
         最終更新:
         <span @onclick:stopPropagation="true">
-            <MudLink Href="@($"/ItemDetail/{ItemId}")" Color="Color.Inherit"
-                     Underline="Underline.Hover">
+            <MudLink Href="@($"/ItemDetail/{ItemId}")" Color="Color.Inherit" Underline="Underline.Hover">
                 @UpdatedDate.ToLocalTime().ToString("g")
             </MudLink>
         </span>

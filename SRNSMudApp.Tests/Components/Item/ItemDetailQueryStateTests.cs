@@ -67,7 +67,7 @@ public class ItemDetailQueryStateTests
     // --- FromTabIndex ---
 
     [Theory]
-    [InlineData(1, "requests")]
+    [InlineData(1, "tags")]
     [InlineData(2, "history")]
     [InlineData(0, "details")]
     [InlineData(99, "details")]

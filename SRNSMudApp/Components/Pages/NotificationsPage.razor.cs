@@ -66,6 +66,9 @@ public partial class NotificationsPage
 
                 await FetchTagsAsync();
                 await FetchAssociatedItemsAsync();
+
+                // 通知ページ閲覧時にバッジをリセットし、未読通知を既読化する
+                await NotificationService.MarkAllAsReadAsync(_userId);
             }
         }
         _isLoading = false;

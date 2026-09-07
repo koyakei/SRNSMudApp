@@ -105,11 +105,14 @@ public class ItemReplyNotificationE2ETests : PageTest
         await Page.GotoAsync($"{_serverAddress}/notifications");
         await Page.WaitForURLAsync(new Regex(@"/notifications"), new PageWaitForURLOptions { Timeout = 10000 });
 
+        // 通知ページ閲覧によりバッジがリセット（非表示または未読1が消えている）されていることを確認
+        await Expect(aliceNavBadge).Not.ToContainTextAsync("1", new LocatorAssertionsToContainTextOptions { Timeout = 10000 });
+
         // Bobからのリプライ通知（自分がownerのItemに対する通知）が表示されていることを確認
         ILocator aliceNotificationItem = Page.Locator($"text={bobEmail}さんがあなたのアイテムにリプライしました。");
         await Expect(aliceNotificationItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
 
-        // 通知をクリックして既読化（アイテム詳細へ遷移）
+        // 通知をクリックしてアイテム詳細へ遷移
         await aliceNotificationItem.ClickAsync();
         await Page.WaitForURLAsync(new Regex(@"/ItemDetail/"), new PageWaitForURLOptions { Timeout = 10000 });
 
@@ -155,6 +158,9 @@ public class ItemReplyNotificationE2ETests : PageTest
         // Bob の通知ページへ移動
         await Page.GotoAsync($"{_serverAddress}/notifications");
         await Page.WaitForURLAsync(new Regex(@"/notifications"), new PageWaitForURLOptions { Timeout = 10000 });
+
+        // 通知ページ閲覧によりバッジがリセットされていることを確認
+        await Expect(bobNavBadge).Not.ToContainTextAsync("1", new LocatorAssertionsToContainTextOptions { Timeout = 10000 });
 
         // Charlieからの参加アイテムへのリプライ通知が表示されることを確認
         ILocator bobNotificationItem = Page.Locator($"text={charlieEmail}さんがあなたの参加しているアイテムにリプライしました。");

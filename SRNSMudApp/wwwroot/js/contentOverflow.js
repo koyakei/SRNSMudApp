@@ -140,20 +140,47 @@ window.contentOverflowHelper = {
 
     /**
      * 指定された要素（ポップオーバー内の要素など）が表示されるようにスクロールする
+     * DOMへの描画遅延やBlazorのレンダリングによるレイアウトシフトに対応するためリトライと位置追従を行う
      * @public
      */
     // noinspection JSUnusedGlobalSymbols
     scrollToElement(selector) {
         this._isProgrammaticScroll = true;
-        setTimeout(function () {
+        let attempts = 0;
+        const maxAttempts = 30; // 50ms * 30 = 最大1.5秒待機
+
+        const tryScroll = () => {
             const el = document.querySelector(selector);
             if (el) {
-                el.scrollIntoView({behavior: 'auto', block: 'center'});
-            }
-            setTimeout(function () {
+                // 要素を表示領域の中央にスクロール
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+                // 遅延レンダリングや画像読み込みによるレイアウトシフト（位置ズレ）を補正するため
+                // 150ms後、400ms後、800ms後に再チェックして微調整する
+                const checkAndAdjust = () => {
+                    const rect = el.getBoundingClientRect();
+                    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+                    // 上端が画面外（ヘッダー下含む）または下端が画面外の場合は再調整
+                    if (rect.top < 64 || rect.bottom > windowHeight) {
+                        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+                    }
+                };
+
+                setTimeout(checkAndAdjust, 150);
+                setTimeout(checkAndAdjust, 400);
+                setTimeout(() => {
+                    checkAndAdjust();
+                    window.contentOverflowHelper._isProgrammaticScroll = false;
+                }, 800);
+            } else if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(tryScroll, 50);
+            } else {
                 window.contentOverflowHelper._isProgrammaticScroll = false;
-            }, 300);
-        }, 50); // DOMにポップオーバーが描画されるのを少し待つ
+            }
+        };
+
+        setTimeout(tryScroll, 50);
     },
 
     /**

@@ -117,6 +117,9 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         Assert.Contains("タグ追加リクエスト", host.Markup);
         Assert.Equal(2, host.FindAll("button[title='リクエストを承認する']").Count);
 
+        // 初期化時に未読通知の一括既読化が呼び出されることを検証
+        _notifServiceMock.Verify(s => s.MarkAllAsReadAsync(OwnerUserId), Times.Once);
+
         // Act 1: 1件目を承認
         host.FindAll("button[title='リクエストを承認する']")[0].Click();
 

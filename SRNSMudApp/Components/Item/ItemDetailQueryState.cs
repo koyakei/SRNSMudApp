@@ -56,7 +56,7 @@ public sealed record ItemDetailQueryState
     /// </summary>
     public static int ToTabIndex(string? tab) => tab switch
     {
-        "requests" => 1,
+        "tags" or "requests" => 1,
         "history" => 2,
         _ => 0
     };
@@ -66,7 +66,7 @@ public sealed record ItemDetailQueryState
     /// </summary>
     public static string FromTabIndex(int index) => index switch
     {
-        1 => "requests",
+        1 => "tags",
         2 => "history",
         _ => "details"
     };

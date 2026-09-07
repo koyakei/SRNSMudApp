@@ -97,7 +97,7 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
         IRenderedComponent<MudTabs> tabs = cut.FindComponent<MudTabs>();
         await cut.InvokeAsync(() => tabs.Instance.ActivatePanelAsync(1));
 
-        cut.WaitForAssertion(() => Assert.Contains("tab=requests", navigationManager.Uri));
+        cut.WaitForAssertion(() => Assert.Contains("tab=tags", navigationManager.Uri));
 
         cut.WaitForState(() => cut.FindAll("td").Any(td => td.TextContent.Contains(UserName)));
         await cut.InvokeAsync(() =>
@@ -148,7 +148,7 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(
-            $"http://localhost/ItemDetail/{itemId}?tab=requests&requestId={requestId}");
+            $"http://localhost/ItemDetail/{itemId}?tab=tags&requestId={requestId}");
 
         IRenderedComponent<ItemDetail> cut =
             _ctx.Render<ItemDetail>(parameters => parameters.Add(p => p.ItemId, itemId));
@@ -156,8 +156,8 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
         cut.WaitForState(() => !cut.Markup.Contains("mud-progress-circular"));
 
         IElement activeTab = cut.FindAll(".mud-tab.mud-tab-active")
-            .First(t => t.TextContent.Contains("関連リクエスト"));
-        Assert.Contains("関連リクエスト", activeTab.TextContent);
+            .First(t => t.TextContent.Contains("タグ管理"));
+        Assert.Contains("タグ管理", activeTab.TextContent);
 
         IElement selectedRow = cut.Find("tr.mud-table-row-selected");
         Assert.Contains(UserName, selectedRow.TextContent);

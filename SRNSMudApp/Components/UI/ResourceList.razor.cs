@@ -32,6 +32,7 @@ public partial class ResourceList : IAsyncDisposable
     [Parameter] public IEnumerable<Data.Tag> Tags { get; set; } = [];
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool EnableUrlUpdate { get; set; } = true;
+    [Parameter] public bool EnableItemNavigation { get; set; } = true;
 
     [Inject] private IHomeDataProvider HomeData { get; set; } = null!;
     [Inject] private ISystemTagEnsurer SystemTagEnsurer { get; set; } = null!;
