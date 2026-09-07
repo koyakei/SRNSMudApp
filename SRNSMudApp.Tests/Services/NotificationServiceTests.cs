@@ -16,11 +16,47 @@ public class NotificationServiceTests
     [Theory]
     [InlineData(TaggingRequestType.Add, "追加")]
     [InlineData(TaggingRequestType.DecreaseWeight, "削除")]
+    [InlineData(TaggingRequestType.Move, "位置変更")]
     [InlineData(null, "不明")]
     public void GetRequestTypeLabel_ReturnsExpectedJapaneseText(TaggingRequestType? type, string expected)
     {
         var result = NotificationService.GetRequestTypeLabel(type);
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void BuildTagRequestNotifications_MapsPropertiesCorrectly_WhenMoveRequest()
+    {
+        // Arrange
+        List<TaggingRequestEntity> requests =
+        [
+            new()
+            {
+                Id = 20,
+                RequestType = TaggingRequestType.Move,
+                TargetItemId = 100,
+                RequestedTagId = 200,
+                Status = TradeStatus.Proposed,
+                CreatedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                OwnerId = "userA",
+                RequestedTag = new Tag { Name = "Rust", OwnerId = "userB" },
+                RequesterUserId = "userA",
+                TagOwnerUserId = "userB"
+            }
+        ];
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildTagRequestNotifications(requests, readStates)];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Equal(20, dto.SourceId);
+        Assert.Equal("/tag-tree?tagId=200", dto.TargetUrl.ToHref());
+        Assert.Contains("Rustの位置変更リクエストが届いています。", dto.Message);
+        Assert.True(dto.Kind is TagRequestNotification);
     }
 
     [Fact]

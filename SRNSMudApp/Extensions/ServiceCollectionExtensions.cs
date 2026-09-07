@@ -57,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IContractExecutor, MutualContractExecutor>();
         services.AddScoped<IContractExecutor, TriggerContractExecutor>();
         services.AddScoped<IContractExecutor, BountyContractExecutor>();
+        services.AddScoped<IContractExecutor, MoveContractExecutor>();
         services.AddScoped<IContractExecutorFactory, ContractExecutorFactory>();
         services.AddScoped<ITaggingContractService, TaggingContractService>();
         services.AddScoped<TaggingContractService>(sp => (TaggingContractService)sp.GetRequiredService<ITaggingContractService>());

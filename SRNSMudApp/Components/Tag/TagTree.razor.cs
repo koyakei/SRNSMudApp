@@ -8,6 +8,8 @@ using Microsoft.JSInterop;
 
 using MudBlazor;
 
+using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
@@ -258,13 +260,6 @@ public partial class TagTree : IAsyncDisposable
                 break;
         }
 
-        // 権限チェック: 自分のタグ以外は移動不可とする
-        if (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
-        {
-            await RejectTreeMoveAsync("他人が作成したタグの構成を変更する権限がありません。", Severity.Error);
-            return;
-        }
-
         // 自分自身の子孫へのドロップは無効（循環参照を防ぐ）
         // movedItem が targetItem の祖先（または自身）であるかを確認する
         if (TagTreeViewModel.IsDescendantOrSelf(_tags, movedItem, targetItem))
@@ -274,12 +269,55 @@ public partial class TagTree : IAsyncDisposable
             return;
         }
 
-        movedItem.ParentTagId = position switch
+        int? newParentTagId = position switch
         {
             "inside" => targetItem.Id,
             "before" or "after" => targetItem.ParentTagId,
             _ => movedItem.ParentTagId
         };
+
+        if (newParentTagId == movedItem.ParentTagId)
+        {
+            return;
+        }
+
+        // 他人が作成したタグの場合は、直接更新せず配置変更リクエストを送信する
+        if (!string.IsNullOrEmpty(movedItem.OwnerId) && movedItem.OwnerId != _currentUserId)
+        {
+            if (string.IsNullOrEmpty(_currentUserId))
+            {
+                await RejectTreeMoveAsync("ログインしていないため、変更依頼リクエストを送信できません。", Severity.Warning);
+                return;
+            }
+
+            try
+            {
+                Result<TaggingRequestEntity> requestResult = await TagTreeData.RequestTagMoveAsync(
+                    _currentUserId, movedItem.Id, newParentTagId);
+
+                switch (requestResult)
+                {
+                    case Success<TaggingRequestEntity>:
+                        _ = Snackbar.Add($"タグ「{movedItem.Name}」の配置変更リクエストを送信しました。", Severity.Success);
+                        break;
+                    case Failure f:
+                        _ = Snackbar.Add($"配置変更リクエストの送信に失敗しました: {f.ErrorMessage}", Severity.Error);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"配置変更リクエスト送信中にエラーが発生しました: {ex.Message}", Severity.Error);
+            }
+
+            StateHasChanged();
+            await ReloadTreeDataAsync();
+            return;
+        }
+
+        movedItem.ParentTagId = newParentTagId;
 
         try
         {

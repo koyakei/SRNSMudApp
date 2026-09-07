@@ -4,5 +4,6 @@ public enum TaggingRequestType
 {
     Add,
     Remove,
-    DecreaseWeight
+    DecreaseWeight,
+    Move
 }

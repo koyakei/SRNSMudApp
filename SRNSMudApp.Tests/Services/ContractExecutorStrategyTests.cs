@@ -22,6 +22,7 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         Assert.Equal("Mutual", ContractTypes.Mutual);
         Assert.Equal("Trigger", ContractTypes.Trigger);
         Assert.Equal("Bounty", ContractTypes.Bounty);
+        Assert.Equal("Move", ContractTypes.Move);
     }
 
     [Fact]
@@ -31,11 +32,13 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         var mutual = new MutualContractExecutor();
         var trigger = new TriggerContractExecutor();
         var bounty = new BountyContractExecutor();
+        var move = new MoveContractExecutor();
 
         Assert.Equal(ContractTypes.Gratis, gratis.ContractType);
         Assert.Equal(ContractTypes.Mutual, mutual.ContractType);
         Assert.Equal(ContractTypes.Trigger, trigger.ContractType);
         Assert.Equal(ContractTypes.Bounty, bounty.ContractType);
+        Assert.Equal(ContractTypes.Move, move.ContractType);
     }
 
     [Fact]
@@ -127,6 +130,7 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
         Assert.NotNull(factory.GetExecutor(ContractTypes.Mutual));
         Assert.NotNull(factory.GetExecutor(ContractTypes.Trigger));
         Assert.NotNull(factory.GetExecutor(ContractTypes.Bounty));
+        Assert.NotNull(factory.GetExecutor(ContractTypes.Move));
         Assert.Null(factory.GetExecutor("Unknown"));
     }
 

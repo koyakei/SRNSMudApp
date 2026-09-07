@@ -3,6 +3,8 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
 #endregion
@@ -87,6 +89,44 @@ public class TagTreeDataProviderTests : IAsyncLifetime
             Assert.Contains(tags, t => t.Id == userTag.Id);
             Assert.DoesNotContain(tags, t => t.Id == voteTag.Id);
             Assert.DoesNotContain(tags, t => t.Id == reactionTag.Id);
+        }
+    }
+
+    [Fact]
+    public async Task RequestTagMoveAsync_CreatesTaggingRequestWithMoveContractAndProposedStatus()
+    {
+        var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
+        await using (context)
+        {
+            var otherUserId = $"other_{tid}";
+            await context.SeedUsersAsync(otherUserId);
+
+            var tagToMove = new Tag { Name = $"MovedTag_{tid}", OwnerId = otherUserId };
+            var newParentTag = new Tag { Name = $"ParentTag_{tid}", OwnerId = systemUserId };
+            context.Tags.AddRange(tagToMove, newParentTag);
+            _ = await context.SaveChangesAsync();
+
+            Result<TaggingRequestEntity> result = await provider.RequestTagMoveAsync(testUserId, tagToMove.Id, newParentTag.Id);
+
+            if (result is not Success<TaggingRequestEntity> success)
+            {
+                Assert.Fail("Result is not Success");
+                return;
+            }
+
+            TaggingRequestEntity req = success.Value;
+            Assert.Equal(ContractTypes.Move, req.ContractType);
+            Assert.Equal(TaggingRequestType.Move, req.RequestType);
+            Assert.Equal(testUserId, req.RequesterUserId);
+            Assert.Equal(otherUserId, req.TagOwnerUserId);
+            Assert.Equal(tagToMove.Id, req.RequestedTagId);
+            Assert.Equal(TradeStatus.Proposed, req.Status);
+            Assert.True(req.Payload is TagMovePayload payload && payload.NewParentTagId == newParentTag.Id);
+
+            // Also check DB persistence
+            TaggingRequestEntity? inDb = await context.TaggingRequestEntities.FirstOrDefaultAsync(r => r.Id == req.Id);
+            Assert.NotNull(inDb);
+            Assert.Equal(ContractTypes.Move, inDb.ContractType);
         }
     }
 

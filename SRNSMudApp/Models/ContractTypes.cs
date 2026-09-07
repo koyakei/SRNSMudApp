@@ -17,4 +17,7 @@ public static class ContractTypes
 
     /// <summary>バウンティ（タグオーナーが報酬を設定し、実行者が RightAsset を提供する）。</summary>
     public const string Bounty = "Bounty";
+
+    /// <summary>タグ位置変更（他人が作成したタグの階層位置を変更する依頼）。</summary>
+    public const string Move = "Move";
 }

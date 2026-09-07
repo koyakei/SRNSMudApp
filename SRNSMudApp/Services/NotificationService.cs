@@ -64,6 +64,8 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
     {
         TaggingRequestType.Add => "追加",
         TaggingRequestType.DecreaseWeight => "削除",
+        TaggingRequestType.Remove => "削除",
+        TaggingRequestType.Move => "位置変更",
         _ => "不明"
     };
 
@@ -88,7 +90,9 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
             ),
             Message = $"{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが届いています。",
             CreatedAt = new DateTimeOffset(req.CreatedDate, TimeSpan.Zero),
-            TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+            TargetUrl = req.RequestType == TaggingRequestType.Move
+                ? new RelativeUrl($"/tag-tree?tagId={req.RequestedTagId}")
+                : new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
             IsRead = IsRead(readStates, req.Id, "TagRequest"),
             ActorName = "システム",
             AssociatedItemId = req.TargetItemId,
@@ -119,7 +123,9 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 ),
                 Message = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが却下されました。{commentMsg}",
                 CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
-                TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+                TargetUrl = req.RequestType == TaggingRequestType.Move
+                    ? new RelativeUrl($"/tag-tree?tagId={req.RequestedTagId}")
+                    : new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
                 IsRead = IsRead(readStates, req.Id, "RequestRejected"),
                 ActorName = "システム",
                 AssociatedItemId = req.TargetItemId,
@@ -144,7 +150,9 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
             // UpdatedDate を実行時刻の近似として使用する
             Message = $"あなたの{req.RequestedTag?.Name ?? "不明なタグ"}の{GetRequestTypeLabel(req.RequestType)}リクエストが承認されました。",
             CreatedAt = new DateTimeOffset(req.UpdatedDate, TimeSpan.Zero),
-            TargetUrl = new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
+            TargetUrl = req.RequestType == TaggingRequestType.Move
+                ? new RelativeUrl($"/tag-tree?tagId={req.RequestedTagId}")
+                : new RelativeUrl($"/ItemDetail/{req.TargetItemId}"),
             IsRead = IsRead(readStates, req.Id, "RequestApproved"),
             ActorName = "システム",
             AssociatedItemId = req.TargetItemId,

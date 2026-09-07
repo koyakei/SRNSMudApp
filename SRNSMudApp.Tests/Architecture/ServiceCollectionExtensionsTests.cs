@@ -50,7 +50,7 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(IContractExecutorFactory) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITaggingContractService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(TaggingContractService) && d.Lifetime == ServiceLifetime.Scoped);
-        Assert.Equal(4, services.Count(d => d.ServiceType == typeof(IContractExecutor)));
+        Assert.Equal(5, services.Count(d => d.ServiceType == typeof(IContractExecutor)));
     }
 
     [Fact]

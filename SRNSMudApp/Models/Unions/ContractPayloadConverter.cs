@@ -24,6 +24,7 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
                 nameof(MutualPayload) => root.Deserialize<MutualPayload>(options)!,
                 nameof(PublicOfferPayload) => root.Deserialize<PublicOfferPayload>(options)!,
                 nameof(BountyPayload) => root.Deserialize<BountyPayload>(options)!,
+                nameof(TagMovePayload) => root.Deserialize<TagMovePayload>(options)!,
                 nameof(EmptyPayload) => new EmptyPayload(),
                 _ => new EmptyPayload()
             };
@@ -38,6 +39,7 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
             MutualPayload => nameof(MutualPayload),
             PublicOfferPayload => nameof(PublicOfferPayload),
             BountyPayload => nameof(BountyPayload),
+            TagMovePayload => nameof(TagMovePayload),
             EmptyPayload => nameof(EmptyPayload),
             _ => nameof(EmptyPayload)
         });
@@ -57,6 +59,20 @@ public sealed class ContractPayloadConverter : JsonConverter<ContractPayload>
                 break;
             case BountyPayload b:
                 writer.WriteNumber(nameof(BountyPayload.OfferedRewardAssetId), b.OfferedRewardAssetId);
+                break;
+            case TagMovePayload tm:
+                if (tm.NewParentTagId.HasValue)
+                {
+                    writer.WriteNumber(nameof(TagMovePayload.NewParentTagId), tm.NewParentTagId.Value);
+                }
+                else
+                {
+                    writer.WriteNull(nameof(TagMovePayload.NewParentTagId));
+                }
+                if (tm.RequesterMessage != null)
+                {
+                    writer.WriteString(nameof(TagMovePayload.RequesterMessage), tm.RequesterMessage);
+                }
                 break;
             default:
                 break;

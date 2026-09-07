@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 
 // 兄弟名前空間との衝突を避けるためのエイリアス
 using Tag = SRNSMudApp.Data.Tag;
@@ -30,6 +32,9 @@ public interface ITagTreeDataProvider
 
     /// <summary>タグの親を変更する。対象が存在しない場合は false。</summary>
     Task<bool> UpdateParentAsync(int tagId, int? parentTagId);
+
+    /// <summary>他人のタグの位置変更リクエストを送信する。</summary>
+    Task<Result<TaggingRequestEntity>> RequestTagMoveAsync(string requesterUserId, int tagId, int? newParentTagId);
 }
 
 public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : ITagTreeDataProvider
@@ -232,5 +237,68 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
 
         _ = await context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<Result<TaggingRequestEntity>> RequestTagMoveAsync(string requesterUserId, int tagId, int? newParentTagId)
+    {
+        if (string.IsNullOrEmpty(requesterUserId))
+        {
+            return new Failure("ログインが必要です。");
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        Tag? tag = await context.Tags.FindAsync(tagId);
+        if (tag is null)
+        {
+            return new Failure(ContractMessages.TagNotFound);
+        }
+
+        if (tag.OwnerId == requesterUserId)
+        {
+            return new Failure("自分のタグの位置変更依頼は作成できません。");
+        }
+
+        Tag? parentTag = null;
+        if (newParentTagId.HasValue)
+        {
+            parentTag = await context.Tags.FindAsync(newParentTagId.Value);
+            if (parentTag is null)
+            {
+                return new Failure("移動先の親タグが見つかりません。");
+            }
+        }
+
+        var parentName = parentTag?.Name ?? Tag.RootTagName;
+        var content = $"タグ「{tag.Name}」を「{parentName}」配下に移動する変更依頼";
+
+        var requestItem = new Item
+        {
+            OwnerId = requesterUserId,
+            Content = content
+        };
+        _ = context.Items.Add(requestItem);
+        _ = await context.SaveChangesAsync();
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = ContractTypes.Move,
+            OwnerId = requesterUserId,
+            RequesterUserId = requesterUserId,
+            TagOwnerUserId = tag.OwnerId,
+            RequestedTagId = tag.Id,
+            TargetId = requestItem.TagTargetId > 0 ? requestItem.TagTargetId : requestItem.TagTarget.Id,
+            Target = requestItem.TagTarget,
+            TargetItem = requestItem,
+            RequestItem = requestItem,
+            Status = TradeStatus.Proposed,
+            RequestType = TaggingRequestType.Move,
+            ProposedWeight = 1,
+            Payload = new TagMovePayload(newParentTagId)
+        };
+
+        _ = context.TaggingRequestEntities.Add(contract);
+        _ = await context.SaveChangesAsync();
+
+        return new Success<TaggingRequestEntity>(contract);
     }
 }

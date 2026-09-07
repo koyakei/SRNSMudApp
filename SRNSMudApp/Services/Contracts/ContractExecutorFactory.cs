@@ -27,7 +27,8 @@ public class ContractExecutorFactory(IEnumerable<IContractExecutor> executors) :
             new GratisContractExecutor(timeProvider),
             new MutualContractExecutor(timeProvider),
             new TriggerContractExecutor(timeProvider),
-            new BountyContractExecutor(timeProvider)
+            new BountyContractExecutor(timeProvider),
+            new MoveContractExecutor()
         ]);
 
     /// <summary>
