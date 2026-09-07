@@ -60,6 +60,17 @@ public class ItemReplyThreadTests : BunitContext, IAsyncLifetime
     }
 
     [Fact]
+    public void Collapsed_WithReplyCountParameter_ShowsReplyCountEvenIfRepliesEmpty()
+    {
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.IsExpanded, false)
+            .Add(p => p.ReplyCount, 3)
+            .Add(p => p.Replies, Array.Empty<SRNSMudApp.Data.Item>()));
+
+        Assert.Contains("リプライ (3)", cut.Markup);
+    }
+
+    [Fact]
     public void Expanded_RendersRepliesViaTemplate()
     {
         IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters

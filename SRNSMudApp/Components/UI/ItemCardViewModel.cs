@@ -47,6 +47,20 @@ public static partial class ItemCardViewModel
     }
 
     /// <summary>
+    ///     リプライ数を決定する。
+    ///     非同期取得されたリプライ件数、または渡されたリプライ一覧の件数を使用する。
+    /// </summary>
+    public static int GetReplyCount(int? loadedReplyCount, IEnumerable<Data.Item>? replies)
+    {
+        if (loadedReplyCount is { } count && count > 0)
+        {
+            return count;
+        }
+
+        return replies?.Count() ?? 0;
+    }
+
+    /// <summary>
     ///     アイテムの TagRelation コレクションから投票スコア（good の Weight の合計）を計算する。
     /// </summary>
     public static int GetItemScore(IEnumerable<TagRelation>? tagRelations)

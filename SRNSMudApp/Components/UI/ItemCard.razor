@@ -62,8 +62,8 @@
                              IsBiDownvoted="@IsItemReactionDownvoted("美")" OnReactionVoteClicked="VoteReactionAsync" />
 
                 @* リプライスレッド (表示専用子コンポーネント。リプライの描画はテンプレートで委譲) *@
-                <ItemReplyThread ItemId="Item.Id" IsExpanded="_isRepliesExpanded" Replies="_replies" ReplyTemplate="ReplyTemplate"
-                                 NewReplyContent="@_newReplyContent"
+                <ItemReplyThread ItemId="Item.Id" IsExpanded="_isRepliesExpanded" Replies="_replies"
+                                 ReplyCount="_replyCount" ReplyTemplate="ReplyTemplate" NewReplyContent="@_newReplyContent"
                                  NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
                                  IsSubmittingReply="_isSubmittingReply" TargetCandidates="@GetReplyTargetCandidates()"
                                  SelectedTargetUserIds="_selectedTargetUserIds" OnTargetToggled="HandleTargetUserToggled"

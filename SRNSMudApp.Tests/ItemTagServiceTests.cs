@@ -395,4 +395,33 @@ public class ItemTagServiceTests : IAsyncLifetime
             Assert.Equal(userId, relation!.OwnerId);
         }
     }
+
+    [Fact]
+    public async Task GetItemReplyCountAsync_ShouldReturnCorrectCount()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var parentItem = new Item { Content = $"Parent Item_{tid}", OwnerId = userId };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            var countBefore = await service.GetItemReplyCountAsync(parentItem.Id);
+            Assert.Equal(0, countBefore);
+
+            var reply1 = new Item { Content = $"Reply 1_{tid}", OwnerId = userId, ParentItemId = parentItem.Id };
+            var reply2 = new Item { Content = $"Reply 2_{tid}", OwnerId = userId, ParentItemId = parentItem.Id };
+            dbContext.Items.AddRange(reply1, reply2);
+            await dbContext.SaveChangesAsync();
+
+            var countAfter = await service.GetItemReplyCountAsync(parentItem.Id);
+            Assert.Equal(2, countAfter);
+
+            var nonExistentCount = await service.GetItemReplyCountAsync(-1);
+            Assert.Equal(0, nonExistentCount);
+        }
+    }
 }

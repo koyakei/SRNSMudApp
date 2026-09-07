@@ -254,4 +254,29 @@ public class ItemCardViewModelTests
 
         Assert.Equal("2", ItemCardViewModel.GetTagDisplayWeight(relation, ev));
     }
+
+    // ────────────────────────────────────────────────────────────
+    // GetReplyCount
+    // ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetReplyCount_WhenLoadedReplyCountProvided_ReturnsLoadedCount()
+    {
+        var count = ItemCardViewModel.GetReplyCount(5, new List<SRNSMudApp.Data.Item> { new() { OwnerId = "u" } });
+        Assert.Equal(5, count);
+    }
+
+    [Fact]
+    public void GetReplyCount_WhenLoadedReplyCountNull_ReturnsRepliesCount()
+    {
+        var count = ItemCardViewModel.GetReplyCount(null, new List<SRNSMudApp.Data.Item> { new() { OwnerId = "u" }, new() { OwnerId = "u" } });
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public void GetReplyCount_WhenBothNullOrEmpty_ReturnsZero()
+    {
+        var count = ItemCardViewModel.GetReplyCount(null, null);
+        Assert.Equal(0, count);
+    }
 }

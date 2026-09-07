@@ -76,6 +76,7 @@ public partial class ItemCard : IAsyncDisposable
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
 
+    private int _replyCount;
     private bool _isRepliesExpanded;
     private IReadOnlyList<Data.Item> _replies = [];
     private string _newReplyContent = "";
@@ -87,11 +88,15 @@ public partial class ItemCard : IAsyncDisposable
     protected override async Task OnParametersSetAsync()
     {
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
-        await (_isRepliesExpanded switch
+        if (_isRepliesExpanded)
         {
-            true => LoadRepliesAsync(),
-            false => Task.CompletedTask
-        });
+            await LoadRepliesAsync();
+        }
+        else
+        {
+            var count = await ItemTagService.GetItemReplyCountAsync(Item.Id);
+            _replyCount = count > 0 ? count : (Item.Replies?.Count ?? 0);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -202,6 +207,7 @@ public partial class ItemCard : IAsyncDisposable
     private async Task LoadRepliesAsync()
     {
         _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
+        _replyCount = _replies.Count;
         UpdateTargetCandidates();
     }
 

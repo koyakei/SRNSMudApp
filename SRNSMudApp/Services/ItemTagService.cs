@@ -485,6 +485,17 @@ public class ItemTagService(
             .ToListAsync();
     }
 
+    public async Task<int> GetItemReplyCountAsync(int parentItemId)
+    {
+        if (parentItemId <= 0)
+        {
+            return 0;
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        return await context.Items!.CountAsync(i => i.ParentItemId == parentItemId);
+    }
+
     public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId, IEnumerable<string>? targetUserIds = null)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
