@@ -31,6 +31,10 @@ public class Item : BaseEntity, ITaggable
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<Item> Replies { get; set; } = [];
 
+    // このアイテム（リプライ）の通知対象ユーザー一覧
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
+    public ICollection<ItemReplyNotificationRecipient> NotificationRecipients { get; set; } = [];
+
     // タグ付けリクエストに対するリプライの場合
     public int? TaggingRequestEntityId { get; set; }
     public TaggingRequestEntity? TaggingRequest { get; set; }

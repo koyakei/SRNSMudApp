@@ -9,6 +9,7 @@ using SRNSMudApp.Components.Contract;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
@@ -79,6 +80,9 @@ public partial class ItemCard : IAsyncDisposable
     private IReadOnlyList<Data.Item> _replies = [];
     private string _newReplyContent = "";
     private bool _isSubmittingReply;
+    private HashSet<string> _selectedTargetUserIds = [];
+    private readonly HashSet<string> _unselectedTargetUserIds = [];
+    private bool _hasManuallyModifiedTargets;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -188,14 +192,92 @@ public partial class ItemCard : IAsyncDisposable
     private async Task ToggleRepliesAsync()
     {
         _isRepliesExpanded = !_isRepliesExpanded;
-        await ((_isRepliesExpanded && _replies.Count == 0) switch
+        await (_isRepliesExpanded switch
         {
             true => LoadRepliesAsync(),
             false => Task.CompletedTask
         });
     }
 
-    private async Task LoadRepliesAsync() => _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
+    private async Task LoadRepliesAsync()
+    {
+        _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
+        UpdateTargetCandidates();
+    }
+
+    private List<ReplyTargetCandidate> GetReplyTargetCandidates()
+    {
+        List<ReplyTargetCandidate> candidates = [];
+        if (!string.IsNullOrEmpty(Item.OwnerId) && Item.OwnerId != CurrentUserId)
+        {
+            candidates.Add(new ReplyTargetCandidate(Item.OwnerId, Item.Owner?.UserName ?? "オーナー"));
+        }
+
+        foreach (var reply in _replies)
+        {
+            if (!string.IsNullOrEmpty(reply.OwnerId) && reply.OwnerId != CurrentUserId &&
+                !candidates.Any(c => c.Id == reply.OwnerId))
+            {
+                candidates.Add(new ReplyTargetCandidate(reply.OwnerId, reply.Owner?.UserName ?? "ユーザー"));
+            }
+        }
+
+        UpdateTargetCandidates(candidates);
+        return candidates;
+    }
+
+    private void UpdateTargetCandidates(List<ReplyTargetCandidate>? candidates = null)
+    {
+        candidates ??= [.. GetReplyTargetCandidatesInternal()];
+        if (!_hasManuallyModifiedTargets)
+        {
+            _selectedTargetUserIds = [.. candidates.Select(c => c.Id)];
+        }
+        else
+        {
+            foreach (var candidate in candidates)
+            {
+                if (!_unselectedTargetUserIds.Contains(candidate.Id) && !_selectedTargetUserIds.Contains(candidate.Id))
+                {
+                    _selectedTargetUserIds.Add(candidate.Id);
+                }
+            }
+        }
+    }
+
+    private IEnumerable<ReplyTargetCandidate> GetReplyTargetCandidatesInternal()
+    {
+        if (!string.IsNullOrEmpty(Item.OwnerId) && Item.OwnerId != CurrentUserId)
+        {
+            yield return new ReplyTargetCandidate(Item.OwnerId, Item.Owner?.UserName ?? "オーナー");
+        }
+
+        HashSet<string> seen = [];
+        foreach (var reply in _replies)
+        {
+            if (!string.IsNullOrEmpty(reply.OwnerId) && reply.OwnerId != CurrentUserId &&
+                reply.OwnerId != Item.OwnerId && seen.Add(reply.OwnerId))
+            {
+                yield return new ReplyTargetCandidate(reply.OwnerId, reply.Owner?.UserName ?? "ユーザー");
+            }
+        }
+    }
+
+    private Task HandleTargetUserToggled((string UserId, bool IsSelected) args)
+    {
+        _hasManuallyModifiedTargets = true;
+        if (args.IsSelected)
+        {
+            _selectedTargetUserIds.Add(args.UserId);
+            _unselectedTargetUserIds.Remove(args.UserId);
+        }
+        else
+        {
+            _selectedTargetUserIds.Remove(args.UserId);
+            _unselectedTargetUserIds.Add(args.UserId);
+        }
+        return Task.CompletedTask;
+    }
 
     private async Task SubmitReplyAsync()
     {
@@ -207,10 +289,12 @@ public partial class ItemCard : IAsyncDisposable
         _isSubmittingReply = true;
         try
         {
-            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId);
+            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId, _selectedTargetUserIds);
             if (addedReply is not null)
             {
                 _newReplyContent = "";
+                _hasManuallyModifiedTargets = false;
+                _unselectedTargetUserIds.Clear();
                 _isRepliesExpanded = true;
                 await LoadRepliesAsync();
             }

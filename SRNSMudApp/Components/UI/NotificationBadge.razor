@@ -1,13 +1,16 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
+@implements IDisposable
 @inject INotificationService NotificationService
 @inject NavigationManager NavigationManager
 
 @switch (_userId)
 {
     case not null:
-        <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)">
-            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="notifications" />
+        <MudBadge Content="_unreadCount" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)"
+                  data-testid="appbar-notifications-badge">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="notifications"
+                           aria-label="notifications" />
         </MudBadge>
         break;
 }
@@ -19,6 +22,18 @@
     private int _unreadCount;
 
     protected override async Task OnInitializedAsync()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        await RefreshUnreadCountAsync();
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await RefreshUnreadCountAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshUnreadCountAsync()
     {
         var authState = await AuthenticationStateTask;
         var user = authState.User;
@@ -33,6 +48,15 @@
                         break;
                 }
                 break;
+            default:
+                _userId = null;
+                _unreadCount = 0;
+                break;
         }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }

@@ -31,6 +31,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TimelineEvent> TimelineEvents { get; set; } = null!;
     public DbSet<Invitation> Invitations { get; set; } = null!;
     public DbSet<NotificationReadState> NotificationReadStates { get; set; } = null!;
+    public DbSet<ItemReplyNotificationRecipient> ItemReplyNotificationRecipients { get; set; } = null!;
     public DbSet<TagEdge> TagEdges { get; set; } = null!;
     public DbSet<TagEdgeTagAttachment> TagEdgeTagAttachments { get; set; } = null!;
     public DbSet<TaggableTarget> TaggableTargets { get; set; } = null!;
@@ -56,6 +57,25 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany(i => i.Replies)
             .HasForeignKey(i => i.ParentItemId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // リプライ通知対象ユーザー
+        _ = builder.Entity<ItemReplyNotificationRecipient>()
+            .HasOne(r => r.ReplyItem)
+            .WithMany(i => i.NotificationRecipients)
+            .HasForeignKey(r => r.ReplyItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<ItemReplyNotificationRecipient>()
+            .HasOne(r => r.RecipientUser)
+            .WithMany()
+            .HasForeignKey(r => r.RecipientUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemReplyNotificationRecipient>()
+            .HasIndex(r => new { r.ReplyItemId, r.RecipientUserId });
+
+        _ = builder.Entity<ItemReplyNotificationRecipient>()
+            .HasIndex(r => r.RecipientUserId);
 
         _ = builder.Entity<Tag>()
             .HasOne(t => t.Owner)

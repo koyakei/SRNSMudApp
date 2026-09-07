@@ -180,6 +180,64 @@ public class NotificationServiceTests
     }
 
     [Fact]
+    public void BuildReplyNotifications_WhenUserIsThreadParticipant_UsesParticipatingItemMessage()
+    {
+        // Arrange
+        List<Item> replies =
+        [
+            new()
+            {
+                Id = 51,
+                ParentItemId = 20,
+                ParentItem = new Item { Id = 20, OwnerId = "userOriginalAuthor" },
+                Content = "返信本文",
+                OwnerId = "userC",
+                Owner = new ApplicationUser { UserName = "Charlie" },
+                CreatedDate = new DateTime(2026, 1, 4, 0, 0, 0, DateTimeKind.Utc)
+            }
+        ];
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildReplyNotifications(replies, readStates, "ItemReply", "userReplierBob")];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Contains("Charlieさんがあなたの参加しているアイテムにリプライしました。", dto.Message);
+    }
+
+    [Fact]
+    public void BuildReplyNotifications_WhenUserIsParentOwner_UsesItemMessage()
+    {
+        // Arrange
+        List<Item> replies =
+        [
+            new()
+            {
+                Id = 52,
+                ParentItemId = 20,
+                ParentItem = new Item { Id = 20, OwnerId = "userAlice" },
+                Content = "返信本文",
+                OwnerId = "userB",
+                Owner = new ApplicationUser { UserName = "Bob" },
+                CreatedDate = new DateTime(2026, 1, 4, 0, 0, 0, DateTimeKind.Utc)
+            }
+        ];
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildReplyNotifications(replies, readStates, "ItemReply", "userAlice")];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Contains("Bobさんがあなたのアイテムにリプライしました。", dto.Message);
+    }
+
+    [Fact]
     public async Task GetUserNotificationsAsync_CallsDataProvider_AndAggregatesInDescendingOrder()
     {
         // Arrange

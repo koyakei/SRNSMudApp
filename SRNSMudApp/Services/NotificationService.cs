@@ -26,8 +26,8 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
             BuildTagRequestNotifications(raw.TagRequests, raw.ReadStates)
                 .Concat(BuildRejectedRequestNotifications(raw.RejectedRequests, raw.ReadStates))
                 .Concat(BuildApprovedRequestNotifications(raw.ApprovedRequests, raw.ReadStates))
-                .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply"))
-                .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply"));
+                .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply", userId))
+                .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
@@ -134,7 +134,7 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
 
     /// <summary>リプライ / リクエスト返信から通知 DTO を生成する。</summary>
     internal static IEnumerable<NotificationDto> BuildReplyNotifications(
-        IEnumerable<Item> replies, IReadOnlyList<NotificationReadState> readStates, string sourceType) =>
+        IEnumerable<Item> replies, IReadOnlyList<NotificationReadState> readStates, string sourceType, string? currentUserId = null) =>
         replies.Select(reply =>
         {
             var ownerName = reply.Owner?.UserName ?? "不明なユーザー";
@@ -143,6 +143,11 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
             var relatedItemId = isRequestReply
                 ? reply.TaggingRequestEntityId.GetValueOrDefault()
                 : reply.ParentItemId.GetValueOrDefault();
+
+            var targetLabel = isRequestReply
+                ? "リクエスト"
+                : (currentUserId != null && reply.ParentItem?.OwnerId != currentUserId ? "参加しているアイテム" : "アイテム");
+
             return new NotificationDto
             {
                 SourceId = reply.Id,
@@ -157,7 +162,7 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                         ParentItemId: relatedItemId,
                         ActorName: ownerName
                     ),
-                Message = $"{ownerName}さんがあなたの{(isRequestReply ? "リクエスト" : "アイテム")}に{(isRequestReply ? "返信" : "リプライ")}しました。",
+                Message = $"{ownerName}さんがあなたの{targetLabel}に{(isRequestReply ? "返信" : "リプライ")}しました。",
                 CreatedAt = new DateTimeOffset(reply.CreatedDate, TimeSpan.Zero),
                 TargetUrl = new RelativeUrl($"/ItemDetail/{relatedItemId}"),
                 IsRead = IsRead(readStates, reply.Id, sourceType),

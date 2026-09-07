@@ -61,7 +61,7 @@ public interface IItemTagService
     Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId);
     Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message);
     Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId);
-    Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId);
+    Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId, IEnumerable<string>? targetUserIds = null);
 }
 
 /// <summary>Weight 更新の結果を表す。</summary>

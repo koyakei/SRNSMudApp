@@ -7,6 +7,7 @@ using Bunit;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.UI;
+using SRNSMudApp.Models;
 
 #endregion
 
@@ -16,8 +17,14 @@ namespace SRNSMudApp.Tests.Components.UI;
 ///     表示専用コンポーネント <see cref="ItemReplyThread" /> の純粋レンダリングテスト。
 ///     サービス注入不要のパラメータ駆動で動作することを検証する。
 /// </summary>
-public class ItemReplyThreadTests : BunitContext
+public class ItemReplyThreadTests : BunitContext, IAsyncLifetime
 {
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await DisposeAsync();
+    }
     public ItemReplyThreadTests()
     {
         // MudTextField 等の MudBlazor コンポーネントが依存するサービス
@@ -121,5 +128,52 @@ public class ItemReplyThreadTests : BunitContext
         Assert.False(submitButton.HasAttribute("disabled"));
         submitButton.Click();
         await cut.WaitForAssertionAsync(() => Assert.Equal(1, submitted));
+    }
+
+    [Fact]
+    public void Expanded_WithTargetCandidates_RendersCheckboxes()
+    {
+        List<ReplyTargetCandidate> candidates =
+        [
+            new("user1", "Alice"),
+            new("user2", "Bob")
+        ];
+
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.IsExpanded, true)
+            .Add(p => p.TargetCandidates, (IReadOnlyList<ReplyTargetCandidate>)candidates)
+            .Add(p => p.SelectedTargetUserIds, (IReadOnlyCollection<string>)new[] { "user1" }));
+
+        Assert.Contains("返信先:", cut.Markup);
+        Assert.Contains("Alice", cut.Markup);
+        Assert.Contains("Bob", cut.Markup);
+    }
+
+    [Fact]
+    public void TargetCandidateCheckbox_Toggling_InvokesOnTargetToggled()
+    {
+        List<ReplyTargetCandidate> candidates =
+        [
+            new("user1", "Alice")
+        ];
+
+        string? toggledUserId = null;
+        bool? toggledState = null;
+
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.IsExpanded, true)
+            .Add(p => p.TargetCandidates, (IReadOnlyList<ReplyTargetCandidate>)candidates)
+            .Add(p => p.SelectedTargetUserIds, (IReadOnlyCollection<string>)new[] { "user1" })
+            .Add(p => p.OnTargetToggled, Microsoft.AspNetCore.Components.EventCallback.Factory.Create<(string UserId, bool IsSelected)>(this, args =>
+            {
+                toggledUserId = args.UserId;
+                toggledState = args.IsSelected;
+            })));
+
+        var checkboxInput = cut.Find("input[type='checkbox']");
+        checkboxInput.Change(false);
+
+        Assert.Equal("user1", toggledUserId);
+        Assert.False(toggledState);
     }
 }

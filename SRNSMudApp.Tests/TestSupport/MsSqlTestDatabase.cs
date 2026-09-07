@@ -41,6 +41,11 @@ public sealed class MsSqlTestDatabase : IAsyncDisposable
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseSqlServer(dbConnectionString, sqlOptions => sqlOptions.UseHierarchyId())
+            .UseSqlServer(dbConnectionString, sqlOptions =>
+            {
+                sqlOptions.UseHierarchyId();
+                sqlOptions.CommandTimeout(300);
+            })
             .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 

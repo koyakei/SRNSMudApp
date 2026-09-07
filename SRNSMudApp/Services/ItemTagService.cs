@@ -479,12 +479,13 @@ public class ItemTagService(
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
+            .Include(i => i.NotificationRecipients)
             .Where(i => i.ParentItemId == parentItemId)
             .OrderBy(i => i.CreatedDate)
             .ToListAsync();
     }
 
-    public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId)
+    public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId, IEnumerable<string>? targetUserIds = null)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
@@ -503,6 +504,42 @@ public class ItemTagService(
 
         _ = context.Items!.Add(replyItem);
         _ = await context.SaveChangesAsync();
+
+        // 通知対象ユーザー（Twitterライクなメンション先）の永続化
+        List<string> recipientIds;
+        if (targetUserIds != null)
+        {
+            recipientIds = targetUserIds.Where(id => !string.IsNullOrWhiteSpace(id) && id != userId).Distinct().ToList();
+        }
+        else
+        {
+            // 省略時はスレッド参加者（親アイテムオーナー + 既存リプライ投稿者、自分を除く）を自動対象とする
+            var parentOwnerId = await context.Items
+                .Where(i => i.Id == parentItemId)
+                .Select(i => i.OwnerId)
+                .FirstOrDefaultAsync();
+
+            var replierIds = await context.Items
+                .Where(i => i.ParentItemId == parentItemId)
+                .Select(i => i.OwnerId)
+                .ToListAsync();
+
+            recipientIds = [.. (new[] { parentOwnerId }.Concat(replierIds))
+                .Where(id => !string.IsNullOrEmpty(id) && id != userId)
+                .Distinct()!];
+        }
+
+        if (recipientIds.Count > 0)
+        {
+            var recipients = recipientIds.Select(rid => new ItemReplyNotificationRecipient
+            {
+                ReplyItemId = replyItem.Id,
+                RecipientUserId = rid,
+                CreatedDate = DateTimeOffset.UtcNow
+            });
+            context.ItemReplyNotificationRecipients.AddRange(recipients);
+            _ = await context.SaveChangesAsync();
+        }
 
         if (inheritedRelations.Count > 0)
         {
@@ -526,6 +563,7 @@ public class ItemTagService(
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
+            .Include(i => i.NotificationRecipients)
             .FirstOrDefaultAsync(i => i.Id == replyItem.Id);
     }
 }

@@ -81,7 +81,11 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             .AsNoTracking()
             .Include(i => i.ParentItem)
             .Include(i => i.Owner)
-            .Where(i => i.ParentItemId != 0 && i.ParentItem!.OwnerId == userId && i.OwnerId != userId)
+            .Include(i => i.NotificationRecipients)
+            .Where(i => i.ParentItemId != 0 &&
+                        (i.NotificationRecipients.Any(r => r.RecipientUserId == userId) ||
+                         (!i.NotificationRecipients.Any() && i.ParentItem!.OwnerId == userId)) &&
+                        i.OwnerId != userId)
             .ToListAsync(cancellationToken);
 
         // 3. Rejected requests for the user

@@ -1,4 +1,5 @@
 @using SRNSMudApp.Data
+@using SRNSMudApp.Models
 
 @* ItemCard のリプライスレッド表示を担う表示専用コンポーネント。
     サービス注入を持たず、データとコールバックのみで駆動するため
@@ -6,19 +7,21 @@
 @{
     var replyCount = Replies?.Count() ?? 0;
 }
-<div class="d-flex justify-end mt-2">
-    <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Color="Color.Default"
-               Variant="Variant.Text" OnClick="@(async () => await OnToggleReplies.InvokeAsync())">
-        @if (replyCount > 0)
-        {
-            <span>リプライ (@replyCount)</span>
-        }
-        else
-        {
-            <span>リプライ</span>
-        }
-    </MudButton>
-</div>
+<div data-testid="@($"item-reply-thread-{ItemId}")">
+    <div class="d-flex justify-end mt-2">
+        <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Color="Color.Default"
+                   Variant="Variant.Text" OnClick="@(async () => await OnToggleReplies.InvokeAsync())"
+                   data-testid="@($"reply-toggle-button-{ItemId}")">
+            @if (replyCount > 0)
+            {
+                <span>リプライ (@replyCount)</span>
+            }
+            else
+            {
+                <span>リプライ</span>
+            }
+        </MudButton>
+    </div>
 
 <MudCollapse Expanded="IsExpanded">
     <MudDivider Class="my-3" />
@@ -41,13 +44,33 @@
             break;
     }
 
-    <div class="d-flex align-end gap-2 mt-2">
+    @if (TargetCandidates?.Any() == true)
+    {
+        <div class="d-flex flex-wrap align-center gap-2 mt-2 px-1" data-testid="@($"reply-target-candidates-container-{ItemId}")">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-1">返信先:</MudText>
+            @foreach (var candidate in TargetCandidates)
+            {
+                var isChecked = SelectedTargetUserIds?.Contains(candidate.Id) ?? false;
+                <div data-testid="@($"reply-target-checkbox-{ItemId}-{candidate.UserName}")" class="d-inline-flex align-center">
+                    <MudCheckBox T="bool" Value="@isChecked"
+                                 ValueChanged="@(async (bool val) => await HandleTargetToggled(candidate.Id, val))" Dense="true"
+                                 Size="Size.Small" Color="Color.Primary">
+                        <MudText Typo="Typo.caption">@candidate.UserName</MudText>
+                    </MudCheckBox>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="d-flex align-end gap-2 mt-2" data-testid="@($"reply-input-form-{ItemId}")">
         <MudTextField Value="@NewReplyContent"
                       ValueChanged="@(async (string value) => await HandleNewReplyContentChanged(value))" Label="リプライを入力..."
-                      Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Immediate="true" Class="flex-grow-1" />
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Immediate="true" Class="flex-grow-1"
+                      data-testid="@($"reply-input-{ItemId}")" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                    OnClick="@(async () => await OnSubmitReply.InvokeAsync())"
-                   Disabled="@(string.IsNullOrWhiteSpace(NewReplyContent) || IsSubmittingReply)">
+                   Disabled="@(string.IsNullOrWhiteSpace(NewReplyContent) || IsSubmittingReply)"
+                   data-testid="@($"reply-submit-button-{ItemId}")">
             @switch (IsSubmittingReply)
             {
                 case true:
@@ -61,8 +84,11 @@
         </MudButton>
     </div>
 </MudCollapse>
+</div>
 
 @code {
+    [Parameter] public int ItemId { get; set; }
+
     [Parameter] public bool IsExpanded { get; set; }
 
     [Parameter] public IEnumerable<Data.Item>? Replies { get; set; }
@@ -80,12 +106,26 @@
 
     [Parameter] public EventCallback OnSubmitReply { get; set; }
 
+    [Parameter] public IReadOnlyList<ReplyTargetCandidate>? TargetCandidates { get; set; }
+
+    [Parameter] public IReadOnlyCollection<string>? SelectedTargetUserIds { get; set; }
+
+    [Parameter] public EventCallback<(string UserId, bool IsSelected)> OnTargetToggled { get; set; }
+
     private async Task HandleNewReplyContentChanged(string value)
     {
         NewReplyContent = value ?? string.Empty;
         if (NewReplyContentChanged.HasDelegate)
         {
             await NewReplyContentChanged.InvokeAsync(NewReplyContent);
+        }
+    }
+
+    private async Task HandleTargetToggled(string userId, bool isSelected)
+    {
+        if (OnTargetToggled.HasDelegate)
+        {
+            await OnTargetToggled.InvokeAsync((userId, isSelected));
         }
     }
 }

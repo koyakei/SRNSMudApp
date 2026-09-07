@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using SRNSMudApp.Components.UI
 
 <MudThemeProvider/>
 <MudProviders @rendermode="InteractiveServer"/>
@@ -8,6 +9,7 @@
                                   Color="Color.Inherit" Edge="Edge.Start"/>
         <MudText Typo="Typo.h5" Class="ml-3">Application</MudText>
         <MudSpacer/>
+        <NotificationBadge @rendermode="InteractiveServer" />
     </MudAppBar>
     <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
         <NavMenu/>

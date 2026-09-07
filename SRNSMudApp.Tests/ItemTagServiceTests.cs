@@ -115,6 +115,69 @@ public class ItemTagServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AddItemReplyAsync_ShouldSaveExplicitNotificationRecipients_WhenTargetUserIdsProvided()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"userA_{tid}";
+            var userB = $"userB_{tid}";
+            var userC = $"userC_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, userC);
+
+            var parentItem = new Item { Content = $"ParentItem_{tid}", OwnerId = userA };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            // userB replies to userA, explicitly selecting only userA
+            Item? reply = await service.AddItemReplyAsync(parentItem.Id, $"Reply_{tid}", userB, [userA]);
+
+            Assert.NotNull(reply);
+            List<ItemReplyNotificationRecipient> recipients = await dbContext.ItemReplyNotificationRecipients
+                .Where(r => r.ReplyItemId == reply!.Id)
+                .ToListAsync();
+
+            Assert.Single(recipients);
+            Assert.Equal(userA, recipients[0].RecipientUserId);
+        }
+    }
+
+    [Fact]
+    public async Task AddItemReplyAsync_ShouldSaveDefaultRecipients_WhenTargetUserIdsNull()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"userA_{tid}";
+            var userB = $"userB_{tid}";
+            var userC = $"userC_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, userC);
+
+            var parentItem = new Item { Content = $"ParentItem_{tid}", OwnerId = userA };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            // userB replies first
+            Item? reply1 = await service.AddItemReplyAsync(parentItem.Id, $"Reply1_{tid}", userB, [userA]);
+            Assert.NotNull(reply1);
+
+            // userC replies without passing targetUserIds -> should default to thread participants (userA and userB)
+            Item? reply2 = await service.AddItemReplyAsync(parentItem.Id, $"Reply2_{tid}", userC);
+            Assert.NotNull(reply2);
+
+            List<string> recipientUserIds = await dbContext.ItemReplyNotificationRecipients
+                .Where(r => r.ReplyItemId == reply2!.Id)
+                .Select(r => r.RecipientUserId)
+                .OrderBy(id => id)
+                .ToListAsync();
+
+            List<string> expected = [userA, userB];
+            expected.Sort();
+            Assert.Equal(expected, recipientUserIds);
+        }
+    }
+
+    [Fact]
     public async Task AddTagToItemAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
         var (dbContext, service, tid) = CreateScope();
