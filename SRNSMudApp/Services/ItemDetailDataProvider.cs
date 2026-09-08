@@ -16,14 +16,13 @@ public sealed record ItemDetailPageData(
     IReadOnlyList<TagWeightLedger> Ledgers,
     IReadOnlyList<Item>? Ancestors = null,
     IReadOnlyList<Item>? Replies = null,
-    IReadOnlyList<Item>? Siblings = null)
     IReadOnlyList<Item>? Siblings = null,
     IReadOnlyList<Item>? Quotes = null)
 {
     public IReadOnlyList<Item> Ancestors { get; init; } = Ancestors ?? [];
-public IReadOnlyList<Item> Replies { get; init; } = Replies ?? [];
-public IReadOnlyList<Item> Siblings { get; init; } = Siblings ?? [];
-public IReadOnlyList<Item> Quotes { get; init; } = Quotes ?? [];
+    public IReadOnlyList<Item> Replies { get; init; } = Replies ?? [];
+    public IReadOnlyList<Item> Siblings { get; init; } = Siblings ?? [];
+    public IReadOnlyList<Item> Quotes { get; init; } = Quotes ?? [];
 }
 
 /// <summary>
@@ -149,7 +148,6 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         List<TagRelationToTag> allTagRelationsToTags =
             await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync(cancellationToken);
 
-        return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings);
         return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings, quotes);
     }
 }

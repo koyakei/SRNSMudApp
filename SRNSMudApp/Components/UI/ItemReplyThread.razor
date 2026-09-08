@@ -8,7 +8,6 @@
     var replyCount = ItemCardViewModel.GetReplyCount(ReplyCount, Replies);
 }
 <div data-testid="@($"item-reply-thread-{ItemId}")">
-    <div class="d-flex justify-end mt-2">
     <div class="d-flex justify-end align-center gap-1 mt-2">
         <MudButton StartIcon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Color="Color.Default"
                    Variant="Variant.Text" OnClick="@(async () => await OnOpenQuoteDialog.InvokeAsync())"
