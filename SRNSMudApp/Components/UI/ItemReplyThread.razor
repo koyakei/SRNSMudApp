@@ -9,6 +9,26 @@
 }
 <div data-testid="@($"item-reply-thread-{ItemId}")">
     <div class="d-flex justify-end mt-2">
+    <div class="d-flex justify-end align-center gap-1 mt-2">
+        <MudButton StartIcon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Color="Color.Default"
+                   Variant="Variant.Text" OnClick="@(async () => await OnOpenQuoteDialog.InvokeAsync())"
+                   data-testid="@($"quote-button-{ItemId}")">
+            引用
+        </MudButton>
+
+        <MudButton StartIcon="@Icons.Material.Filled.FormatListBulleted" Size="Size.Small" Color="Color.Default"
+                   Variant="Variant.Text" OnClick="@(async () => await OnShowQuotes.InvokeAsync())"
+                   data-testid="@($"show-quotes-button-{ItemId}")">
+            @if (QuoteCount > 0)
+            {
+                <span>引用の表示 (@QuoteCount)</span>
+            }
+            else
+            {
+                <span>引用の表示</span>
+            }
+        </MudButton>
+
         <MudButton StartIcon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Color="Color.Default"
                    Variant="Variant.Text" OnClick="@(async () => await OnToggleReplies.InvokeAsync())"
                    data-testid="@($"reply-toggle-button-{ItemId}")">
@@ -105,6 +125,12 @@
     [Parameter] public EventCallback<string> NewReplyContentChanged { get; set; }
 
     [Parameter] public bool IsSubmittingReply { get; set; }
+
+    [Parameter] public int QuoteCount { get; set; }
+
+    [Parameter] public EventCallback OnOpenQuoteDialog { get; set; }
+
+    [Parameter] public EventCallback OnShowQuotes { get; set; }
 
     [Parameter] public EventCallback OnToggleReplies { get; set; }
 

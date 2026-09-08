@@ -119,6 +119,26 @@ public class ItemDetailDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task GetItemDetailAsync_ShouldIncludeQuotes()
+    {
+        var (db, sut, _, userId, _, itemId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var quotingItem1 = new SRNSMudApp.Data.Item { Content = $"quote1_{tid}", OwnerId = userId, QuotedItemId = itemId };
+            var quotingItem2 = new SRNSMudApp.Data.Item { Content = $"quote2_{tid}", OwnerId = userId, QuotedItemId = itemId };
+            db.Items.AddRange(quotingItem1, quotingItem2);
+            await db.SaveChangesAsync();
+
+            ItemDetailPageData? result = await sut.GetItemDetailAsync(itemId);
+
+            Assert.NotNull(result);
+            Assert.Equal(2, result.Quotes.Count);
+            Assert.Contains(result.Quotes, q => q.Id == quotingItem1.Id);
+            Assert.Contains(result.Quotes, q => q.Id == quotingItem2.Id);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

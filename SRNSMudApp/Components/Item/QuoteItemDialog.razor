@@ -1,0 +1,128 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using SRNSMudApp.Components.UI
+@inject IItemQuoteService ItemQuoteService
+@inject ISnackbar Snackbar
+@inject LinkPreviewService PreviewService
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">引用して投稿</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @* 新規引用投稿の本文入力 *@
+            <MudTextField T="string"
+                          @bind-Value="_content"
+                          Label="コメントを追加..."
+                          Placeholder="このアイテムについて何か書く..."
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          MaxLines="8"
+                          MaxLength="1000"
+                          Counter="1000"
+                          Immediate="true"
+                          AutoFocus="true"
+                          Required="true"
+                          RequiredError="本文を入力してください。"
+                          data-testid="quote-item-content-input" />
+
+            @* 抽出したURLのプレビュー *@
+            @{
+                var urls = ItemCardViewModel.ExtractUrls(_content);
+            }
+            @switch (urls.Any())
+            {
+                case true:
+                    <MudStack Spacing="2">
+                        @foreach (var url in urls.Take(3))
+                        {
+                            <UrlPreviewCard Url="@url" LoadPreview="@PreviewService.GetPreviewAsync" />
+                        }
+                    </MudStack>
+                    break;
+            }
+
+            @* 引用元のアイテムプレビュー *@
+            <div class="mt-1">
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1 d-block">引用元:</MudText>
+                <QuotedItemPreview QuotedItemId="QuotedItem.Id" QuotedItem="QuotedItem" />
+            </div>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync"
+                   Disabled="@(string.IsNullOrWhiteSpace(_content) || _isSubmitting)"
+                   data-testid="quote-item-submit-button">
+            @switch (_isSubmitting)
+            {
+                case true:
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                    <span>投稿中...</span>
+                    break;
+                case false:
+                    <span>引用して投稿</span>
+                    break;
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Item QuotedItem { get; set; } = null!;
+    [Parameter] public string CurrentUserId { get; set; } = "";
+
+    private string _content = "";
+    private bool _isSubmitting;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_content))
+        {
+            Snackbar.Add("本文を入力してください。", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            Item? created = await ItemQuoteService.CreateQuoteItemAsync(QuotedItem.Id, _content, CurrentUserId);
+            if (created is not null)
+            {
+                Snackbar.Add("引用を投稿しました。", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+            else
+            {
+                Snackbar.Add("引用元のアイテムが見つかりませんでした。", Severity.Error);
+                MudDialog.Cancel();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
+

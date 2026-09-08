@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 
@@ -325,4 +326,3 @@ public class ItemReactionService(IDbContextFactory<ApplicationDbContext> dbFacto
         return tag;
     }
 }
-

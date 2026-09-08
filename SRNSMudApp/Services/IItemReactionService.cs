@@ -33,4 +33,3 @@ public interface IItemReactionService
     /// <summary>指定した名前のシステムリアクションタグを確実に取得または作成する。</summary>
     Task<Tag> EnsureReactionTagAsync(string userId, string reactionTagName);
 }
-

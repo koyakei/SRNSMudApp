@@ -15,4 +15,3 @@ public interface IItemReplyService
     Task<int> GetItemReplyCountAsync(int parentItemId);
     Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId, IEnumerable<string>? targetUserIds = null);
 }
-

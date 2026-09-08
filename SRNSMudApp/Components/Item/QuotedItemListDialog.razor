@@ -1,0 +1,97 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using SRNSMudApp.Components.UI
+@inject IItemQuoteService ItemQuoteService
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">引用された投稿一覧</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="max-height: 70vh; overflow-y: auto;">
+            @* 引用元の概要 *@
+            <div class="mb-3 pa-2 rounded-lg" style="background-color: var(--mud-palette-background-grey);">
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">元アイテム:</MudText>
+                <MudText Typo="Typo.body2" Class="text-truncate">
+                    @(string.IsNullOrWhiteSpace(TargetItem.Content) ? "内容なし" : TargetItem.Content)
+                </MudText>
+            </div>
+
+            <MudDivider Class="my-2" />
+
+            @switch (_isLoading)
+            {
+                case true:
+                    <div class="d-flex justify-center align-center pa-4 gap-2">
+                        <MudProgressCircular Size="Size.Medium" Indeterminate="true" Color="Color.Primary" />
+                        <MudText Typo="Typo.body2">読み込み中...</MudText>
+                    </div>
+                    break;
+                case false:
+                    @switch (_quotedItems.Count)
+                    {
+                        case 0:
+                            <div class="pa-4 text-center">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" data-testid="no-quotes-message">
+                                    このアイテムを引用した投稿はまだありません。
+                                </MudText>
+                            </div>
+                            break;
+                        default:
+                            <div class="d-flex flex-column gap-3 py-2" data-testid="quoted-items-container">
+                                @foreach (var quote in _quotedItems)
+                                {
+                                    <ItemCard Item="@quote" CurrentUserId="@CurrentUserId" AllTags="@AllTags"
+                                              AllTagRelationsToTags="@AllTagRelationsToTags" EnableNavigation="true"
+                                              OnDataChanged="LoadQuotedItemsAsync" />
+                                }
+                            </div>
+                            break;
+                    }
+                    break;
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">閉じる</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Item TargetItem { get; set; } = null!;
+    [Parameter] public string CurrentUserId { get; set; } = "";
+    [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
+
+    private IReadOnlyList<Item> _quotedItems = [];
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQuotedItemsAsync();
+    }
+
+    private async Task LoadQuotedItemsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _quotedItems = await ItemQuoteService.GetQuotedByItemsAsync(TargetItem.Id);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+

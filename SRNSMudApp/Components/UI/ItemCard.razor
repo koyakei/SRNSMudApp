@@ -38,6 +38,14 @@
                         <ItemCardContent ItemId="Item.Id" LoadPreview="PreviewService.GetPreviewAsync"
                                          Content="@Item.Content" OwnerId="@Item.OwnerId" OwnerUserName="@(Item.Owner?.UserName)"
                                          UpdatedDate="Item.UpdatedDate" />
+
+                        @* 引用元アイテムプレビュー *@
+                        @if (Item.QuotedItemId.HasValue)
+                        {
+                            <div @onclick:stopPropagation="true">
+                                <QuotedItemPreview QuotedItemId="Item.QuotedItemId.Value" QuotedItem="Item.QuotedItem" />
+                            </div>
+                        }
                     </div>
 
                     @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
@@ -78,6 +86,7 @@
                                      NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
                                      IsSubmittingReply="_isSubmittingReply" TargetCandidates="@GetReplyTargetCandidates()"
                                      SelectedTargetUserIds="_selectedTargetUserIds" OnTargetToggled="HandleTargetUserToggled"
+                                     QuoteCount="_quoteCount" OnOpenQuoteDialog="OpenQuoteDialogAsync" OnShowQuotes="OpenShowQuotesDialogAsync"
                                      OnToggleReplies="ToggleRepliesAsync" OnSubmitReply="SubmitReplyAsync" />
                 </div>
             </div>

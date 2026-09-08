@@ -41,4 +41,12 @@ public class Item : BaseEntity, ITaggable
 
     // このアイテムがタグ付けリクエストの本体である場合、そのリクエスト情報
     public TaggingRequestEntity? AsRequestOf { get; set; }
+
+    // 引用元のアイテム（引用リツイート先）
+    public int? QuotedItemId { get; set; }
+    public Item? QuotedItem { get; set; }
+
+    // このアイテムを引用しているアイテム一覧
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
+    public ICollection<Item> QuotedByItems { get; set; } = [];
 }

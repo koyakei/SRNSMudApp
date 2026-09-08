@@ -30,6 +30,7 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
     [Inject] private IItemReplyService ItemReplyService { get; set; } = null!;
     [Inject] private IItemReactionService ItemReactionService { get; set; } = null!;
+    [Inject] private IItemQuoteService ItemQuoteService { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
@@ -82,6 +83,7 @@ public partial class ItemCard : IAsyncDisposable
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
 
     private int _replyCount;
+    private int _quoteCount;
     private bool _isRepliesExpanded;
     private IReadOnlyList<Data.Item> _replies = [];
     private string _newReplyContent = "";
@@ -93,6 +95,7 @@ public partial class ItemCard : IAsyncDisposable
     protected override async Task OnParametersSetAsync()
     {
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
+        _quoteCount = await ItemQuoteService.GetQuoteCountAsync(Item.Id);
         if (_isRepliesExpanded)
         {
             await LoadRepliesAsync();
@@ -485,6 +488,45 @@ public partial class ItemCard : IAsyncDisposable
         }
 
         await NotifyDataChangedAsync();
+    }
+
+    // --- Quote Logic ---
+    private async Task OpenQuoteDialogAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            ["QuotedItem"] = Item,
+            ["CurrentUserId"] = CurrentUserId
+        };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<QuoteItemDialog>("引用して投稿", parameters, options);
+        DialogResult? result = await dialog.Result;
+
+        switch (result)
+        {
+            case { Canceled: false }:
+                await NotifyDataChangedAsync();
+                break;
+        }
+    }
+
+    private async Task OpenShowQuotesDialogAsync()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            ["TargetItem"] = Item,
+            ["CurrentUserId"] = CurrentUserId,
+            ["AllTags"] = AllTags,
+            ["AllTagRelationsToTags"] = AllTagRelationsToTags
+        };
+        _ = await DialogLauncher.ShowAsync<QuotedItemListDialog>("引用された投稿一覧", parameters, options);
     }
 
     // --- Edit/Delete Logic ---

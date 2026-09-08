@@ -39,7 +39,11 @@ public partial class ItemDetail
         IReadOnlyList<TagWeightLedger> Ledgers,
         IReadOnlyList<Data.Item> Ancestors,
         IReadOnlyList<Data.Item> Replies,
-        IReadOnlyList<Data.Item> Siblings);
+        IReadOnlyList<Data.Item> Siblings,
+        IReadOnlyList<Data.Item>? Quotes = null)
+    {
+        public IReadOnlyList<Data.Item> Quotes { get; init; } = Quotes ?? [];
+    }
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -50,7 +54,6 @@ public partial class ItemDetail
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private ITaggingService TaggingService { get; set; } = null!;
-    [Inject] private IItemTagService ItemTagService { get; set; } = null!;
     [Inject] private IItemReplyService ItemReplyService { get; set; } = null!;
     [Inject] private ISystemTagEnsurer SystemTagEnsurer { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
@@ -218,7 +221,8 @@ public partial class ItemDetail
                 data.Ledgers,
                 data.Ancestors,
                 data.Replies,
-                data.Siblings));
+                data.Siblings,
+                data.Quotes));
         }
         catch (Exception ex)
         {

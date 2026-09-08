@@ -58,6 +58,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(i => i.ParentItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // アイテムの引用リツイート用自己参照リレーション
+        _ = builder.Entity<Item>()
+            .HasOne(i => i.QuotedItem)
+            .WithMany(i => i.QuotedByItems)
+            .HasForeignKey(i => i.QuotedItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // リプライ通知対象ユーザー
         _ = builder.Entity<ItemReplyNotificationRecipient>()
             .HasOne(r => r.ReplyItem)

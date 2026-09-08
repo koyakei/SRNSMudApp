@@ -263,6 +263,8 @@ public class ItemListDataProvider(
         IQueryable<Item> query = context.Items
             .AsNoTracking()
             .Include(i => i.Owner)
+            .Include(i => i.QuotedItem)
+                .ThenInclude(q => q!.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)

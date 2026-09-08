@@ -1,0 +1,82 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@inject NavigationManager NavigationManager
+@inject IItemQuoteService ItemQuoteService
+
+<div class="quoted-item-preview rounded-lg pa-3 my-2 cursor-pointer"
+     style="border: 1px solid var(--mud-palette-lines-default); background-color: var(--mud-palette-background-grey);"
+     @onclick="HandleClick" @onclick:stopPropagation="true"
+     data-testid="@($"quoted-item-preview-{QuotedItemId}")">
+    @switch (_isLoading)
+    {
+        case true:
+            <div class="d-flex align-center gap-2">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">引用元を読み込み中...</MudText>
+            </div>
+            break;
+        case false:
+            @switch (_targetItem)
+            {
+                case not null:
+                    <div class="d-flex flex-column gap-1">
+                        <div class="d-flex align-center gap-1">
+                            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption" Class="font-weight-bold">
+                                @(_targetItem.Owner?.UserName ?? "不明")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
+                                @_targetItem.CreatedDate.ToLocalTime().ToString("g")
+                            </MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Class="text-truncate line-clamp-2" Style="white-space: pre-wrap;">
+                            @(string.IsNullOrWhiteSpace(_targetItem.Content) ? "内容なし" : _targetItem.Content)
+                        </MudText>
+                    </div>
+                    break;
+                case null:
+                    <div class="d-flex align-center gap-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Color="Color.Default" />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            引用元のアイテムは削除されたか、表示できません。
+                        </MudText>
+                    </div>
+                    break;
+            }
+            break;
+    }
+</div>
+
+@code {
+    [Parameter] public int QuotedItemId { get; set; }
+    [Parameter] public Item? QuotedItem { get; set; }
+
+    private Item? _targetItem;
+    private bool _isLoading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _targetItem = QuotedItem;
+        if (_targetItem is null && QuotedItemId > 0)
+        {
+            _isLoading = true;
+            try
+            {
+                _targetItem = await ItemQuoteService.GetQuotedItemAsync(QuotedItemId);
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+    }
+
+    private void HandleClick()
+    {
+        if (QuotedItemId > 0)
+        {
+            NavigationManager.NavigateTo($"/ItemDetail/{QuotedItemId}");
+        }
+    }
+}
+

@@ -347,6 +347,33 @@
                                 break;
                         }
                     </MudTabPanel>
+
+                    <MudTabPanel Text="@($"引用 ({data.Quotes.Count})")">
+                        <MudText Typo="Typo.h6" Class="mb-3">このアイテムを引用した投稿</MudText>
+                        @switch (data.Quotes.Count)
+                        {
+                            case 0:
+                                <MudText Typo="Typo.body1" Color="Color.Default">引用されたアイテムはありません。</MudText>
+                                break;
+                            default:
+                                <div class="d-flex flex-column gap-3">
+                                    @foreach (var quote in data.Quotes)
+                                    {
+                                        <SRNSMudApp.Components.UI.ItemCard Item="@quote" AllTags="@_allTags"
+                                                                           AllTagRelationsToTags="@_allTagRelationsToTags"
+                                                                           CurrentUserId="@_currentUserId"
+                                                                           CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                           CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                           CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                           CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                           CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                           OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                           OnDataChanged="LoadDataAsync" EnableNavigation="true" />
+                                    }
+                                </div>
+                                break;
+                        }
+                    </MudTabPanel>
                 </MudTabs>
             </div>
         </LoadedContent>

@@ -17,10 +17,13 @@ public sealed record ItemDetailPageData(
     IReadOnlyList<Item>? Ancestors = null,
     IReadOnlyList<Item>? Replies = null,
     IReadOnlyList<Item>? Siblings = null)
+    IReadOnlyList<Item>? Siblings = null,
+    IReadOnlyList<Item>? Quotes = null)
 {
     public IReadOnlyList<Item> Ancestors { get; init; } = Ancestors ?? [];
-    public IReadOnlyList<Item> Replies { get; init; } = Replies ?? [];
-    public IReadOnlyList<Item> Siblings { get; init; } = Siblings ?? [];
+public IReadOnlyList<Item> Replies { get; init; } = Replies ?? [];
+public IReadOnlyList<Item> Siblings { get; init; } = Siblings ?? [];
+public IReadOnlyList<Item> Quotes { get; init; } = Quotes ?? [];
 }
 
 /// <summary>
@@ -46,6 +49,8 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
     private static IQueryable<Item> IncludeItemDetails(IQueryable<Item> query) =>
         query
             .Include(i => i.Owner)
+            .Include(i => i.QuotedItem)
+                .ThenInclude(q => q!.Owner)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
@@ -125,6 +130,12 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
                 .ToListAsync(cancellationToken);
         }
 
+        // 引用方向 (このアイテムを引用しているアイテム一覧)
+        List<Item> quotes = await IncludeItemDetails(context.Items)
+            .Where(i => i.QuotedItemId == itemId)
+            .OrderByDescending(i => i.CreatedDate)
+            .ToListAsync(cancellationToken);
+
         List<TagWeightLedger> ledgers = await context.TagWeightLedgers
             .Include(l => l.Owner)
             .Include(l => l.TagRelation)
@@ -139,5 +150,6 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync(cancellationToken);
 
         return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings);
+        return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings, quotes);
     }
 }

@@ -187,4 +187,35 @@ public class ItemReplyThreadTests : BunitContext, IAsyncLifetime
         Assert.Equal("user1", toggledUserId);
         Assert.False(toggledState);
     }
+
+    [Fact]
+    public void QuoteButton_Click_InvokesOnOpenQuoteDialog()
+    {
+        var invoked = false;
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.ItemId, 1)
+            .Add(p => p.OnOpenQuoteDialog, Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => invoked = true)));
+
+        var quoteButton = cut.Find("[data-testid='quote-button-1']");
+        quoteButton.Click();
+
+        Assert.True(invoked);
+    }
+
+    [Fact]
+    public void ShowQuotesButton_ShowsCountAndInvokesOnShowQuotes()
+    {
+        var invoked = false;
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.ItemId, 1)
+            .Add(p => p.QuoteCount, 3)
+            .Add(p => p.OnShowQuotes, Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => invoked = true)));
+
+        Assert.Contains("引用の表示 (3)", cut.Markup);
+
+        var showQuotesBtn = cut.Find("[data-testid='show-quotes-button-1']");
+        showQuotesBtn.Click();
+
+        Assert.True(invoked);
+    }
 }
