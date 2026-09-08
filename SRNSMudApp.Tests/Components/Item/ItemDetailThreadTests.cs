@@ -24,6 +24,7 @@ public sealed class ItemDetailThreadTests : IAsyncLifetime
     private readonly BunitContext _ctx = new();
     private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
     private readonly Mock<IItemTagService> _itemTagServiceMock = new();
+    private readonly Mock<IItemReplyService> _itemReplyServiceMock = new();
     private readonly Mock<ITaggingContractService> _contractServiceMock = new();
 
     public ItemDetailThreadTests()
@@ -32,6 +33,7 @@ public sealed class ItemDetailThreadTests : IAsyncLifetime
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _itemDetailDataMock.Object);
         _ = _ctx.Services.AddScoped(_ => _itemTagServiceMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _itemReplyServiceMock.Object);
         _ = _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
 
         Bunit.TestDoubles.BunitAuthorizationContext authorization = _ctx.AddAuthorization();
@@ -183,7 +185,7 @@ public sealed class ItemDetailThreadTests : IAsyncLifetime
             OwnerId = UserId
         };
 
-        _ = _itemTagServiceMock.Setup(s => s.AddItemReplyAsync(itemId, "New reply from test", UserId, null))
+        _ = _itemReplyServiceMock.Setup(s => s.AddItemReplyAsync(itemId, "New reply from test", UserId, null))
             .ReturnsAsync(newReply);
 
         IRenderedComponent<SRNSMudApp.Components.Item.ItemDetail> cut =
@@ -199,7 +201,7 @@ public sealed class ItemDetailThreadTests : IAsyncLifetime
         submitBtn.Click();
 
         // Assert: サービスが呼び出され、データがリロードされる
-        _itemTagServiceMock.Verify(s => s.AddItemReplyAsync(itemId, "New reply from test", UserId, null), Times.Once);
+        _itemReplyServiceMock.Verify(s => s.AddItemReplyAsync(itemId, "New reply from test", UserId, null), Times.Once);
         _itemDetailDataMock.Verify(d => d.GetItemDetailAsync(itemId, default), Times.AtLeast(2));
     }
 

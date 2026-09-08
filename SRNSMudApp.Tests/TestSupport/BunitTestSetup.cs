@@ -81,6 +81,8 @@ public static class BunitTestSetup
         return services
             .AddSingleton<LinkPreviewService>()
             .AddScoped(_ => new Mock<IItemTagService>().Object)
+            .AddScoped(_ => new Mock<IItemReplyService>().Object)
+            .AddScoped(_ => new Mock<IItemReactionService>().Object)
             .AddScoped(_ => new Mock<ITaggingService>().Object)
             .AddScoped(_ => new Mock<ITagEmbeddingService>().Object)
             .AddScoped(_ => new Mock<INotificationService>().Object)

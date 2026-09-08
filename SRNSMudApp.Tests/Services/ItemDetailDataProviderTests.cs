@@ -29,7 +29,7 @@ public class ItemDetailDataProviderTests : IAsyncLifetime
         var db = new ApplicationDbContext(_sharedDb.Options);
         var stubFactory = new DbContextFactoryStub(_sharedDb.Options);
         var sut = new ItemDetailDataProvider(stubFactory);
-        var itemTagService = new ItemTagService(stubFactory);
+        var itemTagService = new ItemTagService(stubFactory, new TimelineRecorder(), new TagWeightLedgerService());
 
         var userId = $"user_{tid}";
         var authorId = $"author_{tid}";

@@ -21,7 +21,7 @@ public class TagRelationServiceTests : IAsyncLifetime
     {
         var tid = Guid.NewGuid().ToString("N")[..8];
         var context = new ApplicationDbContext(_sharedDb.Options);
-        var service = new TagRelationService(context);
+        var service = new TagRelationService(new DbContextFactoryStub(_sharedDb.Options));
         return (context, service, tid);
     }
 
@@ -43,6 +43,7 @@ public class TagRelationServiceTests : IAsyncLifetime
 
             // Act
             Result<bool> result = await service.LinkTagToItemAsync(item.Id, tag.Id, user.Id, 5);
+            context.ChangeTracker.Clear();
 
             // Assert
             Assert.True(result is Success<bool>);
@@ -99,6 +100,7 @@ public class TagRelationServiceTests : IAsyncLifetime
 
             // Act 1: ItemA.TagRelation.weight を 3 操作する (RightAsset -3)
             Result<bool> result1 = await service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tag.Id, user.Id, 3);
+            context.ChangeTracker.Clear();
 
             // Assert 1
             Assert.True(result1 is Success<bool>);
@@ -115,6 +117,7 @@ public class TagRelationServiceTests : IAsyncLifetime
 
             // Act 2: ItemB.TagRelation.weight を 2 操作する (RightAsset -2)
             Result<bool> result2 = await service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tag.Id, user.Id, 2);
+            context.ChangeTracker.Clear();
 
             // Assert 2
             Assert.True(result2 is Success<bool>);
@@ -164,6 +167,7 @@ public class TagRelationServiceTests : IAsyncLifetime
 
             // Act 1: ItemA の TagX を -3 操作する
             Result<bool> result1 = await service.AllocateWeightAsync(rightAsset.Id, itemA.Id, tagX.Id, user.Id, -3);
+            context.ChangeTracker.Clear();
 
             // Assert 1
             Assert.True(result1 is Success<bool>);
@@ -180,6 +184,7 @@ public class TagRelationServiceTests : IAsyncLifetime
 
             // Act 2: ItemB に 2 操作する
             Result<bool> result2 = await service.AllocateWeightAsync(rightAsset.Id, itemB.Id, tagX.Id, user.Id, 2);
+            context.ChangeTracker.Clear();
 
             // Assert 2
             Assert.True(result2 is Success<bool>);
@@ -232,7 +237,7 @@ public class TagRelationServiceTests : IAsyncLifetime
         // 2. Act: 新しいDbContextを持つTagRelationServiceで操作する
         await using (var db = new ApplicationDbContext(_sharedDb.Options))
         {
-            var service = new TagRelationService(db);
+            var service = new TagRelationService(new DbContextFactoryStub(_sharedDb.Options));
             var result = await service.LinkTagToItemAsync(itemId, tagId, testUserId);
             Assert.True(result is Success<bool>);
         }
@@ -247,5 +252,13 @@ public class TagRelationServiceTests : IAsyncLifetime
             Assert.Single(relations);
             Assert.Equal(testUserId, relations[0].OwnerId);
         }
+    }
+
+    private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
+        : IDbContextFactory<ApplicationDbContext>
+    {
+        public ApplicationDbContext CreateDbContext() => new(options);
+        public Task<ApplicationDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new ApplicationDbContext(options));
     }
 }

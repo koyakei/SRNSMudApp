@@ -54,7 +54,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
 
     public async Task<(List<Tag> Tags, List<TagRelationToTag> Relations)> GetTagsAndRelationsAsync(CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
         List<Tag> tags = await context.Tags
             .Include(t => t.Owner)
             .AsNoTracking()
@@ -71,7 +71,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
 
     public async Task<SystemTagsResult> EnsureSystemTagsAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         string[] systemTagNames = ["good", "bad", "真実", "善", "美"];
         Dictionary<string, Tag> existingTags = await context.Tags

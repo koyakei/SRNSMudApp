@@ -51,6 +51,7 @@ public partial class ItemDetail
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private ITaggingService TaggingService { get; set; } = null!;
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
+    [Inject] private IItemReplyService ItemReplyService { get; set; } = null!;
     [Inject] private ISystemTagEnsurer SystemTagEnsurer { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
@@ -256,7 +257,7 @@ public partial class ItemDetail
         _isSubmittingReply = true;
         try
         {
-            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(ItemId, _newReplyText, _currentUserId);
+            Data.Item? addedReply = await ItemReplyService.AddItemReplyAsync(ItemId, _newReplyText, _currentUserId);
             if (addedReply is not null)
             {
                 _newReplyText = "";

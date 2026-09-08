@@ -29,7 +29,7 @@ public class TagDetailDataProviderTests : IAsyncLifetime
         var db = new ApplicationDbContext(_sharedDb.Options);
         var stubFactory = new DbContextFactoryStub(_sharedDb.Options);
         var sut = new TagDetailDataProvider(stubFactory);
-        var itemTagService = new ItemTagService(stubFactory);
+        var itemTagService = new ItemTagService(stubFactory, new TimelineRecorder(), new TagWeightLedgerService());
 
         var userId = $"user_{tid}";
         await db.SeedUsersAsync(userId);

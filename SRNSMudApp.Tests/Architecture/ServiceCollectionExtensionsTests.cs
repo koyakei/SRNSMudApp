@@ -86,7 +86,10 @@ public class ServiceCollectionExtensionsTests
     [Fact]
     public void ItemTagService_ThrowsArgumentNullException_WhenDbFactoryIsNull()
     {
-        Assert.Throws<ArgumentNullException>(() => new ItemTagService(null!));
+        var mockDbFactory = new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>();
+        Assert.Throws<ArgumentNullException>(() => { _ = new ItemTagService(null!, new TimelineRecorder(), new TagWeightLedgerService()); });
+        Assert.Throws<ArgumentNullException>(() => { _ = new ItemTagService(mockDbFactory.Object, null!, new TagWeightLedgerService()); });
+        Assert.Throws<ArgumentNullException>(() => { _ = new ItemTagService(mockDbFactory.Object, new TimelineRecorder(), null!); });
     }
 
     [Fact]

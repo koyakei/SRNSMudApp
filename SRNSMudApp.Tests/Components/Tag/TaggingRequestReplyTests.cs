@@ -26,14 +26,14 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
     private const string TagOwnerId = "tag-owner";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<IItemTagService> _itemTagServiceMock = new();
+    private readonly Mock<IItemReplyService> _itemReplyServiceMock = new();
     private readonly Mock<IHomeDataProvider> _homeDataMock = new();
 
     public TaggingRequestReplyTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
-        _ = _ctx.Services.AddScoped(_ => _itemTagServiceMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _itemReplyServiceMock.Object);
         _ = _ctx.Services.AddScoped(_ => _homeDataMock.Object);
         _ctx.Services.AddAuthorizationCore();
 
@@ -76,7 +76,7 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
             TaggingRequestEntityId = contract.Id
         };
 
-        _ = _itemTagServiceMock
+        _ = _itemReplyServiceMock
             .Setup(s => s.AddReplyToRequestAsync(contract.Id, ReplierId, replyText))
             .ReturnsAsync(createdReply);
 
@@ -91,7 +91,7 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
         IRenderedComponent<MudIconButton> sendButton = host.FindComponent<MudIconButton>();
         await host.InvokeAsync(() => sendButton.Instance.OnClick.InvokeAsync());
 
-        _itemTagServiceMock.Verify(s => s.AddReplyToRequestAsync(contract.Id, ReplierId, replyText), Times.Once);
+        _itemReplyServiceMock.Verify(s => s.AddReplyToRequestAsync(contract.Id, ReplierId, replyText), Times.Once);
         host.WaitForState(() => host.Markup.Contains(replyText));
     }
 

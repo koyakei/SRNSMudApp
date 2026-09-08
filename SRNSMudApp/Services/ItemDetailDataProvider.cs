@@ -74,20 +74,39 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             return null;
         }
 
-        // 親方向 (祖先スレッド): ルートから直前の親までを時系列順に取得
         List<Item> ancestors = [];
-        var currentParentId = item.ParentItemId;
-        HashSet<int> visitedParentIds = [itemId];
-        while (currentParentId.HasValue && visitedParentIds.Add(currentParentId.Value))
+        if (item.ParentItemId.HasValue)
         {
-            Item? parent = await IncludeItemDetails(context.Items)
-                .FirstOrDefaultAsync(i => i.Id == currentParentId.Value, cancellationToken);
-            if (parent is null)
+            var parentId = item.ParentItemId.Value;
+            FormattableString sql = $@"
+                WITH AncestorTree AS (
+                    SELECT Id, ParentItemId, 0 AS Depth
+                    FROM Items
+                    WHERE Id = {parentId}
+                    UNION ALL
+                    SELECT i.Id, i.ParentItemId, a.Depth + 1
+                    FROM Items i
+                    INNER JOIN AncestorTree a ON i.Id = a.ParentItemId
+                )
+                SELECT Id FROM AncestorTree
+                ORDER BY Depth DESC
+            ";
+            var ancestorIds = await context.Database.SqlQuery<int>(sql).ToListAsync(cancellationToken);
+
+            if (ancestorIds.Count > 0)
             {
-                break;
+                var ancestorItems = await IncludeItemDetails(context.Items)
+                    .Where(i => ancestorIds.Contains(i.Id))
+                    .ToDictionaryAsync(i => i.Id, cancellationToken);
+
+                foreach (var id in ancestorIds)
+                {
+                    if (ancestorItems.TryGetValue(id, out var parent))
+                    {
+                        ancestors.Add(parent);
+                    }
+                }
             }
-            ancestors.Insert(0, parent);
-            currentParentId = parent.ParentItemId;
         }
 
         // 子方向 (リプライ一覧)

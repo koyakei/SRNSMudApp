@@ -1,9 +1,13 @@
+#pragma warning disable CA1848
+
 #region
 
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using SRNSMudApp.Data;
 
@@ -43,12 +47,15 @@ public interface ITagDialogDataProvider
 
 public class TagDialogDataProvider(
     IDbContextFactory<ApplicationDbContext> dbFactory,
-    ITagEmbeddingService tagEmbeddingService) : ITagDialogDataProvider
+    ITagEmbeddingService tagEmbeddingService,
+    ILogger<TagDialogDataProvider>? logger = null) : ITagDialogDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly ITagEmbeddingService _tagEmbeddingService =
         tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
+    private readonly ILogger<TagDialogDataProvider> _logger =
+        logger ?? NullLogger<TagDialogDataProvider>.Instance;
     public async Task<List<Tag>> GetAllTagsAsync()
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
@@ -100,7 +107,7 @@ public class TagDialogDataProvider(
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Embedding generation failed: {ex.Message}");
+            _logger.LogWarning(ex, "Embedding generation failed: {Message}", ex.Message);
         }
 
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
@@ -112,7 +119,7 @@ public class TagDialogDataProvider(
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false)
     {
-        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
         if (tagToUpdate is null)
         {
@@ -126,12 +133,12 @@ public class TagDialogDataProvider(
         // タグ名が変更された場合などに備え、ベクトルも再生成する
         try
         {
-            ReadOnlyMemory<float> embedding = await tagEmbeddingService.GenerateEmbeddingAsync(name);
+            ReadOnlyMemory<float> embedding = await _tagEmbeddingService.GenerateEmbeddingAsync(name);
             tagToUpdate.Embedding = embedding.ToArray();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to generate embedding on edit: {ex.Message}");
+            _logger.LogWarning(ex, "Failed to generate embedding on edit: {Message}", ex.Message);
         }
 
         _ = await context.SaveChangesAsync();
@@ -147,7 +154,7 @@ public class TagDialogDataProvider(
             return [];
         }
 
-        await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(token);
         IQueryable<Tag> query = dbContext.Tags.AsQueryable();
 
         if (string.IsNullOrEmpty(value))
@@ -157,7 +164,7 @@ public class TagDialogDataProvider(
 
         try
         {
-            var queryVector = (await tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
+            var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
 
             List<Tag> textMatches = await query
                 .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
@@ -191,7 +198,7 @@ public class TagDialogDataProvider(
                 return [];
             }
 
-            Console.WriteLine($"Vector search failed: {ex.Message}");
+            _logger.LogWarning(ex, "Vector search failed: {Message}", ex.Message);
             query = query.Where(x =>
                 x.Name.Contains(value) ||
                 x.Content.Contains(value)

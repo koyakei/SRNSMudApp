@@ -86,6 +86,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITagWeightLedgerService, TagWeightLedgerService>();
         services.AddScoped<IItemListExportService, ItemListExportService>();
         services.AddScoped<IItemTagService, ItemTagService>();
+        services.AddScoped<IItemReplyService, ItemReplyService>();
+        services.AddScoped<IItemReactionService, ItemReactionService>();
         services.AddScoped<ITagEdgeService, TagEdgeService>();
 
         // 他のサービスに合わせて Scoped ライフタイムに統一 (IDbContextFactory からコンテキストを生成するため安全)

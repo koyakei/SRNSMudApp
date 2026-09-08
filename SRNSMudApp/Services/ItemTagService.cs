@@ -46,15 +46,15 @@ public readonly union WeightComparisonState(SameWeight, DifferentWeight);
 /// </summary>
 public class ItemTagService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
-    ITimelineRecorder? timelineRecorder = null,
-    ITagWeightLedgerService? tagWeightLedgerService = null) : IItemTagService
+    ITimelineRecorder timelineRecorder,
+    ITagWeightLedgerService tagWeightLedgerService) : IItemTagService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly ITimelineRecorder _timelineRecorder =
-        timelineRecorder ?? new TimelineRecorder();
+        timelineRecorder ?? throw new ArgumentNullException(nameof(timelineRecorder));
     private readonly ITagWeightLedgerService _tagWeightLedgerService =
-        tagWeightLedgerService ?? new TagWeightLedgerService();
+        tagWeightLedgerService ?? throw new ArgumentNullException(nameof(tagWeightLedgerService));
     private static AuthorizationState CheckAuth(bool isAuthorized, string unauthMessage) =>
         isAuthorized switch
         {
@@ -100,17 +100,27 @@ public class ItemTagService(
 
     private async Task<string?> ExecuteAddTagRelationAsync(ApplicationDbContext context, int itemId, int tagId, string currentUserId, Tag tagFromDb)
     {
-        var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
-        _ = context.TagRelations.Add(newRelation);
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            var newRelation = new TagRelation { ItemId = itemId, TagId = tagId, Weight = 1, OwnerId = currentUserId };
+            _ = context.TagRelations.Add(newRelation);
 
-        _timelineRecorder.RecordTagRelationAdded(context, currentUserId, itemId, tagId, 1);
+            _timelineRecorder.RecordTagRelationAdded(context, currentUserId, itemId, tagId, 1);
 
-        _ = await context.SaveChangesAsync();
+            _ = await context.SaveChangesAsync();
 
-        _tagWeightLedgerService.RecordItemTagWeightChange(context, tagFromDb, itemId, "TagRelationInsert", newRelation.Id, 1, "タグの新規追加", currentUserId);
+            _tagWeightLedgerService.RecordItemTagWeightChange(context, tagFromDb, itemId, "TagRelationInsert", newRelation.Id, 1, "タグの新規追加", currentUserId);
 
-        _ = await context.SaveChangesAsync();
-        return null;
+            _ = await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return null;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<string?> RemoveTagRelationAsync(int relationId, string currentUserId)
@@ -134,19 +144,29 @@ public class ItemTagService(
 
     private async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
     {
-        _timelineRecorder.RecordTagRelationDeleted(context, currentUserId, relation.ItemId, relation.TagId, relation.Weight);
-
-        Tag? tag = await context.Tags.FindAsync(relation.TagId);
-        var tagOption = Option<Tag>.Create(tag);
-
-        if (tagOption is Some<Tag> someTag)
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        try
         {
-            _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, relation.ItemId, "TagRelationDelete", relation.Id, -relation.Weight, "タグの削除", currentUserId);
-        }
+            _timelineRecorder.RecordTagRelationDeleted(context, currentUserId, relation.ItemId, relation.TagId, relation.Weight);
 
-        _ = context.Remove(relation);
-        _ = await context.SaveChangesAsync();
-        return null;
+            Tag? tag = await context.Tags.FindAsync(relation.TagId);
+            var tagOption = Option<Tag>.Create(tag);
+
+            if (tagOption is Some<Tag> someTag)
+            {
+                _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, relation.ItemId, "TagRelationDelete", relation.Id, -relation.Weight, "タグの削除", currentUserId);
+            }
+
+            _ = context.Remove(relation);
+            _ = await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return null;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
@@ -449,132 +469,5 @@ public class ItemTagService(
             .Where(tr => tr.Target.Item.Id == itemId)
             .OrderByDescending(tr => tr.CreatedDate)
             .ToListAsync();
-    }
-
-    public async Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        var reply = new Item
-        {
-            TaggingRequestEntityId = requestId,
-            OwnerId = userId,
-            Content = message,
-            CreatedDate = DateTime.UtcNow
-        };
-
-        _ = context.Items!.Add(reply);
-        _ = await context.SaveChangesAsync();
-
-        return await context.Items
-            .Include(r => r.Owner)
-            .Include(r => r.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .FirstOrDefaultAsync(r => r.Id == reply.Id);
-    }
-
-    public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Items!
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .Include(i => i.NotificationRecipients)
-            .Where(i => i.ParentItemId == parentItemId)
-            .OrderBy(i => i.CreatedDate)
-            .ToListAsync();
-    }
-
-    public async Task<int> GetItemReplyCountAsync(int parentItemId)
-    {
-        if (parentItemId <= 0)
-        {
-            return 0;
-        }
-
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Items!.CountAsync(i => i.ParentItemId == parentItemId);
-    }
-
-    public async Task<Item?> AddItemReplyAsync(int parentItemId, string content, string userId, IEnumerable<string>? targetUserIds = null)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-
-        List<TagRelation> inheritedRelations = await context.TagRelations
-            .Where(tr => tr.ItemId == parentItemId)
-            .ToListAsync();
-
-        var replyItem = new Item
-        {
-            Content = content,
-            OwnerId = userId,
-            ParentItemId = parentItemId,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
-        };
-
-        _ = context.Items!.Add(replyItem);
-        _ = await context.SaveChangesAsync();
-
-        // 通知対象ユーザー（Twitterライクなメンション先）の永続化
-        List<string> recipientIds;
-        if (targetUserIds != null)
-        {
-            recipientIds = targetUserIds.Where(id => !string.IsNullOrWhiteSpace(id) && id != userId).Distinct().ToList();
-        }
-        else
-        {
-            // 省略時はスレッド参加者（親アイテムオーナー + 既存リプライ投稿者、自分を除く）を自動対象とする
-            var parentOwnerId = await context.Items
-                .Where(i => i.Id == parentItemId)
-                .Select(i => i.OwnerId)
-                .FirstOrDefaultAsync();
-
-            var replierIds = await context.Items
-                .Where(i => i.ParentItemId == parentItemId)
-                .Select(i => i.OwnerId)
-                .ToListAsync();
-
-            recipientIds = [.. (new[] { parentOwnerId }.Concat(replierIds))
-                .Where(id => !string.IsNullOrEmpty(id) && id != userId)
-                .Distinct()!];
-        }
-
-        if (recipientIds.Count > 0)
-        {
-            var recipients = recipientIds.Select(rid => new ItemReplyNotificationRecipient
-            {
-                ReplyItemId = replyItem.Id,
-                RecipientUserId = rid,
-                CreatedDate = DateTimeOffset.UtcNow
-            });
-            context.ItemReplyNotificationRecipients.AddRange(recipients);
-            _ = await context.SaveChangesAsync();
-        }
-
-        if (inheritedRelations.Count > 0)
-        {
-            var replyTagRelations = inheritedRelations
-                .Select(relation => new TagRelation
-                {
-                    ItemId = replyItem.Id,
-                    TagId = relation.TagId,
-                    Weight = relation.Weight,
-                    OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                })
-                .ToList();
-
-            context.TagRelations.AddRange(replyTagRelations);
-            _ = await context.SaveChangesAsync();
-        }
-
-        return await context.Items
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .Include(i => i.NotificationRecipients)
-            .FirstOrDefaultAsync(i => i.Id == replyItem.Id);
     }
 }

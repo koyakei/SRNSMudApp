@@ -53,7 +53,8 @@ public static class TagTreeViewModel
 
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
     public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Data.Tag> filteredTags)
-        => BuildTreeDataInternal(parentId, filteredTags as IReadOnlyCollection<Data.Tag> ?? [.. filteredTags], []);
+        => BuildTreeData(parentId, filteredTags, null, null);
+
     public static IReadOnlyList<object> BuildTreeData(
         int? parentId,
         IEnumerable<Data.Tag> filteredTags,
@@ -66,7 +67,6 @@ public static class TagTreeViewModel
             currentUserId,
             []);
 
-    private static List<object> BuildTreeDataInternal(int? parentId, IReadOnlyCollection<Data.Tag> tagList, HashSet<int> visitedInPath)
     private static List<object> BuildTreeDataInternal(
         int? parentId,
         IReadOnlyCollection<Data.Tag> tagList,
@@ -103,7 +103,6 @@ public static class TagTreeViewModel
             }
 
             HashSet<int> nextVisited = [.. visitedInPath, child.Id];
-            List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, nextVisited);
             List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, pendingMoves, currentUserId, nextVisited);
             switch (nodeChildren.Count)
             {
@@ -148,12 +147,13 @@ public static class TagTreeViewModel
     }
 
     public static string SerializeTreeData(IEnumerable<Data.Tag> filteredTags)
+        => SerializeTreeData(filteredTags, null, null);
+
     public static string SerializeTreeData(
         IEnumerable<Data.Tag> filteredTags,
         IReadOnlyList<PendingTagMoveDto>? pendingMoves = null,
         string? currentUserId = null)
     {
-        IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags);
         IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags, pendingMoves, currentUserId);
         return JsonSerializer.Serialize(treeData, CachedSerializerOptions);
     }

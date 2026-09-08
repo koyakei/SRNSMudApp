@@ -1,9 +1,10 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
-@inject IItemTagService ItemTagService
+@inject IItemReplyService ItemReplyService
 @inject IHomeDataProvider HomeData
 @inject ITaggingRequestActions RequestActions
 @inject IDialogLauncher DialogLauncher
+
 
 <MudDialog>
     <DialogContent>
@@ -30,10 +31,8 @@
             {
                 case not null:
                     <div class="mb-4">
-                        <ItemCard Item="TaggingRequest.RequestItem"
-                                  CurrentUserId="@_currentUserId"
-                                  AllTags="_allTags"
-                                  AllTagRelationsToTags="_allTagRelationsToTags"/>
+                        <ItemCard Item="TaggingRequest.RequestItem" CurrentUserId="@_currentUserId" AllTags="_allTags"
+                                  AllTagRelationsToTags="_allTagRelationsToTags" />
                     </div>
                     break;
                 case null:
@@ -75,17 +74,14 @@
                         {
                             <div class="mb-4 mt-3 position-relative">
                                 <div class="position-absolute" style="left: -30px; top: 10px; z-index: 1;">
-                                    <MudAvatar Size="Size.Small"
-                                               Style="border: 3px solid var(--mud-palette-background);"
+                                    <MudAvatar Size="Size.Small" Style="border: 3px solid var(--mud-palette-background);"
                                                Color="Color.Secondary">
                                         @(reply.Owner?.UserName?.FirstOrDefault().ToString() ?? "?")
                                     </MudAvatar>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <ItemCard Item="reply"
-                                              CurrentUserId="@_currentUserId"
-                                              AllTags="_allTags"
-                                              AllTagRelationsToTags="_allTagRelationsToTags"/>
+                                    <ItemCard Item="reply" CurrentUserId="@_currentUserId" AllTags="_allTags"
+                                              AllTagRelationsToTags="_allTagRelationsToTags" />
                                 </div>
                             </div>
                         }
@@ -99,19 +95,10 @@
     <DialogActions>
         <!-- 新規リプライ投稿フィールド -->
         <div class="d-flex w-100 px-4 pb-2 align-center">
-            <MudTextField @bind-Value="_newReplyMessage"
-                          Placeholder="返信を投稿..."
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Class="mr-2"
-                          Immediate="true"
-                          Lines="1"
-                          MaxLines="3"/>
-            <MudIconButton Icon="@Icons.Material.Filled.Send"
-                           Color="Color.Primary"
-                           AriaLabel="Send"
-                           OnClick="SubmitReplyAsync"
-                           Disabled="@(string.IsNullOrWhiteSpace(_newReplyMessage) || _isSubmitting)"/>
+            <MudTextField @bind-Value="_newReplyMessage" Placeholder="返信を投稿..." Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mr-2" Immediate="true" Lines="1" MaxLines="3" />
+            <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" AriaLabel="Send"
+                           OnClick="SubmitReplyAsync" Disabled="@(string.IsNullOrWhiteSpace(_newReplyMessage) || _isSubmitting)" />
         </div>
     </DialogActions>
 </MudDialog>
@@ -160,7 +147,7 @@
 
         try
         {
-            var newReply = await ItemTagService.AddReplyToRequestAsync(TaggingRequest.Id, _currentUserId, _newReplyMessage);
+            var newReply = await ItemReplyService.AddReplyToRequestAsync(TaggingRequest.Id, _currentUserId, _newReplyMessage);
 
             switch (newReply)
             {

@@ -79,6 +79,10 @@ if (!builder.Environment.IsEnvironment("Testing"))
     {
         connectionString = connectionString.Replace(fallbackPassword, configuredPassword, StringComparison.Ordinal);
     }
+    else if (builder.Environment.IsProduction() && connectionString.Contains(fallbackPassword, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("本番環境では環境変数 'MSSQL_SA_PASSWORD' の設定が必須です。デフォルトのフォールバックパスワードは使用できません。");
+    }
 
     _ = builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(connectionString, sqlOptions => sqlOptions.UseHierarchyId()),
@@ -154,8 +158,17 @@ using (IServiceScope scope = app.Services.CreateScope())
                     EmailConfirmed = true
                 };
                 var systemPassword = Environment.GetEnvironmentVariable("SYSTEM_USER_INITIAL_PASSWORD")
-                    ?? builder.Configuration["SystemUser:InitialPassword"]
-                    ?? "SystemPassword123!";
+                    ?? builder.Configuration["SystemUser:InitialPassword"];
+
+                if (string.IsNullOrWhiteSpace(systemPassword))
+                {
+                    if (app.Environment.IsProduction())
+                    {
+                        throw new InvalidOperationException("本番環境では環境変数 'SYSTEM_USER_INITIAL_PASSWORD' または設定 'SystemUser:InitialPassword' が必須です。");
+                    }
+                    systemPassword = "SystemPassword123!";
+                }
+
                 _ = await userManager.CreateAsync(systemUser, systemPassword);
             }
 

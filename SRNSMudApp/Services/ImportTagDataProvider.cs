@@ -1,3 +1,5 @@
+#pragma warning disable CA1848
+
 #region
 
 using System.Diagnostics.CodeAnalysis;
@@ -5,6 +7,8 @@ using System.Numerics.Tensors;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using SRNSMudApp.Data;
 
@@ -36,12 +40,15 @@ public interface IImportTagDataProvider
 
 public partial class ImportTagDataProvider(
     IDbContextFactory<ApplicationDbContext> dbContextFactory,
-    ITagEmbeddingService tagEmbeddingService) : IImportTagDataProvider
+    ITagEmbeddingService tagEmbeddingService,
+    ILogger<ImportTagDataProvider>? logger = null) : IImportTagDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbContextFactory =
         dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
     private readonly ITagEmbeddingService _tagEmbeddingService =
         tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
+    private readonly ILogger<ImportTagDataProvider> _logger =
+        logger ?? NullLogger<ImportTagDataProvider>.Instance;
 
     [GeneratedRegex(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$")]
     private static partial Regex TagNameRegex();
@@ -104,7 +111,7 @@ public partial class ImportTagDataProvider(
                 return [];
             }
 
-            Console.WriteLine($"Vector search failed: {ex.Message}");
+            _logger.LogWarning(ex, "Vector search failed: {Message}", ex.Message);
             query = query.Where(x => x.Name.Contains(value!) || (x.Content != null && x.Content.Contains(value!)));
             return await query.OrderBy(x => x.Name).AsNoTracking().Take(50).ToListAsync(token);
         }
@@ -195,7 +202,7 @@ public partial class ImportTagDataProvider(
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Embedding generation failed: {ex.Message}");
+                                _logger.LogWarning(ex, "Embedding generation failed: {Message}", ex.Message);
                             }
 
                             _ = dbContext.Tags.Add(newTag);

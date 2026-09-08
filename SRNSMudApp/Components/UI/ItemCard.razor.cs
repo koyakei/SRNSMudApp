@@ -28,6 +28,8 @@ namespace SRNSMudApp.Components.UI;
 public partial class ItemCard : IAsyncDisposable
 {
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
+    [Inject] private IItemReplyService ItemReplyService { get; set; } = null!;
+    [Inject] private IItemReactionService ItemReactionService { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
@@ -97,7 +99,7 @@ public partial class ItemCard : IAsyncDisposable
         }
         else
         {
-            var count = await ItemTagService.GetItemReplyCountAsync(Item.Id);
+            var count = await ItemReplyService.GetItemReplyCountAsync(Item.Id);
             _replyCount = count > 0 ? count : (Item.Replies?.Count ?? 0);
         }
     }
@@ -227,7 +229,7 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task LoadRepliesAsync()
     {
-        _replies = await ItemTagService.GetItemRepliesAsync(Item.Id);
+        _replies = await ItemReplyService.GetItemRepliesAsync(Item.Id);
         _replyCount = _replies.Count;
         UpdateTargetCandidates();
     }
@@ -316,7 +318,7 @@ public partial class ItemCard : IAsyncDisposable
         _isSubmittingReply = true;
         try
         {
-            Data.Item? addedReply = await ItemTagService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId, _selectedTargetUserIds);
+            Data.Item? addedReply = await ItemReplyService.AddItemReplyAsync(Item.Id, _newReplyContent, CurrentUserId, _selectedTargetUserIds);
             if (addedReply is not null)
             {
                 _newReplyContent = "";
@@ -366,7 +368,7 @@ public partial class ItemCard : IAsyncDisposable
         var targetWeight = isUpvote ? 1 : -1;
         var goodTagId = CurrentUserGoodTagId.Value;
 
-        ItemVoteResult result = await ItemCardData.ToggleItemVoteAsync(Item.Id, CurrentUserId, goodTagId, targetWeight);
+        ItemVoteResult result = await ItemReactionService.ToggleItemVoteAsync(Item.Id, CurrentUserId, goodTagId, targetWeight);
 
         TagRelation? existingRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == result.RelationId);
         switch (result.Action)
@@ -441,17 +443,17 @@ public partial class ItemCard : IAsyncDisposable
         Data.Tag reactionTag;
         if (!reactionTagId.HasValue)
         {
-            reactionTag = await ItemCardData.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
+            reactionTag = await ItemReactionService.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
             reactionTagId = reactionTag.Id;
         }
         else
         {
             reactionTag = AllTags.FirstOrDefault(t => t.Id == reactionTagId.Value)
-                ?? await ItemCardData.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
+                ?? await ItemReactionService.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
         }
 
         var tagId = reactionTagId.Value;
-        ItemVoteResult result = await ItemCardData.ToggleItemReactionAsync(Item.Id, CurrentUserId, tagId, targetWeight);
+        ItemVoteResult result = await ItemReactionService.ToggleItemReactionAsync(Item.Id, CurrentUserId, tagId, targetWeight);
 
         TagRelation? existingRelation = Item.TagRelations.FirstOrDefault(tr =>
             tr.Id == result.RelationId || (tr.TagId == tagId && tr.OwnerId == CurrentUserId));

@@ -24,6 +24,7 @@ public sealed class ItemCardReplyCountTests : IAsyncLifetime
 {
     private const string UserId = "test-user-1";
     private readonly BunitContext _ctx = new();
+    private readonly Mock<IItemReplyService> _itemReplyServiceMock = new();
     private readonly Mock<IItemTagService> _itemTagServiceMock = new();
 
     public ItemCardReplyCountTests()
@@ -36,6 +37,7 @@ public sealed class ItemCardReplyCountTests : IAsyncLifetime
         Mock<AuthenticationStateProvider> authMock = new();
         _ = authMock.Setup(p => p.GetAuthenticationStateAsync()).ReturnsAsync(authState);
         _ctx.Services.AddScoped(_ => authMock.Object);
+        _ctx.Services.AddScoped(_ => _itemReplyServiceMock.Object);
         _ctx.Services.AddScoped(_ => _itemTagServiceMock.Object);
     }
 
@@ -51,7 +53,7 @@ public sealed class ItemCardReplyCountTests : IAsyncLifetime
             OwnerId = UserId
         };
 
-        _itemTagServiceMock
+        _itemReplyServiceMock
             .Setup(s => s.GetItemReplyCountAsync(item.Id))
             .ReturnsAsync(3);
 
@@ -74,7 +76,7 @@ public sealed class ItemCardReplyCountTests : IAsyncLifetime
             OwnerId = UserId
         };
 
-        _itemTagServiceMock
+        _itemReplyServiceMock
             .Setup(s => s.GetItemReplyCountAsync(item.Id))
             .ReturnsAsync(0);
 

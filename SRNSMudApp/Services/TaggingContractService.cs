@@ -35,11 +35,6 @@ public class TaggingContractService(
     private readonly IContractExecutorFactory _executorFactory =
         executorFactory ?? throw new ArgumentNullException(nameof(executorFactory));
 
-    public TaggingContractService(IDbContextFactory<ApplicationDbContext> dbFactory)
-        : this(dbFactory, ContractExecutorFactory.CreateDefault())
-    {
-    }
-
     /// <inheritdoc />
     public async Task<Result<TaggingRequestEntity>> ProposeGratisContractAsync(
         string requesterUserId,
