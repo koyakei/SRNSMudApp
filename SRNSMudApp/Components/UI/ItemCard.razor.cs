@@ -510,6 +510,12 @@ public partial class ItemCard : IAsyncDisposable
 
         switch (result)
         {
+            case { Canceled: false, Data: Data.Item createdItem }:
+                var targetUri = $"/Item/ItemList?focus={createdItem.Id}";
+                var currentPath = new Uri(NavigationManager.Uri).AbsolutePath;
+                var isOnItemList = currentPath.Equals("/Item/ItemList", StringComparison.OrdinalIgnoreCase);
+                NavigationManager.NavigateTo(targetUri, forceLoad: isOnItemList);
+                break;
             case { Canceled: false }:
                 await NotifyDataChangedAsync();
                 break;

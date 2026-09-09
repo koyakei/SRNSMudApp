@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
@@ -89,7 +91,9 @@ public class ItemQuoteE2ETests : PageTest
         // ダイアログが閉じるのを待機
         await Expect(dialogLocator).Not.ToBeVisibleAsync();
 
-        // 6. 投稿された引用アイテムのカードおよび引用元プレビューが表示されることを確認
+        // 6. 投稿された引用アイテムのカードおよび引用元プレビューが表示され、URL に focus が付与されていることを確認
+        await Expect(Page).ToHaveURLAsync(new Regex(@"/Item/ItemList\?focus=\d+"));
+
         var quotedPreviewLocator = Page.Locator($"[data-testid='quoted-item-preview-{targetItemId}']").First;
         await Expect(quotedPreviewLocator).ToBeVisibleAsync();
         await Expect(quotedPreviewLocator).ToContainTextAsync(targetContent);
