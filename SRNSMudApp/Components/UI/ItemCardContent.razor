@@ -58,6 +58,20 @@
                 @UpdatedDate.ToLocalTime().ToString("g")
             </MudLink>
         </span>
+        @if (IsPrivate)
+        {
+            <span class="mx-1">|</span>
+            @if (string.IsNullOrEmpty(TargetUserGroupName))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Lock"
+                         Variant="Variant.Outlined" Class="ml-1">フォロワー限定</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Group"
+                         Variant="Variant.Outlined" Class="ml-1">グループ: @TargetUserGroupName</MudChip>
+            }
+        }
     </MudText>
 </div>
 
@@ -67,6 +81,8 @@
     [Parameter] public string? OwnerId { get; set; }
     [Parameter] public string? OwnerUserName { get; set; }
     [Parameter] public DateTime UpdatedDate { get; set; }
+    [Parameter] public bool IsPrivate { get; set; }
+    [Parameter] public string? TargetUserGroupName { get; set; }
 
     /// <summary>リンクプレビュー取得デリゲート（UrlPreviewCard へ委譲）。</summary>
     [Parameter] public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }

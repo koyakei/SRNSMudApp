@@ -7,6 +7,7 @@
 @using SRNSMudApp.Components.UI
 @using SRNSMudApp.Services
 @inject IItemCardDataProvider ItemCardData
+@inject IUserGroupDataProvider UserGroupData
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject UserManager<ApplicationUser> UserManager
@@ -29,6 +30,22 @@
                         <MudTextField @bind-Value="_newItem.Content" For="@(() => _newItem.Content)" name="_newItem.Content"
                                       Placeholder="新しいアイテムのコンテンツを入力..." Variant="Variant.Outlined" Lines="3" MaxLength="1000"
                                       Counter="1000" Required="true" RequiredError="コンテンツは必須です。" Immediate="true" />
+
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4" Class="mt-1">
+                            <MudSwitch @bind-Value="_isPrivate" Color="Color.Primary" Label="プライベートモード" Size="Size.Small" />
+
+                            @if (_isPrivate)
+                            {
+                                <MudSelect T="int?" @bind-Value="_selectedGroupId" Label="公開範囲" Dense="true" Margin="Margin.Dense"
+                                           Variant="Variant.Outlined" Style="max-width: 250px;">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">フォロワーのみ（デフォルト）</MudSelectItem>
+                                    @foreach (var group in _userGroups ?? [])
+                                    {
+                                        <MudSelectItem T="int?" Value="@((int?)group.Id)">@group.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                        </MudStack>
 
                         @* 抽出したURLのプレビューを表示 *@
                         @{
@@ -68,6 +85,10 @@
 
     [SupplyParameterFromForm] private Data.Item? _newItem { get; set; }
 
+    private bool _isPrivate;
+    private int? _selectedGroupId;
+    private IReadOnlyList<Data.UserGroup> _userGroups = [];
+
     protected override async Task OnInitializedAsync()
     {
         // 2. フォーム送信時（POST）の再読み込みで、入力済みデータを上書きしないようにガードする
@@ -83,13 +104,25 @@
                 {
                     case true:
                         userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+                        if (!string.IsNullOrEmpty(userId))
+                        {
+                            _userGroups = await UserGroupData.GetUserGroupsForUserAsync(userId);
+                            var appUser = await UserManager.FindByIdAsync(userId);
+                            if (appUser != null && appUser.IsPrivateModeDefault)
+                            {
+                                _isPrivate = true;
+                                _selectedGroupId = appUser.DefaultPrivateUserGroupId;
+                            }
+                        }
                         break;
                 }
 
                 _newItem = new Data.Item
                 {
                     Content = string.Empty,
-                    OwnerId = userId
+                    OwnerId = userId,
+                    IsPrivate = _isPrivate,
+                    TargetUserGroupId = _selectedGroupId
                 };
                 break;
         }
@@ -104,10 +137,19 @@
 
         try
         {
+            _newItem.IsPrivate = _isPrivate;
+            _newItem.TargetUserGroupId = _isPrivate ? _selectedGroupId : null;
+
             await ItemCardData.CreateItemAsync(
                 _newItem, InitialTags?.Select(t => t.Id).ToList());
 
-            _newItem = new Data.Item { Content = string.Empty, OwnerId = _newItem.OwnerId };
+            _newItem = new Data.Item
+            {
+                Content = string.Empty,
+                OwnerId = _newItem.OwnerId,
+                IsPrivate = _isPrivate,
+                TargetUserGroupId = _isPrivate ? _selectedGroupId : null
+            };
 
             Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
 

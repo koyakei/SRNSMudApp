@@ -2,6 +2,7 @@
 #pragma warning disable CA1508
 
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
 
 using SRNSMudApp.Services;
@@ -23,6 +24,9 @@ public sealed partial class ItemList : IDisposable
     // ===== ソート用ステート =====
     private readonly List<SortCondition> _sortConditions = [];
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string? _currentUserId;
+
     [Inject] private IItemListDataProvider ListData { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
@@ -30,6 +34,12 @@ public sealed partial class ItemList : IDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        if (AuthState is not null)
+        {
+            var auth = await AuthState;
+            _currentUserId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        }
+
         _tagSearchViewModel = new TagSearchViewModel(ListData);
         _tagSearchViewModel.FiltersChanged += OnFiltersChangedAsync;
 
@@ -129,7 +139,7 @@ public sealed partial class ItemList : IDisposable
         List<ItemListSort> sorts =
         [.. _sortConditions.Select(c => new ItemListSort(c.Tag.Id, c.Order == SortOrder.Asc))];
 
-        ItemListPageData page = await ListData.LoadItemsAndTagsAsync(filters, sorts);
+        ItemListPageData page = await ListData.LoadItemsAndTagsAsync(filters, sorts, _currentUserId);
         _items = page.Items;
         _foundTags = page.Tags;
     }

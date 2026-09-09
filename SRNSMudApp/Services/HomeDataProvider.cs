@@ -36,7 +36,7 @@ public interface IHomeDataProvider
     /// <summary>good / bad システムタグを取得し、無ければ作成する。</summary>
     Task<SystemTagsResult> EnsureSystemTagsAsync(string userId, CancellationToken cancellationToken = default);
 
-    Task<HomeTimelinePage> LoadTimelineAsync(IReadOnlyList<int> followedTagIds, int startIndex, int count, CancellationToken cancellationToken = default);
+    Task<HomeTimelinePage> LoadTimelineAsync(IReadOnlyList<int> followedTagIds, int startIndex, int count, string? currentUserId = null, CancellationToken cancellationToken = default);
 }
 
 public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IHomeDataProvider
@@ -117,6 +117,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         IReadOnlyList<int> followedTagIds,
         int startIndex,
         int count,
+        string? currentUserId = null,
         CancellationToken cancellationToken = default)
     {
         await using ApplicationDbContext db = await _dbFactory.CreateDbContextAsync(cancellationToken);
@@ -160,6 +161,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
             {
                 case ItemTarget it:
                     feedGroup.Item = await db.Items!
+                        .WhereVisibleToUser(db, currentUserId)
                         .Include(i => i.Owner)
                         .Include(i => i.TagRelations)
                         .ThenInclude(tr => tr.Tag)

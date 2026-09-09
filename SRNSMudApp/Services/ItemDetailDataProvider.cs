@@ -33,6 +33,9 @@ public interface IItemDetailDataProvider
 {
     /// <summary>アイテム詳細の表示データを取得する。アイテムが存在しない場合は null。</summary>
     Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>閲覧ユーザーの可視性を考慮してアイテム詳細の表示データを取得する。閲覧権限がない場合は null。</summary>
+    Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, string? currentUserId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -48,6 +51,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
     private static IQueryable<Item> IncludeItemDetails(IQueryable<Item> query) =>
         query
             .Include(i => i.Owner)
+            .Include(i => i.TargetUserGroup)
             .Include(i => i.QuotedItem)
                 .ThenInclude(q => q!.Owner)
             .Include(i => i.TagRelations)
@@ -67,13 +71,22 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .AsNoTracking();
 
     /// <inheritdoc />
-    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default)
+    public Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, CancellationToken cancellationToken = default) =>
+        GetItemDetailAsync(itemId, null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<ItemDetailPageData?> GetItemDetailAsync(int itemId, string? currentUserId, CancellationToken cancellationToken = default)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
         Item? item = await IncludeItemDetails(context.Items)
             .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
         if (item is null)
+        {
+            return null;
+        }
+
+        if (!await item.IsItemVisibleToUserAsync(context, currentUserId))
         {
             return null;
         }
@@ -101,6 +114,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             {
                 var ancestorItems = await IncludeItemDetails(context.Items)
                     .Where(i => ancestorIds.Contains(i.Id))
+                    .WhereVisibleToUser(context, currentUserId)
                     .ToDictionaryAsync(i => i.Id, cancellationToken);
 
                 foreach (var id in ancestorIds)
@@ -116,6 +130,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         // 子方向 (リプライ一覧)
         List<Item> replies = await IncludeItemDetails(context.Items)
             .Where(i => i.ParentItemId == itemId)
+            .WhereVisibleToUser(context, currentUserId)
             .OrderBy(i => i.CreatedDate)
             .ToListAsync(cancellationToken);
 
@@ -125,6 +140,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         {
             siblings = await IncludeItemDetails(context.Items)
                 .Where(i => i.ParentItemId == item.ParentItemId.Value && i.Id != itemId)
+                .WhereVisibleToUser(context, currentUserId)
                 .OrderBy(i => i.CreatedDate)
                 .ToListAsync(cancellationToken);
         }
@@ -132,6 +148,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         // 引用方向 (このアイテムを引用しているアイテム一覧)
         List<Item> quotes = await IncludeItemDetails(context.Items)
             .Where(i => i.QuotedItemId == itemId)
+            .WhereVisibleToUser(context, currentUserId)
             .OrderByDescending(i => i.CreatedDate)
             .ToListAsync(cancellationToken);
 

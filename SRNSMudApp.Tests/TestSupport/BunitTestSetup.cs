@@ -65,6 +65,7 @@ public static class BunitTestSetup
             .AddScoped<ITagDetailDataProvider, TagDetailDataProvider>()
             .AddScoped<IContractDataProvider, ContractDataProvider>()
             .AddScoped<IUserDataProvider, UserDataProvider>()
+            .AddScoped<IUserGroupDataProvider, UserGroupDataProvider>()
             .AddScoped<IAdminDataProvider, AdminDataProvider>();
     }
 
@@ -105,7 +106,13 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<ITagDialogDataProvider>().Object)
             .AddScoped(_ => new Mock<ITagDetailDataProvider>().Object)
             .AddScoped(_ => new Mock<IContractDataProvider>().Object)
-            .AddScoped(_ => new Mock<IUserDataProvider>().Object)
+            .AddScoped(_ =>
+            {
+                var mock = new Mock<IUserGroupDataProvider>();
+                mock.Setup(m => m.GetUserGroupsForUserAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Array.Empty<UserGroup>());
+                return mock.Object;
+            })
             .AddScoped(_ => new Mock<IAdminDataProvider>().Object)
             .AddScoped(_ => new Mock<IContentReportService>().Object);
     }

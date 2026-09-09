@@ -70,6 +70,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(i => i.QuotedItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // アイテムの公開対象ユーザーグループ（プライベートモード用）
+        _ = builder.Entity<Item>()
+            .HasOne(i => i.TargetUserGroup)
+            .WithMany()
+            .HasForeignKey(i => i.TargetUserGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        _ = builder.Entity<Item>()
+            .HasIndex(i => i.IsPrivate);
+
+        _ = builder.Entity<Item>()
+            .HasIndex(i => i.TargetUserGroupId);
+
+        // ユーザーのデフォルトプライベートユーザーグループ
+        _ = builder.Entity<ApplicationUser>()
+            .HasOne(u => u.DefaultPrivateUserGroup)
+            .WithMany()
+            .HasForeignKey(u => u.DefaultPrivateUserGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // リプライ通知対象ユーザー
         _ = builder.Entity<ItemReplyNotificationRecipient>()
             .HasOne(r => r.ReplyItem)

@@ -28,31 +28,22 @@
                         <Virtualize ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
                             <ItemContent>
                                 <div class="mb-4">
-                                    @switch (System.Text.Json.JsonSerializer.Deserialize<SRNSMudApp.Models.Unions.TimelineTarget>(group.TimelineTargetJson))
+                                    @switch
+                    (System.Text.Json.JsonSerializer.Deserialize<SRNSMudApp.Models.Unions.TimelineTarget>(group.TimelineTargetJson))
                                     {
                                         case SRNSMudApp.Models.Unions.ItemTarget when group.Item != null:
-                                            <SRNSMudApp.Components.UI.ItemCard Item="@group.Item"
-                                                                                   AllTags="@_allTags"
-                                                                                   AllTagRelationsToTags="@_allTagRelationsToTags"
-                                                                                   CurrentUserId="@_currentUserId"
-                                                                                   CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                                                   CurrentUserBadTagId="@_currentUserBadTagId"
-                                                                                   CurrentUserShinjiTagId="@_currentUserShinjiTagId"
-                                                                                   CurrentUserZenTagId="@_currentUserZenTagId"
-                                                                                   CurrentUserBiTagId="@_currentUserBiTagId"
-                                                                                   OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                                                   HighlightEvents="@group.Events"
-                                                                                   IsFocused="false"/>
+                                            <SRNSMudApp.Components.UI.ItemCard Item="@group.Item" AllTags="@_allTags"
+                                                                               AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_currentUserId"
+                                                                               CurrentUserGoodTagId="@_currentUserGoodTagId" CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                               CurrentUserShinjiTagId="@_currentUserShinjiTagId" CurrentUserZenTagId="@_currentUserZenTagId"
+                                                                               CurrentUserBiTagId="@_currentUserBiTagId" OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                               HighlightEvents="@group.Events" IsFocused="false" />
                                             break;
                                         case SRNSMudApp.Models.Unions.TagTarget when group.Tag != null:
-                                            <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag"
-                                                                                  AllTags="@_allTags"
-                                                                                  CurrentUserId="@_currentUserId"
-                                                                                  CurrentUserGoodTagId="@_currentUserGoodTagId"
-                                                                                  CurrentUserBadTagId="@_currentUserBadTagId"
-                                                                                  OnEnsureSystemTags="EnsureSystemTagsExistAsync"
-                                                                                  HighlightEvents="@group.Events"
-                                                                                  IsFocused="false"/>
+                                            <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag" AllTags="@_allTags"
+                                                                              CurrentUserId="@_currentUserId" CurrentUserGoodTagId="@_currentUserGoodTagId"
+                                                                              CurrentUserBadTagId="@_currentUserBadTagId" OnEnsureSystemTags="EnsureSystemTagsExistAsync"
+                                                                              HighlightEvents="@group.Events" IsFocused="false" />
                                             break;
                                     }
                                 </div>
@@ -61,7 +52,7 @@
                                 <MudCard Class="mb-4" Elevation="0" Outlined="true">
                                     <MudCardContent>
                                         <div class="d-flex justify-center align-center py-4">
-                                            <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                                         </div>
                                     </MudCardContent>
                                 </MudCard>
@@ -184,7 +175,8 @@
     {
         return await (_followedTagIds switch
         {
-            null or { Count: 0 } => ValueTask.FromResult(new ItemsProviderResult<TimelineFeedGroup>(new List<TimelineFeedGroup>(), 0)),
+            null or { Count: 0 } => ValueTask.FromResult(new ItemsProviderResult<TimelineFeedGroup>(new List<TimelineFeedGroup>(),
+0)),
             _ => LoadTimelineDataAsync(request)
         });
     }
@@ -192,7 +184,7 @@
     private async ValueTask<ItemsProviderResult<TimelineFeedGroup>> LoadTimelineDataAsync(ItemsProviderRequest request)
     {
         HomeTimelinePage page =
-            await HomeData.LoadTimelineAsync(_followedTagIds!, request.StartIndex, request.Count);
+            await HomeData.LoadTimelineAsync(_followedTagIds!, request.StartIndex, request.Count, _currentUserId);
         return new ItemsProviderResult<TimelineFeedGroup>(page.Groups, page.TotalCount);
     }
 

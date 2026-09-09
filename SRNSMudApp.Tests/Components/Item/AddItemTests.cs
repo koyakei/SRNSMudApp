@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
+using MudBlazor;
 using MudBlazor.Services;
 
 using SRNSMudApp.Components.Item;
@@ -41,6 +42,7 @@ public sealed class AddItemTests : IAsyncLifetime
         _ = _ctx.Services.AddScoped(_ => userManagerMock.Object);
 
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        _ = _ctx.Render<MudPopoverProvider>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -80,6 +82,29 @@ public sealed class AddItemTests : IAsyncLifetime
         Assert.NotNull(previewCard);
         Assert.Equal("https://example.com", previewCard.Instance.Url);
         Assert.NotNull(previewCard.Instance.LoadPreview);
+    }
+
+    [Fact]
+    public void Save_WhenPrivateModeEnabled_CreatesItemWithIsPrivateTrue()
+    {
+        _ = _itemCardDataMock
+            .Setup(d => d.CreateItemAsync(It.IsAny<SRNSMudApp.Data.Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Returns(Task.CompletedTask);
+
+        IRenderedComponent<AddItem> cut = _ctx.Render<AddItem>();
+
+        cut.WaitForState(() => cut.FindAll("form").Count > 0);
+        cut.Find("textarea").Input(TestContent);
+
+        // プライベートモードのスイッチ (MudSwitch) を ON に切り替える
+        var switchInput = cut.Find("input[type='checkbox']");
+        switchInput.Change(true);
+
+        cut.Find("form").Submit();
+
+        _itemCardDataMock.Verify(d => d.CreateItemAsync(
+            It.Is<SRNSMudApp.Data.Item>(i => i.Content == TestContent && i.OwnerId == ExistingUserId && i.IsPrivate),
+            It.IsAny<IReadOnlyCollection<int>?>()), Times.Once);
     }
 
     public async Task DisposeAsync()

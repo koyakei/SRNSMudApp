@@ -58,6 +58,12 @@ public interface IItemListDataProvider
         IReadOnlyList<ItemListFilter> filters,
         IReadOnlyList<ItemListSort> sorts);
 
+    /// <summary>閲覧ユーザーの可視性を考慮してフィルタ・ソート条件を適用したアイテム / タグ一覧を取得する。</summary>
+    Task<ItemListPageData> LoadItemsAndTagsAsync(
+        IReadOnlyList<ItemListFilter> filters,
+        IReadOnlyList<ItemListSort> sorts,
+        string? currentUserId);
+
     /// <summary>エクスポートに必要な生データを取得する。</summary>
     Task<ItemListExportData> LoadExportDataAsync(IReadOnlyList<int> itemIds);
 
@@ -66,6 +72,11 @@ public interface IItemListDataProvider
     /// IsDescendantOf を使った IQueryable ベースのクエリ。N+1 を発生させない。
     /// </summary>
     Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId);
+
+    /// <summary>
+    /// 祖先タグIDおよび閲覧ユーザーを指定して、表示可能な Item を取得する。
+    /// </summary>
+    Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId, string? currentUserId);
 }
 
 public class ItemListDataProvider(
@@ -76,7 +87,10 @@ public class ItemListDataProvider(
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly ITagEmbeddingService _tagEmbeddingService =
         tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
-    public async Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId)
+    public Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId) =>
+        LoadItemsByAncestorTagAsync(ancestorTagId, null);
+
+    public async Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId, string? currentUserId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
@@ -90,8 +104,10 @@ public class ItemListDataProvider(
             : await context.Items
                 .AsNoTracking()
                 .Include(i => i.Owner)
+                .Include(i => i.TargetUserGroup)
                 .Include(i => i.TagRelations)
                     .ThenInclude(tr => tr.Tag)
+                .WhereVisibleToUser(context, currentUserId)
                 .Where(i => i.TagRelations.Any(tr => tr.Tag.Node.IsDescendantOf(ancestorNode)))
                 .OrderByDescending(i => i.UpdatedDate)
                 .ToListAsync();
@@ -255,24 +271,31 @@ public class ItemListDataProvider(
         };
     }
 
+    public Task<ItemListPageData> LoadItemsAndTagsAsync(
+        IReadOnlyList<ItemListFilter> filters,
+        IReadOnlyList<ItemListSort> sorts) => LoadItemsAndTagsAsync(filters, sorts, null);
+
     public async Task<ItemListPageData> LoadItemsAndTagsAsync(
         IReadOnlyList<ItemListFilter> filters,
-        IReadOnlyList<ItemListSort> sorts)
+        IReadOnlyList<ItemListSort> sorts,
+        string? currentUserId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         IQueryable<Item> query = context.Items
             .AsNoTracking()
             .Include(i => i.Owner)
+            .Include(i => i.TargetUserGroup)
             .Include(i => i.QuotedItem)
                 .ThenInclude(q => q!.Owner)
             .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
+                .ThenInclude(tr => tr.Tag)
+                .ThenInclude(t => t.Owner)
             .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.Target)
-            .ThenInclude(t => t.Item)
+                .ThenInclude(r => r.Target)
+                .ThenInclude(t => t.Item)
             .Include(i => i.AsRequestOf)
-            .ThenInclude(r => r.RequestedTag)
+                .ThenInclude(r => r.RequestedTag)
+            .WhereVisibleToUser(context, currentUserId)
             .AsQueryable();
 
         IQueryable<Tag> tagQuery = context.Tags

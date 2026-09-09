@@ -49,4 +49,13 @@ public class Item : BaseEntity, ITaggable
     // このアイテムを引用しているアイテム一覧
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
     public ICollection<Item> QuotedByItems { get; set; } = [];
+
+    /// <summary>プライベートモード（非公開）かどうか。</summary>
+    public bool IsPrivate { get; set; }
+
+    /// <summary>公開対象とするユーザーグループID（null の場合はフォロワー限定）。</summary>
+    public int? TargetUserGroupId { get; set; }
+
+    /// <summary>公開対象ユーザーグループへのナビゲーションプロパティ。</summary>
+    public UserGroup? TargetUserGroup { get; set; }
 }

@@ -142,4 +142,3 @@ public sealed class UserDetailFollowTests : IAsyncLifetime
         await _ctx.DisposeAsync();
     }
 }
-

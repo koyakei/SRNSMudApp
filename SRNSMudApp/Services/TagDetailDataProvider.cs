@@ -64,6 +64,7 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
 
         List<Item> relatedItems = await context.Items
             .Include(i => i.Owner)
+            .Include(i => i.TargetUserGroup)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
@@ -73,6 +74,7 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.RequestedTag)
             .Where(i => i.TagRelations.Any(tr => tr.TagId == tagId))
+            .WhereVisibleToUser(context, currentUserId)
             .OrderByDescending(i => i.UpdatedDate)
             .AsNoTracking()
             .ToListAsync();

@@ -37,7 +37,8 @@
                         @* 本文・URL プレビュー・メタ情報は表示専用子コンポーネントへ委譲 *@
                         <ItemCardContent ItemId="Item.Id" LoadPreview="PreviewService.GetPreviewAsync"
                                          Content="@Item.Content" OwnerId="@Item.OwnerId" OwnerUserName="@(Item.Owner?.UserName)"
-                                         UpdatedDate="Item.UpdatedDate" />
+                                         UpdatedDate="Item.UpdatedDate" IsPrivate="Item.IsPrivate"
+                                         TargetUserGroupName="@(Item.TargetUserGroup?.Name)" />
 
                         @* 引用元アイテムプレビュー *@
                         @if (Item.QuotedItemId.HasValue)
@@ -88,8 +89,9 @@
                                      NewReplyContentChanged="@(value => { _newReplyContent = value; return Task.CompletedTask; })"
                                      IsSubmittingReply="_isSubmittingReply" TargetCandidates="@GetReplyTargetCandidates()"
                                      SelectedTargetUserIds="_selectedTargetUserIds" OnTargetToggled="HandleTargetUserToggled"
-                                     QuoteCount="_quoteCount" OnOpenQuoteDialog="OpenQuoteDialogAsync" OnShowQuotes="OpenShowQuotesDialogAsync"
-                                     OnToggleReplies="ToggleRepliesAsync" OnSubmitReply="SubmitReplyAsync" />
+                                     QuoteCount="_quoteCount" OnOpenQuoteDialog="OpenQuoteDialogAsync"
+                                     OnShowQuotes="OpenShowQuotesDialogAsync" OnToggleReplies="ToggleRepliesAsync"
+                                     OnSubmitReply="SubmitReplyAsync" />
                 </div>
             </div>
         </div>

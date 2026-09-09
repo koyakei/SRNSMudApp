@@ -97,11 +97,13 @@ public class UserDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
 
         List<Item> userItems = await dbContext.Items
             .Include(i => i.Owner)
+            .Include(i => i.TargetUserGroup)
             .Include(i => i.TagRelations)
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
             .AsNoTracking()
             .Where(i => i.OwnerId == userId)
+            .WhereVisibleToUser(dbContext, currentUserId)
             .OrderByDescending(i => i.UpdatedDate)
             .ToListAsync();
 
