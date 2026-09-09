@@ -122,6 +122,12 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             .Where(n => n.UserId == userId)
             .ToListAsync(cancellationToken);
 
+        // 6. Resolved reports submitted by the user
+        List<ContentReport> resolvedReports = await context.ContentReports!
+            .AsNoTracking()
+            .Where(r => r.OwnerId == userId && r.Status != ReportStatus.Pending && r.HandledDate != null)
+            .ToListAsync(cancellationToken);
+
         return new NotificationRawData(
             tagRequests,
             itemReplies,
@@ -129,6 +135,8 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             approvedRequests,
             requestReplies,
             readStates);
+        readStates,
+            resolvedReports);
     }
 
     /// <inheritdoc />

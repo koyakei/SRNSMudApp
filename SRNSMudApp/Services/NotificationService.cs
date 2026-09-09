@@ -28,6 +28,8 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 .Concat(BuildApprovedRequestNotifications(raw.ApprovedRequests, raw.ReadStates))
                 .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply", userId))
                 .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId));
+                .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId))
+                .Concat(BuildReportResolvedNotifications(raw.ResolvedReports ?? [], raw.ReadStates));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
@@ -39,6 +41,8 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
     }
 
     public event EventHandler? NotificationsChanged;
+
+    public void NotifyNotificationsChanged() => NotificationsChanged?.Invoke(this, EventArgs.Empty);
 
     public async Task MarkAsReadAsync(string userId, int sourceId, string sourceType)
     {
@@ -199,4 +203,51 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 AssociatedItemId = reply.Id
             };
         });
+
+    public static IEnumerable<NotificationDto> BuildReportResolvedNotifications(
+        IReadOnlyList<ContentReport> reports,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(reports);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return reports.Select(report =>
+        {
+            var targetLabel = report.TargetType == ReportTargetType.Item ? "アイテム" : "タグ";
+            var statusLabel = report.Status switch
+            {
+                ReportStatus.ActionTaken => "処置（削除等）が完了しました",
+                ReportStatus.Reviewed => "確認が完了しました（違反なし）",
+                ReportStatus.Dismissed => "対応不要（却下）と判断されました",
+                _ => "審査が完了しました"
+            };
+
+            var message = $"通報いただいた{targetLabel}について、管理者の{statusLabel}。";
+            if (!string.IsNullOrWhiteSpace(report.ResolutionNote))
+            {
+                message += $" (メモ: {report.ResolutionNote})";
+            }
+
+            var targetUrl = (report.TargetType == ReportTargetType.Item && report.ItemId.HasValue)
+                ? new RelativeUrl($"/ItemDetail/{report.ItemId.Value}")
+                : (report.TargetType == ReportTargetType.Tag && report.TagId.HasValue)
+                    ? new RelativeUrl($"/TagDetail/{report.TagId.Value}")
+                    : new RelativeUrl("#");
+
+            return new NotificationDto
+            {
+                SourceId = report.Id,
+                Kind = new ReportResolvedNotification(
+                    report.Id,
+                    report.Status,
+                    report.ResolutionNote,
+                    report.TargetType),
+                Message = message,
+                CreatedAt = new DateTimeOffset(report.HandledDate ?? report.UpdatedDate, TimeSpan.Zero),
+                TargetUrl = targetUrl,
+                IsRead = IsRead(readStates, report.Id, "ReportResolved"),
+                ActorName = "管理者"
+            };
+        });
+    }
 }

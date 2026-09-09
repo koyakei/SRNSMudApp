@@ -28,7 +28,14 @@ public class ContentReportServiceTests : IAsyncLifetime
     {
         var tid = Guid.NewGuid().ToString("N")[..8];
         var db = new ApplicationDbContext(_sharedDb.Options);
-        var sut = new ContentReportService(new DbContextFactoryStub(_sharedDb.Options));
+        var dbFactory = new DbContextFactoryStub(_sharedDb.Options);
+        var handlerFactory = new SRNSMudApp.Services.Reports.ReportTargetHandlerFactory([
+            new SRNSMudApp.Services.Reports.ItemReportTargetHandler(),
+            new SRNSMudApp.Services.Reports.TagReportTargetHandler()
+        ]);
+        var mockNotification = new Moq.Mock<INotificationService>();
+        var commandHandler = new SRNSMudApp.Services.Commands.ResolveContentReportHandler(dbFactory, handlerFactory, mockNotification.Object);
+        var sut = new ContentReportService(dbFactory, handlerFactory, commandHandler);
 
         var reporterId = $"reporter_{tid}";
         var authorId = $"author_{tid}";

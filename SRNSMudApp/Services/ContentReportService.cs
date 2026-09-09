@@ -3,6 +3,9 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services.Commands;
+using SRNSMudApp.Services.Reports;
 
 #endregion
 
@@ -87,12 +90,23 @@ public interface IContentReportService
 
 /// <summary>
 ///     不適切なコンテンツの通報および通報管理の具象サービス。
-///     IDbContextFactory を使用して独立したコンテキストで並行安全に動作する。
+///     スナップショット生成・削除は Strategy (IReportTargetHandler) に委譲し、
+///     処置確定処理は Command Handler (ResolveContentReportCommand) へ委譲する。
 /// </summary>
-public class ContentReportService(IDbContextFactory<ApplicationDbContext> dbFactory) : IContentReportService
+public class ContentReportService(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    IReportTargetHandlerFactory handlerFactory,
+    ICommandHandler<ResolveContentReportCommand, Result<bool>> resolveCommandHandler)
+    : IContentReportService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+
+    private readonly IReportTargetHandlerFactory _handlerFactory =
+        handlerFactory ?? throw new ArgumentNullException(nameof(handlerFactory));
+
+    private readonly ICommandHandler<ResolveContentReportCommand, Result<bool>> _resolveCommandHandler =
+        resolveCommandHandler ?? throw new ArgumentNullException(nameof(resolveCommandHandler));
 
     /// <inheritdoc />
     public async Task<ContentReport> CreateReportAsync(CreateContentReportDto dto, string reporterUserId)
@@ -101,51 +115,18 @@ public class ContentReportService(IDbContextFactory<ApplicationDbContext> dbFact
         ArgumentException.ThrowIfNullOrWhiteSpace(reporterUserId);
         ArgumentException.ThrowIfNullOrWhiteSpace(dto.Reason);
 
+        var targetId = dto.TargetType switch
+        {
+            ReportTargetType.Item => dto.ItemId ?? throw new ArgumentException("Item を対象とする通報には ItemId が必須です。", nameof(dto)),
+            ReportTargetType.Tag => dto.TagId ?? throw new ArgumentException("Tag を対象とする通報には TagId が必須です。", nameof(dto)),
+            _ => throw new NotSupportedException($"未対応の通報対象種別です: {dto.TargetType}")
+        };
+
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
-        var snapshot = string.Empty;
-        if (dto.TargetType == ReportTargetType.Item)
-        {
-            if (!dto.ItemId.HasValue)
-            {
-                throw new ArgumentException("Item を対象とする通報には ItemId が必須です。", nameof(dto));
-            }
-
-            Item? item = await context.Items
-                .Include(i => i.Owner)
-                .FirstOrDefaultAsync(i => i.Id == dto.ItemId.Value);
-
-            if (item is null)
-            {
-                throw new InvalidOperationException($"通報対象のアイテム (ID: {dto.ItemId.Value}) が見つかりません。");
-            }
-
-            snapshot = $"[投稿者: {item.Owner?.UserName ?? "不明"}] {item.Content}";
-        }
-        else if (dto.TargetType == ReportTargetType.Tag)
-        {
-            if (!dto.TagId.HasValue)
-            {
-                throw new ArgumentException("Tag を対象とする通報には TagId が必須です。", nameof(dto));
-            }
-
-            Tag? tag = await context.Tags
-                .Include(t => t.Owner)
-                .FirstOrDefaultAsync(t => t.Id == dto.TagId.Value);
-
-            if (tag is null)
-            {
-                throw new InvalidOperationException($"通報対象のタグ (ID: {dto.TagId.Value}) が見つかりません。");
-            }
-
-            snapshot = $"[タグ名: {tag.Name} / 作成者: {tag.Owner?.UserName ?? "不明"}] {tag.Content}";
-        }
-
-        // スナップショットの最大長制限 (2000文字)
-        if (snapshot.Length > 2000)
-        {
-            snapshot = snapshot[..1997] + "...";
-        }
+        // Strategy パターンにより対象エンティティごとのスナップショットを取得
+        IReportTargetHandler targetHandler = _handlerFactory.GetHandler(dto.TargetType);
+        var snapshot = await targetHandler.CaptureSnapshotAsync(context, targetId);
 
         var report = new ContentReport
         {
@@ -211,71 +192,17 @@ public class ContentReportService(IDbContextFactory<ApplicationDbContext> dbFact
     /// <inheritdoc />
     public async Task<bool> UpdateReportStatusAsync(int reportId, ReportStatus status, string? resolutionNote, string adminUserId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(adminUserId);
-
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-
-        ContentReport? report = await context.ContentReports.FindAsync(reportId);
-        if (report is null)
-        {
-            return false;
-        }
-
-        report.Status = status;
-        report.ResolutionNote = resolutionNote;
-        report.HandledByAdminId = adminUserId;
-        report.HandledDate = DateTime.UtcNow;
-        report.UpdatedDate = DateTime.UtcNow;
-
-        _ = await context.SaveChangesAsync();
-        return true;
+        var command = new ResolveContentReportCommand(reportId, status, DeleteTarget: false, resolutionNote, adminUserId);
+        Result<bool> result = await _resolveCommandHandler.HandleAsync(command);
+        return result is Success<bool>(true);
     }
 
     /// <inheritdoc />
     public async Task<bool> ResolveReportWithActionAsync(int reportId, bool deleteTarget, string? resolutionNote, string adminUserId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(adminUserId);
-
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-
-        ContentReport? report = await context.ContentReports
-            .Include(r => r.Item)
-            .Include(r => r.Tag)
-            .FirstOrDefaultAsync(r => r.Id == reportId);
-
-        if (report is null)
-        {
-            return false;
-        }
-
-        if (deleteTarget)
-        {
-            if (report.TargetType == ReportTargetType.Item && report.ItemId.HasValue)
-            {
-                Item? itemToDelete = await context.Items.FindAsync(report.ItemId.Value);
-                if (itemToDelete is not null)
-                {
-                    _ = context.Items.Remove(itemToDelete);
-                }
-            }
-            else if (report.TargetType == ReportTargetType.Tag && report.TagId.HasValue)
-            {
-                Tag? tagToDelete = await context.Tags.FindAsync(report.TagId.Value);
-                if (tagToDelete is not null)
-                {
-                    _ = context.Tags.Remove(tagToDelete);
-                }
-            }
-        }
-
-        report.Status = ReportStatus.ActionTaken;
-        report.ResolutionNote = resolutionNote;
-        report.HandledByAdminId = adminUserId;
-        report.HandledDate = DateTime.UtcNow;
-        report.UpdatedDate = DateTime.UtcNow;
-
-        _ = await context.SaveChangesAsync();
-        return true;
+        var command = new ResolveContentReportCommand(reportId, ReportStatus.ActionTaken, deleteTarget, resolutionNote, adminUserId);
+        Result<bool> result = await _resolveCommandHandler.HandleAsync(command);
+        return result is Success<bool>(true);
     }
 
     /// <inheritdoc />

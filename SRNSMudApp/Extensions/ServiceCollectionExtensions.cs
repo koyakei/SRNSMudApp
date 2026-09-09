@@ -5,6 +5,7 @@ using SRNSMudApp.Services;
 using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Contracts;
 using SRNSMudApp.Services.Dialogs;
+using SRNSMudApp.Services.Reports;
 
 namespace SRNSMudApp.Extensions;
 
@@ -66,6 +67,7 @@ public static class ServiceCollectionExtensions
         // コマンドハンドラー (Command Pattern) の登録
         services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();
         services.AddScoped<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>, RejectTaggingRequestHandler>();
+        services.AddScoped<ICommandHandler<ResolveContentReportCommand, Result<bool>>, ResolveContentReportHandler>();
 
         return services;
     }
@@ -98,6 +100,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IContentReportService, ContentReportService>();
+
+        // 通報対象 Strategy (IReportTargetHandler) および Factory の登録
+        services.AddScoped<IReportTargetHandler, ItemReportTargetHandler>();
+        services.AddScoped<IReportTargetHandler, TagReportTargetHandler>();
+        services.AddScoped<IReportTargetHandlerFactory, ReportTargetHandlerFactory>();
 
         // テスト時に時刻固定を可能にする TimeProvider 抽象化
         services.AddSingleton(TimeProvider.System);

@@ -421,4 +421,61 @@ public class NotificationServiceTests
             Moq.It.IsAny<CancellationToken>()), Moq.Times.Never);
         Assert.False(eventFired);
     }
+
+    [Fact]
+    public void BuildReportResolvedNotifications_MapsPropertiesCorrectly()
+    {
+        // Arrange
+        List<ContentReport> reports =
+        [
+            new()
+            {
+                Id = 15,
+                TargetType = ReportTargetType.Item,
+                ItemId = 101,
+                OwnerId = "reporter1",
+                Reason = "Spam",
+                Status = ReportStatus.ActionTaken,
+                ResolutionNote = "削除しました",
+                HandledDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc),
+                UpdatedDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+            }
+        ];
+
+        List<NotificationReadState> readStates =
+        [
+            new() { SourceId = 15, SourceType = "ReportResolved", UserId = "reporter1" }
+        ];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildReportResolvedNotifications(reports, readStates)];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Equal(15, dto.SourceId);
+        Assert.True(dto.IsRead);
+        Assert.Equal("/ItemDetail/101", dto.TargetUrl.ToHref());
+        Assert.Contains("アイテム", dto.Message);
+        Assert.Contains("処置（削除等）が完了しました", dto.Message);
+        Assert.Contains("削除しました", dto.Message);
+        Assert.True(dto.Kind is ReportResolvedNotification);
+        Assert.Equal("管理者", dto.ActorName);
+    }
+
+    [Fact]
+    public void NotifyNotificationsChanged_RaisesNotificationsChangedEvent()
+    {
+        // Arrange
+        var mockProvider = new Moq.Mock<INotificationsDataProvider>();
+        var service = new NotificationService(mockProvider.Object);
+        var eventFired = false;
+        service.NotificationsChanged += (_, _) => eventFired = true;
+
+        // Act
+        service.NotifyNotificationsChanged();
+
+        // Assert
+        Assert.True(eventFired);
+    }
 }

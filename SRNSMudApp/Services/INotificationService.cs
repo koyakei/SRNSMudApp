@@ -13,4 +13,7 @@ public interface INotificationService
 
     /// <summary>指定されたユーザーの未読通知をすべて既読として記録する。</summary>
     Task MarkAllAsReadAsync(string userId);
+
+    /// <summary>通知の変更（新規通知発生やステータス変化）を通知リスナーへブロードキャストする。</summary>
+    void NotifyNotificationsChanged();
 }

@@ -24,6 +24,10 @@ public record RequestApprovedNotification(
 
 public record RequestReplyNotification(int ReplyItemId, int RequestId, string ActorName);
 
+public record ReportResolvedNotification(
+    int ReportId, ReportStatus Status, string? ResolutionNote,
+    ReportTargetType TargetType);
+
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
 public readonly union NotificationType(
     TagRequestNotification,
@@ -31,6 +35,8 @@ public readonly union NotificationType(
     RequestRejectedNotification,
     RequestApprovedNotification,
     RequestReplyNotification)
+    RequestReplyNotification,
+    ReportResolvedNotification)
 {
     public readonly string Icon => this switch
     {
@@ -39,26 +45,29 @@ public readonly union NotificationType(
         RequestRejectedNotification => Icons.Material.Filled.Cancel,
         RequestApprovedNotification => Icons.Material.Filled.CheckCircle,
         RequestReplyNotification => Icons.Material.Filled.Forum,
+        ReportResolvedNotification => Icons.Material.Filled.FactCheck,
         _ => throw new UnreachableException()
     };
 
-    public readonly string IconColor => this switch
-    {
-        TagRequestNotification => "Primary",
-        ItemReplyNotification => "Info",
-        RequestRejectedNotification => "Error",
-        RequestApprovedNotification => "Success",
-        RequestReplyNotification => "Secondary",
-        _ => throw new UnreachableException()
-    };
+public readonly string IconColor => this switch
+{
+    TagRequestNotification => "Primary",
+    ItemReplyNotification => "Info",
+    RequestRejectedNotification => "Error",
+    RequestApprovedNotification => "Success",
+    RequestReplyNotification => "Secondary",
+    ReportResolvedNotification => "Warning",
+    _ => throw new UnreachableException()
+};
 
-    public readonly string SourceType => this switch
-    {
-        TagRequestNotification => "TagRequest",
-        ItemReplyNotification => "ItemReply",
-        RequestRejectedNotification => "RequestRejected",
-        RequestApprovedNotification => "RequestApproved",
-        RequestReplyNotification => "RequestReply",
-        _ => throw new UnreachableException()
-    };
+public readonly string SourceType => this switch
+{
+    TagRequestNotification => "TagRequest",
+    ItemReplyNotification => "ItemReply",
+    RequestRejectedNotification => "RequestRejected",
+    RequestApprovedNotification => "RequestApproved",
+    RequestReplyNotification => "RequestReply",
+    ReportResolvedNotification => "ReportResolved",
+    _ => throw new UnreachableException()
+};
 }
