@@ -121,14 +121,28 @@
         currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var initialUri = new Uri(NavigationManager.Uri, UriKind.RelativeOrAbsolute);
+        _lastBasePath = initialUri.IsAbsoluteUri ? initialUri.AbsolutePath : NavigationManager.Uri.Split('?')[0];
+
         NavigationManager.LocationChanged += OnLocationChanged;
         NotificationService.NotificationsChanged += OnNotificationsChanged;
         await UpdateUnreadCountAsync();
     }
 
+    private string? _lastBasePath;
+
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        var uri = new Uri(e.Location, UriKind.RelativeOrAbsolute);
+        var absolutePath = uri.IsAbsoluteUri ? uri.AbsolutePath : e.Location.Split('?')[0];
+
+        if (string.Equals(_lastBasePath, absolutePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _lastBasePath = absolutePath;
         await UpdateUnreadCountAsync();
         await InvokeAsync(StateHasChanged);
     }

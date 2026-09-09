@@ -157,21 +157,32 @@ public partial class ResourceList : IAsyncDisposable
         UpdateFocusUrl();
     }
 
-    private void UpdateFocusUrl()
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "URL更新失敗はページ表示への影響を避けるため無視する")]
+    [SuppressMessage("Roslynator", "RCS1075:Avoid empty catch clause that catches System.Exception",
+        Justification = "URL更新失敗時は何もしない")]
+    private async void UpdateFocusUrl()
     {
         switch (EnableUrlUpdate)
         {
             case false: return;
         }
 
-        // 現在の URL から状態を読み取り、focus 系パラメータのみ差し替える
-        ItemListQueryState updated = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri)) with
+        try
         {
-            FocusTagId = _focusTagId,
-            FocusItemId = _focusItemId
-        };
-        var newUri = NavigationManager.GetUriWithQueryParameters(updated.BuildParameters());
-        NavigationManager.NavigateTo(newUri, replace: true);
+            // 現在の URL から状態を読み取り、focus 系パラメータのみ差し替える
+            ItemListQueryState updated = ItemListQueryState.ParseFromUri(new Uri(NavigationManager.Uri)) with
+            {
+                FocusTagId = _focusTagId,
+                FocusItemId = _focusItemId
+            };
+            var newUri = NavigationManager.GetUriWithQueryParameters(updated.BuildParameters());
+            await JS.InvokeVoidAsync("contentOverflowHelper.updateUrl", newUri);
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
     }
 
     public async Task EnsureSystemTagsExistAsync()

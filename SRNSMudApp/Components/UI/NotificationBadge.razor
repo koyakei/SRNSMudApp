@@ -20,9 +20,13 @@
 
     private string? _userId;
     private int _unreadCount;
+    private string? _lastBasePath;
 
     protected override async Task OnInitializedAsync()
     {
+        var initialUri = new Uri(NavigationManager.Uri, UriKind.RelativeOrAbsolute);
+        _lastBasePath = initialUri.IsAbsoluteUri ? initialUri.AbsolutePath : NavigationManager.Uri.Split('?')[0];
+
         NavigationManager.LocationChanged += OnLocationChanged;
         NotificationService.NotificationsChanged += OnNotificationsChanged;
         await RefreshUnreadCountAsync();
@@ -30,6 +34,15 @@
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
+        var uri = new Uri(e.Location, UriKind.RelativeOrAbsolute);
+        var absolutePath = uri.IsAbsoluteUri ? uri.AbsolutePath : e.Location.Split('?')[0];
+
+        if (string.Equals(_lastBasePath, absolutePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _lastBasePath = absolutePath;
         await RefreshUnreadCountAsync();
         await InvokeAsync(StateHasChanged);
     }

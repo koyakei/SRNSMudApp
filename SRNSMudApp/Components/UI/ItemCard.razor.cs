@@ -81,6 +81,7 @@ public partial class ItemCard : IAsyncDisposable
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
+    private int _loadedItemId;
 
     private int _replyCount;
     private int _quoteCount;
@@ -94,6 +95,12 @@ public partial class ItemCard : IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_loadedItemId == Item.Id && Item.Id > 0)
+        {
+            return;
+        }
+
+        _loadedItemId = Item.Id;
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
         _quoteCount = await ItemQuoteService.GetQuoteCountAsync(Item.Id);
         if (_isRepliesExpanded)

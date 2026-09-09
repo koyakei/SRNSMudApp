@@ -88,6 +88,36 @@ public sealed class ItemCardReplyCountTests : IAsyncLifetime
         Assert.DoesNotContain("リプライ (", cut.Markup);
     }
 
+    [Fact]
+    public void WhenFocusChanges_DoesNotRequeryItemMetadata()
+    {
+        var item = new SRNSMudApp.Data.Item
+        {
+            Id = 44,
+            Content = "Item for focus change test",
+            OwnerId = UserId
+        };
+
+        _itemReplyServiceMock
+            .Setup(s => s.GetItemReplyCountAsync(item.Id))
+            .ReturnsAsync(0);
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, UserId)
+            .Add(p => p.IsFocused, false));
+
+        cut.WaitForState(() => cut.Markup.Contains("リプライ"));
+
+        // フォーカス状態を変更して再レンダリング
+        cut.Render(parameters => parameters.Add(p => p.IsFocused, true));
+        cut.Render(parameters => parameters.Add(p => p.IsFocused, false));
+
+        // 初期化時の1回のみ呼ばれ、フォーカス変更による再問い合わせが発生しないことを検証
+        _itemReplyServiceMock.Verify(s => s.GetItemReplyCountAsync(item.Id), Times.Once);
+        _itemTagServiceMock.Verify(s => s.GetTaggingRequestsForItemAsync(item.Id), Times.Once);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -53,9 +53,18 @@
 
     private Item? _targetItem;
     private bool _isLoading;
+    private int _loadedQuotedItemId;
+    private Item? _loadedQuotedItem;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (ReferenceEquals(_loadedQuotedItem, QuotedItem) && _loadedQuotedItemId == QuotedItemId)
+        {
+            return;
+        }
+
+        _loadedQuotedItem = QuotedItem;
+        _loadedQuotedItemId = QuotedItemId;
         _targetItem = QuotedItem;
         if (_targetItem is null && QuotedItemId > 0)
         {

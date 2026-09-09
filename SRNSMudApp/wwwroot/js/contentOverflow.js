@@ -184,9 +184,25 @@ window.contentOverflowHelper = {
     },
 
     /**
+     * URL のクエリパラメータを Blazor のルーティングをトリガーせずにブラウザ履歴上書きで更新する (debounce 100ms)
+     * @public
+     */
+    // noinspection JSUnusedGlobalSymbols
+    _urlUpdateTimeout: null,
+    updateUrl(url) {
+        clearTimeout(this._urlUpdateTimeout);
+        this._urlUpdateTimeout = setTimeout(() => {
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', url);
+            }
+        }, 100);
+    },
+
+    /**
      * リスナー解除
      */
     dispose() {
+        clearTimeout(this._urlUpdateTimeout);
         if (this._resizeHandler) {
             window.removeEventListener('resize', this._resizeHandler);
             this._resizeHandler = null;
