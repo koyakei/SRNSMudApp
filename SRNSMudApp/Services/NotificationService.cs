@@ -27,7 +27,6 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 .Concat(BuildRejectedRequestNotifications(raw.RejectedRequests, raw.ReadStates))
                 .Concat(BuildApprovedRequestNotifications(raw.ApprovedRequests, raw.ReadStates))
                 .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply", userId))
-                .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId));
                 .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId))
                 .Concat(BuildReportResolvedNotifications(raw.ResolvedReports ?? [], raw.ReadStates));
 

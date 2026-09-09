@@ -34,7 +34,6 @@ public readonly union NotificationType(
     ItemReplyNotification,
     RequestRejectedNotification,
     RequestApprovedNotification,
-    RequestReplyNotification)
     RequestReplyNotification,
     ReportResolvedNotification)
 {
@@ -49,25 +48,25 @@ public readonly union NotificationType(
         _ => throw new UnreachableException()
     };
 
-public readonly string IconColor => this switch
-{
-    TagRequestNotification => "Primary",
-    ItemReplyNotification => "Info",
-    RequestRejectedNotification => "Error",
-    RequestApprovedNotification => "Success",
-    RequestReplyNotification => "Secondary",
-    ReportResolvedNotification => "Warning",
-    _ => throw new UnreachableException()
-};
+    public readonly string IconColor => this switch
+    {
+        TagRequestNotification => "Primary",
+        ItemReplyNotification => "Info",
+        RequestRejectedNotification => "Error",
+        RequestApprovedNotification => "Success",
+        RequestReplyNotification => "Secondary",
+        ReportResolvedNotification => "Warning",
+        _ => throw new UnreachableException()
+    };
 
-public readonly string SourceType => this switch
-{
-    TagRequestNotification => "TagRequest",
-    ItemReplyNotification => "ItemReply",
-    RequestRejectedNotification => "RequestRejected",
-    RequestApprovedNotification => "RequestApproved",
-    RequestReplyNotification => "RequestReply",
-    ReportResolvedNotification => "ReportResolved",
-    _ => throw new UnreachableException()
-};
+    public readonly string SourceType => this switch
+    {
+        TagRequestNotification => "TagRequest",
+        ItemReplyNotification => "ItemReply",
+        RequestRejectedNotification => "RequestRejected",
+        RequestApprovedNotification => "RequestApproved",
+        RequestReplyNotification => "RequestReply",
+        ReportResolvedNotification => "ReportResolved",
+        _ => throw new UnreachableException()
+    };
 }

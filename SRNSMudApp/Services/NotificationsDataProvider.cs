@@ -134,8 +134,7 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             rejectedRequests,
             approvedRequests,
             requestReplies,
-            readStates);
-        readStates,
+            readStates,
             resolvedReports);
     }
 
