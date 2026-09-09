@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
+@using System.Security.Claims
 @using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Services
 @inject IUserDataProvider UserData
@@ -21,15 +22,40 @@
                     <MudAlert Severity="Severity.Error">ユーザーが見つかりませんでした。</MudAlert>
                     break;
                 case not null:
-                    <div class="d-flex align-center mb-4">
-                        <MudText Typo="Typo.h5">@user.UserName</MudText>
+                    <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-4">
+                        <div class="d-flex align-center gap-3">
+                            <MudAvatar Color="Color.Primary" Size="Size.Large">
+                                @(string.IsNullOrEmpty(user.UserName) ? "?" : user.UserName[0].ToString().ToUpperInvariant())
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.h5">@user.UserName</MudText>
+                                <div class="d-flex gap-4 mt-1">
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        <strong>@_followingCount</strong> フォロー中
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        <strong>@_followersCount</strong> フォロワー
+                                    </MudText>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (_isLoggedIn && !string.IsNullOrEmpty(_currentUserId) && _currentUserId != UserId)
+                        {
+                            <MudButton Variant="@(_isFollowing ? Variant.Outlined : Variant.Filled)"
+                                       Color="@(_isFollowing ? Color.Default : Color.Primary)"
+                                       StartIcon="@(_isFollowing ? Icons.Material.Filled.PersonRemove : Icons.Material.Filled.PersonAdd)"
+                                       OnClick="@ToggleFollowAsync">
+                                @(_isFollowing ? "フォロー解除" : "フォロー")
+                            </MudButton>
+                        }
                     </div>
 
                     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" Class="mt-4"
                              ActivePanelIndex="_activeTabIndex" ActivePanelIndexChanged="OnTabChanged">
                         <MudTabPanel Text="アクティビティ (Item & Tag)">
                             <SRNSMudApp.Components.UI.ResourceList Tags="userTags" Items="userItems"
-                                                                       OnDataChanged="LoadDataAsync" EnableUrlUpdate="false"/>
+                                                                        OnDataChanged="LoadDataAsync" EnableUrlUpdate="false"/>
                         </MudTabPanel>
                         <MudTabPanel Text="作成したタグツリー">
                             <MudCard Elevation="0" Outlined="true">
@@ -46,6 +72,68 @@
                                 </MudCardContent>
                             </MudCard>
                         </MudTabPanel>
+                        <MudTabPanel Text="@($"フォロー中 ({_followingCount})")">
+                            @if (_followingUsers.Count > 0)
+                            {
+                                <MudList T="ApplicationUser" Clickable="false">
+                                    @foreach (var followedUser in _followingUsers)
+                                    {
+                                        <MudListItem T="ApplicationUser">
+                                            <div class="d-flex align-center justify-space-between w-100">
+                                                <div class="d-flex align-center gap-3">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Medium">
+                                                        @(string.IsNullOrEmpty(followedUser.UserName) ? "?" : followedUser.UserName[0].ToString().ToUpperInvariant())
+                                                    </MudAvatar>
+                                                    <div>
+                                                        <MudLink Href="@($"/User/UserDetail/{followedUser.Id}")" Typo="Typo.subtitle1" Color="Color.Primary" Underline="Underline.Hover">
+                                                            @followedUser.UserName
+                                                        </MudLink>
+                                                    </div>
+                                                </div>
+                                                <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@($"/User/UserDetail/{followedUser.Id}")">
+                                                    プロフィール
+                                                </MudButton>
+                                            </div>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                            else
+                            {
+                                <MudText Color="Color.Secondary" Class="pa-4">フォローしているユーザーはいません。</MudText>
+                            }
+                        </MudTabPanel>
+                        <MudTabPanel Text="@($"フォロワー ({_followersCount})")">
+                            @if (_followerUsers.Count > 0)
+                            {
+                                <MudList T="ApplicationUser" Clickable="false">
+                                    @foreach (var follower in _followerUsers)
+                                    {
+                                        <MudListItem T="ApplicationUser">
+                                            <div class="d-flex align-center justify-space-between w-100">
+                                                <div class="d-flex align-center gap-3">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Medium">
+                                                        @(string.IsNullOrEmpty(follower.UserName) ? "?" : follower.UserName[0].ToString().ToUpperInvariant())
+                                                    </MudAvatar>
+                                                    <div>
+                                                        <MudLink Href="@($"/User/UserDetail/{follower.Id}")" Typo="Typo.subtitle1" Color="Color.Primary" Underline="Underline.Hover">
+                                                            @follower.UserName
+                                                        </MudLink>
+                                                    </div>
+                                                </div>
+                                                <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@($"/User/UserDetail/{follower.Id}")">
+                                                    プロフィール
+                                                </MudButton>
+                                            </div>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                            else
+                            {
+                                <MudText Color="Color.Secondary" Class="pa-4">フォロワーはいません。</MudText>
+                            }
+                        </MudTabPanel>
                     </MudTabs>
                     break;
             }
@@ -54,6 +142,7 @@
 </MudContainer>
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     [Parameter] public string UserId { get; set; } = string.Empty;
 
     private ApplicationUser? user;
@@ -61,6 +150,15 @@
     private IReadOnlyList<Item> userItems = [];
     private bool isLoading = true;
 
+    private string? _currentUserId;
+    private bool _isLoggedIn;
+    private bool _isFollowing;
+    private int _followingCount;
+    private int _followersCount;
+    private IReadOnlyList<ApplicationUser> _followingUsers = [];
+    private IReadOnlyList<ApplicationUser> _followerUsers = [];
+
+    private string? _lastLoadedUserId;
     private int _activeTabIndex;
     private DotNetObjectReference<UserDetail>? _dotNetRef;
     private bool _isTreeInitialized;
@@ -72,21 +170,54 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveCurrentUserAsync();
         await LoadDataAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastLoadedUserId != UserId)
+        {
+            _isTreeInitialized = false;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ResolveCurrentUserAsync()
+    {
+        if (AuthState is not null)
+        {
+            var authState = await AuthState;
+            _isLoggedIn = authState.User.Identity?.IsAuthenticated ?? false;
+            _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
     }
 
     private async Task LoadDataAsync()
     {
         try
         {
-            UserDetailPageData page = await UserData.GetUserDetailAsync(UserId);
-            user = page.User;
+            _lastLoadedUserId = UserId;
+            Task<UserDetailPageData>? detailTask = UserData.GetUserDetailAsync(UserId, _currentUserId);
+            UserDetailPageData? page = detailTask is not null ? await detailTask : null;
+            if (page is null)
+            {
+                Task<UserDetailPageData>? fallbackTask = UserData.GetUserDetailAsync(UserId);
+                page = fallbackTask is not null ? await fallbackTask : null;
+            }
+
+            user = page?.User;
 
             switch (user)
             {
-                case not null:
+                case not null when page is not null:
                     userTags = page.UserTags;
                     userItems = page.UserItems;
+                    _isFollowing = page.IsFollowing;
+                    _followingCount = page.FollowingCount;
+                    _followersCount = page.FollowersCount;
+                    _followingUsers = page.FollowingUsers ?? [];
+                    _followerUsers = page.FollowerUsers ?? [];
                     break;
             }
         }
@@ -94,6 +225,26 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task ToggleFollowAsync()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || user is null || _currentUserId == UserId)
+        {
+            return;
+        }
+
+        _isFollowing = await UserData.ToggleFollowUserAsync(_currentUserId, UserId);
+        if (_isFollowing)
+        {
+            _followersCount++;
+        }
+        else
+        {
+            _followersCount = Math.Max(0, _followersCount - 1);
+        }
+
+        await LoadDataAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

@@ -23,6 +23,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Tag> Tags { get; set; } = null!;
     public DbSet<TagRelation> TagRelations { get; set; } = null!;
     public DbSet<UserTagFollow> UserTagFollows { get; set; } = null!;
+    public DbSet<UserFollow> UserFollows { get; set; } = null!;
     public DbSet<TagRelationToTag> TagRelationToTags { get; set; } = null!;
     public DbSet<RightAsset> RightAssets { get; set; } = null!;
     public DbSet<TagWeightLedger> TagWeightLedgers { get; set; } = null!;
@@ -163,6 +164,25 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(utf => utf.TagId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<UserFollow>()
+            .HasOne(uf => uf.Owner)
+            .WithMany()
+            .HasForeignKey(uf => uf.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserFollow>()
+            .HasOne(uf => uf.FollowedUser)
+            .WithMany()
+            .HasForeignKey(uf => uf.FollowedUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserFollow>()
+            .HasIndex(uf => new { uf.OwnerId, uf.FollowedUserId })
+            .IsUnique();
+
+        _ = builder.Entity<UserFollow>()
+            .HasIndex(uf => uf.FollowedUserId);
 
         // 4. TagRelationの中間テーブル設定
         // Item または Tag が削除された場合は中間テーブルのレコードも削除して問題ないため Cascade とします
