@@ -46,6 +46,28 @@
                 {
                     <MudText Typo="Typo.body1" Class="mt-4">@_tag.Content</MudText>
                 }
+                @if (_tag.AutoApproveUserGroups.Count > 0 || _tag.AutoApproveUserGroup is not null)
+                {
+                    <div class="d-flex align-center mt-3 gap-2 flex-wrap">
+                        <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" Color="Color.Info" />
+                        <MudText Typo="Typo.body2">自動承認許可グループ:</MudText>
+                        @if (_tag.AutoApproveUserGroups.Count > 0)
+                        {
+                            @foreach (var g in _tag.AutoApproveUserGroups)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                                    @(g.UserGroup?.Name ?? "不明なグループ")
+                                </MudChip>
+                            }
+                        }
+                        else if (_tag.AutoApproveUserGroup is not null)
+                        {
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                                @_tag.AutoApproveUserGroup.Name
+                            </MudChip>
+                        }
+                    </div>
+                }
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
                     作成者: @(_tag.Owner?.UserName ?? "不明")
                 </MudText>
@@ -156,7 +178,13 @@
             return;
         }
 
-        bool updated = await TagDialogData.UpdateTagAsync(_tag.Id, _tag.Name, _tag.Content, enabled);
+        var groupIds = _tag.AutoApproveUserGroups.Select(g => g.UserGroupId).ToList();
+        if (groupIds.Count == 0 && _tag.AutoApproveUserGroupId.HasValue)
+        {
+            groupIds.Add(_tag.AutoApproveUserGroupId.Value);
+        }
+
+        bool updated = await TagDialogData.UpdateTagAsync(_tag.Id, _tag.Name, _tag.Content, enabled, groupIds);
         if (!updated)
         {
             return;

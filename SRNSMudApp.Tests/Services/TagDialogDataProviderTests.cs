@@ -97,4 +97,49 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             Assert.DoesNotContain(result, t => t.Id == tagUnrelated.Id);
         }
     }
+
+    [Fact]
+    public async Task UpdateTagAsync_WhenAllowedUserGroupIdsProvided_ShouldSyncAutoApproveUserGroups()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var group1 = new UserGroup { Name = $"G1_{tid}", OwnerId = userId };
+            var group2 = new UserGroup { Name = $"G2_{tid}", OwnerId = userId };
+            var group3 = new UserGroup { Name = $"G3_{tid}", OwnerId = userId };
+            dbContext.UserGroups.AddRange(group1, group2, group3);
+
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            bool updated = await provider.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group2.Id]);
+            Assert.True(updated);
+
+            dbContext.ChangeTracker.Clear();
+            var loadedTag = await dbContext.Tags
+                .Include(t => t.AutoApproveUserGroups)
+                .FirstOrDefaultAsync(t => t.Id == tag.Id);
+            Assert.NotNull(loadedTag);
+            Assert.Equal(2, loadedTag.AutoApproveUserGroups.Count);
+            Assert.Contains(loadedTag.AutoApproveUserGroups, g => g.UserGroupId == group1.Id);
+            Assert.Contains(loadedTag.AutoApproveUserGroups, g => g.UserGroupId == group2.Id);
+
+            bool updated2 = await provider.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group3.Id]);
+            Assert.True(updated2);
+
+            dbContext.ChangeTracker.Clear();
+            var reloadedTag = await dbContext.Tags
+                .Include(t => t.AutoApproveUserGroups)
+                .FirstOrDefaultAsync(t => t.Id == tag.Id);
+            Assert.NotNull(reloadedTag);
+            Assert.Equal(2, reloadedTag.AutoApproveUserGroups.Count);
+            Assert.Contains(reloadedTag.AutoApproveUserGroups, g => g.UserGroupId == group1.Id);
+            Assert.Contains(reloadedTag.AutoApproveUserGroups, g => g.UserGroupId == group3.Id);
+            Assert.DoesNotContain(reloadedTag.AutoApproveUserGroups, g => g.UserGroupId == group2.Id);
+        }
+    }
 }

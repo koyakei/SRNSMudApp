@@ -1,5 +1,8 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
 @using SRNSMudApp.Services
 @inject ITagDialogDataProvider TagDialogData
+@inject IUserGroupDataProvider UserGroupData
 @inject ISnackbar Snackbar
 @inject ITagEmbeddingService TagEmbeddingService
 
@@ -9,7 +12,16 @@
                       AutoFocus="true" Required="true" RequiredError="タグ名は必須です" />
 
         <MudTextField T="string" @bind-Value="_editContent" Label="内容" Variant="Variant.Outlined" Lines="3"
-                      MaxLines="5" />
+                      MaxLines="5" Class="mb-4" />
+
+        <MudSelect T="int" @bind-SelectedValues="_selectedGroupIds" Label="自動承認を許可するユーザーグループ"
+                   MultiSelection="true" Variant="Variant.Outlined" Clearable="true"
+                   HelperText="選択されたいずれかのグループに所属するユーザーからのタグ付けリクエストが自動承認されます。">
+            @foreach (var group in _myGroups)
+            {
+                <MudSelectItem T="int" Value="@group.Id">@group.Name</MudSelectItem>
+            }
+        </MudSelect>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@Cancel">キャンセル</MudButton>
@@ -18,7 +30,8 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     // TagList.razor から渡される Tag パラメータ
     [Parameter] public Tag Tag { get; set; } = null!;
@@ -26,12 +39,36 @@
     // 編集用のバインド変数（キャンセル時に元のオブジェクトを汚染しないため）
     private string _editName = null!;
     private string _editContent = null!;
+    private IReadOnlyCollection<int> _selectedGroupIds = [];
+    private List<UserGroup> _myGroups = [];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // 初期値として現在の値をセット
         _editName = Tag.Name;
         _editContent = Tag.Content;
+
+        var initialGroups = Tag.AutoApproveUserGroups.Select(g => g.UserGroupId).ToHashSet();
+        if (initialGroups.Count == 0 && Tag.AutoApproveUserGroupId.HasValue)
+        {
+            initialGroups.Add(Tag.AutoApproveUserGroupId.Value);
+        }
+        _selectedGroupIds = initialGroups;
+
+        string? currentUserId = null;
+        if (AuthState is not null)
+        {
+            var auth = await AuthState;
+            currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        currentUserId ??= Tag.OwnerId;
+
+        if (!string.IsNullOrEmpty(currentUserId))
+        {
+            var groups = await UserGroupData.GetManagedGroupsAsync(currentUserId);
+            _myGroups = groups.ToList();
+        }
     }
 
     private void Cancel()
@@ -51,12 +88,13 @@
         try
         {
             bool updated = await TagDialogData.UpdateTagAsync(Tag.Id, _editName, _editContent,
-Tag.AutoAcceptIncomingTaggingRequests);
+                Tag.AutoAcceptIncomingTaggingRequests, _selectedGroupIds);
 
             switch (updated)
             {
                 // 成功した場合はダイアログを閉じ、結果として true を返す
                 case true:
+                    Tag.AutoApproveUserGroupId = _selectedGroupIds.Cast<int?>().FirstOrDefault();
                     MudDialog.Close(DialogResult.Ok(true));
                     break;
                 case false:

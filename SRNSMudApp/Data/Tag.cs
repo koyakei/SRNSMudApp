@@ -38,6 +38,20 @@ public class Tag : BaseEntity
     public bool AutoAcceptIncomingTaggingRequests { get; set; }
 
     /// <summary>
+    ///     自動承認を委任するユーザーグループの ID。
+    ///     設定されている場合、このグループに属するメンバーからのリクエストが自動承認される。
+    /// </summary>
+    public int? AutoApproveUserGroupId { get; set; }
+
+    public UserGroup? AutoApproveUserGroup { get; set; }
+
+    /// <summary>
+    ///     自動承認を許可するユーザーグループのコレクション。
+    /// </summary>
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only")]
+    public ICollection<TagAutoApproveUserGroup> AutoApproveUserGroups { get; set; } = [];
+
+    /// <summary>
     ///     タグの種別（VoteTag / ReactionTag / SystemClassificationTag / UserCustomTag）を取得する。
     /// </summary>
     public TagKind GetKind() =>

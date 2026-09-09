@@ -1,0 +1,179 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@inject IUserGroupDataProvider UserGroupData
+@inject IUserDataProvider UserData
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="mb-3">
+            グループ: <strong>@Group.Name</strong>
+        </MudText>
+
+        @if (IsOwner)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-4 rounded-lg">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">新規メンバー追加</MudText>
+                <div class="d-flex align-center gap-2">
+                    <MudAutocomplete T="ApplicationUser" @bind-Value="_selectedUser"
+                                     SearchFunc="@SearchUsersAsync"
+                                     ToStringFunc="@(u => u?.UserName ?? string.Empty)"
+                                     Label="ユーザー名で検索" Variant="Variant.Outlined" Dense="true"
+                                     Margin="Margin.Dense" Class="flex-grow-1"
+                                     Placeholder="追加するユーザーを検索..." />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="@AddMemberAsync" Disabled="@(_selectedUser is null || _isAdding)">
+                        追加
+                    </MudButton>
+                </div>
+            </MudPaper>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">メンバー一覧 (@_members.Count 人)</MudText>
+        @if (_isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+        }
+        else
+        {
+            <MudList T="UserGroupMember" Dense="true">
+                @foreach (var member in _members)
+                {
+                    <MudListItem T="UserGroupMember">
+                        <div class="d-flex align-center justify-space-between width-100">
+                            <div class="d-flex align-center gap-2">
+                                <MudAvatar Color="Color.Secondary" Size="Size.Small">
+                                    @(member.User?.UserName?.FirstOrDefault().ToString().ToUpperInvariant() ?? "U")
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body2">
+                                        @member.User?.UserName
+                                        @if (member.UserId == Group.OwnerId)
+                                        {
+                                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Class="ml-2">オーナー</MudChip>
+                                        }
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        参加: @member.CreatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                            </div>
+                            @if (IsOwner && member.UserId != Group.OwnerId)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error"
+                                               Size="Size.Small" Title="メンバーから削除"
+                                               OnClick="@(() => RemoveMemberAsync(member.UserId))" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="@Close">閉じる</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public UserGroup Group { get; set; } = null!;
+
+    [Parameter] public string CurrentUserId { get; set; } = null!;
+
+    private List<UserGroupMember> _members = [];
+    private ApplicationUser? _selectedUser;
+    private bool _isLoading = true;
+    private bool _isAdding;
+
+    private bool IsOwner => Group.OwnerId == CurrentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMembersAsync();
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        _isLoading = true;
+        UserGroup? group = await UserGroupData.GetUserGroupByIdAsync(Group.Id);
+        if (group is not null)
+        {
+            _members = group.Members.OrderBy(m => m.UserId == Group.OwnerId ? 0 : 1).ThenBy(m => m.CreatedDate).ToList();
+        }
+        _isLoading = false;
+    }
+
+    private async Task<IEnumerable<ApplicationUser>> SearchUsersAsync(string? value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        List<ApplicationUser> users = await UserData.SearchUsersAsync(value, ct);
+        // すでにメンバーのユーザーは除外
+        var existingUserIds = _members.Select(m => m.UserId).ToHashSet();
+        return users.Where(u => !existingUserIds.Contains(u.Id));
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        _isAdding = true;
+        try
+        {
+            bool added = await UserGroupData.AddMemberAsync(Group.Id, _selectedUser.Id, CurrentUserId);
+            if (added)
+            {
+                Snackbar.Add($"ユーザー「{_selectedUser.UserName}」を追加しました。", Severity.Success);
+                _selectedUser = null;
+                await LoadMembersAsync();
+            }
+            else
+            {
+                Snackbar.Add("メンバーの追加に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isAdding = false;
+        }
+    }
+
+    private async Task RemoveMemberAsync(string userId)
+    {
+        try
+        {
+            bool removed = await UserGroupData.RemoveMemberAsync(Group.Id, userId, CurrentUserId);
+            if (removed)
+            {
+                Snackbar.Add("メンバーを削除しました。", Severity.Success);
+                await LoadMembersAsync();
+            }
+            else
+            {
+                Snackbar.Add("メンバーの削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Close()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+

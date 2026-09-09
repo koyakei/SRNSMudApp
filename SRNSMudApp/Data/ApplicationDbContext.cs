@@ -35,6 +35,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TagEdge> TagEdges { get; set; } = null!;
     public DbSet<TagEdgeTagAttachment> TagEdgeTagAttachments { get; set; } = null!;
     public DbSet<TaggableTarget> TaggableTargets { get; set; } = null!;
+    public DbSet<UserGroup> UserGroups { get; set; } = null!;
+    public DbSet<UserGroupMember> UserGroupMembers { get; set; } = null!;
+    public DbSet<TagAutoApproveUserGroup> TagAutoApproveGroups { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -89,6 +92,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(t => t.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<Tag>()
+            .HasOne(t => t.AutoApproveUserGroup)
+            .WithMany()
+            .HasForeignKey(t => t.AutoApproveUserGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Node (hierarchyid) のインデックス設定
         _ = builder.Entity<Tag>()
@@ -365,6 +374,56 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(i => i.InvitedByAdminId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserGroup>()
+            .HasOne(g => g.Owner)
+            .WithMany()
+            .HasForeignKey(g => g.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserGroupMember>()
+            .HasOne(m => m.UserGroup)
+            .WithMany(g => g.Members)
+            .HasForeignKey(m => m.UserGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<UserGroupMember>()
+            .HasOne(m => m.User)
+            .WithMany()
+            .HasForeignKey(m => m.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserGroupMember>()
+            .HasOne(m => m.Owner)
+            .WithMany()
+            .HasForeignKey(m => m.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserGroupMember>()
+            .HasIndex(m => new { m.UserGroupId, m.UserId })
+            .IsUnique();
+
+        _ = builder.Entity<TagAutoApproveUserGroup>()
+            .HasOne(g => g.Tag)
+            .WithMany(t => t.AutoApproveUserGroups)
+            .HasForeignKey(g => g.TagId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<TagAutoApproveUserGroup>()
+            .HasOne(g => g.UserGroup)
+            .WithMany()
+            .HasForeignKey(g => g.UserGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        _ = builder.Entity<TagAutoApproveUserGroup>()
+            .HasOne(g => g.Owner)
+            .WithMany()
+            .HasForeignKey(g => g.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagAutoApproveUserGroup>()
+            .HasIndex(g => new { g.TagId, g.UserGroupId })
+            .IsUnique();
     }
 
     /// <inheritdoc />

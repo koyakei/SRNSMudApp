@@ -36,7 +36,7 @@ public interface ITagDialogDataProvider
     Task CreateTagWithoutEmbeddingAsync(Tag newTag);
 
     /// <summary>タグ名・内容・自動承認設定を更新し、ベクトルを再生成する。対象が存在しない場合は false。</summary>
-    Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false);
+    Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null);
 
     /// <summary>全タグを対象にテキスト+ベクトル検索を行う (失敗時はテキスト検索にフォールバック、最大 50 件)。</summary>
     Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default);
@@ -117,10 +117,12 @@ public class TagDialogDataProvider(
     }
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
-    public async Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false)
+    public async Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        Tag? tagToUpdate = await context.Tags.FindAsync(tagId);
+        Tag? tagToUpdate = await context.Tags
+            .Include(t => t.AutoApproveUserGroups)
+            .FirstOrDefaultAsync(t => t.Id == tagId);
         if (tagToUpdate is null)
         {
             return false;
@@ -129,6 +131,40 @@ public class TagDialogDataProvider(
         tagToUpdate.Name = name;
         tagToUpdate.Content = content ?? "";
         tagToUpdate.AutoAcceptIncomingTaggingRequests = autoAcceptIncomingTaggingRequests;
+
+        if (allowedUserGroupIds is not null)
+        {
+            var targetGroupIds = allowedUserGroupIds.ToHashSet();
+            var toRemove = tagToUpdate.AutoApproveUserGroups
+                .Where(g => !targetGroupIds.Contains(g.UserGroupId))
+                .ToList();
+            foreach (var rel in toRemove)
+            {
+                tagToUpdate.AutoApproveUserGroups.Remove(rel);
+                context.TagAutoApproveGroups.Remove(rel);
+            }
+
+            var existingGroupIds = tagToUpdate.AutoApproveUserGroups
+                .Select(g => g.UserGroupId)
+                .ToHashSet();
+
+            foreach (var groupId in targetGroupIds)
+            {
+                if (!existingGroupIds.Contains(groupId))
+                {
+                    tagToUpdate.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+                    {
+                        TagId = tagId,
+                        UserGroupId = groupId,
+                        OwnerId = tagToUpdate.OwnerId,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    });
+                }
+            }
+
+            tagToUpdate.AutoApproveUserGroupId = targetGroupIds.FirstOrDefault();
+        }
 
         // タグ名が変更された場合などに備え、ベクトルも再生成する
         try

@@ -5,8 +5,7 @@
 
 <div class="quoted-item-preview rounded-lg pa-3 my-2 cursor-pointer"
      style="border: 1px solid var(--mud-palette-lines-default); background-color: var(--mud-palette-background-grey);"
-     @onclick="HandleClick" @onclick:stopPropagation="true"
-     data-testid="@($"quoted-item-preview-{QuotedItemId}")">
+     @onclick="HandleClick" @onclick:stopPropagation="true" data-testid="@($"quoted-item-preview-{QuotedItemId}")">
     @switch (_isLoading)
     {
         case true:

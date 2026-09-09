@@ -347,7 +347,9 @@ public class TaggingContractService(
     }
 
     /// <summary>
-    ///     タグの <c>AutoAcceptIncomingTaggingRequests</c> フラグを確認し、有効であれば即時承認する。
+    ///     タグの自動承認設定を確認し、条件を満たしていれば即時承認する。
+    ///     - 委任グループ（AutoApproveUserGroupId）が設定されている場合: リクエスト送信者が該当グループのメンバーであれば即時承認。
+    ///     - 委任グループ未設定かつ AutoAcceptIncomingTaggingRequests が有効な場合: 即時承認。
     ///     <see cref="ProposeGratisContractAsync" /> および <see cref="ProposeMutualContractAsync" /> から共有して使用する。
     /// </summary>
     private async Task<Result<TaggingRequestEntity>> TryAutoAcceptAsync(
@@ -356,13 +358,42 @@ public class TaggingContractService(
         string tagOwnerUserId)
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        bool autoAccept = await dbContext.Tags
+        var tagInfo = await dbContext.Tags
             .AsNoTracking()
             .Where(t => t.Id == requestedTagId)
-            .Select(t => t.AutoAcceptIncomingTaggingRequests)
+            .Select(t => new { t.AutoAcceptIncomingTaggingRequests, t.AutoApproveUserGroupId })
             .FirstOrDefaultAsync();
 
-        if (!autoAccept)
+        if (tagInfo is null)
+        {
+            return new Success<TaggingRequestEntity>(contract);
+        }
+
+        var allowedGroupIds = await dbContext.TagAutoApproveGroups
+            .AsNoTracking()
+            .Where(g => g.TagId == requestedTagId)
+            .Select(g => g.UserGroupId)
+            .ToListAsync();
+
+        if (tagInfo.AutoApproveUserGroupId.HasValue && !allowedGroupIds.Contains(tagInfo.AutoApproveUserGroupId.Value))
+        {
+            allowedGroupIds.Add(tagInfo.AutoApproveUserGroupId.Value);
+        }
+
+        var shouldAutoAccept = false;
+
+        if (allowedGroupIds.Count > 0)
+        {
+            shouldAutoAccept = await dbContext.UserGroupMembers
+                .AsNoTracking()
+                .AnyAsync(m => allowedGroupIds.Contains(m.UserGroupId) && m.UserId == contract.RequesterUserId);
+        }
+        else if (tagInfo.AutoAcceptIncomingTaggingRequests)
+        {
+            shouldAutoAccept = true;
+        }
+
+        if (!shouldAutoAccept)
         {
             return new Success<TaggingRequestEntity>(contract);
         }

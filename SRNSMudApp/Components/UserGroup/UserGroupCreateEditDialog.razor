@@ -1,0 +1,97 @@
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@inject IUserGroupDataProvider UserGroupData
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="_name" Label="グループ名" Variant="Variant.Outlined" Class="mb-4"
+                      AutoFocus="true" Required="true" RequiredError="グループ名は必須です" MaxLength="100" />
+
+        <MudTextField T="string" @bind-Value="_description" Label="説明" Variant="Variant.Outlined" Lines="3"
+                      MaxLines="5" MaxLength="500" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync" Disabled="@_isSaving">
+            @switch (_isSaving)
+            {
+                case true:
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>保存中...</span>
+                    break;
+                case false:
+                    <span>保存</span>
+                    break;
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public UserGroup? Group { get; set; }
+
+    [Parameter] public string CurrentUserId { get; set; } = null!;
+
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+    private bool _isSaving;
+
+    protected override void OnInitialized()
+    {
+        if (Group is not null)
+        {
+            _name = Group.Name;
+            _description = Group.Description;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            Snackbar.Add("グループ名は必須です。", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            if (Group is null)
+            {
+                UserGroup created = await UserGroupData.CreateUserGroupAsync(_name, _description, CurrentUserId);
+                Snackbar.Add($"グループ「{created.Name}」を作成しました。", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+            else
+            {
+                bool updated = await UserGroupData.UpdateUserGroupAsync(Group.Id, _name, _description, CurrentUserId);
+                if (updated)
+                {
+                    Snackbar.Add($"グループ「{_name}」を更新しました。", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("グループの更新権限がないか、見つかりませんでした。", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}
+

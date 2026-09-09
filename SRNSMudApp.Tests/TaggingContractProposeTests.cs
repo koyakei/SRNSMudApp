@@ -142,4 +142,178 @@ public class TaggingContractProposeTests : TaggingContractTestBase
             .FirstOrDefaultAsync(c => c.Id == contract.Id);
         Assert.NotNull(saved);
     }
+
+    [Fact]
+    public async Task ProposeGratisContractAsync_WhenTagDelegatedToGroup_AndRequesterIsMember_ShouldExecuteImmediately()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var group = new UserGroup { Name = $"DelegatedGroup_{tid}", OwnerId = tagOwnerId };
+        var member = new UserGroupMember { UserGroup = group, UserId = requesterId, OwnerId = tagOwnerId };
+        group.Members.Add(member);
+        dbContext.UserGroups.Add(group);
+        await dbContext.SaveChangesAsync();
+
+        var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = requesterId };
+        var tag = new Tag
+        {
+            Name = $"DelegatedTag_{tid}",
+            OwnerId = tagOwnerId,
+            AutoApproveUserGroupId = group.Id,
+            CachedWeight = 10
+        };
+        dbContext.Items.Add(targetItem);
+        dbContext.Tags.Add(tag);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem.Id,
+            tag.Id,
+            requestType: TaggingRequestType.Add,
+            proposedWeight: 1,
+            message: "delegate test");
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        dbContext.ChangeTracker.Clear();
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Executed, saved!.Status);
+        Assert.NotNull(await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id));
+    }
+
+    [Fact]
+    public async Task ProposeGratisContractAsync_WhenTagDelegatedToGroup_AndRequesterIsNotMember_ShouldRemainProposed()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        var otherUserId = $"other_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId, otherUserId);
+
+        var group = new UserGroup { Name = $"DelegatedGroup_{tid}", OwnerId = tagOwnerId };
+        var member = new UserGroupMember { UserGroup = group, UserId = otherUserId, OwnerId = tagOwnerId };
+        group.Members.Add(member);
+        dbContext.UserGroups.Add(group);
+        await dbContext.SaveChangesAsync();
+
+        var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = requesterId };
+        var tag = new Tag
+        {
+            Name = $"DelegatedTag_{tid}",
+            OwnerId = tagOwnerId,
+            AutoApproveUserGroupId = group.Id,
+            CachedWeight = 10
+        };
+        dbContext.Items.Add(targetItem);
+        dbContext.Tags.Add(tag);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem.Id,
+            tag.Id,
+            requestType: TaggingRequestType.Add,
+            proposedWeight: 1,
+            message: "not member test");
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        dbContext.ChangeTracker.Clear();
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Proposed, saved!.Status);
+        Assert.Null(await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id));
+    }
+
+    [Fact]
+    public async Task ProposeGratisContractAsync_WhenMultipleGroupsAllowed_AndRequesterIsInAnyGroup_ShouldExecuteImmediately()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        var otherUserId = $"other_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId, otherUserId);
+
+        var groupA = new UserGroup { Name = $"GroupA_{tid}", OwnerId = tagOwnerId };
+        var memberA = new UserGroupMember { UserGroup = groupA, UserId = otherUserId, OwnerId = tagOwnerId };
+        groupA.Members.Add(memberA);
+
+        var groupB = new UserGroup { Name = $"GroupB_{tid}", OwnerId = tagOwnerId };
+        var memberB = new UserGroupMember { UserGroup = groupB, UserId = requesterId, OwnerId = tagOwnerId };
+        groupB.Members.Add(memberB);
+
+        dbContext.UserGroups.AddRange(groupA, groupB);
+        await dbContext.SaveChangesAsync();
+
+        var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = requesterId };
+        var tag = new Tag
+        {
+            Name = $"MultiGroupTag_{tid}",
+            OwnerId = tagOwnerId,
+            CachedWeight = 10
+        };
+        tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup { Tag = tag, UserGroupId = groupA.Id, OwnerId = tagOwnerId });
+        tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup { Tag = tag, UserGroupId = groupB.Id, OwnerId = tagOwnerId });
+
+        dbContext.Items.Add(targetItem);
+        dbContext.Tags.Add(tag);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem.Id,
+            tag.Id,
+            requestType: TaggingRequestType.Add,
+            proposedWeight: 1,
+            message: "multi group test");
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        dbContext.ChangeTracker.Clear();
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Executed, saved!.Status);
+        Assert.NotNull(await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id));
+    }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.SqlServer.Types;
 using SRNSMudApp.Data;
@@ -13,14 +14,11 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Migrations;
 
 [DbContext(typeof(ApplicationDbContext))]
-partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+[Migration("20260909121002_AddUserGroupAndTagDelegation")]
+partial class _20260909121002_AddUserGroupAndTagDelegation
 {
-    // If you encounter a merge conflict in the line below, it means you need to
-    // discard one of the migration branches and recreate its migrations on top of
-    // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20260909123454_AddTagAutoApproveUserGroups";
-
-    protected override void BuildModel(ModelBuilder modelBuilder)
+    /// <inheritdoc />
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
         modelBuilder
@@ -583,42 +581,6 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     {
                         t.HasCheckConstraint("CK_Tags_RootOnlyForUniversalTag", "[Name] = N'全て∀' OR [Node] <> hierarchyid::GetRoot()");
                     });
-            });
-
-        modelBuilder.Entity("SRNSMudApp.Data.TagAutoApproveUserGroup", b =>
-            {
-                var id = b.Property<int>("Id")
-                    .ValueGeneratedOnAdd()
-                    .HasColumnType("int");
-
-                SqlServerPropertyBuilderExtensions.UseIdentityColumn(id);
-
-                b.Property<DateTime>("CreatedDate")
-                    .HasColumnType("datetime2");
-
-                b.Property<string>("OwnerId")
-                    .IsRequired()
-                    .HasColumnType("nvarchar(450)");
-
-                b.Property<int>("TagId")
-                    .HasColumnType("int");
-
-                b.Property<DateTime>("UpdatedDate")
-                    .HasColumnType("datetime2");
-
-                b.Property<int>("UserGroupId")
-                    .HasColumnType("int");
-
-                b.HasKey("Id");
-
-                b.HasIndex("OwnerId");
-
-                b.HasIndex("UserGroupId");
-
-                b.HasIndex("TagId", "UserGroupId")
-                    .IsUnique();
-
-                b.ToTable("TagAutoApproveGroups");
             });
 
         modelBuilder.Entity("SRNSMudApp.Data.TagEdge", b =>
@@ -1320,33 +1282,6 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Owner");
             });
 
-        modelBuilder.Entity("SRNSMudApp.Data.TagAutoApproveUserGroup", b =>
-            {
-                b.HasOne("SRNSMudApp.Data.ApplicationUser", "Owner")
-                    .WithMany()
-                    .HasForeignKey("OwnerId")
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .IsRequired();
-
-                b.HasOne("SRNSMudApp.Data.Tag", "Tag")
-                    .WithMany("AutoApproveUserGroups")
-                    .HasForeignKey("TagId")
-                    .OnDelete(DeleteBehavior.Cascade)
-                    .IsRequired();
-
-                b.HasOne("SRNSMudApp.Data.UserGroup", "UserGroup")
-                    .WithMany()
-                    .HasForeignKey("UserGroupId")
-                    .OnDelete(DeleteBehavior.Cascade)
-                    .IsRequired();
-
-                b.Navigation("Owner");
-
-                b.Navigation("Tag");
-
-                b.Navigation("UserGroup");
-            });
-
         modelBuilder.Entity("SRNSMudApp.Data.TagEdge", b =>
             {
                 b.HasOne("SRNSMudApp.Data.ApplicationUser", "Owner")
@@ -1662,8 +1597,6 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
 
         modelBuilder.Entity("SRNSMudApp.Data.Tag", b =>
             {
-                b.Navigation("AutoApproveUserGroups");
-
                 b.Navigation("SourceTagRelations");
 
                 b.Navigation("TagRelations");

@@ -1,0 +1,230 @@
+@page "/UserGroup/List"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@using SRNSMudApp.Services.Dialogs
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IUserGroupDataProvider UserGroupData
+@inject IDialogLauncher DialogLauncher
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <div class="d-flex align-center mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Large" Color="Color.Primary" />
+                ユーザーグループ管理
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                タグの自動承認委任や共同管理に利用するグループを作成・管理します。
+            </MudText>
+        </div>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.GroupAdd"
+                   OnClick="@OpenCreateDialogAsync">
+            新規グループ作成
+        </MudButton>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Indeterminate="true" />
+        </div>
+    }
+    else if (_groups.Count == 0)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+            <MudIcon Icon="@Icons.Material.Filled.GroupOff" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+            <MudText Typo="Typo.h6">グループがまだありません</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                新しいユーザーグループを作成して、メンバーを追加してみましょう。
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@OpenCreateDialogAsync">
+                グループを作成
+            </MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudTable Items="@_groups" Hover="true" Elevation="2" Class="rounded-xl">
+            <HeaderContent>
+                <MudTh>グループ名</MudTh>
+                <MudTh>説明</MudTh>
+                <MudTh>オーナー</MudTh>
+                <MudTh>メンバー数</MudTh>
+                <MudTh>更新日時</MudTh>
+                <MudTh Style="text-align: right;">アクション</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="グループ名">
+                    <div class="d-flex align-center gap-2">
+                        <MudAvatar Color="Color.Primary" Size="Size.Small">
+                            @(context.Name.FirstOrDefault().ToString().ToUpperInvariant())
+                        </MudAvatar>
+                        <strong>@context.Name</strong>
+                        @if (context.OwnerId == _currentUserId)
+                        {
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small">管理者</MudChip>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="説明">
+                    @if (string.IsNullOrEmpty(context.Description))
+                    {
+                        <span class="text-secondary">-</span>
+                    }
+                    else
+                    {
+                        @context.Description
+                    }
+                </MudTd>
+                <MudTd DataLabel="オーナー">@context.Owner?.UserName</MudTd>
+                <MudTd DataLabel="メンバー数">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.People">
+                        @context.Members.Count 人
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="更新日時">@context.UpdatedDate.ToLocalTime().ToString("g")</MudTd>
+                <MudTd Style="text-align: right;" DataLabel="アクション">
+                    <div class="d-flex justify-end gap-1">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.People"
+                                   OnClick="@(() => OpenMembersDialogAsync(context))">
+                            メンバー
+                        </MudButton>
+                        @if (context.OwnerId == _currentUserId)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small"
+                                           Title="編集" OnClick="@(() => OpenEditDialogAsync(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                           Title="削除" OnClick="@(() => DeleteGroupAsync(context))" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<UserGroup> _groups = [];
+    private string? _currentUserId;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var auth = await AuthState;
+            _currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        await LoadGroupsAsync();
+    }
+
+    private async Task LoadGroupsAsync()
+    {
+        _isLoading = true;
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            var groups = await UserGroupData.GetUserGroupsForUserAsync(_currentUserId);
+            _groups = groups.ToList();
+        }
+        _isLoading = false;
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(UserGroupCreateEditDialog.CurrentUserId), _currentUserId }
+        };
+
+        var dialog = await DialogLauncher.ShowAsync<UserGroupCreateEditDialog>("新規グループ作成", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadGroupsAsync();
+        }
+    }
+
+    private async Task OpenEditDialogAsync(UserGroup group)
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(UserGroupCreateEditDialog.Group), group },
+            { nameof(UserGroupCreateEditDialog.CurrentUserId), _currentUserId }
+        };
+
+        var dialog = await DialogLauncher.ShowAsync<UserGroupCreateEditDialog>("グループを編集", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadGroupsAsync();
+        }
+    }
+
+    private async Task OpenMembersDialogAsync(UserGroup group)
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(UserGroupMembersDialog.Group), group },
+            { nameof(UserGroupMembersDialog.CurrentUserId), _currentUserId }
+        };
+
+        var dialog = await DialogLauncher.ShowAsync<UserGroupMembersDialog>("メンバー管理", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadGroupsAsync();
+        }
+    }
+
+    private async Task DeleteGroupAsync(UserGroup group)
+    {
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            return;
+        }
+
+        try
+        {
+            bool deleted = await UserGroupData.DeleteUserGroupAsync(group.Id, _currentUserId);
+            if (deleted)
+            {
+                Snackbar.Add($"グループ「{group.Name}」を削除しました。", Severity.Success);
+                await LoadGroupsAsync();
+            }
+            else
+            {
+                Snackbar.Add("グループの削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+}
+

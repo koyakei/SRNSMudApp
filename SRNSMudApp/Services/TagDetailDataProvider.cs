@@ -42,6 +42,9 @@ public class TagDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFac
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tag = await context.Tags
             .Include(t => t.Owner)
+            .Include(t => t.AutoApproveUserGroup)
+            .Include(t => t.AutoApproveUserGroups)
+                .ThenInclude(g => g.UserGroup)
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == tagId);
 
