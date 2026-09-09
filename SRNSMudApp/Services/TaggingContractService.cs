@@ -382,15 +382,15 @@ public class TaggingContractService(
 
         var shouldAutoAccept = false;
 
-        if (allowedGroupIds.Count > 0)
+        if (tagInfo.AutoAcceptIncomingTaggingRequests)
+        {
+            shouldAutoAccept = true;
+        }
+        else if (allowedGroupIds.Count > 0)
         {
             shouldAutoAccept = await dbContext.UserGroupMembers
                 .AsNoTracking()
                 .AnyAsync(m => allowedGroupIds.Contains(m.UserGroupId) && m.UserId == contract.RequesterUserId);
-        }
-        else if (tagInfo.AutoAcceptIncomingTaggingRequests)
-        {
-            shouldAutoAccept = true;
         }
 
         if (!shouldAutoAccept)

@@ -70,6 +70,101 @@ public class ItemCardDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task CanUserAttachTagDirectlyAsync_WhenTagIsAutoApproved_ReturnsTrueAndAddsRelation()
+    {
+        var (db, sut, userId, _, itemId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var otherOwnerId = $"other_owner_{tid}";
+            await db.SeedUsersAsync(otherOwnerId);
+
+            var autoApproveTag = new Tag
+            {
+                Name = $"auto_tag_{tid}",
+                OwnerId = otherOwnerId,
+                AutoAcceptIncomingTaggingRequests = true,
+                CachedWeight = 5
+            };
+            db.Tags.Add(autoApproveTag);
+            await db.SaveChangesAsync();
+
+            // Act 1: Check can attach directly
+            var canAttach = await sut.CanUserAttachTagDirectlyAsync(autoApproveTag.Id, userId);
+            Assert.True(canAttach);
+
+            // Act 2: Add free tag relation directly
+            var relation = await sut.AddFreeTagRelationAsync(itemId, autoApproveTag.Id, userId);
+
+            // Assert
+            Assert.NotNull(relation);
+            Assert.Equal(itemId, relation.ItemId);
+            Assert.Equal(autoApproveTag.Id, relation.TagId);
+            Assert.Equal(userId, relation.OwnerId);
+
+            var updatedTag = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == autoApproveTag.Id);
+            Assert.Equal(6, updatedTag!.CachedWeight);
+
+            var ledger = await db.TagWeightLedgers.FirstOrDefaultAsync(l => l.SourceId == relation.Id);
+            Assert.NotNull(ledger);
+            Assert.Equal("Auto-Approved Tagging", ledger.Reason);
+            Assert.Equal(1, ledger.Delta);
+        }
+    }
+
+    [Fact]
+    public async Task CanUserAttachTagDirectlyAsync_WhenUserInDelegatedGroup_ReturnsTrue()
+    {
+        var (db, sut, userId, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var otherOwnerId = $"group_owner_{tid}";
+            await db.SeedUsersAsync(otherOwnerId);
+
+            var group = new UserGroup { Name = $"Group_{tid}", OwnerId = otherOwnerId };
+            group.Members.Add(new UserGroupMember { UserGroup = group, UserId = userId, OwnerId = otherOwnerId });
+            db.UserGroups.Add(group);
+            await db.SaveChangesAsync();
+
+            var tag = new Tag
+            {
+                Name = $"delegated_{tid}",
+                OwnerId = otherOwnerId,
+                AutoApproveUserGroupId = group.Id,
+                CachedWeight = 0
+            };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var canAttach = await sut.CanUserAttachTagDirectlyAsync(tag.Id, userId);
+            Assert.True(canAttach);
+        }
+    }
+
+    [Fact]
+    public async Task CanUserAttachTagDirectlyAsync_WhenNotAutoApproved_ReturnsFalse()
+    {
+        var (db, sut, userId, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var otherOwnerId = $"normal_owner_{tid}";
+            await db.SeedUsersAsync(otherOwnerId);
+
+            var tag = new Tag
+            {
+                Name = $"normal_{tid}",
+                OwnerId = otherOwnerId,
+                AutoAcceptIncomingTaggingRequests = false,
+                CachedWeight = 0
+            };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var canAttach = await sut.CanUserAttachTagDirectlyAsync(tag.Id, userId);
+            Assert.False(canAttach);
+        }
+    }
+
     /// <summary>テスト用のシンプルなファクトリ。</summary>
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>

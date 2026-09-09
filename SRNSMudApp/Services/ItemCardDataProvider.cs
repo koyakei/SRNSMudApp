@@ -26,6 +26,14 @@ public interface IItemCardDataProvider
 
     /// <summary>アイテム本文を更新する。対象が存在しない場合は false。</summary>
     Task<bool> UpdateItemContentAsync(int itemId, string content);
+
+    /// <summary>
+    ///     指定ユーザーがタグを直接（コントラクト提案を経ずに）付与可能かどうかを判定する。
+    ///     - システムタグ・リアクションタグ
+    ///     - タグのオーナー本人
+    ///     - タグの自動承認（全体またはユーザーが所属するグループ）が有効な場合
+    /// </summary>
+    Task<bool> CanUserAttachTagDirectlyAsync(int tagId, string userId);
 }
 
 public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemCardDataProvider
@@ -108,5 +116,17 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         itemToUpdate.Content = content;
         _ = await context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<bool> CanUserAttachTagDirectlyAsync(int tagId, string userId)
+    {
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        Tag? tag = await context.Tags.FindAsync(tagId);
+        if (tag is null)
+        {
+            return false;
+        }
+
+        return await context.CanUserAttachTagDirectlyAsync(tag, userId);
     }
 }

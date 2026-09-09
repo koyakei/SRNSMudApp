@@ -622,15 +622,8 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
-#pragma warning disable CA1508
-        var requiresContract = tagFromDb.GetKind() switch
-        {
-            UserCustomTag custom => custom.OwnerId != CurrentUserId,
-            SystemClassificationTag or VoteTag or ReactionTag => false
-        };
-#pragma warning restore CA1508
-
-        if (requiresContract)
+        var canAttachDirectly = await ItemCardData.CanUserAttachTagDirectlyAsync(tagFromDb.Id, CurrentUserId);
+        if (!canAttachDirectly)
         {
             await ProposeTaggingContractAsync(tagFromDb);
             return;
