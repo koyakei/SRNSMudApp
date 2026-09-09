@@ -48,19 +48,21 @@
                         }
                     </div>
 
-                    @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
-                    {
-                        case true:
-                            <div class="d-flex" @onclick:stopPropagation="true">
+                    <div class="d-flex align-center" @onclick:stopPropagation="true">
+                        @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
+                        {
+                            case true:
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
                                                OnClick="EditItemAsync" title="このアイテムを編集" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                                OnClick="DeleteItemAsync" title="このアイテムを削除" />
-                            </div>
-                            break;
-                        case false:
-                            break;
-                    }
+                                break;
+                            case false:
+                                <MudIconButton Icon="@Icons.Material.Outlined.Report" Size="Size.Small" Color="Color.Default"
+                                               OnClick="ReportItemAsync" title="このアイテムを通報" />
+                                break;
+                        }
+                    </div>
                 </div>
 
                 <div @onclick:stopPropagation="true">

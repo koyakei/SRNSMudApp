@@ -1,0 +1,276 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@inject IContentReportService ContentReportService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<MudDialog>
+    <DialogContent>
+        @if (Report is null)
+        {
+            <MudText>通報情報が読み込めません。</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <div class="d-flex align-center justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                            通報 #@Report.Id
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            通報日時: @Report.CreatedDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss")
+                        </MudText>
+                    </div>
+                    @switch (Report.Status)
+                    {
+                        case ReportStatus.Pending:
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">未対応</MudChip>
+                            break;
+                        case ReportStatus.Reviewed:
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">確認済み</MudChip>
+                            break;
+                        case ReportStatus.ActionTaken:
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">処置済み</MudChip>
+                            break;
+                        case ReportStatus.Dismissed:
+                            <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled">却下</MudChip>
+                            break;
+                    }
+                </div>
+
+                <MudPaper Outlined="true" Class="pa-3 rounded-lg" Style="background-color: var(--mud-palette-background-grey);">
+                    <div class="d-flex align-center gap-2 mb-2">
+                        @if (Report.TargetType == ReportTargetType.Item)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">アイテム</MudChip>
+                            @if (Report.ItemId.HasValue && Report.Item is not null)
+                            {
+                                <MudLink Href="@($"/ItemDetail/{Report.ItemId.Value}")" Target="_blank" Typo="Typo.caption">
+                                    アイテム詳細を開く ↗
+                                </MudLink>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">（対象アイテムは削除済みです）</MudText>
+                            }
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">タグ</MudChip>
+                            @if (Report.TagId.HasValue && Report.Tag is not null)
+                            {
+                                <MudLink Href="@($"/TagDetail/{Report.TagId.Value}")" Target="_blank" Typo="Typo.caption">
+                                    タグ詳細を開く ↗
+                                </MudLink>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">（対象タグは削除済みです）</MudText>
+                            }
+                        }
+                    </div>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
+                        通報時コンテンツスナップショット:
+                    </MudText>
+                    <MudText Typo="Typo.body2" Style="max-height: 120px; overflow-y: auto; white-space: pre-wrap;" Class="pa-2 border rounded">
+                        @Report.TargetContentSnapshot
+                    </MudText>
+                </MudPaper>
+
+                <MudPaper Outlined="true" Class="pa-3 rounded-lg">
+                    <MudGrid Spacing="1">
+                        <MudItem xs="12" sm="4">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">通報者</MudText>
+                            <MudText Typo="Typo.body2">@(Report.Owner?.UserName ?? "不明")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="8">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">通報理由</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Error" Class="font-weight-bold">@Report.Reason</MudText>
+                        </MudItem>
+                        @if (!string.IsNullOrEmpty(Report.Detail))
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">通報詳細コメント</MudText>
+                                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Report.Detail</MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudPaper>
+
+                @if (Report.HandledDate.HasValue)
+                {
+                    <MudPaper Outlined="true" Class="pa-3 rounded-lg" Style="background-color: var(--mud-palette-background-grey);">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                            対応日時: @Report.HandledDate.Value.ToLocalTime().ToString("yyyy/MM/dd HH:mm") / 対応管理者: @(Report.HandledByAdmin?.UserName ?? "不明")
+                        </MudText>
+                        @if (!string.IsNullOrEmpty(Report.ResolutionNote))
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1">
+                                メモ: @Report.ResolutionNote
+                            </MudText>
+                        }
+                    </MudPaper>
+                }
+
+                <MudTextField T="string"
+                              @bind-Value="_resolutionNote"
+                              Label="管理者対応メモ"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              MaxLength="1000"
+                              Placeholder="処置理由や確認結果のメモを入力してください" />
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Close" Disabled="@_isProcessing">閉じる</MudButton>
+        <MudSpacer />
+        <MudButton Color="Color.Default"
+                   Variant="Variant.Outlined"
+                   OnClick="@DismissReportAsync"
+                   Disabled="@_isProcessing">
+            却下 (問題なし)
+        </MudButton>
+        <MudButton Color="Color.Info"
+                   Variant="Variant.Outlined"
+                   OnClick="@ReviewReportAsync"
+                   Disabled="@_isProcessing">
+            確認済みにする
+        </MudButton>
+        <MudButton Color="Color.Success"
+                   Variant="Variant.Outlined"
+                   OnClick="@ResolveWithoutDeleteAsync"
+                   Disabled="@_isProcessing">
+            処置完了 (削除なし)
+        </MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   OnClick="@ResolveAndDeleteTargetAsync"
+                   Disabled="@_isProcessing">
+            @if (_isProcessing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">処理中...</span>
+            }
+            else
+            {
+                <span>対象を削除して処置完了</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    [Parameter] public ContentReport? Report { get; set; }
+
+    private string _resolutionNote = "";
+    private bool _isProcessing;
+
+    protected override void OnInitialized()
+    {
+        if (Report is not null)
+        {
+            _resolutionNote = Report.ResolutionNote ?? "";
+        }
+    }
+
+    private void Close() => MudDialog.Cancel();
+
+    private async Task<string?> GetAdminUserIdAsync()
+    {
+        var authState = await AuthStateTask;
+        return authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private async Task DismissReportAsync()
+    {
+        await UpdateStatusAsync(ReportStatus.Dismissed, "通報を却下しました。");
+    }
+
+    private async Task ReviewReportAsync()
+    {
+        await UpdateStatusAsync(ReportStatus.Reviewed, "通報を確認済みに変更しました。");
+    }
+
+    private async Task ResolveWithoutDeleteAsync()
+    {
+        await UpdateStatusAsync(ReportStatus.ActionTaken, "処置を完了として記録しました。");
+    }
+
+    private async Task UpdateStatusAsync(ReportStatus status, string successMessage)
+    {
+        if (Report is null) return;
+
+        _isProcessing = true;
+        try
+        {
+            var adminId = await GetAdminUserIdAsync();
+            if (string.IsNullOrEmpty(adminId))
+            {
+                Snackbar.Add("管理者情報が取得できません。", Severity.Error);
+                return;
+            }
+
+            var success = await ContentReportService.UpdateReportStatusAsync(Report.Id, status, _resolutionNote, adminId);
+            if (success)
+            {
+                Snackbar.Add(successMessage, Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("通報の更新に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ResolveAndDeleteTargetAsync()
+    {
+        if (Report is null) return;
+
+        _isProcessing = true;
+        try
+        {
+            var adminId = await GetAdminUserIdAsync();
+            if (string.IsNullOrEmpty(adminId))
+            {
+                Snackbar.Add("管理者情報が取得できません。", Severity.Error);
+                return;
+            }
+
+            var success = await ContentReportService.ResolveReportWithActionAsync(Report.Id, deleteTarget: true, _resolutionNote, adminId);
+            if (success)
+            {
+                Snackbar.Add("対象コンテンツを削除し、処置完了としました。", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("処置の実行に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}
+

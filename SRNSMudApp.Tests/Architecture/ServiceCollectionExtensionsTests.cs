@@ -70,6 +70,7 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(INotificationService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITimelineRecorder) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITagWeightLedgerService) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(IContentReportService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ApplicationDbSaveChangesInterceptor) && d.Lifetime == ServiceLifetime.Singleton);
     }
 
@@ -128,6 +129,7 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new ItemListExportService(null!));
         Assert.Throws<ArgumentNullException>(() => new SystemTagEnsurer(null!));
         Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(null!));
+        Assert.Throws<ArgumentNullException>(() => new ContentReportService(null!));
     }
 
     [Fact]

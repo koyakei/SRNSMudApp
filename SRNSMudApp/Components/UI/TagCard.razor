@@ -50,6 +50,10 @@
                             }
                         </MudText>
                     </div>
+                    <div @onclick:stopPropagation="true">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Report" Size="Size.Small" Color="Color.Default"
+                                       OnClick="ReportTagAsync" title="このタグを通報" />
+                    </div>
                 </div>
 
                 @{

@@ -106,7 +106,8 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<ITagDetailDataProvider>().Object)
             .AddScoped(_ => new Mock<IContractDataProvider>().Object)
             .AddScoped(_ => new Mock<IUserDataProvider>().Object)
-            .AddScoped(_ => new Mock<IAdminDataProvider>().Object);
+            .AddScoped(_ => new Mock<IAdminDataProvider>().Object)
+            .AddScoped(_ => new Mock<IContentReportService>().Object);
     }
 
     /// <summary>

@@ -368,4 +368,24 @@ public partial class TagCard : IAsyncDisposable
         _ = Snackbar.Add($"'{createdTag.Name}' を追加しました。", Severity.Success);
         return NotifyChangedAsync();
     }
+
+    private async Task ReportTagAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            _ = Snackbar.Add("通報するにはログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            [nameof(ReportContentDialog.TargetType)] = ReportTargetType.Tag,
+            [nameof(ReportContentDialog.TagId)] = Tag.Id,
+            [nameof(ReportContentDialog.TargetContent)] = $"タグ名: {Tag.Name}\n{Tag.Content}",
+            [nameof(ReportContentDialog.TargetOwnerName)] = Tag.Owner?.UserName
+        };
+
+        _ = await DialogLauncher.ShowAsync<ReportContentDialog>("不適切な投稿を通報", parameters, options);
+    }
 }

@@ -579,6 +579,26 @@ public partial class ItemCard : IAsyncDisposable
         _ = Snackbar.Add("アイテムを削除しました。", Severity.Success);
     }
 
+    private async Task ReportItemAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            _ = Snackbar.Add("通報するにはログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            [nameof(ReportContentDialog.TargetType)] = ReportTargetType.Item,
+            [nameof(ReportContentDialog.ItemId)] = Item.Id,
+            [nameof(ReportContentDialog.TargetContent)] = Item.Content,
+            [nameof(ReportContentDialog.TargetOwnerName)] = Item.Owner?.UserName
+        };
+
+        _ = await DialogLauncher.ShowAsync<ReportContentDialog>("不適切な投稿を通報", parameters, options);
+    }
+
     // --- Tag Operations ---
     private async Task OnAddTagClicked()
     {

@@ -1,0 +1,137 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
+@using SRNSMudApp.Services
+@inject IContentReportService ContentReportService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            コミュニティガイドラインに違反していると思われる投稿を通報してください。管理者が確認の上、適切な対応を行います。
+        </MudText>
+
+        <MudPaper Outlined="true" Class="pa-3 mb-4 rounded-lg" Style="background-color: var(--mud-palette-background-grey);">
+            <div class="d-flex align-center gap-2 mb-1">
+                @if (TargetType == ReportTargetType.Item)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">アイテム</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">タグ</MudChip>
+                }
+                @if (!string.IsNullOrEmpty(TargetOwnerName))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">作成者: @TargetOwnerName</MudText>
+                }
+            </div>
+            <MudText Typo="Typo.body2" Style="max-height: 100px; overflow-y: auto; white-space: pre-wrap;">@TargetContent</MudText>
+        </MudPaper>
+
+        <MudSelect T="string"
+                   @bind-Value="_selectedReason"
+                   Label="通報の理由"
+                   Variant="Variant.Outlined"
+                   AnchorOrigin="Origin.BottomCenter"
+                   Required="true"
+                   RequiredError="通報の理由を選択してください"
+                   Class="mb-3">
+            <MudSelectItem Value="@("スパム・宣伝目的")">スパム・宣伝目的</MudSelectItem>
+            <MudSelectItem Value="@("誹謗中傷・嫌がらせ")">誹謗中傷・嫌がらせ</MudSelectItem>
+            <MudSelectItem Value="@("不適切なコンテンツ（性的・暴力的）")">不適切なコンテンツ（性的・暴力的）</MudSelectItem>
+            <MudSelectItem Value="@("著作権・知的財産権の侵害")">著作権・知的財産権の侵害</MudSelectItem>
+            <MudSelectItem Value="@("その他")">その他</MudSelectItem>
+        </MudSelect>
+
+        <MudTextField T="string"
+                      @bind-Value="_detail"
+                      Label="詳細な理由（任意）"
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      MaxLength="1000"
+                      Counter="1000"
+                      Placeholder="問題箇所の詳細や補足情報があれば入力してください" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel" Disabled="@_isSubmitting">キャンセル</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   OnClick="@SubmitAsync"
+                   Disabled="@(string.IsNullOrWhiteSpace(_selectedReason) || _isSubmitting)">
+            @if (_isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">送信中...</span>
+            }
+            else
+            {
+                <span>通報を送信</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    [Parameter] public ReportTargetType TargetType { get; set; }
+    [Parameter] public int? ItemId { get; set; }
+    [Parameter] public int? TagId { get; set; }
+    [Parameter] public string TargetContent { get; set; } = string.Empty;
+    [Parameter] public string? TargetOwnerName { get; set; }
+
+    private string _selectedReason = "スパム・宣伝目的";
+    private string _detail = "";
+    private bool _isSubmitting;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedReason))
+        {
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var authState = await AuthStateTask;
+            var currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                Snackbar.Add("通報するにはログインが必要です。", Severity.Warning);
+                MudDialog.Cancel();
+                return;
+            }
+
+            var dto = new CreateContentReportDto
+            {
+                TargetType = TargetType,
+                ItemId = ItemId,
+                TagId = TagId,
+                Reason = _selectedReason,
+                Detail = _detail
+            };
+
+            _ = await ContentReportService.CreateReportAsync(dto, currentUserId);
+
+            Snackbar.Add("通報を受け付けました。ご協力ありがとうございます。", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"通報の送信中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
+

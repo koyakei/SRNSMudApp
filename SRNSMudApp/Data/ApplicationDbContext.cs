@@ -38,6 +38,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UserGroup> UserGroups { get; set; } = null!;
     public DbSet<UserGroupMember> UserGroupMembers { get; set; } = null!;
     public DbSet<TagAutoApproveUserGroup> TagAutoApproveGroups { get; set; } = null!;
+    public DbSet<ContentReport> ContentReports { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -424,6 +425,37 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         _ = builder.Entity<TagAutoApproveUserGroup>()
             .HasIndex(g => new { g.TagId, g.UserGroupId })
             .IsUnique();
+
+        // ContentReport (不適切な投稿・タグの通報) のリレーション・インデックス設定
+        _ = builder.Entity<ContentReport>()
+            .HasOne(r => r.Owner)
+            .WithMany()
+            .HasForeignKey(r => r.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ContentReport>()
+            .HasOne(r => r.HandledByAdmin)
+            .WithMany()
+            .HasForeignKey(r => r.HandledByAdminId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ContentReport>()
+            .HasOne(r => r.Item)
+            .WithMany()
+            .HasForeignKey(r => r.ItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        _ = builder.Entity<ContentReport>()
+            .HasOne(r => r.Tag)
+            .WithMany()
+            .HasForeignKey(r => r.TagId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        _ = builder.Entity<ContentReport>()
+            .HasIndex(r => r.Status);
+
+        _ = builder.Entity<ContentReport>()
+            .HasIndex(r => r.CreatedDate);
     }
 
     /// <inheritdoc />
