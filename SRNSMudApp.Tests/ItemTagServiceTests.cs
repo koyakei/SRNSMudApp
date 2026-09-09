@@ -90,6 +90,95 @@ public class ItemTagServiceTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    ///     systemがownerのタグ（IsSystem=true）を一般ユーザーAが付与したとき、
+    ///     一般ユーザーBがそのタグ関連付けを解除できないことを検証する。
+    /// </summary>
+    [Fact]
+    public async Task RemoveTagRelationAsync_WhenSystemTagAssignedByUserA_ShouldNotAllowUserBToRemove()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var systemUserId = $"sys_{tid}";
+            var userAId = $"userA_{tid}";
+            var userBId = $"userB_{tid}";
+            await dbContext.SeedUsersAsync(systemUserId, userAId, userBId);
+
+            var item = new Item { Content = $"UserItem_{tid}", OwnerId = userAId };
+            dbContext.Items.Add(item);
+            // systemが所有者のタグ（IsSystem = true）
+            var systemTag = new Tag { Name = $"SystemTag_{tid}", OwnerId = systemUserId, CachedWeight = 10, IsSystem = true };
+            dbContext.Tags.Add(systemTag);
+            await dbContext.SaveChangesAsync();
+
+            // 1. 一般ユーザーAがsystemタグをアイテムに付与
+            var addResult = await service.AddTagToItemAsync(item.Id, systemTag.Id, userAId);
+            Assert.Null(addResult);
+
+            TagRelation? relation = await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
+            Assert.NotNull(relation);
+            Assert.Equal(userAId, relation.OwnerId);
+
+            // 2. 一般ユーザーBがそのタグ関連付けの解除を試行
+            var removeResult = await service.RemoveTagRelationAsync(relation.Id, userBId);
+
+            // 3. 権限エラーが返され解除できないことを検証
+            Assert.Equal("関連付けた本人ではないため、解除する権限がありません。", removeResult);
+
+            // 4. DBからTagRelationが削除されていないことを検証
+            TagRelation? remainingRelation = await dbContext.TagRelations.AsNoTracking().FirstOrDefaultAsync(tr => tr.Id == relation.Id);
+            Assert.NotNull(remainingRelation);
+
+            // 5. タグのCachedWeightが減少していないことを検証（付与時の11のまま）
+            Tag? tagAfterAttempt = await dbContext.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == systemTag.Id);
+            Assert.Equal(11, tagAfterAttempt!.CachedWeight);
+        }
+    }
+
+    /// <summary>
+    ///     OwnerIdが明示的に "system" であるタグを一般ユーザーAが付与したとき、
+    ///     一般ユーザーBがそのタグ関連付けを解除できないことを検証する。
+    /// </summary>
+    [Fact]
+    public async Task RemoveTagRelationAsync_WhenTagOwnerIsLiteralSystem_ShouldNotAllowUserBToRemove()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            const string systemUserId = "system";
+            var userAId = $"userA_{tid}";
+            var userBId = $"userB_{tid}";
+            await dbContext.SeedUsersAsync(systemUserId, userAId, userBId);
+
+            var item = new Item { Content = $"UserItem_{tid}", OwnerId = userAId };
+            dbContext.Items.Add(item);
+            // OwnerId が "system" そのもののタグ
+            var systemTag = new Tag { Name = $"SystemTag_{tid}", OwnerId = systemUserId, CachedWeight = 5 };
+            dbContext.Tags.Add(systemTag);
+            await dbContext.SaveChangesAsync();
+
+            // 1. 一般ユーザーAがsystemタグを付与
+            var addResult = await service.AddTagToItemAsync(item.Id, systemTag.Id, userAId);
+            Assert.Null(addResult);
+
+            TagRelation? relation = await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == item.Id && tr.TagId == systemTag.Id);
+            Assert.NotNull(relation);
+            Assert.Equal(userAId, relation.OwnerId);
+
+            // 2. 一般ユーザーBが解除を試みる
+            var removeResult = await service.RemoveTagRelationAsync(relation.Id, userBId);
+
+            // 3. 関連付けた本人でないためエラーが返ること
+            Assert.Equal("関連付けた本人ではないため、解除する権限がありません。", removeResult);
+
+            // 4. DB上に依然として存在し、CachedWeightも維持されていること
+            TagRelation? remainingRelation = await dbContext.TagRelations.AsNoTracking().FirstOrDefaultAsync(tr => tr.Id == relation.Id);
+            Assert.NotNull(remainingRelation);
+            Assert.Equal(6, (await dbContext.Tags.AsNoTracking().FirstAsync(t => t.Id == systemTag.Id)).CachedWeight);
+        }
+    }
+
     [Fact]
     public async Task RemoveTagRelationAsync_ShouldDecreaseCachedWeightAndAddLedger()
     {
