@@ -9,13 +9,15 @@ using SRNSMudApp.Data;
 
 namespace SRNSMudApp.Components.UI;
 
+public record ContentSegment(string Text, bool IsUrl);
+
 /// <summary>
 ///     ItemCard コンポーネントに含まれる純粋なビジネスロジックを切り出した ViewModel。
 ///     UI への依存を持たないため、bUnit を使わずに xUnit で直接単体テストできる。
 /// </summary>
 public static partial class ItemCardViewModel
 {
-    [GeneratedRegex(@"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)")]
+    [GeneratedRegex(@"https?:\/\/(?:localhost(?:\:\d+)?|(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6})\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)")]
     private static partial Regex UrlRegex();
 
     public static RequestInfo GetRequestInfo(Data.Item item)
@@ -152,6 +154,9 @@ public static partial class ItemCardViewModel
     public static bool CanModifyRelation(string? relationOwnerId, string? currentUserId)
         => !string.IsNullOrEmpty(currentUserId) && relationOwnerId == currentUserId;
 
+    [GeneratedRegex(@"\/(?:ItemDetail|TagDetail)\/\d+")]
+    private static partial Regex InternalLinkRegex();
+
     /// <summary>
     ///     テキストから URL を抽出して返す。重複は除去される。
     /// </summary>
@@ -170,6 +175,63 @@ public static partial class ItemCardViewModel
             {
                 results.Add(match.Value);
             }
+        }
+
+        MatchCollection internalMatches = InternalLinkRegex().Matches(text);
+        foreach (Match match in internalMatches)
+        {
+            if (!results.Contains(match.Value))
+            {
+                results.Add(match.Value);
+            }
+        }
+
+        return results;
+    }
+
+
+    /// <summary>
+    ///     テキストを URL と通常の文字列のセグメントに分割して返す。
+    /// </summary>
+    public static IReadOnlyList<ContentSegment> GetContentSegments(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        var results = new List<ContentSegment>();
+        var matches = new List<Match>();
+        matches.AddRange(UrlRegex().Matches(text).Cast<Match>());
+        matches.AddRange(InternalLinkRegex().Matches(text).Cast<Match>());
+
+        matches = matches.OrderBy(m => m.Index).ToList();
+
+        var validMatches = new List<Match>();
+        int currentEnd = 0;
+        foreach (var m in matches)
+        {
+            if (m.Index >= currentEnd)
+            {
+                validMatches.Add(m);
+                currentEnd = m.Index + m.Length;
+            }
+        }
+
+        int lastIndex = 0;
+        foreach (var match in validMatches)
+        {
+            if (match.Index > lastIndex)
+            {
+                results.Add(new ContentSegment(text.Substring(lastIndex, match.Index - lastIndex), false));
+            }
+            results.Add(new ContentSegment(match.Value, true));
+            lastIndex = match.Index + match.Length;
+        }
+
+        if (lastIndex < text.Length)
+        {
+            results.Add(new ContentSegment(text.Substring(lastIndex), false));
         }
 
         return results;

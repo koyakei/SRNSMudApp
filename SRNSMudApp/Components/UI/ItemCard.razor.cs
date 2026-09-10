@@ -566,6 +566,74 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 
+#pragma warning disable CA1031
+    private async Task SplitSelectionAsync()
+    {
+        if (Item.OwnerId != CurrentUserId)
+        {
+            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
+            return;
+        }
+
+        string selectedText;
+        try
+        {
+            selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
+        }
+        catch (JSException)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            _ = Snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
+            return;
+        }
+
+        if (Item.Content == null || !Item.Content.Contains(selectedText, StringComparison.Ordinal))
+        {
+            _ = Snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            var newItem = new Data.Item
+            {
+                Content = selectedText,
+                OwnerId = CurrentUserId,
+                IsPrivate = Item.IsPrivate,
+                TargetUserGroupId = Item.TargetUserGroupId
+            };
+
+            await ItemCardData.CreateItemAsync(newItem, []);
+
+            var linkUrl = $"/ItemDetail/{newItem.Id}";
+            int index = Item.Content.IndexOf(selectedText, StringComparison.Ordinal);
+            if (index >= 0)
+            {
+                var updatedContent = Item.Content.Remove(index, selectedText.Length).Insert(index, linkUrl);
+                bool updated = await ItemCardData.UpdateItemContentAsync(Item.Id, updatedContent);
+                if (updated)
+                {
+                    _ = Snackbar.Add("アイテムを分割しました。", Severity.Success);
+                    Item.Content = updatedContent;
+                    await NotifyDataChangedAsync();
+                }
+                else
+                {
+                    _ = Snackbar.Add("元のアイテムの更新に失敗しました。", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+#pragma warning restore CA1031
+
     private async Task DeleteItemAsync()
     {
         if (Item.OwnerId != CurrentUserId)

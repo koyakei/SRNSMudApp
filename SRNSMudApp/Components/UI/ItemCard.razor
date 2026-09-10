@@ -53,6 +53,8 @@
                         @switch (((IOwnable)Item).IsOwnedBy(CurrentUserId))
                         {
                             case true:
+                                <MudIconButton Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small" Color="Color.Secondary"
+                                               OnClick="SplitSelectionAsync" title="選択テキストを別アイテムに分割" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
                                                OnClick="EditItemAsync" title="このアイテムを編集" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"

@@ -11,38 +11,39 @@
     case Loading:
         <MudCard Outlined="true" Class="mt-2 rounded-lg">
             <MudCardContent Class="d-flex align-center pa-2">
-                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-3"/>
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-3" />
                 <MudText Typo="Typo.body2">リンク情報を取得中...</MudText>
             </MudCardContent>
         </MudCard>
         break;
+    case Loaded<LinkPreviewData> loaded when loaded.Data.IsSuccess && Url.StartsWith("/"):
+        <span @onclick="NavigateToUrl" class="cursor-pointer px-1 mx-1 rounded"
+              style="background-color: var(--mud-palette-action-default-hover); color: var(--mud-palette-primary);">
+            @loaded.Data.Description
+        </span>
+        break;
     case Loaded<LinkPreviewData> loaded when loaded.Data.IsSuccess:
-        <MudCard Outlined="true" Class="mt-2 mb-2 rounded-lg preview-card"
-                 @onclick="NavigateToUrl">
+        <MudCard Outlined="true" Class="mt-2 mb-2 rounded-lg preview-card" @onclick="NavigateToUrl">
             <div class="d-flex flex-row">
                 @switch (string.IsNullOrEmpty(loaded.Data.ImageUrl))
                 {
                     case false:
                         <div class="preview-img-container">
                             <MudImage Src="@loaded.Data.ImageUrl" Alt="Preview Image" ObjectFit="ObjectFit.Cover" Width="120"
-                                      Height="120"
-                                      Class="preview-img"/>
+                                      Height="120" Class="preview-img" />
                         </div>
                         break;
                 }
                 <MudCardContent Class="pa-3 d-flex flex-column justify-center preview-content">
-                    <MudText Typo="Typo.subtitle2"
-                             Class="preview-title">
+                    <MudText Typo="Typo.subtitle2" Class="preview-title">
                         @loaded.Data.Title
                     </MudText>
                     @switch (string.IsNullOrEmpty(_selectedText), string.IsNullOrEmpty(loaded.Data.Description))
                     {
                         case (false, _):
-                            <div
-                                class="preview-highlight">
+                            <div class="preview-highlight">
                                 <div class="d-flex align-center highlight-header">
-                                    <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small"
-                                             Class="highlight-icon"/>
+                                    <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Class="highlight-icon" />
                                     <MudText Typo="Typo.caption" Class="highlight-title">
                                         選択テキスト
                                     </MudText>
@@ -60,9 +61,14 @@
                     }
                     <div class="d-flex align-center mt-2">
                         <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" Color="Color.Secondary"
-                                 Class="mr-1 site-icon"/>
+                                 Class="mr-1 site-icon" />
                         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="site-name">
-                            @(string.IsNullOrEmpty(loaded.Data.SiteName) switch { false => loaded.Data.SiteName, true => new Uri(loaded.Data.Url).Host })
+                            @(string.IsNullOrEmpty(loaded.Data.SiteName) switch
+                            {
+                                false => loaded.Data.SiteName,
+                                true => new
+                    Uri(loaded.Data.Url).Host
+                            })
                         </MudText>
                     </div>
                 </MudCardContent>
@@ -72,7 +78,7 @@
 }
 
 @code {
-    [Parameter] [EditorRequired] public string Url { get; set; } = null!;
+    [Parameter][EditorRequired] public string Url { get; set; } = null!;
 
     /// <summary>プレビューデータ取得デリゲート（親から注入。null の場合は取得しない）。</summary>
     [Parameter] public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }

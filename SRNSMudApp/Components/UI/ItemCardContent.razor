@@ -7,22 +7,22 @@
 
 <div>
     <div id="@($"item-content-{ItemId}")" class="@($"resource-content {(!_isExpanded ? "line-clamp-2" : "")}")">
-        <MudText Typo="Typo.subtitle1" Class="font-inherit" Style="white-space: pre-wrap;">
-            @DisplayContent
-        </MudText>
+        @foreach (var segment in _segments)
+        {
+            @switch (segment.IsUrl)
+            {
+                case true:
+                    <span @onclick:stopPropagation="true">
+                        <UrlPreviewCard Url="@segment.Text" LoadPreview="@LoadPreview" />
+                    </span>
+                    break;
+                case false:
+                    <MudText Typo="Typo.subtitle1" Class="font-inherit d-inline" Style="white-space: pre-wrap;">@segment.Text
+                    </MudText>
+                    break;
+            }
+        }
     </div>
-
-    @switch (_urls.Any())
-    {
-        case true:
-            <div class="d-flex flex-column gap-2 mb-2 mt-2" @onclick:stopPropagation="true">
-                @foreach (var url in _urls.Take(3))
-                {
-                    <UrlPreviewCard Url="@url" LoadPreview="@LoadPreview" />
-                }
-            </div>
-            break;
-    }
 
     @switch (_isOverflowing)
     {
@@ -92,14 +92,14 @@
     private bool _isExpanded;
     private bool _isOverflowing;
 
-    private IReadOnlyList<string> _urls = [];
+    private IReadOnlyList<ContentSegment> _segments = [];
 
     private DotNetObjectReference<ItemCardContent>? _dotNetRef;
     private bool _needsOverflowCheck = true;
 
     protected override void OnParametersSet()
     {
-        _urls = ItemCardViewModel.ExtractUrls(Content);
+        _segments = ItemCardViewModel.GetContentSegments(DisplayContent);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
