@@ -79,7 +79,6 @@ public class TaggingRequestListDialogLauncherTests : IAsyncDisposable
             TargetItemId = 1,
             RequestedTagId = 2,
             OwnerId = "requester",
-            Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             Owner = new ApplicationUser { Id = "requester", UserName = "requester" },
             TargetItem = new SRNSMudApp.Data.Item { Id = 1, Content = "TargetItem", OwnerId = "requester" }

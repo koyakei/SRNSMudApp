@@ -110,7 +110,6 @@ public sealed class DuplicateTaggingRequestCancelTests : IAsyncLifetime
         TagOwnerUserId = TagOwnerId,
         TargetItemId = 10,
         RequestedTagId = 20,
-        Status = TradeStatus.Proposed,
         RequestType = TaggingRequestType.Add,
         Owner = new ApplicationUser { Id = ownerId, UserName = ownerId },
         RequestedTag = new SRNSMudApp.Data.Tag { Id = 20, Name = "DupTag", OwnerId = TagOwnerId },

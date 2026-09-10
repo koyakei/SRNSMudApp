@@ -110,7 +110,7 @@
             TagOwnerUserId = Offer.OwnerId,
             TargetItemId = _selectedItem.Id,
             RequestedTagId = Offer.OfferedTagId,
-            Status = TradeStatus.Proposed,
+
             Payload = new SRNSMudApp.Models.Unions.PublicOfferPayload(Offer.Id),
             ConsumedRightAssetId = _selectedAsset?.Id
         };

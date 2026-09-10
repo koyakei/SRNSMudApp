@@ -36,7 +36,6 @@ public class NotificationServiceTests
                 RequestType = TaggingRequestType.Move,
                 TargetItemId = 100,
                 RequestedTagId = 200,
-                Status = TradeStatus.Proposed,
                 CreatedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 OwnerId = "userA",
                 RequestedTag = new Tag { Name = "Rust", OwnerId = "userB" },
@@ -87,7 +86,6 @@ public class NotificationServiceTests
                 TargetItemId = 100,
                 RequestedTagId = 200,
                 ProposedWeight = 2,
-                Status = TradeStatus.Proposed,
                 CreatedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 OwnerId = "userA",
                 RequestedTag = new Tag { Name = "Rust", OwnerId = "system" },
@@ -118,23 +116,21 @@ public class NotificationServiceTests
     public void BuildRejectedRequestNotifications_IncludesComment_WhenPresent()
     {
         // Arrange
-        List<TaggingRequestEntity> requests =
-        [
-            new()
-            {
-                Id = 11,
-                RequestType = TaggingRequestType.Add,
-                TargetItemId = 101,
-                RequestedTagId = 201,
-                Status = TradeStatus.Rejected,
-                UpdatedDate = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
-                OwnerId = "userA",
-                RequestedTag = new Tag { Name = "Go", OwnerId = "system" },
-                RequesterUserId = "userA",
-                TagOwnerUserId = "userB",
-                Rejection = new RejectionReason("不適切なタグ付けです。")
-            }
-        ];
+
+        var req = new TaggingRequestEntity
+        {
+            Id = 11,
+            RequestType = TaggingRequestType.Add,
+            TargetItemId = 101,
+            RequestedTagId = 201,
+            UpdatedDate = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
+            OwnerId = "userA",
+            RequestedTag = new Tag { Name = "Go", OwnerId = "system" },
+            RequesterUserId = "userA",
+            TagOwnerUserId = "userB"
+        };
+        req.Reject(new SRNSMudApp.Models.Unions.RejectionReason("不適切なタグ付けです。"));
+        List<TaggingRequestEntity> requests = [req];
 
         List<NotificationReadState> readStates = [];
 
@@ -154,22 +150,21 @@ public class NotificationServiceTests
     public void BuildApprovedRequestNotifications_MapsPropertiesCorrectly()
     {
         // Arrange
-        List<TaggingRequestEntity> requests =
-        [
-            new()
-            {
-                Id = 12,
-                RequestType = TaggingRequestType.Add,
-                TargetItemId = 102,
-                RequestedTagId = 202,
-                Status = TradeStatus.Executed,
-                UpdatedDate = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc),
-                OwnerId = "userA",
-                RequestedTag = new Tag { Name = "C#", OwnerId = "system" },
-                RequesterUserId = "userA",
-                TagOwnerUserId = "userB"
-            }
-        ];
+
+        var req = new TaggingRequestEntity
+        {
+            Id = 12,
+            RequestType = TaggingRequestType.Add,
+            TargetItemId = 102,
+            RequestedTagId = 202,
+            UpdatedDate = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc),
+            OwnerId = "userA",
+            RequestedTag = new Tag { Name = "C#", OwnerId = "system" },
+            RequesterUserId = "userA",
+            TagOwnerUserId = "userB"
+        };
+        req.Execute();
+        List<TaggingRequestEntity> requests = [req];
 
         List<NotificationReadState> readStates = [];
 
@@ -288,7 +283,6 @@ public class NotificationServiceTests
                     TargetItemId = 10,
                     RequestedTagId = 20,
                     ProposedWeight = 1,
-                    Status = TradeStatus.Proposed,
                     CreatedDate = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc),
                     OwnerId = "user1",
                     RequestedTag = new Tag { Name = "Tag1", OwnerId = "user2" },
@@ -350,7 +344,6 @@ public class NotificationServiceTests
                     TargetItemId = 1,
                     RequesterUserId = "other",
                     ProposedWeight = 1,
-                    Status = TradeStatus.Proposed,
                     CreatedDate = DateTime.UtcNow
                 }
             ],
@@ -394,7 +387,6 @@ public class NotificationServiceTests
                     TargetItemId = 1,
                     RequesterUserId = "other",
                     ProposedWeight = 1,
-                    Status = TradeStatus.Proposed,
                     CreatedDate = DateTime.UtcNow
                 }
             ],
@@ -426,21 +418,18 @@ public class NotificationServiceTests
     public void BuildReportResolvedNotifications_MapsPropertiesCorrectly()
     {
         // Arrange
-        List<ContentReport> reports =
-        [
-            new()
-            {
-                Id = 15,
-                TargetType = ReportTargetType.Item,
-                ItemId = 101,
-                OwnerId = "reporter1",
-                Reason = "Spam",
-                Status = ReportStatus.ActionTaken,
-                ResolutionNote = "削除しました",
-                HandledDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc),
-                UpdatedDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
-            }
-        ];
+        var report1 = new ContentReport
+        {
+            Id = 15,
+            TargetType = ReportTargetType.Item,
+            ItemId = 101,
+            OwnerId = "reporter1",
+            Reason = "Spam",
+            UpdatedDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+        };
+        report1.TakeAction("admin1", "削除しました");
+
+        List<ContentReport> reports = [report1];
 
         List<NotificationReadState> readStates =
         [

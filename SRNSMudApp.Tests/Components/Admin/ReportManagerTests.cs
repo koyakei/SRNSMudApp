@@ -52,7 +52,6 @@ public sealed class ReportManagerTests : IAsyncLifetime
                 TargetContentSnapshot = "不適切な投稿のテスト内容",
                 Reason = "スパム・宣伝目的",
                 Detail = "広告リンクです",
-                Status = ReportStatus.Pending,
                 OwnerId = "reporter1",
                 Owner = reporter,
                 CreatedDate = DateTime.UtcNow

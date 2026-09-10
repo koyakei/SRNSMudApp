@@ -69,7 +69,7 @@ public class MoveContractExecutor : IContractExecutor
         tagToUpdate.ParentTagId = newParentTagId;
         tagToUpdate.UpdatedDate = DateTime.UtcNow;
 
-        contract.Status = TradeStatus.Executed;
+        contract.Execute();
 
         _ = await dbContext.SaveChangesAsync();
 

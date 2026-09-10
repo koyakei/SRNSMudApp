@@ -49,7 +49,33 @@ public class TaggingRequestEntity : BaseEntity, IDirectTaggable
     public int RequestedTagId { get; set; }
     public Tag RequestedTag { get; set; } = null!;
 
-    public TradeStatus Status { get; set; } = TradeStatus.Proposed;
+    public TradeStatus Status { get; private set; } = TradeStatus.Proposed;
+
+    public void Execute()
+    {
+        if (Status == TradeStatus.Executed) return;
+        if (Status != TradeStatus.Proposed)
+            throw new InvalidOperationException($"状態 '{Status}' から Executed への遷移は許可されていません。");
+        Status = TradeStatus.Executed;
+    }
+
+    public void Cancel()
+    {
+        if (Status == TradeStatus.Canceled) return;
+        if (Status != TradeStatus.Proposed)
+            throw new InvalidOperationException($"状態 '{Status}' から Canceled への遷移は許可されていません。");
+        Status = TradeStatus.Canceled;
+    }
+
+    public void Reject(RejectionInfo rejectionInfo)
+    {
+        if (Status == TradeStatus.Rejected) return;
+        if (Status != TradeStatus.Proposed)
+            throw new InvalidOperationException($"状態 '{Status}' から Rejected への遷移は許可されていません。");
+
+        Status = TradeStatus.Rejected;
+        Rejection = rejectionInfo;
+    }
     public int ProposedWeight { get; set; } = 1;
 
     // The asset that will be burned when this contract is accepted. (Optional)

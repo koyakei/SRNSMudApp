@@ -74,7 +74,7 @@ public class TaggingContractService(
             Target = targetItem.TagTarget,
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
-            Status = TradeStatus.Proposed,
+
             RequestType = requestType,
             ProposedWeight = proposedWeight,
             Payload = new GratisPayload(message ?? ""),
@@ -125,7 +125,7 @@ public class TaggingContractService(
             TargetId = targetEdge.TagTargetId > 0 ? targetEdge.TagTargetId : targetEdge.TagTarget.Id,
             Target = targetEdge.TagTarget,
             RequestedTagId = requestedTagId,
-            Status = TradeStatus.Proposed,
+
             RequestType = requestType,
             ProposedWeight = proposedWeight,
             Payload = new GratisPayload(message ?? ""),
@@ -180,7 +180,7 @@ public class TaggingContractService(
             TargetItemId = targetItemId,
             RequestedTagId = requestedTagId,
             ConsumedRightAssetId = consumedRightAssetId,
-            Status = TradeStatus.Proposed,
+
             RequestType = requestType,
             ProposedWeight = proposedWeight,
             Payload = new MutualPayload(offeredTargetItemId, offeredTagId),
@@ -291,7 +291,7 @@ public class TaggingContractService(
                 return new Failure("このリクエストは既に処理されているか、状態が変更されています。");
             }
 
-            entity.Status = TradeStatus.Executed;
+            entity.Execute();
 
             IContractExecutor? executor = _executorFactory.GetExecutor(entity.ContractType);
             Result<string> executeResult = executor is not null
@@ -323,7 +323,7 @@ public class TaggingContractService(
         TaggingRequestEntity entity,
         Success<string> s)
     {
-        entity.Status = TradeStatus.Executed;
+        entity.Execute();
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
         return s;
@@ -362,7 +362,7 @@ public class TaggingContractService(
             return new Failure("このリクエストは既に処理されているか、状態が変更されています。");
         }
 
-        entity.Status = TradeStatus.Canceled;
+        entity.Cancel();
         await dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");
     }

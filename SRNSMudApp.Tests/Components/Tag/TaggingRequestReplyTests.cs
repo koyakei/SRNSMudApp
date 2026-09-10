@@ -106,7 +106,6 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
             TagOwnerUserId = TagOwnerId,
             TargetItemId = 10,
             RequestedTagId = 20,
-            Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             RequestedTag = new SRNSMudApp.Data.Tag { Name = "ReplyTestTag", OwnerId = TagOwnerId },
             Replies = [new() { Content = "reply-1", OwnerId = TagOwnerId }]
@@ -132,10 +131,10 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
             TagOwnerUserId = TagOwnerId,
             TargetItemId = 10,
             RequestedTagId = 20,
-            Status = TradeStatus.Canceled,
             RequestType = TaggingRequestType.Add,
             RequestedTag = new SRNSMudApp.Data.Tag { Name = "ReplyTestTag", OwnerId = TagOwnerId }
         };
+        request.Cancel();
         var item = new SRNSMudApp.Data.Item { Content = "chip-item", OwnerId = ItemOwnerId };
 
         IRenderedComponent<ItemTagRequestChip> cut = _ctx.Render<ItemTagRequestChip>(parameters => parameters
@@ -166,7 +165,6 @@ public sealed class TaggingRequestReplyTests : IAsyncLifetime
         TagOwnerUserId = TagOwnerId,
         TargetItemId = 10,
         RequestedTagId = 20,
-        Status = TradeStatus.Proposed,
         RequestType = TaggingRequestType.Add,
         Owner = new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
         RequestedTag = new SRNSMudApp.Data.Tag { Id = 20, Name = "ReplyTestTag", OwnerId = TagOwnerId }

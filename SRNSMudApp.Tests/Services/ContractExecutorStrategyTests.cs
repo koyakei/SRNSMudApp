@@ -64,7 +64,6 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
             TagOwnerUserId = user.Id,
             TargetItemId = item.Id,
             RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             ProposedWeight = 1
         };
@@ -107,7 +106,6 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
             TagOwnerUserId = user.Id,
             TargetItemId = item.Id,
             RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             ProposedWeight = 1
         };

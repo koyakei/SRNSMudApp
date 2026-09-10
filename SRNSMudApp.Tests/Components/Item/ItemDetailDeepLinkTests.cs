@@ -76,7 +76,6 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
             TargetItem = item,
             Owner = new ApplicationUser { Id = UserId, UserName = UserName },
             RequestType = TaggingRequestType.Add,
-            Status = TradeStatus.Proposed,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };
@@ -135,7 +134,6 @@ public sealed class ItemDetailDeepLinkTests : IAsyncLifetime
             TargetItem = item,
             Owner = new ApplicationUser { Id = UserId, UserName = UserName },
             RequestType = TaggingRequestType.Add,
-            Status = TradeStatus.Proposed,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };

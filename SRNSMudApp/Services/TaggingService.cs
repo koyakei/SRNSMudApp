@@ -129,8 +129,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             throw new InvalidOperationException("このリクエストは既に処理されているか、状態が変更されています。");
         }
 
-        request.Status = TradeStatus.Rejected;
-        request.Rejection = new RejectionReason(comment ?? "");
+        request.Reject(new SRNSMudApp.Models.Unions.RejectionReason(comment ?? ""));
 
         _ = await context.SaveChangesAsync();
     }

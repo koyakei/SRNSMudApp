@@ -79,7 +79,6 @@ public sealed class TaggingRequestApprovalTests : IAsyncLifetime
         TagOwnerUserId = tagOwnerId,
         TargetItemId = 10,
         RequestedTagId = 20,
-        Status = TradeStatus.Proposed,
         RequestType = TaggingRequestType.Add
     };
 

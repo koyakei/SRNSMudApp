@@ -196,7 +196,7 @@ public partial class ItemCard : IAsyncDisposable
         try
         {
             _ = await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
-            Item.AsRequestOf.Status = TradeStatus.Canceled;
+            Item.AsRequestOf.Cancel();
             _ = Snackbar.Add("リクエストを取り下げました。", Severity.Success);
             await NotifyDataChangedAsync();
         }
@@ -217,7 +217,7 @@ public partial class ItemCard : IAsyncDisposable
         try
         {
             _ = await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
-            Item.AsRequestOf.Status = TradeStatus.Executed;
+            Item.AsRequestOf.Execute();
             _ = Snackbar.Add("リクエストを承認しました。", Severity.Success);
             await NotifyDataChangedAsync();
         }

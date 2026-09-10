@@ -90,18 +90,18 @@ public class ContentReport : BaseEntity
     /// <summary>
     ///     通報の処理ステータス。
     /// </summary>
-    public ReportStatus Status { get; set; } = ReportStatus.Pending;
+    public ReportStatus Status { get; private set; } = ReportStatus.Pending;
 
     /// <summary>
     ///     管理者による対応メモ・解決理由。
     /// </summary>
     [MaxLength(1000)]
-    public string? ResolutionNote { get; set; }
+    public string? ResolutionNote { get; private set; }
 
     /// <summary>
     ///     対応を行った管理者のユーザーID。
     /// </summary>
-    public string? HandledByAdminId { get; set; }
+    public string? HandledByAdminId { get; private set; }
 
     /// <summary>
     ///     対応を行った管理者のナビゲーションプロパティ。
@@ -111,5 +111,41 @@ public class ContentReport : BaseEntity
     /// <summary>
     ///     対応が実施された日時（UTC）。
     /// </summary>
-    public DateTime? HandledDate { get; set; }
+    public DateTime? HandledDate { get; private set; }
+
+    public void MarkAsReviewed(string adminId, string? note = null)
+    {
+        if (Status == ReportStatus.Reviewed) return;
+        if (Status != ReportStatus.Pending)
+            throw new InvalidOperationException($"状態 '{Status}' から Reviewed への遷移は許可されていません。");
+
+        Status = ReportStatus.Reviewed;
+        HandledByAdminId = adminId;
+        ResolutionNote = note;
+        HandledDate = DateTime.UtcNow;
+    }
+
+    public void TakeAction(string adminId, string? note = null)
+    {
+        if (Status == ReportStatus.ActionTaken) return;
+        if (Status != ReportStatus.Pending && Status != ReportStatus.Reviewed)
+            throw new InvalidOperationException($"状態 '{Status}' から ActionTaken への遷移は許可されていません。");
+
+        Status = ReportStatus.ActionTaken;
+        HandledByAdminId = adminId;
+        ResolutionNote = note;
+        HandledDate = DateTime.UtcNow;
+    }
+
+    public void Dismiss(string adminId, string? note = null)
+    {
+        if (Status == ReportStatus.Dismissed) return;
+        if (Status != ReportStatus.Pending && Status != ReportStatus.Reviewed)
+            throw new InvalidOperationException($"状態 '{Status}' から Dismissed への遷移は許可されていません。");
+
+        Status = ReportStatus.Dismissed;
+        HandledByAdminId = adminId;
+        ResolutionNote = note;
+        HandledDate = DateTime.UtcNow;
+    }
 }

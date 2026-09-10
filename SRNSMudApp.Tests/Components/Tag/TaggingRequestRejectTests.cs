@@ -104,11 +104,11 @@ public sealed class TaggingRequestRejectTests : IAsyncLifetime
             TargetItemId = 1,
             RequestedTagId = 2,
             OwnerId = ItemOwnerId,
-            Status = TradeStatus.Rejected,
             RequestType = TaggingRequestType.Add,
             Owner = new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
             TargetItem = new SRNSMudApp.Data.Item { Id = 1, Content = "RejectedTargetItem", OwnerId = ItemOwnerId }
         };
+        rejected.Reject(new SRNSMudApp.Models.Unions.RejectionReason("test"));
 
         IRenderedComponent<TaggingRequestList> cut = RenderList(rejected);
 
@@ -126,7 +126,6 @@ public sealed class TaggingRequestRejectTests : IAsyncLifetime
             TargetItemId = 1,
             RequestedTagId = 2,
             OwnerId = ItemOwnerId,
-            Status = TradeStatus.Proposed,
             RequestType = TaggingRequestType.Add,
             Owner = new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },
             TargetItem = new SRNSMudApp.Data.Item { Id = 1, Content = "ProposedTargetItem", OwnerId = ItemOwnerId }
@@ -188,7 +187,6 @@ public sealed class TaggingRequestRejectTests : IAsyncLifetime
         TagOwnerUserId = TagOwnerId,
         TargetItemId = 1,
         RequestedTagId = 2,
-        Status = TradeStatus.Proposed,
         Payload = new GratisPayload("Please add this tag"),
         RequestType = TaggingRequestType.Add,
         Owner = new ApplicationUser { Id = ItemOwnerId, UserName = ItemOwnerId },

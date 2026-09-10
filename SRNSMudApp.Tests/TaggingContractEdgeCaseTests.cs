@@ -22,7 +22,6 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
         {
             ContractType = "Gratis",
             TagOwnerUserId = userB,
-            Status = TradeStatus.Proposed,
             OwnerId = userA,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = userB },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
@@ -53,11 +52,11 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
         {
             ContractType = "Gratis",
             TagOwnerUserId = userB,
-            Status = TradeStatus.Canceled,
             OwnerId = userA,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = userB },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
         };
+        contract.Cancel();
         dbContext.TaggingRequestEntities!.Add(contract);
         await dbContext.SaveChangesAsync();
 
@@ -85,7 +84,6 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
             ContractType = "Gratis",
             RequesterUserId = requesterId,
             TagOwnerUserId = tagOwnerId,
-            Status = TradeStatus.Proposed,
             OwnerId = requesterId,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = tagOwnerId },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
@@ -120,7 +118,6 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
             ContractType = "Gratis",
             RequesterUserId = requesterId,
             TagOwnerUserId = tagOwnerId,
-            Status = TradeStatus.Proposed,
             OwnerId = requesterId,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = tagOwnerId },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
@@ -156,7 +153,6 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
             ContractType = "Gratis",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
-            Status = TradeStatus.Proposed,
             OwnerId = userA,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = userB },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
@@ -188,11 +184,11 @@ public class TaggingContractEdgeCaseTests : TaggingContractTestBase
             ContractType = "Gratis",
             RequesterUserId = userA,
             TagOwnerUserId = userB,
-            Status = TradeStatus.Executed,
             OwnerId = userA,
             RequestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = userB },
             TargetItem = new Item { Content = $"Item_{tid}", OwnerId = system }
         };
+        contract.Execute();
         dbContext.TaggingRequestEntities!.Add(contract);
         await dbContext.SaveChangesAsync();
 

@@ -48,7 +48,6 @@ public class TaggingContractPublicOfferTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
             Payload = new PublicOfferPayload(publicOffer.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -108,7 +107,6 @@ public class TaggingContractPublicOfferTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = null,
             Payload = new PublicOfferPayload(publicOffer.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -172,7 +170,6 @@ public class TaggingContractPublicOfferTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
             Payload = new PublicOfferPayload(publicOffer.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -226,7 +223,6 @@ public class TaggingContractPublicOfferTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
             Payload = new PublicOfferPayload(publicOffer.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -279,7 +275,6 @@ public class TaggingContractPublicOfferTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             ConsumedRightAssetId = rightAsset.Id,
             Payload = new PublicOfferPayload(publicOffer.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);

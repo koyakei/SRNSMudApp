@@ -39,16 +39,21 @@ public class TaggingRequestActionsTests
     }
 
     private static TaggingRequestEntity CreateRequest(
-        string contractType = "Gratis", TradeStatus status = TradeStatus.Proposed) =>
-        new()
+        string contractType = "Gratis", TradeStatus status = TradeStatus.Proposed)
+    {
+        var req = new TaggingRequestEntity
         {
             Id = 1,
             OwnerId = TagOwnerId,
             RequesterUserId = RequesterId,
             TagOwnerUserId = TagOwnerId,
-            ContractType = contractType,
-            Status = status
+            ContractType = contractType
         };
+        if (status == TradeStatus.Executed) req.Execute();
+        else if (status == TradeStatus.Canceled) req.Cancel();
+        else if (status == TradeStatus.Rejected) req.Reject(new SRNSMudApp.Models.Unions.RejectionReason("テスト拒否"));
+        return req;
+    }
 
     // --- CanApprove ---
 

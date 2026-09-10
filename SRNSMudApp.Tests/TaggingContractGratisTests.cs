@@ -38,7 +38,6 @@ public class TaggingContractGratisTests : TaggingContractTestBase
             TargetItemId = targetItem.Id,
             RequestedTagId = tag.Id,
             ConsumedRightAssetId = rightAsset.Id, // チップを添付
-            Status = TradeStatus.Proposed,
             OwnerId = userA,
             Payload = new GratisPayload("Please tag my item. Here is a tip!")
         };
@@ -100,7 +99,6 @@ public class TaggingContractGratisTests : TaggingContractTestBase
             TargetItemId = targetItem.Id,
             RequestedTagId = tag.Id,
             ConsumedRightAssetId = null, // アセットなし
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -159,7 +157,6 @@ public class TaggingContractGratisTests : TaggingContractTestBase
             TagOwnerUserId = userB,
             TargetItemId = targetItem.Id,
             RequestedTagId = tag.Id,
-            Status = TradeStatus.Proposed,
             Payload = new GratisPayload("Please remove this tag"),
             RequestType = TaggingRequestType.Remove
         };

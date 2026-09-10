@@ -296,7 +296,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             Target = requestItem.TagTarget,
             TargetItem = requestItem,
             RequestItem = requestItem,
-            Status = TradeStatus.Proposed,
+
             RequestType = TaggingRequestType.Move,
             ProposedWeight = 1,
             Payload = new TagMovePayload(newParentTagId)
@@ -363,7 +363,7 @@ public class TagTreeDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             return new Failure("リクエストをキャンセルする権限がありません。");
         }
 
-        request.Status = TradeStatus.Canceled;
+        request.Cancel();
         request.UpdatedDate = DateTime.UtcNow;
         _ = await context.SaveChangesAsync();
 

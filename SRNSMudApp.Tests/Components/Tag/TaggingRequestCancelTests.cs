@@ -53,7 +53,6 @@ public sealed class TaggingRequestCancelTests : IAsyncLifetime
             OwnerId = UserId,
             TagOwnerUserId = UserId,
             RequestType = TaggingRequestType.Add,
-            Status = TradeStatus.Proposed,
             RequestedTag = new SRNSMudApp.Data.Tag { Id = 20, Name = "CancelTestTag", OwnerId = UserId }
         };
 

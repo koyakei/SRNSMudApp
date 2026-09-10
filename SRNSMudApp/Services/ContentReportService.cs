@@ -137,7 +137,6 @@ public class ContentReportService(
             TargetContentSnapshot = snapshot,
             Reason = dto.Reason,
             Detail = dto.Detail ?? string.Empty,
-            Status = ReportStatus.Pending,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };

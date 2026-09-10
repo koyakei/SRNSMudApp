@@ -150,8 +150,8 @@ public class ServiceCollectionExtensionsTests
             TargetItemContent = "Item Content",
             TargetTagId = 20,
             TargetTagName = "TagName",
-            Status = TradeStatus.Proposed,
-            RequestType = TaggingRequestType.Add
+            RequestType = TaggingRequestType.Add,
+            Status = TradeStatus.Proposed
         };
 
         Assert.True(info.IsTaggingRequest);

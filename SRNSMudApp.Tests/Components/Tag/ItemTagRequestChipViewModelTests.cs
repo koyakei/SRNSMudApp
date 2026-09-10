@@ -12,18 +12,23 @@ public class ItemTagRequestChipViewModelTests
     private static TaggingRequestEntity CreateRequest(
         TradeStatus status = TradeStatus.Proposed,
         TaggingRequestType type = TaggingRequestType.Add,
-        List<SRNSMudApp.Data.Item>? replies = null) =>
-        new()
+        List<SRNSMudApp.Data.Item>? replies = null)
+    {
+        var req = new TaggingRequestEntity
         {
             Id = 1,
             OwnerId = "owner",
             RequesterUserId = "requester",
-            Status = status,
             RequestType = type,
             RequestedTagId = 10,
             RequestedTag = new SRNSMudApp.Data.Tag { Id = 10, Name = "target-tag", OwnerId = "owner" },
             Replies = replies!
         };
+        if (status == TradeStatus.Executed) req.Execute();
+        else if (status == TradeStatus.Canceled) req.Cancel();
+        else if (status == TradeStatus.Rejected) req.Reject(new SRNSMudApp.Models.Unions.RejectionReason("test"));
+        return req;
+    }
 
     private static SRNSMudApp.Data.Item CreateItem(params int[] tagIds)
     {

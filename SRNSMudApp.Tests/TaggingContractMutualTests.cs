@@ -40,7 +40,6 @@ public class TaggingContractMutualTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             Payload = new MutualPayload(targetItemB.Id, tagA.Id),
             ConsumedRightAssetId = rightAssetA.Id,
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -111,7 +110,6 @@ public class TaggingContractMutualTests : TaggingContractTestBase
             RequestedTagId = tagB.Id,
             Payload = new MutualPayload(targetItemB.Id, tagA.Id),
             ConsumedRightAssetId = null,
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);

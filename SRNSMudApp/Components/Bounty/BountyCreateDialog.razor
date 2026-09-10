@@ -106,7 +106,7 @@
             TagOwnerUserId = _selectedTag.OwnerId, // Base property for who owns the requested tag
             TargetItemId = _selectedItem.Id,
             RequestedTagId = _selectedTag.Id,
-            Status = TradeStatus.Proposed,
+
             Payload = new SRNSMudApp.Models.Unions.BountyPayload(_selectedRewardAsset?.Id ?? 0)
         };
 

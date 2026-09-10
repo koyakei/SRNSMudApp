@@ -37,7 +37,6 @@ public class TaggingContractBountyTests : TaggingContractTestBase
             TagOwnerUserId = userB,
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);
@@ -100,7 +99,6 @@ public class TaggingContractBountyTests : TaggingContractTestBase
             TargetItemId = targetItemA.Id,
             RequestedTagId = tagB.Id,
             Payload = new BountyPayload(rewardAsset.Id),
-            Status = TradeStatus.Proposed,
             OwnerId = userA
         };
         dbContext.TaggingRequestEntities!.Add(contract);

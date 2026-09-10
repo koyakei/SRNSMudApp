@@ -77,10 +77,23 @@ public class ResolveContentReportHandler(
             }
         }
 
-        report.Status = command.Status;
-        report.ResolutionNote = command.ResolutionNote;
-        report.HandledByAdminId = command.AdminUserId;
-        report.HandledDate = DateTime.UtcNow;
+        switch (command.Status)
+        {
+            case ReportStatus.Reviewed:
+                report.MarkAsReviewed(command.AdminUserId, command.ResolutionNote);
+                break;
+            case ReportStatus.ActionTaken:
+                report.TakeAction(command.AdminUserId, command.ResolutionNote);
+                break;
+            case ReportStatus.Dismissed:
+                report.Dismiss(command.AdminUserId, command.ResolutionNote);
+                break;
+            case ReportStatus.Pending:
+                throw new InvalidOperationException("Pendingへの変更はサポートされていません。");
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+
         report.UpdatedDate = DateTime.UtcNow;
 
         _ = await context.SaveChangesAsync(cancellationToken);

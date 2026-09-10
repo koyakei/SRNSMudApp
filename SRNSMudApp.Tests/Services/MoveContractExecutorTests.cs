@@ -74,7 +74,6 @@ public class MoveContractExecutorTests : TaggingContractTestBase
             TagOwnerUserId = userOwner.Id,
             RequestedTagId = movingTag.Id,
             RequestType = TaggingRequestType.Move,
-            Status = TradeStatus.Proposed,
             Payload = new TagMovePayload(parentTag2.Id)
         };
 
@@ -115,7 +114,6 @@ public class MoveContractExecutorTests : TaggingContractTestBase
             TagOwnerUserId = userOwner.Id,
             RequestedTagId = movingTag.Id,
             RequestType = TaggingRequestType.Move,
-            Status = TradeStatus.Proposed,
             Payload = new TagMovePayload(null)
         };
 
