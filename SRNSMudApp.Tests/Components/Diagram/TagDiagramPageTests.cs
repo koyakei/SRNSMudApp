@@ -20,6 +20,7 @@ using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
+using ItemEntity = SRNSMudApp.Data.Item;
 using TagEntity = SRNSMudApp.Data.Tag;
 
 namespace SRNSMudApp.Tests.Components.Diagram;
@@ -418,6 +419,106 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         var arrows = cut.Find("g.diagram-link-intermediate-arrows");
         Assert.NotNull(arrows);
         Assert.Equal(2, arrows.QuerySelectorAll("path").Length);
+    }
+
+    [Fact]
+    public void TagDiagramPage_RendersItemNodesAndTagRelationLinks_WhenItemIdIsProvided()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "SourceTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var parentItem = new ItemEntity
+        {
+            Id = 10,
+            Content = "Parent item content",
+            OwnerId = TestUserId,
+            TagRelations = [new TagRelation { TagId = 1, ItemId = 10, OwnerId = TestUserId }]
+        };
+        var childItem = new ItemEntity
+        {
+            Id = 20,
+            Content = "Child item content",
+            OwnerId = TestUserId,
+            TagRelations = [new TagRelation { TagId = 1, ItemId = 20, OwnerId = TestUserId }]
+        };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([]);
+        _ = _dataProviderMock.Setup(p => p.GetContextTagIdsForItemAsync(10)).ReturnsAsync([1]);
+        _ = _dataProviderMock.Setup(p => p.GetContextItemsAsync(10)).ReturnsAsync([parentItem, childItem]);
+
+        var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        nav.NavigateTo("http://localhost/tag-diagram?itemId=10");
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // Assert: TagNode と 2つの ItemNode がダイアグラム上に存在すること
+        var tagNode = diagram.Nodes.OfType<TagNode>().FirstOrDefault(n => n.Tag.Id == 1);
+        var pItemNode = diagram.Nodes.OfType<ItemNode>().FirstOrDefault(n => n.Item.Id == 10);
+        var cItemNode = diagram.Nodes.OfType<ItemNode>().FirstOrDefault(n => n.Item.Id == 20);
+
+        Assert.NotNull(tagNode);
+        Assert.NotNull(pItemNode);
+        Assert.NotNull(cItemNode);
+
+        // Assert: ItemNode と TagNode を結ぶ TagRelationLink が存在すること
+        var tagRelationLinks = diagram.Links.OfType<TagRelationLink>().ToList();
+        Assert.NotEmpty(tagRelationLinks);
+        Assert.Contains(tagRelationLinks, l => l.Source.Model == pItemNode && l.Target.Model == tagNode);
+        Assert.Contains(tagRelationLinks, l => l.Source.Model == cItemNode && l.Target.Model == tagNode);
+
+        // Assert: 親Item と 子Item を結ぶ LinkModel が存在すること
+        var itemToItemLink = diagram.Links.OfType<Blazor.Diagrams.Core.Models.LinkModel>()
+            .FirstOrDefault(l => l is not TagRelationLink && l is not TagEdgeLink);
+        Assert.NotNull(itemToItemLink);
+        Assert.Same(pItemNode, itemToItemLink.Source.Model);
+        Assert.Same(cItemNode, itemToItemLink.Target.Model);
+    }
+
+    [Fact]
+    public void TagDiagramPage_ClearingFocus_PreservesContextItemsAndPinnedTags()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "SourceTag", OwnerId = TestUserId, CachedWeight = 5 };
+        var parentItem = new ItemEntity
+        {
+            Id = 10,
+            Content = "Parent item content",
+            OwnerId = TestUserId,
+            TagRelations = [new TagRelation { TagId = 1, ItemId = 10, OwnerId = TestUserId }]
+        };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([]);
+        _ = _dataProviderMock.Setup(p => p.GetContextTagIdsForItemAsync(10)).ReturnsAsync([1]);
+        _ = _dataProviderMock.Setup(p => p.GetContextItemsAsync(10)).ReturnsAsync([parentItem]);
+
+        var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        nav.NavigateTo("http://localhost/tag-diagram?itemId=10");
+
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // ノードをクリックしてフォーカス
+        var tagNode = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        cut.InvokeAsync(() => tagNode.RequestFocusTag!(1));
+        cut.WaitForState(() => cut.Markup.Contains("① 始点"));
+
+        // フォーカス解除ボタンをクリック
+        var clearFocusButton = cut.FindAll("button").First(b => b.TextContent.Contains("フォーカス解除"));
+        cut.InvokeAsync(() => clearFocusButton.Click());
+
+        // Assert: フォーカス解除後も、ItemNode および pinned な TagNode が消えずに残っていること
+        cut.WaitForState(() => !cut.Markup.Contains("① 始点"));
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 1);
+        Assert.Contains(diagram.Nodes.OfType<ItemNode>(), n => n.Item.Id == 10);
     }
 
     public async ValueTask DisposeAsync()

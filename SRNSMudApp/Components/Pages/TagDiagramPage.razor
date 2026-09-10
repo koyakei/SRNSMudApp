@@ -158,7 +158,7 @@ else
     private bool _contextOnly = true;
     private bool _isProgrammaticSelection;
     private int _displayedTagsCount = 0;
-    private readonly HashSet<int> _extraVisibleTagIds = [];
+    private readonly HashSet<int> _pinnedTagIds = [];
 
     // エッジ作成モード関連の内部状態
     private bool _isEdgeCreationMode;
@@ -201,9 +201,14 @@ else
                 var contextTagIds = await DataProvider.GetContextTagIdsForItemAsync(QueryItemId.Value);
                 foreach (var id in contextTagIds)
                 {
-                    _extraVisibleTagIds.Add(id);
+                    _pinnedTagIds.Add(id);
                 }
                 _contextItems = await DataProvider.GetContextItemsAsync(QueryItemId.Value);
+                contextChanged = true;
+            }
+            else
+            {
+                _contextItems = [];
                 contextChanged = true;
             }
         }
@@ -256,12 +261,18 @@ else
     {
         if (_isLoading) return;
         
-        var uri = NavigationManager.GetUriWithQueryParameters(new Dictionary<string, object?>
+        var queryParams = new Dictionary<string, object?>
         {
             { "t1", _focusedTag?.Id },
             { "t2", _secondFocusedTag?.Id },
             { "e", _selectedEdge?.Id }
-        });
+        };
+        if (QueryItemId.HasValue)
+        {
+            queryParams["itemId"] = QueryItemId.Value;
+        }
+        
+        var uri = NavigationManager.GetUriWithQueryParameters(queryParams);
         
         _isUpdatingUrl = true;
         try
@@ -296,10 +307,10 @@ else
 
     private async Task ReloadDiagramAsync(bool preserveExtraVisibleTags = false)
     {
-        var preservedExtraIds = preserveExtraVisibleTags ? _extraVisibleTagIds.ToHashSet() : null;
+        var preservedExtraIds = preserveExtraVisibleTags ? _pinnedTagIds.ToHashSet() : null;
         _isLoading = true;
         _selectedEdge = null;
-        _extraVisibleTagIds.Clear();
+        _pinnedTagIds.Clear();
 
         try
         {
@@ -311,7 +322,7 @@ else
             {
                 foreach (var id in preservedExtraIds)
                 {
-                    _extraVisibleTagIds.Add(id);
+                    _pinnedTagIds.Add(id);
                 }
             }
 
@@ -321,9 +332,13 @@ else
                 var contextTagIds = await DataProvider.GetContextTagIdsForItemAsync(QueryItemId.Value);
                 foreach (var id in contextTagIds)
                 {
-                    _extraVisibleTagIds.Add(id);
+                    _pinnedTagIds.Add(id);
                 }
                 _contextItems = await DataProvider.GetContextItemsAsync(QueryItemId.Value);
+            }
+            else
+            {
+                _contextItems = [];
             }
 
             BuildDiagramElements();
@@ -375,9 +390,9 @@ else
 
         IEnumerable<TagEntity> tagsToDisplay;
 
-        if (QueryItemId.HasValue && _contextOnly && _extraVisibleTagIds.Count > 0)
+        if (QueryItemId.HasValue && _contextOnly && _pinnedTagIds.Count > 0)
         {
-            tagsToDisplay = _tags.Where(t => _extraVisibleTagIds.Contains(t.Id)
+            tagsToDisplay = _tags.Where(t => _pinnedTagIds.Contains(t.Id)
                 || (_focusedTag != null && t.Id == _focusedTag.Id)
                 || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id));
         }
@@ -398,18 +413,18 @@ else
                 .Where(e => focusIds.Contains(e.SourceTagId) || focusIds.Contains(e.TargetTagId))
                 .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
                 .Concat(focusIds)
-                .Concat(_extraVisibleTagIds)
+                .Concat(_pinnedTagIds)
                 .ToHashSet();
 
             tagsToDisplay = _tags.Where(t => neighborIds.Contains(t.Id));
         }
         else if (_onlyConnectedTags)
         {
-            // エッジに関与しているタグ、フォーカス中、または子タグ展開で明示的に追加されたタグ
+            // エッジに関与しているタグ、フォーカス中、または明示的にピン留めされたタグ
             tagsToDisplay = _tags.Where(t => connectedTagIds.Contains(t.Id)
                 || (_focusedTag != null && t.Id == _focusedTag.Id)
                 || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id)
-                || _extraVisibleTagIds.Contains(t.Id));
+                || _pinnedTagIds.Contains(t.Id));
         }
         else
         {
@@ -564,6 +579,7 @@ offsetY));
 
     private void HandleTagSelection(TagEntity tag)
     {
+        _pinnedTagIds.Add(tag.Id);
         if (_focusedTag == null)
         {
             _focusedTag = tag;
@@ -596,6 +612,7 @@ offsetY));
                 return;
         }
 
+        _pinnedTagIds.Add(tag.Id);
         if (_focusedTag == null)
         {
             _focusedTag = tag;
@@ -618,6 +635,12 @@ offsetY));
 
     private void OnSecondTagFocusedFromSearch(TagEntity? tag)
     {
+        switch (tag)
+        {
+            case not null:
+                _pinnedTagIds.Add(tag.Id);
+                break;
+        }
         _secondFocusedTag = tag;
         OnFocusedTagsChanged();
     }
@@ -728,7 +751,6 @@ offsetY));
         _focusedTag = null;
         _secondFocusedTag = null;
         _neighborhoodOnly = false;
-        _extraVisibleTagIds.Clear();
         ExitEdgeCreationMode();
         foreach (var n in _diagram.Nodes.OfType<TagNode>())
         {
@@ -739,6 +761,9 @@ offsetY));
 
         // 絞り込み表示を通常状態に再構築
         BuildDiagramElements();
+        FocusNodesInDiagram();
+        _ = InvokeAsync(StateHasChanged);
+        UpdateUrlQuery();
     }
 
     private int GetChildTagsCount(int tagId) =>
@@ -756,7 +781,7 @@ offsetY));
         int newlyAdded = 0;
         foreach (var child in children)
         {
-            if (_extraVisibleTagIds.Add(child.Id))
+            if (_pinnedTagIds.Add(child.Id))
             {
                 newlyAdded++;
             }
@@ -1004,7 +1029,7 @@ offsetY));
                 bool addedAny = false;
                 foreach (var child in children)
                 {
-                    if (_extraVisibleTagIds.Add(child.Id))
+                    if (_pinnedTagIds.Add(child.Id))
                     {
                         addedAny = true;
                     }

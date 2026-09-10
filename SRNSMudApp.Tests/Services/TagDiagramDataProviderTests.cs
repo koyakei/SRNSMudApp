@@ -131,4 +131,124 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
         var detachRes = await provider.DetachTagFromEdgeAsync(200, "u1");
         Assert.True(detachRes is Success<bool> dts && dts.Value);
     }
+
+    [Fact]
+    public async Task GetContextTagIdsForItemAsync_ExtractsDirectAndLinkedAndQuotedTagIds()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag1 = new Tag { Name = $"T1_{tid}", OwnerId = userId };
+            var tag2 = new Tag { Name = $"T2_{tid}", OwnerId = userId };
+            var tag3 = new Tag { Name = $"T3_{tid}", OwnerId = userId };
+            var tag4 = new Tag { Name = $"T4_{tid}", OwnerId = userId };
+            dbContext.Tags.AddRange(tag1, tag2, tag3, tag4);
+            await dbContext.SaveChangesAsync();
+
+            var tt1 = new TaggableTarget { OwnerId = userId };
+            var tt2 = new TaggableTarget { OwnerId = userId };
+            var tt3 = new TaggableTarget { OwnerId = userId };
+            dbContext.TaggableTargets.AddRange(tt1, tt2, tt3);
+            await dbContext.SaveChangesAsync();
+
+            var item3 = new Item { Content = "Quoted target item", OwnerId = userId, TagTargetId = tt3.Id };
+            var item2 = new Item { Content = "Internally linked item", OwnerId = userId, TagTargetId = tt2.Id };
+            dbContext.Items.AddRange(item3, item2);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.TagRelations.Add(new TagRelation { TagId = tag4.Id, ItemId = item3.Id, OwnerId = userId, Weight = 1 });
+            dbContext.TagRelations.Add(new TagRelation { TagId = tag3.Id, ItemId = item2.Id, OwnerId = userId, Weight = 1 });
+            await dbContext.SaveChangesAsync();
+
+            var item1 = new Item
+            {
+                Content = $"Source item link to /TagDetail/{tag2.Id} and /ItemDetail/{item2.Id}",
+                OwnerId = userId,
+                TagTargetId = tt1.Id,
+                QuotedItemId = item3.Id
+            };
+            dbContext.Items.Add(item1);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.TagRelations.Add(new TagRelation { TagId = tag1.Id, ItemId = item1.Id, OwnerId = userId, Weight = 1 });
+            await dbContext.SaveChangesAsync();
+
+            var result = await provider.GetContextTagIdsForItemAsync(item1.Id);
+
+            Assert.Contains(tag1.Id, result);
+            Assert.Contains(tag2.Id, result);
+            Assert.Contains(tag3.Id, result);
+            Assert.Contains(tag4.Id, result);
+        }
+    }
+
+    [Fact]
+    public async Task GetContextTagIdsForItemAsync_ItemNotFound_ReturnsEmpty()
+    {
+        var (_, provider, _, _) = CreateScope();
+        var result = await provider.GetContextTagIdsForItemAsync(999999);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetContextItemsAsync_ReturnsQueriedItemAndLinkedAndQuotedItems_WithTagRelations()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            var tt1 = new TaggableTarget { OwnerId = userId };
+            var tt2 = new TaggableTarget { OwnerId = userId };
+            var tt3 = new TaggableTarget { OwnerId = userId };
+            dbContext.TaggableTargets.AddRange(tt1, tt2, tt3);
+            await dbContext.SaveChangesAsync();
+
+            var item3 = new Item { Content = "Quoted Item", OwnerId = userId, TagTargetId = tt3.Id };
+            var item2 = new Item { Content = "Linked Item", OwnerId = userId, TagTargetId = tt2.Id };
+            dbContext.Items.AddRange(item3, item2);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.TagRelations.Add(new TagRelation { TagId = tag.Id, ItemId = item2.Id, OwnerId = userId, Weight = 1 });
+            await dbContext.SaveChangesAsync();
+
+            var item1 = new Item
+            {
+                Content = $"Source item link to /ItemDetail/{item2.Id}",
+                OwnerId = userId,
+                TagTargetId = tt1.Id,
+                QuotedItemId = item3.Id
+            };
+            dbContext.Items.Add(item1);
+            await dbContext.SaveChangesAsync();
+
+            var result = await provider.GetContextItemsAsync(item1.Id);
+
+            Assert.Equal(3, result.Count);
+            Assert.Contains(result, i => i.Id == item1.Id);
+            Assert.Contains(result, i => i.Id == item2.Id);
+            Assert.Contains(result, i => i.Id == item3.Id);
+
+            var fetchedItem2 = result.First(i => i.Id == item2.Id);
+            Assert.NotNull(fetchedItem2.TagRelations);
+            Assert.Single(fetchedItem2.TagRelations);
+            Assert.Equal(tag.Id, fetchedItem2.TagRelations.First().TagId);
+        }
+    }
+
+    [Fact]
+    public async Task GetContextItemsAsync_ItemNotFound_ReturnsEmpty()
+    {
+        var (_, provider, _, _) = CreateScope();
+        var result = await provider.GetContextItemsAsync(999999);
+        Assert.Empty(result);
+    }
 }
