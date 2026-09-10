@@ -11,6 +11,7 @@
 @using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Services
 @using SRNSMudApp.Services.Dialogs
+@inject NavigationManager NavigationManager
 @using TagEntity = SRNSMudApp.Data.Tag
 
 <PageTitle>Tag Edge Diagram - SRNS</PageTitle>
@@ -142,6 +143,13 @@ else
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
 
+    
+    [SupplyParameterFromQuery(Name = "t1")] public int? QueryTag1 { get; set; }
+    [SupplyParameterFromQuery(Name = "t2")] public int? QueryTag2 { get; set; }
+    [SupplyParameterFromQuery(Name = "e")] public int? QueryEdge { get; set; }
+
+    private bool _isUpdatingUrl;
+
     private BlazorDiagram _diagram = null!;
     private List<TagEntity> _tags = [];
     private List<TagEdge> _edges = [];
@@ -178,6 +186,71 @@ else
         }
 
         await ReloadDiagramAsync();
+    }
+
+    
+    protected override void OnParametersSet()
+    {
+        if (_isUpdatingUrl || _isLoading || _tags.Count == 0)
+        {
+            return;
+        }
+        ApplyQueryParameters();
+    }
+
+    private void ApplyQueryParameters()
+    {
+        bool changed = false;
+        
+        var newTag1 = QueryTag1.HasValue ? _tags.FirstOrDefault(t => t.Id == QueryTag1.Value) : null;
+        if ((_focusedTag?.Id ?? 0) != (newTag1?.Id ?? 0))
+        {
+            _focusedTag = newTag1;
+            changed = true;
+        }
+        
+        var newTag2 = QueryTag2.HasValue ? _tags.FirstOrDefault(t => t.Id == QueryTag2.Value) : null;
+        if ((_secondFocusedTag?.Id ?? 0) != (newTag2?.Id ?? 0))
+        {
+            _secondFocusedTag = newTag2;
+            changed = true;
+        }
+        
+        var newEdge = QueryEdge.HasValue ? _edges.FirstOrDefault(e => e.Id == QueryEdge.Value) : null;
+        if ((_selectedEdge?.Id ?? 0) != (newEdge?.Id ?? 0))
+        {
+            _selectedEdge = newEdge;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            BuildDiagramElements();
+            FocusNodesInDiagram();
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void UpdateUrlQuery()
+    {
+        if (_isLoading) return;
+        
+        var uri = NavigationManager.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            { "t1", _focusedTag?.Id },
+            { "t2", _secondFocusedTag?.Id },
+            { "e", _selectedEdge?.Id }
+        });
+        
+        _isUpdatingUrl = true;
+        try
+        {
+            NavigationManager.NavigateTo(uri, replace: false);
+        }
+        finally
+        {
+            _isUpdatingUrl = false;
+        }
     }
 
     private void InitializeDiagram()
@@ -464,6 +537,7 @@ else
         BuildDiagramElements();
         FocusNodesInDiagram();
         _ = InvokeAsync(StateHasChanged);
+        UpdateUrlQuery();
     }
 
     private void FocusNodesInDiagram()
@@ -609,6 +683,7 @@ else
         BuildDiagramElements();
         FocusNodesInDiagram();
         _ = InvokeAsync(StateHasChanged);
+        UpdateUrlQuery();
 
         if (newlyAdded > 0)
         {
@@ -640,6 +715,7 @@ else
     private void HandleEdgeSelected(TagEdge? edge)
     {
         _selectedEdge = edge;
+        UpdateUrlQuery();
     }
 
     private void HandleNodeSelected(TagEntity? tag)
