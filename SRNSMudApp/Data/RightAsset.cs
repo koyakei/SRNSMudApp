@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 
@@ -26,4 +27,10 @@ public class RightAsset : BaseEntity
     // 対象となるタグ
     public int TargetTagId { get; set; }
     public Tag TargetTag { get; set; } = null!;
+
+    // 楽観的ロック用バージョン（同一アカウントからの同時操作による残高の不整合防止）
+    [Timestamp]
+#pragma warning disable CA1819
+    public byte[] Version { get; set; } = null!;
+#pragma warning restore CA1819
 }

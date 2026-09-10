@@ -165,6 +165,11 @@ public class TagEdgeService(
 
             return new Success<TagEdgeTagAttachment>(attachment);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            return new Failure("データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。");
+        }
         catch
         {
             await transaction.RollbackAsync();
