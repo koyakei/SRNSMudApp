@@ -7,10 +7,17 @@
     <SRNSMudApp.Components.UI.AsyncPageView T="ItemDetailData" State="_pageState">
         <LoadedContent Context="data">
             <div>
-                <div class="d-flex align-center mb-4">
-                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2" />
-                    <MudText Typo="Typo.h5">アイテム詳細</MudText>
+                <div class="d-flex justify-space-between align-center mb-4">
+                    <div class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                       OnClick="@(() => NavigationManager.NavigateTo("Item/ItemList"))" Class="mr-2" />
+                        <MudText Typo="Typo.h5">アイテム詳細</MudText>
+                    </div>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Hub"
+                               OnClick="@(() => NavigationManager.NavigateTo($"/tag-diagram?itemId={ItemId}"))">
+                        Tag Diagram で見る
+                    </MudButton>
                 </div>
 
                 <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6"

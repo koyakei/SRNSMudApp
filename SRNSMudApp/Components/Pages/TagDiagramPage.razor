@@ -22,6 +22,15 @@
             <MudIcon Icon="@Icons.Material.Filled.Hub" Class="mr-2" Color="Color.Primary" />
             Tag Edge Diagram
         </MudText>
+        @if (QueryItemId.HasValue)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo($"/ItemDetail/{QueryItemId.Value}"))">
+                Item #@QueryItemId.Value に戻る
+            </MudButton>
+        }
+
     </div>
 
     @* 共通化されたタグ検索コンポーネントによるフォーカス UI *@
@@ -147,6 +156,7 @@ else
     [SupplyParameterFromQuery(Name = "t1")] public int? QueryTag1 { get; set; }
     [SupplyParameterFromQuery(Name = "t2")] public int? QueryTag2 { get; set; }
     [SupplyParameterFromQuery(Name = "e")] public int? QueryEdge { get; set; }
+    [SupplyParameterFromQuery(Name = "itemId")] public int? QueryItemId { get; set; }
 
     private bool _isUpdatingUrl;
 
