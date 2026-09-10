@@ -61,8 +61,16 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
             .Setup(d => d.FindTagByNameAsync(TagName))
@@ -104,8 +112,16 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
             .Setup(d => d.FindTagByNameAsync(TagName))

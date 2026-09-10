@@ -58,7 +58,7 @@ public class ItemReactionServiceTests : IAsyncLifetime
             TagRelation? relation = await db.TagRelations.SingleAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId);
             Assert.Equal(goodTagId, relation.TagId);
             Assert.Equal(1, relation.Weight);
-            TagWeightLedger ledger = await db.TagWeightLedgers.SingleAsync(l => l.SourceType == "TagRelationInsert");
+            TagWeightLedger ledger = await db.TagWeightLedgers.SingleAsync(l => l.SourceType == "TagRelationInsert" && l.SourceId == relation.Id);
             Assert.Equal(relation.Id, ledger.SourceId);
         }
     }

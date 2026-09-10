@@ -63,6 +63,10 @@ public sealed class TagDeletionTrackingTests : IAsyncLifetime
             .ReturnsAsync(ownedTag);
 
         _ = _itemCardDataMock
+            .Setup(d => d.CanUserAttachTagDirectlyAsync(ownedTag.Id, UserId))
+            .ReturnsAsync(true);
+
+        _ = _itemCardDataMock
             .Setup(d => d.AddFreeTagRelationAsync(item.Id, ownedTag.Id, UserId))
             .ReturnsAsync(new TagRelation { TagId = ownedTag.Id, ItemId = item.Id, OwnerId = UserId, Tag = ownedTag });
 

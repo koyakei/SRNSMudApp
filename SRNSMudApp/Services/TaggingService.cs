@@ -120,6 +120,15 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             _ => throw new UnauthorizedAccessException("このリクエストを却下する権限がありません。")
         };
 
+        int updatedRows = await context.TaggingRequestEntities!
+            .Where(r => r.Id == requestId && r.Status == TradeStatus.Proposed)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, TradeStatus.Rejected));
+
+        if (updatedRows == 0)
+        {
+            throw new InvalidOperationException("このリクエストは既に処理されているか、状態が変更されています。");
+        }
+
         request.Status = TradeStatus.Rejected;
         request.Rejection = new RejectionReason(comment ?? "");
 

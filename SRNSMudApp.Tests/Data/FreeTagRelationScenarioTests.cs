@@ -137,7 +137,7 @@ public class FreeTagRelationScenarioTests : IAsyncLifetime
         Assert.Equal(1, ledger.Delta);
         Assert.Equal(50, ledger.PreviousWeight);
         Assert.Equal(51, ledger.NewWeight);
-        Assert.False(ledger.IsOwnerAction);
+        Assert.True(ledger.IsOwnerAction); // SystemTag なので IsOwnerAction = true になる
         Assert.Equal("System Classification Tagging", ledger.Reason);
 
         Tag? updatedTag = await context.Tags!.FindAsync(systemTag.Id);

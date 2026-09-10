@@ -114,6 +114,7 @@ public static class BunitTestSetup
                 return mock.Object;
             })
             .AddScoped(_ => new Mock<IAdminDataProvider>().Object)
+            .AddScoped(_ => new Mock<IUserDataProvider>().Object)
             .AddScoped(_ => new Mock<IContentReportService>().Object);
     }
 

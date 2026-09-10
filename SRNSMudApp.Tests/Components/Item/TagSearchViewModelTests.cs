@@ -33,7 +33,7 @@ public sealed class TagSearchViewModelTests
         IEnumerable<TagSuggestion> actual = await vm.SearchSuggestionsAsync("   ");
 
         Assert.Empty(actual);
-        _dataProviderMock.Verify(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _dataProviderMock.Verify(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

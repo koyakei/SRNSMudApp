@@ -281,6 +281,18 @@ public class TaggingContractService(
 
         try
         {
+            int updatedRows = await dbContext.TaggingRequestEntities
+                .Where(e => e.Id == entity.Id && e.Status == TradeStatus.Proposed)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, TradeStatus.Executed));
+
+            if (updatedRows == 0)
+            {
+                await transaction.RollbackAsync();
+                return new Failure("このリクエストは既に処理されているか、状態が変更されています。");
+            }
+
+            entity.Status = TradeStatus.Executed;
+
             IContractExecutor? executor = _executorFactory.GetExecutor(entity.ContractType);
             Result<string> executeResult = executor is not null
                 ? await executor.ExecuteAsync(dbContext, entity, currentUserId, fulfillerAssetId)
@@ -341,6 +353,15 @@ public class TaggingContractService(
 
     private static async Task<Result<string>> ProcessCancelAsync(ApplicationDbContext dbContext, TaggingRequestEntity entity)
     {
+        int updatedRows = await dbContext.TaggingRequestEntities
+            .Where(e => e.Id == entity.Id && e.Status == TradeStatus.Proposed)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, TradeStatus.Canceled));
+
+        if (updatedRows == 0)
+        {
+            return new Failure("このリクエストは既に処理されているか、状態が変更されています。");
+        }
+
         entity.Status = TradeStatus.Canceled;
         await dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");

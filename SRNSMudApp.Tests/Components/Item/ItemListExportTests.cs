@@ -60,8 +60,16 @@ public sealed class ItemListExportTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([testItem], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([testItem], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
             .Setup(d => d.LoadExportDataAsync(It.IsAny<IReadOnlyList<int>>()))

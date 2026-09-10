@@ -174,15 +174,23 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag> { [TagName] = tag });
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         _ = _itemListDataMock
             .Setup(d => d.FindTagByNameAsync(TagName))
             .ReturnsAsync(tag);
 
         _ = _itemListDataMock
-            .Setup(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(d => d.SearchTagNameSuggestionsAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new TagSuggestion(null, TagName, null)]);
 
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
@@ -219,8 +227,16 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
         };
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
         cut.WaitForState(() => cut.Markup.Contains("item-card-1"));

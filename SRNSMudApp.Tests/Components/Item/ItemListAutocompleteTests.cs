@@ -58,8 +58,16 @@ public sealed class ItemListAutocompleteTests : IAsyncLifetime
             .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag> { [1] = new() { Id = 1, Name = TagName, OwnerId = UserId } });
 
         _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
             .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
             .ReturnsAsync(new ItemListPageData([], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
 
         IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
 
