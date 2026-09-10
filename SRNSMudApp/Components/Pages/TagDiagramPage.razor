@@ -36,14 +36,20 @@
     @* 共通化されたタグ検索コンポーネントによるフォーカス UI *@
     <div style="min-width: 280px; max-width: 380px; flex-grow: 1;">
         <TagAutocomplete Value="_focusedTag" ValueChanged="OnTagFocusedFromSearch"
-                         Label="@(_focusedTag == null ? "タグを検索してフォーカス" : "始点タグを変更")"
-                         Placeholder="タグ名または内容で検索..." Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                         Label="@(_focusedTag == null ? "タグを検索してフォーカス" : "始点タグを変更")" Placeholder="タグ名または内容で検索..."
+                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
     </div>
 
     <div class="d-flex flex-wrap align-center gap-2">
         @* 表示過多を防ぐフィルタリング設定 *@
         <MudSwitch T="bool" Value="_onlyConnectedTags" ValueChanged="OnOnlyConnectedTagsChanged" Color="Color.Primary"
                    Label="エッジのあるタグのみ" Dense="true" />
+
+        @if (QueryItemId.HasValue)
+        {
+            <MudSwitch T="bool" Value="_contextOnly" ValueChanged="OnContextOnlyChanged" Color="Color.Secondary"
+                       Label="アイテム関連タグのみ" Dense="true" />
+        }
 
         @if (_focusedTag != null || _secondFocusedTag != null)
         {
@@ -60,10 +66,8 @@
         </MudChip>
 
         <MudButton Variant="@(_isEdgeCreationMode ? Variant.Filled : Variant.Outlined)"
-                   Color="@(_isEdgeCreationMode ? Color.Warning : Color.Primary)"
-                   StartIcon="@Icons.Material.Filled.AltRoute"
-                   OnClick="ToggleEdgeCreationModeAsync"
-                   Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
+                   Color="@(_isEdgeCreationMode ? Color.Warning : Color.Primary)" StartIcon="@Icons.Material.Filled.AltRoute"
+                   OnClick="ToggleEdgeCreationModeAsync" Disabled="@(string.IsNullOrEmpty(_currentUserId) || _tags.Count < 2)">
             @(_isEdgeCreationMode ? "エッジ作成中" : "エッジ作成モード")
         </MudButton>
 
@@ -81,44 +85,23 @@
 </div>
 
 @* フォーカス中タグのサマリーバー（複数タグ・始点/終点フォーカス対応） *@
-<TagDiagramFocusBar FocusedTag="_focusedTag"
-                    SecondFocusedTag="_secondFocusedTag"
-                    AllTags="_tags"
-                    Edges="_edges"
-                    IsEdgeCreationMode="_isEdgeCreationMode"
-                    CurrentUserId="@_currentUserId"
-                    OnClearFirstTag="ClearFirstTag"
-                    OnClearSecondTag="ClearSecondTag"
-                    OnClearFocus="ClearFocus"
-                    OnSwapFocusedTags="SwapFocusedTags"
-                    OnShowChildNodes="HandleShowChildNodes"
-                    OnFocusTagFromTree="FocusTagFromHeaderTree"
-                    OnAddChildTag="HandleAddChildTag"
-                    OnToggleEdgeCreationMode="ToggleEdgeCreationModeAsync"
-                    OnOpenCreateEdgeDialog="args => OpenCreateEdgeDialog(args.Source, args.Target)"
-                    OnSelectEdge="HandleEdgeSelected"
+<TagDiagramFocusBar FocusedTag="_focusedTag" SecondFocusedTag="_secondFocusedTag" AllTags="_tags" Edges="_edges"
+                    IsEdgeCreationMode="_isEdgeCreationMode" CurrentUserId="@_currentUserId" OnClearFirstTag="ClearFirstTag"
+                    OnClearSecondTag="ClearSecondTag" OnClearFocus="ClearFocus" OnSwapFocusedTags="SwapFocusedTags"
+                    OnShowChildNodes="HandleShowChildNodes" OnFocusTagFromTree="FocusTagFromHeaderTree"
+                    OnAddChildTag="HandleAddChildTag" OnToggleEdgeCreationMode="ToggleEdgeCreationModeAsync"
+                    OnOpenCreateEdgeDialog="args => OpenCreateEdgeDialog(args.Source, args.Target)" OnSelectEdge="HandleEdgeSelected"
                     OnSecondTagFocusedFromSearch="OnSecondTagFocusedFromSearch" />
 
 @* エッジ作成モードパネル（現在フォーカスを維持したまま子タグ同士・タグ間のエッジを形成・タグ付け） *@
-<TagEdgeCreationPanel IsEdgeCreationMode="_isEdgeCreationMode"
-                      FocusedTag="_focusedTag"
-                      AllTags="_tags"
-                      SourceTag="_edgeCreationSourceTag"
-                      TargetTag="_edgeCreationTargetTag"
-                      AttachTag="_edgeCreationAttachTag"
-                      AttachAsset="_edgeCreationAttachAsset"
-                      AvailableAssets="_edgeCreationAvailableAssets"
-                      Weight="_edgeCreationWeight"
-                      IsLoadingAttachAssets="_isLoadingAttachAssets"
-                      CanCreateEdge="CanCreateEdgeInMode"
-                      OnCreateEdge="CreateEdgeInModeAsync"
-                      OnExitMode="ExitEdgeCreationMode"
-                      OnSourceTagChanged="OnEdgeCreationSourceChanged"
-                      OnTargetTagChanged="OnEdgeCreationTargetChanged"
-                      OnAttachTagChanged="OnEdgeCreationAttachTagChanged"
-                      OnWeightChanged="w => _edgeCreationWeight = w"
-                      OnSwapTags="SwapEdgeCreationTags"
-                      OnSelectChildAsSource="SelectChildAsSource"
+<TagEdgeCreationPanel IsEdgeCreationMode="_isEdgeCreationMode" FocusedTag="_focusedTag" AllTags="_tags"
+                      SourceTag="_edgeCreationSourceTag" TargetTag="_edgeCreationTargetTag" AttachTag="_edgeCreationAttachTag"
+                      AttachAsset="_edgeCreationAttachAsset" AvailableAssets="_edgeCreationAvailableAssets" Weight="_edgeCreationWeight"
+                      IsLoadingAttachAssets="_isLoadingAttachAssets" CanCreateEdge="CanCreateEdgeInMode"
+                      OnCreateEdge="CreateEdgeInModeAsync" OnExitMode="ExitEdgeCreationMode"
+                      OnSourceTagChanged="OnEdgeCreationSourceChanged" OnTargetTagChanged="OnEdgeCreationTargetChanged"
+                      OnAttachTagChanged="OnEdgeCreationAttachTagChanged" OnWeightChanged="w => _edgeCreationWeight = w"
+                      OnSwapTags="SwapEdgeCreationTags" OnSelectChildAsSource="SelectChildAsSource"
                       OnSelectChildAsTarget="SelectChildAsTarget" />
 
 @if (_isLoading)
@@ -159,10 +142,12 @@ else
     [SupplyParameterFromQuery(Name = "itemId")] public int? QueryItemId { get; set; }
 
     private bool _isUpdatingUrl;
+    private int? _loadedContextItemId;
 
     private BlazorDiagram _diagram = null!;
     private List<TagEntity> _tags = [];
     private List<TagEdge> _edges = [];
+    private List<Data.Item> _contextItems = [];
     private TagEdge? _selectedEdge;
     private TagEntity? _focusedTag;
     private TagEntity? _secondFocusedTag;
@@ -170,6 +155,7 @@ else
     private bool _isLoading = true;
     private bool _onlyConnectedTags = true;
     private bool _neighborhoodOnly = false;
+    private bool _contextOnly = true;
     private bool _isProgrammaticSelection;
     private int _displayedTagsCount = 0;
     private readonly HashSet<int> _extraVisibleTagIds = [];
@@ -199,16 +185,40 @@ else
     }
 
     
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (_isUpdatingUrl || _isLoading || _tags.Count == 0)
         {
             return;
         }
-        ApplyQueryParameters();
+
+        bool contextChanged = false;
+        if (QueryItemId != _loadedContextItemId)
+        {
+            _loadedContextItemId = QueryItemId;
+            if (QueryItemId.HasValue)
+            {
+                var contextTagIds = await DataProvider.GetContextTagIdsForItemAsync(QueryItemId.Value);
+                foreach (var id in contextTagIds)
+                {
+                    _extraVisibleTagIds.Add(id);
+                }
+                _contextItems = await DataProvider.GetContextItemsAsync(QueryItemId.Value);
+                contextChanged = true;
+            }
+        }
+
+        bool queryChanged = ApplyQueryParameters();
+
+        if (contextChanged && !queryChanged)
+        {
+            BuildDiagramElements();
+            FocusNodesInDiagram();
+            _ = InvokeAsync(StateHasChanged);
+        }
     }
 
-    private void ApplyQueryParameters()
+    private bool ApplyQueryParameters()
     {
         bool changed = false;
         
@@ -239,6 +249,7 @@ else
             FocusNodesInDiagram();
             _ = InvokeAsync(StateHasChanged);
         }
+        return changed;
     }
 
     private void UpdateUrlQuery()
@@ -278,6 +289,7 @@ else
 
         _diagram = new BlazorDiagram(options);
         _diagram.RegisterComponent<TagNode, TagNodeWidget>();
+        _diagram.RegisterComponent<ItemNode, ItemNodeWidget>();
         _diagram.RegisterComponent<TagEdgeLink, TagEdgeLinkWidget>();
     }
 
@@ -300,6 +312,17 @@ else
                 {
                     _extraVisibleTagIds.Add(id);
                 }
+            }
+
+            if (QueryItemId.HasValue)
+            {
+                _loadedContextItemId = QueryItemId.Value;
+                var contextTagIds = await DataProvider.GetContextTagIdsForItemAsync(QueryItemId.Value);
+                foreach (var id in contextTagIds)
+                {
+                    _extraVisibleTagIds.Add(id);
+                }
+                _contextItems = await DataProvider.GetContextItemsAsync(QueryItemId.Value);
             }
 
             BuildDiagramElements();
@@ -328,6 +351,13 @@ else
         FocusNodesInDiagram();
     }
 
+    private void OnContextOnlyChanged(bool value)
+    {
+        _contextOnly = value;
+        BuildDiagramElements();
+        FocusNodesInDiagram();
+    }
+
     private void BuildDiagramElements()
     {
         // 既存ノードの位置を退避して可能な限りレイアウトを維持
@@ -344,7 +374,13 @@ else
 
         IEnumerable<TagEntity> tagsToDisplay;
 
-        if (_neighborhoodOnly && (_focusedTag != null || _secondFocusedTag != null))
+        if (QueryItemId.HasValue && _contextOnly && _extraVisibleTagIds.Count > 0)
+        {
+            tagsToDisplay = _tags.Where(t => _extraVisibleTagIds.Contains(t.Id)
+                || (_focusedTag != null && t.Id == _focusedTag.Id)
+                || (_secondFocusedTag != null && t.Id == _secondFocusedTag.Id));
+        }
+        else if (_neighborhoodOnly && (_focusedTag != null || _secondFocusedTag != null))
         {
             var focusIds = new HashSet<int>();
             if (_focusedTag != null)
@@ -403,7 +439,8 @@ else
                 childOffsets[tag.ParentTagId.Value] = order + 1;
                 double offsetX = (order - 1) * 200.0;
                 double offsetY = 120.0;
-                position = new Blazor.Diagrams.Core.Geometry.Point(Math.Max(20, parentPos.X + offsetX), Math.Max(20, parentPos.Y + offsetY));
+                position = new Blazor.Diagrams.Core.Geometry.Point(Math.Max(20, parentPos.X + offsetX), Math.Max(20, parentPos.Y +
+offsetY));
             }
             else
             {
@@ -434,6 +471,27 @@ else
             };
             nodeMap[tag.Id] = node;
             _diagram.Nodes.Add(node);
+        }
+
+        for (int i = 0; i < _contextItems.Count; i++)
+        {
+            var item = _contextItems[i];
+            double x = 80 + (i * 240);
+            double y = 80 + ((displayList.Count / columns + 1) * 160);
+            var node = new ItemNode(item, new Blazor.Diagrams.Core.Geometry.Point(x, y));
+            _diagram.Nodes.Add(node);
+
+            // Draw links from ItemNode to its associated TagNodes
+            if (item.TagRelations != null)
+            {
+                foreach (var tr in item.TagRelations)
+                {
+                    if (nodeMap.TryGetValue(tr.TagId, out var targetNode))
+                    {
+                        _diagram.Links.Add(new LinkModel(node.GetPort(PortAlignment.Top), targetNode.GetPort(PortAlignment.Bottom)));
+                    }
+                }
+            }
         }
 
         foreach (var edge in _edges)
@@ -882,13 +940,13 @@ else
     }
 
     /// <summary>
-    ///     指定された親タグの子タグ一覧を取得する。
+    /// 指定された親タグの子タグ一覧を取得する。
     /// </summary>
     private List<TagEntity> GetChildTags(int parentId) =>
         _tags.Where(t => t.ParentTagId == parentId).ToList();
 
     /// <summary>
-    ///     エッジ作成モードの切り替え。
+    /// エッジ作成モードの切り替え。
     /// </summary>
     private async Task ToggleEdgeCreationModeAsync()
     {
@@ -903,9 +961,9 @@ else
     }
 
     /// <summary>
-    ///     エッジ作成モードを開始する。
-    ///     現在フォーカス中のタグのフォーカスは維持したまま、子タグが存在する場合は画面上に展開し、
-    ///     フォーカス中タグをエッジに紐付ける意味付けタグの初期値として設定する。
+    /// エッジ作成モードを開始する。
+    /// 現在フォーカス中のタグのフォーカスは維持したまま、子タグが存在する場合は画面上に展開し、
+    /// フォーカス中タグをエッジに紐付ける意味付けタグの初期値として設定する。
     /// </summary>
     private async Task EnterEdgeCreationModeAsync()
     {
@@ -947,7 +1005,7 @@ else
     }
 
     /// <summary>
-    ///     エッジ作成モードを終了し、作業状態をリセットする。
+    /// エッジ作成モードを終了し、作業状態をリセットする。
     /// </summary>
     private void ExitEdgeCreationMode()
     {
@@ -996,7 +1054,7 @@ else
     }
 
     /// <summary>
-    ///     エッジに紐付ける意味付けタグの変更時に利用可能 RightAsset を取得する。
+    /// エッジに紐付ける意味付けタグの変更時に利用可能 RightAsset を取得する。
     /// </summary>
     private async Task SetEdgeCreationAttachTagAsync(TagEntity? tag)
     {
@@ -1023,7 +1081,7 @@ else
     }
 
     /// <summary>
-    ///     エッジ作成モードで決定ボタンが押下可能か判定する。
+    /// エッジ作成モードで決定ボタンが押下可能か判定する。
     /// </summary>
     private bool CanCreateEdgeInMode =>
         !string.IsNullOrEmpty(_currentUserId) &&
@@ -1033,9 +1091,9 @@ else
         !_isLoadingAttachAssets;
 
     /// <summary>
-    ///     エッジ作成モードにおいて、From と To を結ぶ Edge を作成し、
-    ///     意味付けタグが指定されていればタグ紐付け（RightAsset 消費）を実行する。
-    ///     処理完了後も現在のフォーカス状態を維持する。
+    /// エッジ作成モードにおいて、From と To を結ぶ Edge を作成し、
+    /// 意味付けタグが指定されていればタグ紐付け（RightAsset 消費）を実行する。
+    /// 処理完了後も現在のフォーカス状態を維持する。
     /// </summary>
     private async Task CreateEdgeInModeAsync()
     {

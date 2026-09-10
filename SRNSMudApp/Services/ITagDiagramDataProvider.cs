@@ -15,6 +15,13 @@ public interface ITagDiagramDataProvider
     Task<List<Tag>> LoadAllTagsAsync();
 
     /// <summary>
+    ///     Item のタグと、その本文に含まれる内部リンク先のタグおよびアイテムのタグの ID 一覧を取得する。
+    /// </summary>
+    Task<List<int>> GetContextTagIdsForItemAsync(int itemId);
+
+    Task<List<Item>> GetContextItemsAsync(int itemId);
+
+    /// <summary>
     ///     全 Edge（関連タグおよび紐付けタグを含む）を取得する。
     /// </summary>
     Task<IReadOnlyList<TagEdge>> LoadAllEdgesAsync();

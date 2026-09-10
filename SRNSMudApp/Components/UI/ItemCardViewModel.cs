@@ -154,8 +154,8 @@ public static partial class ItemCardViewModel
     public static bool CanModifyRelation(string? relationOwnerId, string? currentUserId)
         => !string.IsNullOrEmpty(currentUserId) && relationOwnerId == currentUserId;
 
-    [GeneratedRegex(@"\/(?:ItemDetail|TagDetail)\/\d+")]
-    private static partial Regex InternalLinkRegex();
+    [GeneratedRegex(@"\/(?:ItemDetail|TagDetail)\/\d+", RegexOptions.IgnoreCase)]
+    public static partial Regex InternalLinkRegex();
 
     /// <summary>
     ///     テキストから URL を抽出して返す。重複は除去される。

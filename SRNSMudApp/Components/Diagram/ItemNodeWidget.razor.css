@@ -1,0 +1,22 @@
+.item-node {
+    width: 200px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease-in-out;
+}
+
+.item-node.selected {
+    box-shadow: 0 0 0 2px var(--mud-palette-primary);
+}
+
+.item-paper {
+    background-color: var(--mud-palette-background);
+    border: 1px solid var(--mud-palette-lines-default);
+    overflow: hidden;
+}
+
+.item-content {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

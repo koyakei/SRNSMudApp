@@ -1,0 +1,37 @@
+@using Blazor.Diagrams.Core.Models
+@using Blazor.Diagrams.Components.Renderers
+@using SRNSMudApp.Components.UI
+@inject NavigationManager NavigationManager
+
+<div class="item-node @(Node.Selected ? "selected" : "")" @onclick="OnClick">
+    <MudPaper Elevation="Node.Selected ? 4 : 1" Class="pa-2 item-paper">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Class="mr-2" />
+            <MudText Typo="Typo.body2" Class="item-content">
+                @GetPreviewText()
+            </MudText>
+        </div>
+    </MudPaper>
+
+    @foreach (var port in Node.Ports)
+    {
+        <PortRenderer Port="port" />
+    }
+</div>
+
+@code {
+    [Parameter] public ItemNode Node { get; set; } = null!;
+
+    private string GetPreviewText()
+    {
+        var content = Node.Item.Content ?? "";
+        return content.Length > 20 ? content.Substring(0, 20) + "..." : content;
+    }
+
+    private void OnClick()
+    {
+        // Double click might be better, but simple click to navigate is fine, or we can just leave it as is and let the user
+        // see it.
+        // Let's not navigate on single click because it interferes with selection.
+    }
+}
