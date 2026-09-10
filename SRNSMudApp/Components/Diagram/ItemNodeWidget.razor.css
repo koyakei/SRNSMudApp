@@ -1,8 +1,22 @@
 .item-node {
-    width: 200px;
+    width: 300px;
+    max-width: 300px;
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.2s ease-in-out;
+}
+
+.item-node.expanded {
+    width: 600px;
+    max-width: 600px;
+    z-index: 1000;
+}
+
+.expanded-card-container {
+    background-color: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 8px;
+    overflow: visible;
 }
 
 .item-node.selected {
@@ -16,7 +30,10 @@
 }
 
 .item-content {
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
     overflow: hidden;
     text-overflow: ellipsis;
+    word-break: break-all;
 }

@@ -3,15 +3,30 @@
 @using SRNSMudApp.Components.UI
 @inject NavigationManager NavigationManager
 
-<div class="item-node @(Node.Selected ? "selected" : "")" @onclick="OnClick">
-    <MudPaper Elevation="Node.Selected ? 4 : 1" Class="pa-2 item-paper">
-        <div class="d-flex align-center">
-            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Class="mr-2" />
-            <MudText Typo="Typo.body2" Class="item-content">
-                @GetPreviewText()
-            </MudText>
+<div class="item-node @(Node.Selected ? "selected" : "") @(Node.IsExpanded ? "expanded" : "")" @onclick="OnClick">
+    @if (Node.IsExpanded)
+    {
+        <div class="expanded-card-container" @onclick:stopPropagation="true">
+            <div class="d-flex justify-end p-1"
+                 style="background: var(--mud-palette-surface); border-bottom: 1px solid var(--mud-palette-lines-default);">
+                <MudIconButton Icon="@Icons.Material.Filled.Compress" Size="Size.Small" OnClick="ToggleExpand" />
+            </div>
+            <ItemCard Item="Node.Item" EnableNavigation="true" />
         </div>
-    </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="Node.Selected ? 4 : 1" Class="pa-2 item-paper">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Class="mr-2" />
+                <MudText Typo="Typo.body2" Class="item-content">
+                    @GetPreviewText()
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" OnClick="ToggleExpand"
+                               Class="ml-auto" />
+            </div>
+        </MudPaper>
+    }
 
     @foreach (var port in Node.Ports)
     {
@@ -25,7 +40,34 @@
     private string GetPreviewText()
     {
         var content = Node.Item.Content ?? "";
-        return content.Length > 20 ? content.Substring(0, 20) + "..." : content;
+
+        var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(content);
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            var url = match.Value;
+            if (url.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(url.AsSpan("/ItemDetail/".Length), out var iId))
+                {
+                    var linkedItem = Node.AllContextItems.FirstOrDefault(i => i.Id == iId);
+                    if (linkedItem != null)
+                    {
+                        var linkedText = linkedItem.Content ?? "";
+                        linkedText = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Replace(linkedText, "[Link]");
+                        content = content.Replace(url, linkedText);
+                    }
+                }
+            }
+        }
+
+        content = System.Text.RegularExpressions.Regex.Replace(content, "<.*?>", string.Empty).Trim();
+        return Node.IsExpanded ? content : (content.Length > 80 ? content.Substring(0, 80) + "..." : content);
+    }
+
+    private void ToggleExpand()
+    {
+        Node.IsExpanded = !Node.IsExpanded;
+        Node.Refresh();
     }
 
     private void OnClick()

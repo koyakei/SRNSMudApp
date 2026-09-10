@@ -291,6 +291,7 @@ else
         _diagram.RegisterComponent<TagNode, TagNodeWidget>();
         _diagram.RegisterComponent<ItemNode, ItemNodeWidget>();
         _diagram.RegisterComponent<TagEdgeLink, TagEdgeLinkWidget>();
+        _diagram.RegisterComponent<TagRelationLink, TagRelationLinkWidget>();
     }
 
     private async Task ReloadDiagramAsync(bool preserveExtraVisibleTags = false)
@@ -473,24 +474,46 @@ offsetY));
             _diagram.Nodes.Add(node);
         }
 
-        for (int i = 0; i < _contextItems.Count; i++)
-        {
-            var item = _contextItems[i];
-            double x = 80 + (i * 240);
-            double y = 80 + ((displayList.Count / columns + 1) * 160);
-            var node = new ItemNode(item, new Blazor.Diagrams.Core.Geometry.Point(x, y));
-            _diagram.Nodes.Add(node);
+        double tagMaxY = 80 + ((displayList.Count / columns + 1) * 160);
+        var parentItem = _contextItems.FirstOrDefault(i => QueryItemId.HasValue && i.Id == QueryItemId.Value);
+        var childItems = _contextItems.Where(i => !QueryItemId.HasValue || i.Id != QueryItemId.Value).ToList();
+        var itemNodes = new List<ItemNode>();
 
-            // Draw links from ItemNode to its associated TagNodes
-            if (item.TagRelations != null)
+        for (int i = 0; i < childItems.Count; i++)
+        {
+            var item = childItems[i];
+            double x = 80 + (i * 240);
+            double y = tagMaxY + 80;
+            var node = new ItemNode(item, _contextItems, new Blazor.Diagrams.Core.Geometry.Point(x, y));
+            itemNodes.Add(node);
+            _diagram.Nodes.Add(node);
+        }
+
+        if (parentItem != null)
+        {
+            double x = 80 + (childItems.Count > 0 ? (childItems.Count - 1) * 240 / 2.0 : 0);
+            double y = tagMaxY + 240;
+            var node = new ItemNode(parentItem, _contextItems, new Blazor.Diagrams.Core.Geometry.Point(x, y));
+            itemNodes.Add(node);
+            _diagram.Nodes.Add(node);
+        }
+
+        foreach (var node in itemNodes)
+        {
+            if (node.Item.TagRelations != null)
             {
-                foreach (var tr in item.TagRelations)
+                foreach (var tr in node.Item.TagRelations)
                 {
                     if (nodeMap.TryGetValue(tr.TagId, out var targetNode))
                     {
-                        _diagram.Links.Add(new LinkModel(node.GetPort(PortAlignment.Top), targetNode.GetPort(PortAlignment.Bottom)));
+                        _diagram.Links.Add(new TagRelationLink(node, targetNode));
                     }
                 }
+            }
+            if (parentItem != null && node.Item.Id != parentItem.Id)
+            {
+                var parentNode = itemNodes.First(n => n.Item.Id == parentItem.Id);
+                _diagram.Links.Add(new LinkModel(parentNode, node));
             }
         }
 
