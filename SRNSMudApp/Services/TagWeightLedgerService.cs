@@ -16,7 +16,8 @@ public class TagWeightLedgerService : ITagWeightLedgerService
         int? sourceId,
         int delta,
         string reason,
-        string userId)
+        string userId,
+        TagRelation? sourceRelation = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(tag);
@@ -31,6 +32,7 @@ public class TagWeightLedgerService : ITagWeightLedgerService
             ItemId = itemId,
             SourceType = sourceType,
             SourceId = sourceId,
+            TagRelation = sourceRelation,
             PreviousWeight = prevWeight,
             NewWeight = tag.CachedWeight,
             Delta = delta,

@@ -5,301 +5,126 @@ using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
 
-public class ItemReactionService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemReactionService
+public class ItemReactionService(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    ITagWeightLedgerService? ledgerService = null,
+    TimeProvider? timeProvider = null) : IItemReactionService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly ITagWeightLedgerService _ledgerService = ledgerService ?? new TagWeightLedgerService();
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async Task<ItemVoteResult> ToggleItemVoteAsync(
         int itemId,
         string userId,
         int goodTagId,
         int targetWeight)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        List<TagRelation> relations = await context.TagRelations
-            .Where(tr => tr.ItemId == itemId && tr.OwnerId == userId)
-            .ToListAsync();
-
-        TagRelation? existingRelation = relations.Find(tr => tr.TagId == goodTagId);
-        Tag? tag = await context.Tags.FindAsync(goodTagId);
-
-        switch (existingRelation)
-        {
-            case null:
-                {
-                    var newRelation = new TagRelation
-                    {
-                        ItemId = itemId,
-                        TagId = goodTagId,
-                        OwnerId = userId,
-                        Weight = targetWeight,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow
-                    };
-                    _ = context.TagRelations.Add(newRelation);
-
-                    _ = context.TimelineEvents!.Add(new TimelineEvent
-                    {
-                        OwnerId = userId,
-                        Target = new ItemTarget(itemId),
-                        FollowedTagId = goodTagId,
-                        EventType = "Insert",
-                        NewWeight = targetWeight
-                    });
-
-                    _ = await context.SaveChangesAsync();
-
-                    if (tag is not null)
-                    {
-                        var prevWeightAdd = tag.CachedWeight;
-                        tag.CachedWeight += targetWeight;
-                        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                        {
-                            TagId = tag.Id,
-                            TagNameSnapshot = tag.Name,
-                            ItemId = itemId,
-                            SourceType = "TagRelationInsert",
-                            SourceId = newRelation.Id,
-                            PreviousWeight = prevWeightAdd,
-                            NewWeight = tag.CachedWeight,
-                            Delta = targetWeight,
-                            IsOwnerAction = true,
-                            Reason = "Vote付与",
-                            OwnerId = userId
-                        });
-
-                        _ = await context.SaveChangesAsync();
-                    }
-
-                    return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
-                }
-            default:
-                switch (existingRelation.Weight == targetWeight)
-                {
-                    // 同じ Weight なら投票取り消し
-                    case true:
-                        {
-                            var deltaCancel = -existingRelation.Weight;
-                            if (tag is not null)
-                            {
-                                var prevWeightCancel = tag.CachedWeight;
-                                tag.CachedWeight += deltaCancel;
-                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    ItemId = itemId,
-                                    SourceType = "TagRelationDelete",
-                                    SourceId = null,
-                                    PreviousWeight = prevWeightCancel,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaCancel,
-                                    IsOwnerAction = true,
-                                    Reason = "Vote取り消し",
-                                    OwnerId = userId
-                                });
-                            }
-
-                            _ = context.TimelineEvents!.Add(new TimelineEvent
-                            {
-                                OwnerId = userId,
-                                Target = new ItemTarget(itemId),
-                                FollowedTagId = goodTagId,
-                                EventType = "Delete",
-                                PreviousWeight = existingRelation.Weight
-                            });
-
-                            _ = context.TagRelations.Remove(existingRelation);
-                            _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, existingRelation.Weight);
-                        }
-                    default:
-                        {
-                            var deltaUpdate = targetWeight - existingRelation.Weight;
-                            existingRelation.Weight = targetWeight;
-                            existingRelation.UpdatedDate = DateTime.UtcNow;
-
-                            if (tag is not null)
-                            {
-                                var prevWeightUpdate = tag.CachedWeight;
-                                tag.CachedWeight += deltaUpdate;
-                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    ItemId = itemId,
-                                    SourceType = "TagRelationUpdate",
-                                    SourceId = existingRelation.Id,
-                                    PreviousWeight = prevWeightUpdate,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaUpdate,
-                                    IsOwnerAction = true,
-                                    Reason = "Vote変更",
-                                    OwnerId = userId
-                                });
-                            }
-
-                            _ = context.TimelineEvents!.Add(new TimelineEvent
-                            {
-                                OwnerId = userId,
-                                Target = new ItemTarget(itemId),
-                                FollowedTagId = goodTagId,
-                                EventType = "Update",
-                                PreviousWeight = existingRelation.Weight - deltaUpdate,
-                                NewWeight = existingRelation.Weight
-                            });
-
-                            _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, targetWeight);
-                        }
-                }
-        }
-    }
+        => await ApplyReactionChangeAsync(itemId, userId, goodTagId, targetWeight, false, "Vote");
 
     public async Task<ItemVoteResult> ToggleItemReactionAsync(
         int itemId,
         string userId,
         int reactionTagId,
         int targetWeight)
+        => await ApplyReactionChangeAsync(itemId, userId, reactionTagId, targetWeight, true, "Reaction");
+
+    private async Task<ItemVoteResult> ApplyReactionChangeAsync(
+        int itemId,
+        string userId,
+        int tagId,
+        int targetWeight,
+        bool accumulate,
+        string reasonPrefix)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         TagRelation? existingRelation = await context.TagRelations
-            .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == reactionTagId);
-        Tag? tag = await context.Tags.FindAsync(reactionTagId);
+            .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.OwnerId == userId && tr.TagId == tagId);
+        Tag? tag = await context.Tags.FindAsync(tagId);
 
-        switch (existingRelation)
+        if (existingRelation is null)
         {
-            case null:
-                {
-                    var newRelation = new TagRelation
-                    {
-                        ItemId = itemId,
-                        TagId = reactionTagId,
-                        OwnerId = userId,
-                        Weight = targetWeight,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow
-                    };
-                    _ = context.TagRelations.Add(newRelation);
+            var newRelation = new TagRelation
+            {
+                ItemId = itemId,
+                TagId = tagId,
+                OwnerId = userId,
+                Weight = targetWeight,
+                CreatedDate = now,
+                UpdatedDate = now
+            };
+            _ = context.TagRelations.Add(newRelation);
+            AddTimelineEvent(context, itemId, userId, tagId, "Insert", now, newWeight: targetWeight);
+            RecordWeightChange(context, tag, itemId, "TagRelationInsert", null, targetWeight, $"{reasonPrefix}付与", userId, newRelation);
 
-                    _ = context.TimelineEvents!.Add(new TimelineEvent
-                    {
-                        OwnerId = userId,
-                        Target = new ItemTarget(itemId),
-                        FollowedTagId = reactionTagId,
-                        EventType = "Insert",
-                        NewWeight = targetWeight
-                    });
-
-                    _ = await context.SaveChangesAsync();
-
-                    if (tag is not null)
-                    {
-                        var prevWeightAdd = tag.CachedWeight;
-                        tag.CachedWeight += targetWeight;
-                        _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                        {
-                            TagId = tag.Id,
-                            TagNameSnapshot = tag.Name,
-                            ItemId = itemId,
-                            SourceType = "TagRelationInsert",
-                            SourceId = newRelation.Id,
-                            PreviousWeight = prevWeightAdd,
-                            NewWeight = tag.CachedWeight,
-                            Delta = targetWeight,
-                            IsOwnerAction = true,
-                            Reason = "Reaction付与",
-                            OwnerId = userId
-                        });
-
-                        _ = await context.SaveChangesAsync();
-                    }
-                    return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
-                }
-            default:
-                var newWeight = existingRelation.Weight + targetWeight;
-                switch (newWeight)
-                {
-                    // 逆操作によって Weight が 0 に達した場合はリレーションを削除 (Removed)
-                    case 0:
-                        {
-                            var deltaCancel = -existingRelation.Weight;
-                            if (tag is not null)
-                            {
-                                var prevWeightCancel = tag.CachedWeight;
-                                tag.CachedWeight += deltaCancel;
-                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    ItemId = itemId,
-                                    SourceType = "TagRelationDelete",
-                                    SourceId = null,
-                                    PreviousWeight = prevWeightCancel,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaCancel,
-                                    IsOwnerAction = true,
-                                    Reason = "Reaction取り消し",
-                                    OwnerId = userId
-                                });
-                            }
-
-                            _ = context.TimelineEvents!.Add(new TimelineEvent
-                            {
-                                OwnerId = userId,
-                                Target = new ItemTarget(itemId),
-                                FollowedTagId = reactionTagId,
-                                EventType = "Delete",
-                                PreviousWeight = existingRelation.Weight
-                            });
-
-                            _ = context.TagRelations.Remove(existingRelation);
-                            _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, 0);
-                        }
-                    // 同方向なら加算、逆方向なら減算して Weight を更新 (Updated)
-                    default:
-                        {
-                            var deltaUpdate = targetWeight;
-                            existingRelation.Weight = newWeight;
-                            existingRelation.UpdatedDate = DateTime.UtcNow;
-
-                            if (tag is not null)
-                            {
-                                var prevWeightUpdate = tag.CachedWeight;
-                                tag.CachedWeight += deltaUpdate;
-                                _ = context.TagWeightLedgers!.Add(new TagWeightLedger
-                                {
-                                    TagId = tag.Id,
-                                    TagNameSnapshot = tag.Name,
-                                    ItemId = itemId,
-                                    SourceType = "TagRelationUpdate",
-                                    SourceId = existingRelation.Id,
-                                    PreviousWeight = prevWeightUpdate,
-                                    NewWeight = tag.CachedWeight,
-                                    Delta = deltaUpdate,
-                                    IsOwnerAction = true,
-                                    Reason = "Reaction変更",
-                                    OwnerId = userId
-                                });
-                            }
-
-                            _ = context.TimelineEvents!.Add(new TimelineEvent
-                            {
-                                OwnerId = userId,
-                                Target = new ItemTarget(itemId),
-                                FollowedTagId = reactionTagId,
-                                EventType = "Update",
-                                PreviousWeight = existingRelation.Weight - deltaUpdate,
-                                NewWeight = existingRelation.Weight
-                            });
-
-                            _ = await context.SaveChangesAsync();
-                            return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, newWeight);
-                        }
-                }
+            _ = await context.SaveChangesAsync();
+            return new ItemVoteResult(ItemVoteAction.Added, newRelation.Id, targetWeight);
         }
+
+        int previousWeight = existingRelation.Weight;
+        int newWeight = accumulate ? previousWeight + targetWeight : targetWeight;
+        if (newWeight == 0 || (!accumulate && newWeight == previousWeight))
+        {
+            int delta = -previousWeight;
+            RecordWeightChange(context, tag, itemId, "TagRelationDelete", null, delta, $"{reasonPrefix}取り消し", userId);
+            AddTimelineEvent(context, itemId, userId, tagId, "Delete", now, previousWeight: previousWeight);
+            _ = context.TagRelations.Remove(existingRelation);
+
+            _ = await context.SaveChangesAsync();
+            return new ItemVoteResult(ItemVoteAction.Removed, existingRelation.Id, accumulate ? 0 : previousWeight);
+        }
+
+        int weightDelta = newWeight - previousWeight;
+        existingRelation.Weight = newWeight;
+        existingRelation.UpdatedDate = now;
+        RecordWeightChange(context, tag, itemId, "TagRelationUpdate", existingRelation.Id, weightDelta, $"{reasonPrefix}変更", userId);
+        AddTimelineEvent(context, itemId, userId, tagId, "Update", now, previousWeight, newWeight);
+
+        _ = await context.SaveChangesAsync();
+        return new ItemVoteResult(ItemVoteAction.Updated, existingRelation.Id, newWeight);
+    }
+
+    private void RecordWeightChange(
+        ApplicationDbContext context,
+        Tag? tag,
+        int itemId,
+        string sourceType,
+        int? sourceId,
+        int delta,
+        string reason,
+        string userId,
+        TagRelation? sourceRelation = null)
+    {
+        if (tag is null)
+        {
+            return;
+        }
+
+        _ledgerService.RecordItemTagWeightChange(context, tag, itemId, sourceType, sourceId, delta, reason, userId, sourceRelation);
+    }
+
+    private static void AddTimelineEvent(
+        ApplicationDbContext context,
+        int itemId,
+        string userId,
+        int tagId,
+        string eventType,
+        DateTime timestamp,
+        int previousWeight = 0,
+        int newWeight = 0)
+    {
+        _ = context.TimelineEvents.Add(new TimelineEvent
+        {
+            OwnerId = userId,
+            Target = new ItemTarget(itemId),
+            FollowedTagId = tagId,
+            EventType = eventType,
+            PreviousWeight = previousWeight,
+            NewWeight = newWeight,
+            CreatedDate = timestamp,
+            UpdatedDate = timestamp
+        });
     }
 
     public async Task<Tag> EnsureReactionTagAsync(string userId, string reactionTagName)
@@ -313,13 +138,14 @@ public class ItemReactionService(IDbContextFactory<ApplicationDbContext> dbFacto
             return tag;
         }
 
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         tag = new Tag
         {
             Name = reactionTagName,
             IsSystem = true,
             OwnerId = userId,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
+            CreatedDate = now,
+            UpdatedDate = now
         };
         _ = context.Tags.Add(tag);
         _ = await context.SaveChangesAsync();

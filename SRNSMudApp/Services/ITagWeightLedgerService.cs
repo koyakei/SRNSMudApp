@@ -19,7 +19,8 @@ public interface ITagWeightLedgerService
         int? sourceId,
         int delta,
         string reason,
-        string userId);
+        string userId,
+        TagRelation? sourceRelation = null);
 
     /// <summary>
     ///     タグ間の関連付け（TagRelationToTag）に伴うウェイト変更をキャッシュに反映し、台帳レコードをコンテキストに追加する。

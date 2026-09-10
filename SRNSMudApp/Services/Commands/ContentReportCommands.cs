@@ -33,7 +33,7 @@ public class ResolveContentReportHandler(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     IReportTargetHandlerFactory handlerFactory,
     INotificationService notificationService)
-    : ICommandHandler<ResolveContentReportCommand, Result<bool>>
+    : CommandHandlerBase<ResolveContentReportCommand, Result<bool>>
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -45,9 +45,8 @@ public class ResolveContentReportHandler(
         notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 
     /// <inheritdoc />
-    public async Task<Result<bool>> HandleAsync(ResolveContentReportCommand command, CancellationToken cancellationToken = default)
+    protected override async Task<Result<bool>> ExecuteAsync(ResolveContentReportCommand command, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(command);
         ArgumentException.ThrowIfNullOrWhiteSpace(command.AdminUserId);
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);

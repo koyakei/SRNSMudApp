@@ -23,17 +23,14 @@ public record RejectTaggingRequestCommand(int RequestId, string CurrentUserId, s
 /// </summary>
 /// <param name="contractService">契約処理サービス。</param>
 public class ApproveTaggingRequestHandler(ITaggingContractService contractService)
-    : ICommandHandler<ApproveTaggingRequestCommand, Result<string>>
+    : CommandHandlerBase<ApproveTaggingRequestCommand, Result<string>>
 {
     private readonly ITaggingContractService _contractService =
         contractService ?? throw new ArgumentNullException(nameof(contractService));
 
     /// <inheritdoc />
-    public async Task<Result<string>> HandleAsync(ApproveTaggingRequestCommand command, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        return await _contractService.AcceptContractAsync(command.RequestId, command.CurrentUserId, command.FulfillerAssetId);
-    }
+    protected override async Task<Result<string>> ExecuteAsync(ApproveTaggingRequestCommand command, CancellationToken cancellationToken)
+        => await _contractService.AcceptContractAsync(command.RequestId, command.CurrentUserId, command.FulfillerAssetId);
 }
 
 /// <summary>
@@ -41,15 +38,14 @@ public class ApproveTaggingRequestHandler(ITaggingContractService contractServic
 /// </summary>
 /// <param name="taggingService">タグサービス。</param>
 public class RejectTaggingRequestHandler(ITaggingService taggingService)
-    : ICommandHandler<RejectTaggingRequestCommand, Result<bool>>
+    : CommandHandlerBase<RejectTaggingRequestCommand, Result<bool>>
 {
     private readonly ITaggingService _taggingService =
         taggingService ?? throw new ArgumentNullException(nameof(taggingService));
 
     /// <inheritdoc />
-    public async Task<Result<bool>> HandleAsync(RejectTaggingRequestCommand command, CancellationToken cancellationToken = default)
+    protected override async Task<Result<bool>> ExecuteAsync(RejectTaggingRequestCommand command, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(command);
         await _taggingService.RejectRequestAsync(command.RequestId, command.CurrentUserId, command.Reason);
         return new Success<bool>(true);
     }

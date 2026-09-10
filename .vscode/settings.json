@@ -27,5 +27,8 @@
   "chat.plugins.enabled": true,
   "chat.plugins.marketplaces": [
     "dotnet/skills"
-  ]
+  ],
+  "chat.tools.terminal.autoApprove": {
+    "dotnet format": true
+  }
 }
