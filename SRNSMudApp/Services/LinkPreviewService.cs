@@ -6,6 +6,10 @@ using System.Text.RegularExpressions;
 
 using HtmlAgilityPack;
 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
 #endregion
@@ -16,10 +20,12 @@ public partial class LinkPreviewService
 {
     private readonly ConcurrentDictionary<string, LinkPreviewData> _cache = new();
     private readonly HttpClient _httpClient;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public LinkPreviewService(HttpClient httpClient)
+    public LinkPreviewService(HttpClient httpClient, IServiceScopeFactory scopeFactory)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "SRNSMudApp-LinkPreviewBot/1.0");
     }
 
@@ -29,6 +35,26 @@ public partial class LinkPreviewService
         if (string.IsNullOrWhiteSpace(url))
         {
             return new LinkPreviewData { IsSuccess = false };
+        }
+
+        if (Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out Uri? uri))
+        {
+            var path = uri.IsAbsoluteUri ? uri.AbsolutePath : uri.ToString().Split('?')[0];
+
+            if (path.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(path.AsSpan("/ItemDetail/".Length), out int itemId))
+                {
+                    return await GetItemPreviewAsync(itemId, url);
+                }
+            }
+            else if (path.StartsWith("/TagDetail/", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(path.AsSpan("/TagDetail/".Length), out int tagId))
+                {
+                    return await GetTagPreviewAsync(tagId, url);
+                }
+            }
         }
 
         if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
@@ -129,6 +155,90 @@ public partial class LinkPreviewService
                          doc.DocumentNode.SelectSingleNode($"//meta[@name='{property}']");
 
         return node?.GetAttributeValue("content", string.Empty)?.Trim();
+    }
+
+    private async Task<LinkPreviewData> GetItemPreviewAsync(int itemId, string originalUrl)
+    {
+        if (_cache.TryGetValue(originalUrl, out var cachedData))
+        {
+            return cachedData;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var item = await db.Items
+            .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                    .ThenInclude(t => t.Owner)
+            .FirstOrDefaultAsync(i => i.Id == itemId);
+
+        if (item == null)
+        {
+            return new LinkPreviewData { Url = originalUrl, IsSuccess = false };
+        }
+
+        var tags = item.TagRelations
+            .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
+            .OrderByDescending(tr => tr.Weight)
+            .Take(3)
+            .Select(tr =>
+            {
+                var ownerName = tr.Tag.Owner?.UserName ?? (tr.Tag.GetKind() is Models.Unions.SystemClassificationTag ? "system" : "unknown");
+                return $"{tr.Tag.Name} ({ownerName})";
+            })
+            .ToList();
+
+        var text = WhitespaceRegex().Replace(item.Content, " ").Trim();
+        if (text.Length > 200) text = $"{text.AsSpan(0, 200)}...";
+
+        var preview = new LinkPreviewData
+        {
+            Url = originalUrl,
+            Title = $"Item #{item.Id}",
+            Description = text + (tags.Count > 0 ? $" | Tags: {string.Join(", ", tags)}" : ""),
+            SiteName = "SRNSMudApp",
+            IsSuccess = true
+        };
+
+        _cache[originalUrl] = preview;
+        return preview;
+    }
+
+    private async Task<LinkPreviewData> GetTagPreviewAsync(int tagId, string originalUrl)
+    {
+        if (_cache.TryGetValue(originalUrl, out var cachedData))
+        {
+            return cachedData;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var tag = await db.Tags
+            .Include(t => t.Owner)
+            .FirstOrDefaultAsync(t => t.Id == tagId);
+
+        if (tag == null)
+        {
+            return new LinkPreviewData { Url = originalUrl, IsSuccess = false };
+        }
+
+        var text = string.IsNullOrWhiteSpace(tag.Content) ? "タグ詳細" : WhitespaceRegex().Replace(tag.Content, " ").Trim();
+        if (text.Length > 200) text = $"{text.AsSpan(0, 200)}...";
+        var ownerName = tag.Owner?.UserName ?? (tag.GetKind() is Models.Unions.SystemClassificationTag ? "system" : "unknown");
+
+        var preview = new LinkPreviewData
+        {
+            Url = originalUrl,
+            Title = $"Tag: {tag.Name} ({ownerName})",
+            Description = text,
+            SiteName = "SRNSMudApp",
+            IsSuccess = true
+        };
+
+        _cache[originalUrl] = preview;
+        return preview;
     }
 
     [GeneratedRegex(@"\s+")]

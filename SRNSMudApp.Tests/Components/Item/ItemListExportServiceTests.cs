@@ -71,7 +71,7 @@ public class ItemListExportServiceTests
         var exportData = new ItemListExportData([], [], []);
         // 404 を返すハンドラでプレビュー取得失敗を再現する
         var service = new ItemListExportService(new LinkPreviewService(
-            new HttpClient(new StatusCodeHandler(HttpStatusCode.NotFound))));
+            new HttpClient(new StatusCodeHandler(HttpStatusCode.NotFound)), new Moq.Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object));
 
         IReadOnlyList<ExportItemDto> result = await service.BuildExportAsync(
             exportData, [new SRNSMudApp.Data.Item { Id = 1, Content = "see https://fail.com", OwnerId = "u1" }]);
@@ -101,7 +101,7 @@ public class ItemListExportServiceTests
 
     /// <summary>あらゆる GET に title 付き HTML を返すフェイクハンドラ。</summary>
     private static LinkPreviewService CreatePreviewService() =>
-        new(new HttpClient(new TitleHtmlHandler()));
+        new(new HttpClient(new TitleHtmlHandler()), new Moq.Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object);
 
     private sealed class TitleHtmlHandler : HttpMessageHandler
     {

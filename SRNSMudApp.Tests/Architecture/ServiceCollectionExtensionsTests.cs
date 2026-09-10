@@ -133,7 +133,8 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new TagDialogDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
         Assert.Throws<ArgumentNullException>(() => new ItemListExportService(null!));
         Assert.Throws<ArgumentNullException>(() => new SystemTagEnsurer(null!));
-        Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(null!));
+        Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(null!, new Moq.Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object));
+        Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(new HttpClient(), null!));
         Assert.Throws<ArgumentNullException>(() => new ContentReportService(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<ICommandHandler<ResolveContentReportCommand, Result<bool>>>().Object));
         Assert.Throws<ArgumentNullException>(() => new ResolveContentReportHandler(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<INotificationService>().Object));
         Assert.Throws<ArgumentNullException>(() => new ReportTargetHandlerFactory(null!));
