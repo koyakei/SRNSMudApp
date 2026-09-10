@@ -11,6 +11,7 @@ using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
@@ -195,10 +196,18 @@ public partial class ItemCard : IAsyncDisposable
         }
         try
         {
-            _ = await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
-            Item.AsRequestOf.Cancel();
-            _ = Snackbar.Add("リクエストを取り下げました。", Severity.Success);
-            await NotifyDataChangedAsync();
+            Result<string> result = await TaggingContractService.CancelContractAsync(Item.AsRequestOf.Id, CurrentUserId);
+            switch (result)
+            {
+                case Success<string>:
+                    _ = Item.AsRequestOf.Cancel();
+                    _ = Snackbar.Add(ErrorMessages.ContractCancelSuccess, Severity.Success);
+                    await NotifyDataChangedAsync();
+                    break;
+                case Failure f:
+                    _ = Snackbar.Add($"エラー: {f.ErrorMessage}", Severity.Error);
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -216,10 +225,18 @@ public partial class ItemCard : IAsyncDisposable
         }
         try
         {
-            _ = await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
-            Item.AsRequestOf.Execute();
-            _ = Snackbar.Add("リクエストを承認しました。", Severity.Success);
-            await NotifyDataChangedAsync();
+            Result<string> result = await TaggingContractService.AcceptContractAsync(Item.AsRequestOf.Id, CurrentUserId);
+            switch (result)
+            {
+                case Success<string>:
+                    _ = Item.AsRequestOf.Execute();
+                    _ = Snackbar.Add(ErrorMessages.ContractApproveSuccess, Severity.Success);
+                    await NotifyDataChangedAsync();
+                    break;
+                case Failure f:
+                    _ = Snackbar.Add($"エラー: {f.ErrorMessage}", Severity.Error);
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -360,6 +377,7 @@ public partial class ItemCard : IAsyncDisposable
         if (string.IsNullOrEmpty(CurrentUserId))
         {
             _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
+            _ = Snackbar.Add(ErrorMessages.LoginRequired, Severity.Warning);
             return;
         }
 
@@ -372,6 +390,7 @@ public partial class ItemCard : IAsyncDisposable
         if (!CurrentUserGoodTagId.HasValue)
         {
             _ = Snackbar.Add("システムタグの取得に失敗しました。", Severity.Error);
+            _ = Snackbar.Add(ErrorMessages.SystemTagRetrievalFailed, Severity.Error);
             return;
         }
 
@@ -548,6 +567,7 @@ public partial class ItemCard : IAsyncDisposable
         if (Item.OwnerId != CurrentUserId)
         {
             _ = Snackbar.Add("投稿者本人ではないため、編集する権限がありません。", Severity.Error);
+            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
             return;
         }
 
@@ -570,6 +590,7 @@ public partial class ItemCard : IAsyncDisposable
         if (Item.OwnerId != CurrentUserId)
         {
             _ = Snackbar.Add("投稿者本人ではないため、操作する権限がありません。", Severity.Error);
+            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToDelete, Severity.Error);
             return;
         }
 
@@ -633,6 +654,7 @@ public partial class ItemCard : IAsyncDisposable
         if (alreadyExists)
         {
             _ = Snackbar.Add("このタグは既に追加されています。", Severity.Warning);
+            _ = Snackbar.Add(ErrorMessages.TagAlreadyAdded, Severity.Warning);
             return;
         }
 

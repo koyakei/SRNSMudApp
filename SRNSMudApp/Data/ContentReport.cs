@@ -2,6 +2,9 @@
 
 using System.ComponentModel.DataAnnotations;
 
+using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
+
 #endregion
 
 namespace SRNSMudApp.Data;
@@ -113,39 +116,42 @@ public class ContentReport : BaseEntity
     /// </summary>
     public DateTime? HandledDate { get; private set; }
 
-    public void MarkAsReviewed(string adminId, string? note = null)
+    public Result<bool> MarkAsReviewed(string adminId, string? note = null)
     {
-        if (Status == ReportStatus.Reviewed) return;
+        if (Status == ReportStatus.Reviewed) return Result.Ok();
         if (Status != ReportStatus.Pending)
-            throw new InvalidOperationException($"状態 '{Status}' から Reviewed への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidReportStatusTransition(Status, ReportStatus.Reviewed));
 
         Status = ReportStatus.Reviewed;
         HandledByAdminId = adminId;
         ResolutionNote = note;
         HandledDate = DateTime.UtcNow;
+        return Result.Ok();
     }
 
-    public void TakeAction(string adminId, string? note = null)
+    public Result<bool> TakeAction(string adminId, string? note = null)
     {
-        if (Status == ReportStatus.ActionTaken) return;
+        if (Status == ReportStatus.ActionTaken) return Result.Ok();
         if (Status != ReportStatus.Pending && Status != ReportStatus.Reviewed)
-            throw new InvalidOperationException($"状態 '{Status}' から ActionTaken への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidReportStatusTransition(Status, ReportStatus.ActionTaken));
 
         Status = ReportStatus.ActionTaken;
         HandledByAdminId = adminId;
         ResolutionNote = note;
         HandledDate = DateTime.UtcNow;
+        return Result.Ok();
     }
 
-    public void Dismiss(string adminId, string? note = null)
+    public Result<bool> Dismiss(string adminId, string? note = null)
     {
-        if (Status == ReportStatus.Dismissed) return;
+        if (Status == ReportStatus.Dismissed) return Result.Ok();
         if (Status != ReportStatus.Pending && Status != ReportStatus.Reviewed)
-            throw new InvalidOperationException($"状態 '{Status}' から Dismissed への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidReportStatusTransition(Status, ReportStatus.Dismissed));
 
         Status = ReportStatus.Dismissed;
         HandledByAdminId = adminId;
         ResolutionNote = note;
         HandledDate = DateTime.UtcNow;
+        return Result.Ok();
     }
 }

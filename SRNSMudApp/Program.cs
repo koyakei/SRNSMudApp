@@ -41,6 +41,9 @@ builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("AuthRa
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
+// Add Localization for Resource Pattern
+builder.Services.AddLocalization();
+
 // UI DataProvider 群の登録 (Provider Pattern による UI/DbContext 分離)
 builder.Services.AddDataProviders();
 

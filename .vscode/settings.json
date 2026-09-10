@@ -29,6 +29,9 @@
     "dotnet/skills"
   ],
   "chat.tools.terminal.autoApprove": {
-    "dotnet format": true
+    "dotnet format": true,
+    "true": true,
+    "git fsck": true,
+    "dotnet build": true
   }
 }

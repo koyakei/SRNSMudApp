@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="InvalidTradeStatusTransition" xml:space="preserve">
+    <value>状態 '{0}' から {1} への遷移は許可されていません。</value>
+    <comment>取引状態の不正遷移エラー</comment>
+  </data>
+  <data name="InvalidReportStatusTransition" xml:space="preserve">
+    <value>状態 '{0}' から {1} への遷移は許可されていません。</value>
+    <comment>通報状態の不正遷移エラー</comment>
+  </data>
+  <data name="ReportNotFound" xml:space="preserve">
+    <value>通報 (ID: {0}) が見つかりません。</value>
+    <comment>通報が存在しない場合のエラー</comment>
+  </data>
+  <data name="UnsupportedReportStatus" xml:space="preserve">
+    <value>Pendingへの変更はサポートされていません。</value>
+    <comment>未対応の通報ステータスエラー</comment>
+  </data>
+  <data name="NotAuthorizedToEdit" xml:space="preserve">
+    <value>投稿者本人ではないため、編集する権限がありません。</value>
+  </data>
+  <data name="NotAuthorizedToDelete" xml:space="preserve">
+    <value>投稿者本人ではないため、操作する権限がありません。</value>
+  </data>
+  <data name="LoginRequired" xml:space="preserve">
+    <value>ログインが必要です。</value>
+  </data>
+  <data name="TagAlreadyAdded" xml:space="preserve">
+    <value>このタグは既に追加されています。</value>
+  </data>
+  <data name="SystemTagRetrievalFailed" xml:space="preserve">
+    <value>システムタグの取得に失敗しました。</value>
+  </data>
+  <data name="ContractCancelSuccess" xml:space="preserve">
+    <value>リクエストを取り下げました。</value>
+  </data>
+  <data name="ContractApproveSuccess" xml:space="preserve">
+    <value>リクエストを承認しました。</value>
+  </data>
+</root>

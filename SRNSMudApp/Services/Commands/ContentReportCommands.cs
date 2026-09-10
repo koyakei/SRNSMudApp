@@ -4,9 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
 using SRNSMudApp.Services.Reports;
 
 #endregion
+
+// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する誤検知抑制
+#pragma warning disable IDE0010, IDE0072
 
 namespace SRNSMudApp.Services.Commands;
 
@@ -58,7 +62,7 @@ public class ResolveContentReportHandler(
 
         if (report is null)
         {
-            return new Failure($"通報 (ID: {command.ReportId}) が見つかりません。");
+            return new Failure(ErrorMessages.FormatReportNotFound(command.ReportId));
         }
 
         if (command.DeleteTarget)
@@ -77,21 +81,21 @@ public class ResolveContentReportHandler(
             }
         }
 
-        switch (command.Status)
+        Result<bool> transitionResult = command.Status switch
         {
-            case ReportStatus.Reviewed:
-                report.MarkAsReviewed(command.AdminUserId, command.ResolutionNote);
+            ReportStatus.Pending => Result.Fail(ErrorMessages.UnsupportedReportStatus),
+            ReportStatus.Reviewed => report.MarkAsReviewed(command.AdminUserId, command.ResolutionNote),
+            ReportStatus.ActionTaken => report.TakeAction(command.AdminUserId, command.ResolutionNote),
+            ReportStatus.Dismissed => report.Dismiss(command.AdminUserId, command.ResolutionNote),
+            _ => Result.Fail(ErrorMessages.UnsupportedReportStatus)
+        };
+
+        switch (transitionResult)
+        {
+            case Failure failure:
+                return failure;
+            case Success<bool>:
                 break;
-            case ReportStatus.ActionTaken:
-                report.TakeAction(command.AdminUserId, command.ResolutionNote);
-                break;
-            case ReportStatus.Dismissed:
-                report.Dismiss(command.AdminUserId, command.ResolutionNote);
-                break;
-            case ReportStatus.Pending:
-                throw new InvalidOperationException("Pendingへの変更はサポートされていません。");
-            default:
-                throw new ArgumentOutOfRangeException();
         }
 
         report.UpdatedDate = DateTime.UtcNow;

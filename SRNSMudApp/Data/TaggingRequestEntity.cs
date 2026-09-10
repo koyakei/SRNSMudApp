@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
 
 namespace SRNSMudApp.Data;
 
@@ -51,30 +52,35 @@ public class TaggingRequestEntity : BaseEntity, IDirectTaggable
 
     public TradeStatus Status { get; private set; } = TradeStatus.Proposed;
 
-    public void Execute()
+    public Result<bool> Execute()
     {
-        if (Status == TradeStatus.Executed) return;
+        if (Status == TradeStatus.Executed) return Result.Ok();
         if (Status != TradeStatus.Proposed)
-            throw new InvalidOperationException($"状態 '{Status}' から Executed への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidTradeStatusTransition(Status, TradeStatus.Executed));
+
         Status = TradeStatus.Executed;
+        return Result.Ok();
     }
 
-    public void Cancel()
+    public Result<bool> Cancel()
     {
-        if (Status == TradeStatus.Canceled) return;
+        if (Status == TradeStatus.Canceled) return Result.Ok();
         if (Status != TradeStatus.Proposed)
-            throw new InvalidOperationException($"状態 '{Status}' から Canceled への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidTradeStatusTransition(Status, TradeStatus.Canceled));
+
         Status = TradeStatus.Canceled;
+        return Result.Ok();
     }
 
-    public void Reject(RejectionInfo rejectionInfo)
+    public Result<bool> Reject(RejectionInfo rejectionInfo)
     {
-        if (Status == TradeStatus.Rejected) return;
+        if (Status == TradeStatus.Rejected) return Result.Ok();
         if (Status != TradeStatus.Proposed)
-            throw new InvalidOperationException($"状態 '{Status}' から Rejected への遷移は許可されていません。");
+            return Result.Fail(ErrorMessages.FormatInvalidTradeStatusTransition(Status, TradeStatus.Rejected));
 
         Status = TradeStatus.Rejected;
         Rejection = rejectionInfo;
+        return Result.Ok();
     }
     public int ProposedWeight { get; set; } = 1;
 
