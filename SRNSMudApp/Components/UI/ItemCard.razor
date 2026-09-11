@@ -71,7 +71,7 @@
                     </div>
                 </div>
 
-                @switch (_pendingSplitRequests.Count > 0)
+                @switch (_pendingSplitRequests is { Count: > 0 })
                 {
                     case true:
                         <div class="mt-2" @onclick:stopPropagation="true">

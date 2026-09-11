@@ -105,7 +105,7 @@ public partial class ItemCard : IAsyncDisposable
 
         _loadedItemId = Item.Id;
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
-        _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+        _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
         _quoteCount = await ItemQuoteService.GetQuoteCountAsync(Item.Id);
         if (_isRepliesExpanded)
         {
@@ -682,7 +682,7 @@ public partial class ItemCard : IAsyncDisposable
             {
                 case Success<ItemSplitRequest>:
                     _ = Snackbar.Add("アイテム分割リクエストを送信しました。", Severity.Success);
-                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
                     await NotifyDataChangedAsync();
                     break;
                 case Failure fail:
@@ -705,7 +705,7 @@ public partial class ItemCard : IAsyncDisposable
         {
             case Success<Data.Item> success:
                 _ = Snackbar.Add("分割リクエストを承認しました。", Severity.Success);
-                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
                 var linkUrl = $"/ItemDetail/{success.Value.Id}";
                 int index = Item.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
                 if (index >= 0)
@@ -740,7 +740,7 @@ public partial class ItemCard : IAsyncDisposable
             {
                 case Success<bool>:
                     _ = Snackbar.Add("分割リクエストを却下しました。", Severity.Success);
-                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
                     await NotifyDataChangedAsync();
                     break;
                 case Failure fail:
@@ -763,7 +763,7 @@ public partial class ItemCard : IAsyncDisposable
         {
             case Success<bool>:
                 _ = Snackbar.Add("分割リクエストを取り下げました。", Severity.Success);
-                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
                 await NotifyDataChangedAsync();
                 break;
             case Failure fail:
