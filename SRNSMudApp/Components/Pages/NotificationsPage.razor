@@ -96,11 +96,12 @@
                                                              Color="Color.Info" Class="mr-2" />
                                                     <MudText Typo="Typo.body2">
                                                         分割対象テキスト: <span class="font-italic ml-1">「@(splitNote.SelectedText.Length > 30 ?
-                                                                                                    $"{splitNote.SelectedText[..30]}..." : splitNote.SelectedText)」</span>
+                                                                                                                                                            $"{splitNote.SelectedText[..30]}..." : splitNote.SelectedText)」</span>
                                                         @switch (splitNote.Status)
                                                         {
                                                             case TradeStatus.Executed:
-                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">承認済み
+                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2"
+                                                                         data-testid="item-split-approved-status">承認済み
                                                                 </MudChip>
                                                                 break;
                                                             case TradeStatus.Rejected:

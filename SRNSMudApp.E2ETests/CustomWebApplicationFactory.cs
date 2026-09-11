@@ -53,6 +53,26 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     public IServiceProvider AppServices =>
         _host?.Services ?? throw new InvalidOperationException("Host is not built yet.");
 
+    public async Task<int> CreateItemAsync(string ownerUserName, string content)
+    {
+        using IServiceScope scope = AppServices.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        ApplicationUser owner = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .SingleOrDefaultAsync(db.Users, user => user.UserName == ownerUserName || user.Email == $"{ownerUserName}@example.com")
+            ?? throw new InvalidOperationException($"ユーザー {ownerUserName} が作成されていません。");
+
+        var item = new Item
+        {
+            Content = content,
+            OwnerId = owner.Id,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+        _ = db.Items.Add(item);
+        _ = await db.SaveChangesAsync();
+        return item.Id;
+    }
+
     public void EnsureServer()
     {
         if (_host != null)

@@ -1,8 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
-
-using SRNSMudApp.Data;
 
 namespace SRNSMudApp.E2ETests;
 
@@ -31,7 +28,7 @@ public class ItemSplitRequestE2ETests : PageTest
     private string _serverAddress = "";
 
     [Test]
-    public async Task GivenOtherUsersItem_WhenRequestingSplit_AndOwnerApproves_ThenNewItemIsCreatedAndLinked()
+    public async Task GivenOtherUsersItem_WhenRequestingSplit_AndOwnerApproves_ThenApprovalUiShowsLinkedItem()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var alice = $"alice_{suffix}";
@@ -45,24 +42,7 @@ public class ItemSplitRequestE2ETests : PageTest
         // 1. Alice でログインしてアイテムを作成
         await WebAuthnTestHelpers.LoginWithMockGoogleAsync(Page, _serverAddress, alice);
 
-        using (IServiceScope scope = _factory.AppServices.CreateScope())
-        {
-            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            ApplicationUser? aliceUser = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                .SingleOrDefaultAsync(db.Users, u => u.UserName == alice || u.Email == $"{alice}@example.com");
-            Assert.That(aliceUser, Is.Not.Null, $"ユーザー {alice} が作成されていません。");
-
-            var item = new Item
-            {
-                Content = originalContent,
-                OwnerId = aliceUser!.Id,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            };
-            db.Items.Add(item);
-            await db.SaveChangesAsync();
-            targetItemId = item.Id;
-        }
+        targetItemId = await _factory.CreateItemAsync(alice, originalContent);
 
         // 2. Bob でログインし、Alice のアイテムを表示
         await WebAuthnTestHelpers.LoginWithMockGoogleAsync(Page, _serverAddress, bob);
@@ -147,6 +127,7 @@ public class ItemSplitRequestE2ETests : PageTest
         // 7. 通知画面 (/notifications) でも確認
         await Page.GotoAsync($"{_serverAddress}/notifications");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.Locator("text=承認済み")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
+        await Expect(Page.Locator("[data-testid='item-split-approved-status']"))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
     }
 }
