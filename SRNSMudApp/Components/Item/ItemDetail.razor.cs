@@ -97,7 +97,7 @@ public partial class ItemDetail
 
     protected override async Task OnInitializedAsync()
     {
-        _activeTabIndex = ItemDetailQueryState.ToTabIndex(ActiveTabQuery);
+        _activeTabIndex = ItemDetailQueryStateFactory.ToTabIndex(ActiveTabQuery);
         InitializeSearchQueryFromUri();
 
         await LoadDataAsync();
@@ -112,9 +112,8 @@ public partial class ItemDetail
                 break;
         }
 
-        var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
-        var currentSearch = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
+        var state = ItemDetailQueryStateFactory.ParseFromUri(new Uri(NavigationManager.Uri));
+        var currentSearch = ItemDetailQueryStateFactory.ToSearchQuery(state, _allTags);
         if (currentSearch != _searchQuery)
         {
             _searchQuery = currentSearch;
@@ -123,9 +122,8 @@ public partial class ItemDetail
 
     private void InitializeSearchQueryFromUri()
     {
-        var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-        FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
-        _searchQuery = filter != null ? TagFilterQueryCodec.ToSearchString(filter, _allTags) : null;
+        var state = ItemDetailQueryStateFactory.ParseFromUri(new Uri(NavigationManager.Uri));
+        _searchQuery = ItemDetailQueryStateFactory.ToSearchQuery(state, _allTags);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -208,12 +206,8 @@ public partial class ItemDetail
             }
 
             // タグ一覧取得後に TagId ベースのフィルタ文字列を解決する
-            var state = ItemDetailQueryState.ParseFromUri(new Uri(NavigationManager.Uri));
-            FilterEntry? filter = state.Filters.Count > 0 ? state.Filters[0] : null;
-            if (filter != null)
-            {
-                _searchQuery = TagFilterQueryCodec.ToSearchString(filter, _allTags);
-            }
+            var state = ItemDetailQueryStateFactory.ParseFromUri(new Uri(NavigationManager.Uri));
+            _searchQuery = ItemDetailQueryStateFactory.ToSearchQuery(state, _allTags);
 
             _pageState = new Loaded<ItemDetailData>(new ItemDetailData(
                 data.Item,
@@ -332,7 +326,7 @@ public partial class ItemDetail
     private void OnTabChanged(int index)
     {
         _activeTabIndex = index;
-        ActiveTabQuery = ItemDetailQueryState.FromTabIndex(index);
+        ActiveTabQuery = ItemDetailQueryStateFactory.FromTabIndex(index);
         UpdateUrlQuery();
 
         if (index == 0)
@@ -349,18 +343,9 @@ public partial class ItemDetail
 
     private void UpdateUrlQuery()
     {
-        FilterEntry? filter = TagFilterQueryCodec.FromSearchString(_searchQuery);
-        IReadOnlyList<FilterEntry> filters = filter != null ? [filter] : [];
-
         // URL 形式の知識は ItemDetailQueryState に一元化
-        Dictionary<string, object?> parameters =
-            new ItemDetailQueryState
-            {
-                ActiveTab = ActiveTabQuery,
-                SelectedRequestId = SelectedRequestIdQuery,
-                Filters = filters
-            }
-                .BuildParameters();
+        Dictionary<string, object?> parameters = ItemDetailQueryStateFactory.BuildParameters(
+            ItemDetailQueryStateFactory.FromSearchQuery(ActiveTabQuery, SelectedRequestIdQuery, _searchQuery));
         var uri = NavigationManager.GetUriWithQueryParameters(parameters);
         NavigationManager.NavigateTo(uri, replace: false);
     }

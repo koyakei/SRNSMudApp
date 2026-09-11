@@ -27,7 +27,7 @@ public sealed class DuplicateTaggingRequestCancelTests : IAsyncLifetime
     private const string UserBId = "dup-user-b";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<IContractDataProvider> _contractDataMock = new();
+    private readonly Mock<IContractManagementDataProvider> _contractDataMock = new();
     private readonly Mock<ITaggingRequestActions> _actionsMock = new();
     private readonly Mock<ITaggingContractService> _contractServiceMock = new();
 

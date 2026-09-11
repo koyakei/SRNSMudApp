@@ -26,7 +26,7 @@ public sealed class PublicOfferBoardTests : IAsyncLifetime
     private const string CharlieUserId = "charlie-id";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<IContractDataProvider> _contractDataMock = new();
+    private readonly Mock<IPublicOfferDataProvider> _contractDataMock = new();
     private readonly Mock<ITaggingContractService> _contractServiceMock = new();
     private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
 

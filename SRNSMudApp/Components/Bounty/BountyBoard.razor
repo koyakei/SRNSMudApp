@@ -5,7 +5,7 @@
 @attribute [Authorize]
 
 @using SRNSMudApp.Services
-@inject IContractDataProvider ContractData
+@inject IBountyDataProvider ContractData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 
@@ -23,7 +23,7 @@
     @switch (_isLoading)
     {
         case true:
-            <MudProgressCircular Indeterminate="true"/>
+            <MudProgressCircular Indeterminate="true" />
             break;
         case false:
             @switch (!_bounties.Any())
@@ -50,7 +50,9 @@
                                         <MudText Typo="Typo.body2" Class="mb-2">@bounty.TargetItem.Content</MudText>
 
                                         @{
-                                            RightAsset? rewardAsset = (bounty.Payload is SRNSMudApp.Models.Unions.BountyPayload bp && bp.OfferedRewardAssetId != 0 && _rewardAssets.TryGetValue(bp.OfferedRewardAssetId, out var a)) ? a : null;
+                                            RightAsset? rewardAsset = (bounty.Payload is SRNSMudApp.Models.Unions.BountyPayload bp &&
+                    bp.OfferedRewardAssetId != 0 && _rewardAssets.TryGetValue(bp.OfferedRewardAssetId, out var a)) ? a :
+                    null;
                                         }
                                         @switch (rewardAsset != null)
                                         {
@@ -72,8 +74,7 @@
                                                 <MudButton Disabled="true" Variant="Variant.Text">自分の依頼</MudButton>
                                                 break;
                                             case false:
-                                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
-                                                           OnClick="() => FulfillBounty(bounty)">
+                                                <MudButton Color="Color.Secondary" Variant="Variant.Filled" OnClick="() => FulfillBounty(bounty)">
                                                     依頼を完了する
                                                 </MudButton>
                                                 break;

@@ -16,7 +16,9 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
 
 namespace SRNSMudApp.Tests.Components.PublicOffer;
 
@@ -25,13 +27,15 @@ public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
     private const string AliceUserId = "alice-id";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<IContractDataProvider> _contractDataMock = new();
+    private readonly Mock<IContractLookupDataProvider> _contractDataMock = new();
+    private readonly Mock<ICommandHandler<CreatePublicOfferCommand, Result<bool>>> _createPublicOfferHandlerMock = new();
 
     public CreatePublicOfferDialogTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _contractDataMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _createPublicOfferHandlerMock.Object);
         _ctx.Services.AddAuthorizationCore();
 
         var authState = CreateAuthState(AliceUserId);
@@ -44,14 +48,16 @@ public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
     public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Publish_WithOwnedTag_CallsCreatePublicOfferAsync()
+    public async Task Publish_WithOwnedTag_ExecutesCreatePublicOfferCommand()
     {
         var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = "AliceTag", Content = "Alice's Tag", OwnerId = AliceUserId };
 
         _ = _contractDataMock.Setup(d => d.SearchMyTagsAsync(AliceUserId, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([tag]);
-        _ = _contractDataMock.Setup(d => d.CreatePublicOfferAsync(It.IsAny<PublicTradeOffer>()))
-            .Returns(Task.CompletedTask);
+        _ = _createPublicOfferHandlerMock.Setup(h => h.HandleAsync(
+                It.IsAny<CreatePublicOfferCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Ok());
 
         IRenderedComponent<AuthDialogHost> host = _ctx.Render<AuthDialogHost>();
 
@@ -75,7 +81,9 @@ public sealed class CreatePublicOfferDialogTests : IAsyncLifetime
 
         Assert.False(result!.Canceled);
         Assert.Equal(true, result.Data);
-        _contractDataMock.Verify(d => d.CreatePublicOfferAsync(It.Is<PublicTradeOffer>(o => o.OfferedTagId == tag.Id && o.OwnerId == AliceUserId)), Times.Once);
+        _createPublicOfferHandlerMock.Verify(h => h.HandleAsync(
+            It.Is<CreatePublicOfferCommand>(c => c.Offer.OfferedTagId == tag.Id && c.Offer.OwnerId == AliceUserId),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static AuthenticationState CreateAuthState(string userId)

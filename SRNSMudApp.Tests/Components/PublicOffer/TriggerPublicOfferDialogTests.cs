@@ -16,7 +16,9 @@ using MudBlazor.Services;
 
 using SRNSMudApp.Components.PublicOffer;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
 
 namespace SRNSMudApp.Tests.Components.PublicOffer;
 
@@ -26,13 +28,15 @@ public sealed class TriggerPublicOfferDialogTests : IAsyncLifetime
     private const string CharlieUserId = "charlie-id";
 
     private readonly BunitContext _ctx = new();
-    private readonly Mock<IContractDataProvider> _contractDataMock = new();
+    private readonly Mock<IContractLookupDataProvider> _contractDataMock = new();
+    private readonly Mock<ICommandHandler<CreateTriggerContractCommand, Result<bool>>> _createTriggerContractHandlerMock = new();
 
     public TriggerPublicOfferDialogTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
         _ = _ctx.Services.AddScoped(_ => _contractDataMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _createTriggerContractHandlerMock.Object);
         _ctx.Services.AddAuthorizationCore();
 
         var authState = CreateAuthState(CharlieUserId);
@@ -45,7 +49,7 @@ public sealed class TriggerPublicOfferDialogTests : IAsyncLifetime
     public Task InitializeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Trigger_FreeOffer_CallsCreateTriggerContractAsync()
+    public async Task Trigger_FreeOffer_ExecutesCreateTriggerContractCommand()
     {
         var aliceTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "AlicePublicTag", OwnerId = AliceUserId };
         var charlieItem = new SRNSMudApp.Data.Item { Id = 10, Content = "Charlie's own item", OwnerId = CharlieUserId };
@@ -62,9 +66,11 @@ public sealed class TriggerPublicOfferDialogTests : IAsyncLifetime
 
         _ = _contractDataMock.Setup(d => d.SearchItemsAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([charlieItem]);
-        _ = _contractDataMock.Setup(d => d.CreateTriggerContractAsync(It.IsAny<TaggingRequestEntity>()))
-            .Callback<TaggingRequestEntity>(t => t.Id = 123)
-            .Returns(Task.CompletedTask);
+        _ = _createTriggerContractHandlerMock.Setup(h => h.HandleAsync(
+                It.IsAny<CreateTriggerContractCommand>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<CreateTriggerContractCommand, CancellationToken>((c, _) => c.TriggerContract.Id = 123)
+            .ReturnsAsync(Result.Ok());
 
         IRenderedComponent<AuthDialogHost> host = _ctx.Render<AuthDialogHost>();
 
@@ -90,12 +96,14 @@ public sealed class TriggerPublicOfferDialogTests : IAsyncLifetime
         Assert.False(result!.Canceled);
         var contractId = Assert.IsType<int>(result.Data);
         Assert.Equal(123, contractId);
-        _contractDataMock.Verify(d => d.CreateTriggerContractAsync(It.Is<TaggingRequestEntity>(c =>
-            c.ContractType == "Trigger" &&
-            c.RequesterUserId == CharlieUserId &&
-            c.TagOwnerUserId == AliceUserId &&
-            c.TargetItemId == charlieItem.Id &&
-            c.RequestedTagId == aliceTag.Id)), Times.Once);
+        _createTriggerContractHandlerMock.Verify(h => h.HandleAsync(
+            It.Is<CreateTriggerContractCommand>(c =>
+                c.TriggerContract.ContractType == "Trigger" &&
+                c.TriggerContract.RequesterUserId == CharlieUserId &&
+                c.TriggerContract.TagOwnerUserId == AliceUserId &&
+                c.TriggerContract.TargetItemId == charlieItem.Id &&
+                c.TriggerContract.RequestedTagId == aliceTag.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static AuthenticationState CreateAuthState(string userId)

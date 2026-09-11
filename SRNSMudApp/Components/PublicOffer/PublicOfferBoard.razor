@@ -5,7 +5,7 @@
 
 @attribute [Authorize]
 
-@inject IContractDataProvider ContractData
+@inject IPublicOfferDataProvider ContractData
 @inject IDialogLauncher DialogLauncher
 @inject ISnackbar Snackbar
 @inject ITaggingContractService ContractService
@@ -22,7 +22,7 @@
     @switch (_isLoading)
     {
         case true:
-            <MudProgressCircular Indeterminate="true"/>
+            <MudProgressCircular Indeterminate="true" />
             break;
         case false:
             @switch (!_offers.Any())
@@ -65,14 +65,12 @@
                                         @switch (offer.OwnerId == _currentUserId)
                                         {
                                             case true:
-                                                <MudButton Color="Color.Error" Variant="Variant.Text"
-                                                           OnClick="() => DeactivateOffer(offer)">
+                                                <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="() => DeactivateOffer(offer)">
                                                     取り下げる
                                                 </MudButton>
                                                 break;
                                             case false:
-                                                <MudButton Color="Color.Secondary" Variant="Variant.Filled"
-                                                           OnClick="() => TriggerOffer(offer)">
+                                                <MudButton Color="Color.Secondary" Variant="Variant.Filled" OnClick="() => TriggerOffer(offer)">
                                                     オファーに応じる
                                                 </MudButton>
                                                 break;

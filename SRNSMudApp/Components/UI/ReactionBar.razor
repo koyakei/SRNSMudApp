@@ -93,10 +93,10 @@
 
         if (ItemId > 0)
         {
-            var parameters = new ItemDetailQueryState
+            var parameters = ItemDetailQueryStateFactory.BuildParameters(new ItemDetailQueryState
             {
                 Filters = [FilterEntry.FromName(tagName)]
-            }.BuildParameters();
+            });
             var uri = NavigationManager.GetUriWithQueryParameters($"/ItemDetail/{ItemId}", parameters);
             NavigationManager.NavigateTo(uri);
         }

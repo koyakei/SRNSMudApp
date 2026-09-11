@@ -36,7 +36,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>();
         services.AddScoped<ITagDialogDataProvider, TagDialogDataProvider>();
         services.AddScoped<ITagDetailDataProvider, TagDetailDataProvider>();
-        services.AddScoped<IContractDataProvider, ContractDataProvider>();
+        services.AddScoped<ContractDataProvider>();
+        services.AddScoped<IContractManagementDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>());
+        services.AddScoped<IBountyDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>());
+        services.AddScoped<IPublicOfferDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>());
+        services.AddScoped<IContractLookupDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>());
         services.AddScoped<IUserDataProvider, UserDataProvider>();
         services.AddScoped<IAdminDataProvider, AdminDataProvider>();
         services.AddScoped<ITagDiagramDataProvider, TagDiagramDataProvider>();
@@ -68,6 +72,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>, ApproveTaggingRequestHandler>();
         services.AddScoped<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>, RejectTaggingRequestHandler>();
         services.AddScoped<ICommandHandler<ResolveContentReportCommand, Result<bool>>, ResolveContentReportHandler>();
+        services.AddScoped<ICommandHandler<CreatePublicOfferCommand, Result<bool>>, CreatePublicOfferCommandHandler>();
+        services.AddScoped<ICommandHandler<CreateBountyCommand, Result<bool>>, CreateBountyCommandHandler>();
+        services.AddScoped<ICommandHandler<CreateTriggerContractCommand, Result<bool>>, CreateTriggerContractCommandHandler>();
 
         return services;
     }

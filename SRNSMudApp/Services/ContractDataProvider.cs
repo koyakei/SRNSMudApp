@@ -20,16 +20,32 @@ public sealed record BountyBoardData(
     IReadOnlyList<TaggingRequestEntity> Bounties,
     Dictionary<int, RightAsset> RewardAssets);
 
-/// <summary>
-///     コントラクト系コンポーネント (ContractManagement / ProposeContractDialog) 用の
-///     データアクセスを分離するインターフェース。
-///     コンポーネントから DbContext への直接依存を断ち、単体テストでモック可能にする。
-/// </summary>
-public interface IContractDataProvider
+/// <summary>契約管理画面が必要とする契約一覧取得を提供する。</summary>
+public interface IContractManagementDataProvider
 {
-    /// <summary>ユーザーの受信 / 送信コントラクト (Proposed) を取得する。</summary>
     Task<ContractManagementPageData> GetContractsAsync(string userId);
+}
 
+/// <summary>バウンティ一覧画面が必要とする読み取り操作を提供する。</summary>
+public interface IBountyDataProvider
+{
+    /// <summary>アクティブなバウンティと報酬アセットを取得する。</summary>
+    Task<BountyBoardData> GetActiveBountiesAsync();
+}
+
+/// <summary>公開オファー画面が必要とする公開オファー操作を提供する。</summary>
+public interface IPublicOfferDataProvider
+{
+    /// <summary>アクティブな公開オファーを取得する。</summary>
+    Task<List<PublicTradeOffer>> GetActivePublicOffersAsync();
+
+    /// <summary>自分の公開オファーを取り下げる。所有者一致時のみ無効化される。</summary>
+    Task<bool> DeactivatePublicOfferAsync(int offerId, string userId);
+}
+
+/// <summary>契約関連ダイアログが必要とする検索・アセット取得を提供する。</summary>
+public interface IContractLookupDataProvider
+{
     /// <summary>未消費の RightAsset (TargetTag 込み) を取得する。</summary>
     Task<List<RightAsset>> GetAvailableRightAssetsAsync(string userId);
 
@@ -39,23 +55,8 @@ public interface IContractDataProvider
     /// <summary>タグを名前部分一致で検索する。</summary>
     Task<List<Tag>> SearchTagsByNameAsync(string? value, CancellationToken token = default);
 
-    /// <summary>アクティブなバウンティと報酬アセットを取得する。</summary>
-    Task<BountyBoardData> GetActiveBountiesAsync();
-
-    /// <summary>アクティブな公開オファーを取得する。</summary>
-    Task<List<PublicTradeOffer>> GetActivePublicOffersAsync();
-
-    /// <summary>自分の公開オファーを取り下げる。所有者一致時のみ無効化される。</summary>
-    Task<bool> DeactivatePublicOfferAsync(int offerId, string userId);
-
     /// <summary>指定ユーザー所有のタグを名前部分一致で検索する (最大 10 件)。</summary>
     Task<List<Tag>> SearchMyTagsAsync(string userId, string? value, CancellationToken token = default);
-
-    Task CreatePublicOfferAsync(PublicTradeOffer offer);
-
-    Task CreateBountyAsync(TaggingRequestEntity bounty);
-
-    Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract);
 
     /// <summary>条件に合う未消費 RightAsset (TargetTag 込み) を取得する。</summary>
     Task<List<RightAsset>> GetValidRightAssetsAsync(string userId, int? targetTagId = null, int? minAmount = null);
@@ -63,7 +64,8 @@ public interface IContractDataProvider
     Task<RightAsset?> GetRightAssetByIdAsync(int assetId);
 }
 
-public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IContractDataProvider
+public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
+    : IContractManagementDataProvider, IBountyDataProvider, IPublicOfferDataProvider, IContractLookupDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -196,27 +198,6 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         }
 
         return await query.Take(10).ToListAsync(token);
-    }
-
-    public async Task CreatePublicOfferAsync(PublicTradeOffer offer)
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        _ = dbContext.PublicTradeOffers!.Add(offer);
-        _ = await dbContext.SaveChangesAsync();
-    }
-
-    public async Task CreateBountyAsync(TaggingRequestEntity bounty)
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        _ = dbContext.TaggingRequestEntities.Add(bounty);
-        _ = await dbContext.SaveChangesAsync();
-    }
-
-    public async Task CreateTriggerContractAsync(TaggingRequestEntity triggerContract)
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        _ = dbContext.TaggingRequestEntities.Add(triggerContract);
-        _ = await dbContext.SaveChangesAsync();
     }
 
     public async Task<List<RightAsset>> GetValidRightAssetsAsync(

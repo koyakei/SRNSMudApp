@@ -1,6 +1,6 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
-@inject IContractDataProvider ContractData
+@inject IContractLookupDataProvider ContractData
 @inject ITaggingContractService ContractService
 @inject ISnackbar Snackbar
 
@@ -8,12 +8,12 @@
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_isValid">
             <MudText Typo="Typo.body1" Class="mb-4">
-                あなたはこのタグの操作権限を持っていません。<br/>
+                あなたはこのタグの操作権限を持っていません。<br />
                 タグの作成者に@(IsRemovalRequest ? "タグの削除" : "タグ付け")のリクエスト（コントラクト）を提案しますか？
             </MudText>
 
-            <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
-            <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true"/>
+            <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true" />
+            <MudTextField T="string" Label="希望するタグ" Value="@RequestedTag.Name" ReadOnly="true" />
 
             @switch (IsRemovalRequest)
             {
@@ -25,16 +25,18 @@
                 case false:
                     <div class="d-flex align-center gap-4 mt-2 mb-4">
                         <MudText Typo="Typo.body2">提案するWeight変更（増減）:</MudText>
-                        <MudNumericField @bind-Value="ProposedWeightInput" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px" />
+                        <MudNumericField @bind-Value="ProposedWeightInput" Required="true" Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" Style="max-width: 150px" />
                     </div>
                     break;
             }
 
-            <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-4">
+            <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Elevation="1" Rounded="true"
+                     ApplyEffectsToContainer="true" Class="mt-4">
                 <MudTabPanel Text="無償のお願い (Gratis)">
                     <div class="pa-4">
                         <MudTextField T="string" Label="メッセージ（任意）" @bind-Value="_gratisMessage" Lines="3"
-                                      MaxLength="200"/>
+                                      MaxLength="200" />
                     </div>
                 </MudTabPanel>
                 <MudTabPanel Text="相互タグ付け (Mutual)">
@@ -43,22 +45,22 @@
                             代わりにあなたが提供するタグとアイテムを選択してください。
                         </MudText>
 
-                        <MudAutocomplete T="Item" Label="提供するアイテム" @bind-Value="_offeredItem"
-                                         SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
-                                         Required="@(_activeTabIndex == 1)" RequiredError="アイテムを選択してください"
-                                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+                        <MudAutocomplete T="Item" Label="提供するアイテム" @bind-Value="_offeredItem" SearchFunc="@SearchItems"
+                                         ToStringFunc="@(i => i?.Content ?? "")" Required="@(_activeTabIndex == 1)"
+                                         RequiredError="アイテムを選択してください" ResetValueOnEmptyText="true" CoerceText="true"
+                                         CoerceValue="true" />
 
-                        <MudAutocomplete T="Tag" Label="提供するタグ" @bind-Value="_offeredTag"
-                                         SearchFunc="@SearchTags" ToStringFunc="@(t => t?.Name ?? "")"
-                                         Required="@(_activeTabIndex == 1)" RequiredError="タグを選択してください"
-                                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+                        <MudAutocomplete T="Tag" Label="提供するタグ" @bind-Value="_offeredTag" SearchFunc="@SearchTags"
+                                         ToStringFunc="@(t => t?.Name ?? "")" Required="@(_activeTabIndex == 1)"
+                                         RequiredError="タグを選択してください" ResetValueOnEmptyText="true" CoerceText="true"
+                                         CoerceValue="true" />
 
                         <MudSelect T="RightAsset" Label="消費するアセット（必須）" @bind-Value="_selectedRightAsset"
                                    Clearable="true" Required="@(_activeTabIndex == 1)" RequiredError="相互タグ付けにはアセットが必要です"
                                    ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")">
                             @foreach (var asset in _myAssets)
                             {
-                                <MudSelectItem Value="@asset"/>
+                                <MudSelectItem Value="@asset" />
                             }
                         </MudSelect>
                     </div>

@@ -1,6 +1,9 @@
 @using System.Security.Claims
+@using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Services
-@inject IContractDataProvider ContractData
+@using SRNSMudApp.Services.Commands
+@inject IContractLookupDataProvider ContractData
+@inject ICommandHandler<CreateBountyCommand, Result<bool>> CreateBountyHandler
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -9,29 +12,24 @@
             @switch (TargetItem)
             {
                 case null:
-                    <MudAutocomplete T="Item" Label="対象のアイテム" @bind-Value="_selectedItem"
-                                     SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
-                                     Required="true" RequiredError="アイテムを選択してください"
-                                     ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"
-                                     MaxItems="10"/>
+                    <MudAutocomplete T="Item" Label="対象のアイテム" @bind-Value="_selectedItem" SearchFunc="@SearchItems"
+                                     ToStringFunc="@(i => i?.Content ?? "")" Required="true" RequiredError="アイテムを選択してください"
+                                     ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" MaxItems="10" />
                     break;
                 case not null:
-                    <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true"/>
+                    <MudTextField T="string" Label="対象のアイテム" Value="@TargetItem.Content" ReadOnly="true" />
                     break;
             }
 
-            <MudAutocomplete T="Tag" Label="希望するタグ" @bind-Value="_selectedTag"
-                             SearchFunc="@SearchTags" ToStringFunc="@(t => t?.Name ?? "")"
-                             Required="true" RequiredError="タグを選択してください"
-                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"
-                             MaxItems="10"/>
+            <MudAutocomplete T="Tag" Label="希望するタグ" @bind-Value="_selectedTag" SearchFunc="@SearchTags"
+                             ToStringFunc="@(t => t?.Name ?? "")" Required="true" RequiredError="タグを選択してください"
+                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" MaxItems="10" />
 
-            <MudSelect T="RightAsset" Label="報酬として提供するアセット（任意）" @bind-Value="_selectedRewardAsset"
-                       Clearable="true"
+            <MudSelect T="RightAsset" Label="報酬として提供するアセット（任意）" @bind-Value="_selectedRewardAsset" Clearable="true"
                        ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利" : "")">
                 @foreach (var asset in _myAssets)
                 {
-                    <MudSelectItem Value="@asset"/>
+                    <MudSelectItem Value="@asset" />
                 }
             </MudSelect>
         </MudForm>
@@ -110,7 +108,7 @@
             Payload = new SRNSMudApp.Models.Unions.BountyPayload(_selectedRewardAsset?.Id ?? 0)
         };
 
-        await ContractData.CreateBountyAsync(bounty);
+        _ = await CreateBountyHandler.HandleAsync(new CreateBountyCommand(bounty));
 
         Snackbar.Add("タグ付けの依頼（バウンティ）を作成しました。", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));

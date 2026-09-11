@@ -63,7 +63,11 @@ public static class BunitTestSetup
             .AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>()
             .AddScoped<ITagDialogDataProvider, TagDialogDataProvider>()
             .AddScoped<ITagDetailDataProvider, TagDetailDataProvider>()
-            .AddScoped<IContractDataProvider, ContractDataProvider>()
+            .AddScoped<ContractDataProvider>()
+            .AddScoped<IContractManagementDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>())
+            .AddScoped<IBountyDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>())
+            .AddScoped<IPublicOfferDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>())
+            .AddScoped<IContractLookupDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>())
             .AddScoped<IUserDataProvider, UserDataProvider>()
             .AddScoped<IUserGroupDataProvider, UserGroupDataProvider>()
             .AddScoped<IAdminDataProvider, AdminDataProvider>()
@@ -107,7 +111,10 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<IItemDetailDataProvider>().Object)
             .AddScoped(_ => new Mock<ITagDialogDataProvider>().Object)
             .AddScoped(_ => new Mock<ITagDetailDataProvider>().Object)
-            .AddScoped(_ => new Mock<IContractDataProvider>().Object)
+            .AddScoped(_ => new Mock<IContractManagementDataProvider>().Object)
+            .AddScoped(_ => new Mock<IBountyDataProvider>().Object)
+            .AddScoped(_ => new Mock<IPublicOfferDataProvider>().Object)
+            .AddScoped(_ => new Mock<IContractLookupDataProvider>().Object)
             .AddScoped(_ =>
             {
                 var mock = new Mock<IUserGroupDataProvider>();

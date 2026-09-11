@@ -1,6 +1,9 @@
 @using System.Security.Claims
+@using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Services
-@inject IContractDataProvider ContractData
+@using SRNSMudApp.Services.Commands
+@inject IContractLookupDataProvider ContractData
+@inject ICommandHandler<CreateTriggerContractCommand, Result<bool>> CreateTriggerContractHandler
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -11,14 +14,13 @@
             </MudText>
 
             <MudAlert Severity="Severity.Info" Class="mb-4">
-                提供されるタグ: @Offer.OfferedTag.Name<br/>
+                提供されるタグ: @Offer.OfferedTag.Name<br />
                 要求されるアセット量: @(Offer.RequiredAssetAmount > 0 ? Offer.RequiredAssetAmount.ToString() : "無償")
             </MudAlert>
 
-            <MudAutocomplete T="Item" Label="タグを付与する対象のアイテム" @bind-Value="_selectedItem"
-                             SearchFunc="@SearchItems" ToStringFunc="@(i => i?.Content ?? "")"
-                             Required="true" RequiredError="アイテムを選択してください"
-                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true"/>
+            <MudAutocomplete T="Item" Label="タグを付与する対象のアイテム" @bind-Value="_selectedItem" SearchFunc="@SearchItems"
+                             ToStringFunc="@(i => i?.Content ?? "")" Required="true" RequiredError="アイテムを選択してください"
+                             ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" />
 
             @switch (Offer.RequiredAssetAmount > 0)
             {
@@ -28,7 +30,7 @@
                                ToStringFunc="@(a => a?.TargetTag?.Name != null ? $"[ID: {a.Id}] {a.TargetTag.Name} の権利 (量: {a.Amount})" : "")">
                         @foreach (var asset in _validAssets)
                         {
-                            <MudSelectItem Value="@asset"/>
+                            <MudSelectItem Value="@asset" />
                         }
                     </MudSelect>
                     @switch (!_validAssets.Any())
@@ -115,7 +117,7 @@
             ConsumedRightAssetId = _selectedAsset?.Id
         };
 
-        await ContractData.CreateTriggerContractAsync(triggerContract);
+        _ = await CreateTriggerContractHandler.HandleAsync(new CreateTriggerContractCommand(triggerContract));
 
         MudDialog.Close(DialogResult.Ok(triggerContract.Id));
     }
