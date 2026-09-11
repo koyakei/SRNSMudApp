@@ -6,7 +6,7 @@
 @using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Components.UI
 @inject ITagDetailDataProvider TagDetailData
-@inject ITagDialogDataProvider TagDialogData
+@inject ITagCommandService TagCommandService
 @inject ITagContentProposalService TagContentProposalService
 @inject ITagNameProposalService TagNameProposalService
 @inject IDialogLauncher DialogLauncher
@@ -72,7 +72,7 @@
                 {
                     <MudText Typo="Typo.body1" Class="mt-4">@_tag.Content</MudText>
                 }
-                @if (_tag.AutoApproveUserGroups.Count > 0 || _tag.AutoApproveUserGroup is not null)
+                @if (_tag.AutoApproveUserGroups.Count > 0)
                 {
                     <div class="d-flex align-center mt-3 gap-2 flex-wrap">
                         <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" Color="Color.Info" />
@@ -85,12 +85,6 @@
                                     @(g.UserGroup?.Name ?? "不明なグループ")
                                 </MudChip>
                             }
-                        }
-                        else if (_tag.AutoApproveUserGroup is not null)
-                        {
-                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
-                                @_tag.AutoApproveUserGroup.Name
-                            </MudChip>
                         }
                     </div>
                 }
@@ -339,12 +333,8 @@
         }
 
         var groupIds = _tag.AutoApproveUserGroups.Select(g => g.UserGroupId).ToList();
-        if (groupIds.Count == 0 && _tag.AutoApproveUserGroupId.HasValue)
-        {
-            groupIds.Add(_tag.AutoApproveUserGroupId.Value);
-        }
 
-        bool updated = await TagDialogData.UpdateTagAsync(_tag.Id, _tag.Name, _tag.Content, enabled, groupIds);
+        bool updated = await TagCommandService.UpdateTagAsync(_tag.Id, _tag.Name, _tag.Content, enabled, groupIds);
         if (!updated)
         {
             return;

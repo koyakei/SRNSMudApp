@@ -34,7 +34,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationsDataProvider, NotificationsDataProvider>();
         services.AddScoped<IImportTagDataProvider, ImportTagDataProvider>();
         services.AddScoped<IItemDetailDataProvider, ItemDetailDataProvider>();
-        services.AddScoped<ITagDialogDataProvider, TagDialogDataProvider>();
+        services.AddScoped<ITagSearchQueryService, TagSearchQueryService>();
+        services.AddScoped<ITagCommandService, TagCommandService>();
         services.AddScoped<ITagDetailDataProvider, TagDetailDataProvider>();
         services.AddScoped<ContractDataProvider>();
         services.AddScoped<IContractManagementDataProvider>(sp => sp.GetRequiredService<ContractDataProvider>());

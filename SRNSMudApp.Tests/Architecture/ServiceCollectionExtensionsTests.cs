@@ -134,8 +134,10 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new ImportTagDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
         Assert.Throws<ArgumentNullException>(() => new ItemListDataProvider(null!, new Moq.Mock<ITagEmbeddingService>().Object));
         Assert.Throws<ArgumentNullException>(() => new ItemListDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
-        Assert.Throws<ArgumentNullException>(() => new TagDialogDataProvider(null!, new Moq.Mock<ITagEmbeddingService>().Object));
-        Assert.Throws<ArgumentNullException>(() => new TagDialogDataProvider(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new TagSearchQueryService(null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagSearchQueryService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new TagCommandService(null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagCommandService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!));
         Assert.Throws<ArgumentNullException>(() => new ItemListExportService(null!));
         Assert.Throws<ArgumentNullException>(() => new SystemTagEnsurer(null!));
         Assert.Throws<ArgumentNullException>(() => new LinkPreviewService(null!, new Moq.Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>().Object));

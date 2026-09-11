@@ -1,6 +1,7 @@
 @using System.Security.Claims
 @using SRNSMudApp.Services
-@inject ITagDialogDataProvider TagDialogData
+@inject ITagSearchQueryService TagSearchQueryService
+@inject ITagCommandService TagCommandService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -179,7 +180,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _allTags = await TagDialogData.GetAllTagsAsync();
+        _allTags = await TagSearchQueryService.GetAllTagsAsync();
     }
 
     protected override void OnParametersSet()
@@ -208,7 +209,7 @@
 
         try
         {
-            _searchResults = await TagDialogData.SearchTagsAsync(_searchText);
+            _searchResults = await TagSearchQueryService.SearchTagsAsync(_searchText);
 
             switch (_searchResults.Count)
             {
@@ -266,7 +267,7 @@
                 return;
         }
 
-        Tag? existingTag = await TagDialogData.FindTagByNameAsync(_newTagName);
+        Tag? existingTag = await TagSearchQueryService.FindTagByNameAsync(_newTagName);
         switch (existingTag)
         {
             case not null:
@@ -283,7 +284,7 @@
             CachedWeight = 0
         };
 
-        await TagDialogData.CreateTagAsync(newTag);
+        await TagCommandService.CreateTagAsync(newTag);
 
         MudDialog.Close(DialogResult.Ok(newTag));
     }

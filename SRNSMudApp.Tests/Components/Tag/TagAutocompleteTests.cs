@@ -18,13 +18,13 @@ namespace SRNSMudApp.Tests.Components.Tag;
 public class TagAutocompleteTests : IAsyncDisposable
 {
     private readonly BunitContext _ctx = new();
-    private readonly Mock<ITagDialogDataProvider> _dataProviderMock = new();
+    private readonly Mock<ITagSearchQueryService> _queryServiceMock = new();
 
     public TagAutocompleteTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices();
-        _ctx.Services.AddSingleton(_dataProviderMock.Object);
+        _ctx.Services.AddSingleton(_queryServiceMock.Object);
         _ = _ctx.Render<MudPopoverProvider>();
     }
 
@@ -76,14 +76,14 @@ public class TagAutocompleteTests : IAsyncDisposable
 
         Assert.True(customSearchCalled);
         Assert.Contains(results, t => t.Name == "CustomTag");
-        _dataProviderMock.Verify(d => d.SearchTagsWithFallbackAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _queryServiceMock.Verify(d => d.SearchTagsWithFallbackAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task TagAutocomplete_UsesDataProviderSearch_ByDefault()
     {
         var fallbackTag = new TagEntity { Id = 5, Name = "FallbackTag", OwnerId = "user1" };
-        _dataProviderMock.Setup(d => d.SearchTagsWithFallbackAsync("Fall", It.IsAny<CancellationToken>()))
+        _queryServiceMock.Setup(d => d.SearchTagsWithFallbackAsync("Fall", It.IsAny<CancellationToken>()))
             .ReturnsAsync([fallbackTag]);
 
         var cut = _ctx.Render<TagAutocomplete>();
@@ -92,6 +92,6 @@ public class TagAutocompleteTests : IAsyncDisposable
         var results = await autocomplete.Instance.SearchFunc("Fall", CancellationToken.None);
 
         Assert.Contains(results, t => t.Name == "FallbackTag");
-        _dataProviderMock.Verify(d => d.SearchTagsWithFallbackAsync("Fall", It.IsAny<CancellationToken>()), Times.Once);
+        _queryServiceMock.Verify(d => d.SearchTagsWithFallbackAsync("Fall", It.IsAny<CancellationToken>()), Times.Once);
     }
 }

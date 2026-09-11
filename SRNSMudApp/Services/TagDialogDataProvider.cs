@@ -3,7 +3,6 @@
 #region
 
 using System.Diagnostics.CodeAnalysis;
-using System.Numerics.Tensors;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -17,91 +16,35 @@ using Tag = SRNSMudApp.Data.Tag;
 
 namespace SRNSMudApp.Services;
 
-/// <summary>
-///     タグ選択・作成ダイアログ (TagAddDialog) 用のデータアクセスを分離するインターフェース。
-///     コンポーネントから DbContext への直接依存を断ち、単体テストでモック可能にする。
-/// </summary>
-public interface ITagDialogDataProvider
+/// <summary>タグ検索・一覧取得を担う CQS の Query 契約。</summary>
+public interface ITagSearchQueryService
 {
     Task<List<Tag>> GetAllTagsAsync();
-
-    /// <summary>全タグを対象にテキスト + ベクトル類似度で検索する。</summary>
     Task<List<Tag>> SearchTagsAsync(string searchText);
-
     Task<Tag?> FindTagByNameAsync(string tagName);
-
-    Task CreateTagAsync(Tag newTag);
-
-    /// <summary>ベクトルを生成せずにタグを作成する (旧 AddTag ページの挙動を維持)。</summary>
-    Task CreateTagWithoutEmbeddingAsync(Tag newTag);
-
-    /// <summary>
-    ///     タグ名・内容・自動承認設定を更新し、ベクトルを再生成する。対象が存在しない場合は false。
-    /// </summary>
-    /// <param name="tagId">更新対象のタグ ID。</param>
-    /// <param name="name">更新後のタグ名。</param>
-    /// <param name="content">更新後のタグ詳細内容。</param>
-    /// <param name="autoAcceptIncomingTaggingRequests">タグ付けリクエストを自動承認するかどうか。</param>
-    /// <param name="allowedUserGroupIds">自動承認を委任するユーザーグループ ID の一覧。空または未指定の場合は委任を解除。</param>
-    /// <returns>更新に成功した場合は true、対象のタグが存在しない場合は false。</returns>
-    Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null);
-
-    /// <summary>全タグを対象にテキスト+ベクトル検索を行う (失敗時はテキスト検索にフォールバック、最大 50 件)。</summary>
     Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default);
-
-    /// <summary>タグ一覧 (Owner / TargetTagRelations 込み) を取得する。</summary>
     Task<List<Tag>> GetTagsWithDetailsAsync();
 }
 
-public class TagDialogDataProvider(
+/// <summary>タグの作成・更新を担う CQS の Command 契約。</summary>
+public interface ITagCommandService
+{
+    Task CreateTagAsync(Tag newTag);
+    Task CreateTagWithoutEmbeddingAsync(Tag newTag);
+    Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null);
+}
+
+public class TagCommandService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ITagEmbeddingService tagEmbeddingService,
-    ILogger<TagDialogDataProvider>? logger = null) : ITagDialogDataProvider
+    ILogger<TagCommandService>? logger = null) : ITagCommandService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly ITagEmbeddingService _tagEmbeddingService =
         tagEmbeddingService ?? throw new ArgumentNullException(nameof(tagEmbeddingService));
-    private readonly ILogger<TagDialogDataProvider> _logger =
-        logger ?? NullLogger<TagDialogDataProvider>.Instance;
-    public async Task<List<Tag>> GetAllTagsAsync()
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        return await dbContext.Tags.AsNoTracking().ToListAsync();
-    }
-
-    public async Task<List<Tag>> SearchTagsAsync(string searchText)
-    {
-        var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
-
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-
-        List<Tag> textMatches = await dbContext.Tags
-            .Where(x => x.Name.Contains(searchText) || x.Content.Contains(searchText))
-            .AsNoTracking()
-            .ToListAsync();
-
-        List<Tag> vectorTags = await dbContext.Tags.Where(x => x.Embedding != null).AsNoTracking().ToListAsync();
-
-        var vectorMatches = vectorTags
-            .Where(x => x.Embedding.Length == queryVector.Length)
-            .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
-            .Take(50)
-            .ToList();
-
-        return
-        [
-            .. textMatches.Concat(vectorMatches)
-                .DistinctBy(x => x.Id)
-                .Take(50)
-        ];
-    }
-
-    public async Task<Tag?> FindTagByNameAsync(string tagName)
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        return await dbContext.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
-    }
+    private readonly ILogger<TagCommandService> _logger =
+        logger ?? NullLogger<TagCommandService>.Instance;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
@@ -128,142 +71,92 @@ public class TagDialogDataProvider(
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null)
     {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        Tag? tagToUpdate = await context.Tags
-            .Include(t => t.AutoApproveUserGroups)
-            .FirstOrDefaultAsync(t => t.Id == tagId);
-        if (tagToUpdate is null)
+        bool nameChanged;
+        await using (ApplicationDbContext context = await _dbFactory.CreateDbContextAsync())
         {
-            return false;
-        }
-
-        tagToUpdate.Name = name;
-        tagToUpdate.Content = content ?? "";
-        tagToUpdate.AutoAcceptIncomingTaggingRequests = autoAcceptIncomingTaggingRequests;
-
-        if (allowedUserGroupIds is not null)
-        {
-            var targetGroupIds = allowedUserGroupIds.ToHashSet();
-            var toRemove = tagToUpdate.AutoApproveUserGroups
-                .Where(g => !targetGroupIds.Contains(g.UserGroupId))
-                .ToList();
-            foreach (var rel in toRemove)
+            Tag? tagToUpdate = await context.Tags
+                .Include(t => t.AutoApproveUserGroups)
+                .FirstOrDefaultAsync(t => t.Id == tagId);
+            if (tagToUpdate is null)
             {
-                tagToUpdate.AutoApproveUserGroups.Remove(rel);
-                context.TagAutoApproveGroups.Remove(rel);
+                return false;
             }
 
-            var existingGroupIds = tagToUpdate.AutoApproveUserGroups
-                .Select(g => g.UserGroupId)
-                .ToHashSet();
+            nameChanged = !string.Equals(tagToUpdate.Name, name, StringComparison.Ordinal);
+            tagToUpdate.Name = name;
+            tagToUpdate.Content = content ?? "";
+            tagToUpdate.AutoAcceptIncomingTaggingRequests = autoAcceptIncomingTaggingRequests;
 
-            foreach (var groupId in targetGroupIds)
+            if (allowedUserGroupIds is not null)
             {
-                if (!existingGroupIds.Contains(groupId))
+                var targetGroupIds = allowedUserGroupIds.ToHashSet();
+                List<TagAutoApproveUserGroup> toRemove =
+                [
+                    .. tagToUpdate.AutoApproveUserGroups.Where(g => !targetGroupIds.Contains(g.UserGroupId))
+                ];
+                foreach (TagAutoApproveUserGroup rel in toRemove)
                 {
-                    tagToUpdate.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
-                    {
-                        TagId = tagId,
-                        UserGroupId = groupId,
-                        OwnerId = tagToUpdate.OwnerId,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow
-                    });
+                    _ = tagToUpdate.AutoApproveUserGroups.Remove(rel);
+                    _ = context.TagAutoApproveGroups.Remove(rel);
                 }
+
+                var existingGroupIds = tagToUpdate.AutoApproveUserGroups
+                    .Select(g => g.UserGroupId)
+                    .ToHashSet();
+
+                foreach (var groupId in targetGroupIds)
+                {
+                    if (!existingGroupIds.Contains(groupId))
+                    {
+                        tagToUpdate.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+                        {
+                            TagId = tagId,
+                            UserGroupId = groupId,
+                            OwnerId = tagToUpdate.OwnerId,
+                            CreatedDate = DateTime.UtcNow,
+                            UpdatedDate = DateTime.UtcNow
+                        });
+                    }
+                }
+
             }
 
-            // targetGroupIds が空または無効値（0以下）の場合は null を設定し、外部キー制約違反（FK_Tags_UserGroups_AutoApproveUserGroupId）を防止する
-            tagToUpdate.AutoApproveUserGroupId = targetGroupIds.Where(id => id > 0).Cast<int?>().FirstOrDefault();
+            _ = await context.SaveChangesAsync();
         }
 
-        // タグ名が変更された場合などに備え、ベクトルも再生成する
+        if (nameChanged)
+        {
+            await UpdateEmbeddingAfterNameChangeAsync(tagId, name);
+        }
+
+        return true;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "埋め込み生成の失敗でタグ名変更の保存結果を取り消さないため広く捕捉する")]
+    private async Task UpdateEmbeddingAfterNameChangeAsync(int tagId, string name)
+    {
         try
         {
+            // 埋め込み生成中は DB コンテキストを保持せず、接続プールを占有しない。
             ReadOnlyMemory<float> embedding = await _tagEmbeddingService.GenerateEmbeddingAsync(name);
-            tagToUpdate.Embedding = embedding.ToArray();
+
+            await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+            Tag? tag = await context.Tags.FirstOrDefaultAsync(t => t.Id == tagId && t.Name == name);
+            if (tag is null)
+            {
+                return;
+            }
+
+            tag.Embedding = embedding.ToArray();
+            _ = await context.SaveChangesAsync();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to generate embedding on edit: {Message}", ex.Message);
         }
-
-        _ = await context.SaveChangesAsync();
-        return true;
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
-    public async Task<List<Tag>> SearchTagsWithFallbackAsync(string? value, CancellationToken token = default)
-    {
-        if (token.IsCancellationRequested)
-        {
-            return [];
-        }
-
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(token);
-        IQueryable<Tag> query = dbContext.Tags.AsQueryable();
-
-        if (string.IsNullOrEmpty(value))
-        {
-            return await query.OrderBy(t => t.Name).AsNoTracking().Take(50).ToListAsync(token);
-        }
-
-        try
-        {
-            var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(value)).ToArray();
-
-            List<Tag> textMatches = await query
-                .Where(x => x.Name.Contains(value) || x.Content.Contains(value))
-                .OrderBy(x => x.Name)
-                .AsNoTracking()
-                .ToListAsync(token);
-
-            List<Tag> vectorTags = await query.Where(x => x.Embedding != null).AsNoTracking().ToListAsync(token);
-
-            var vectorMatches = vectorTags
-                .Where(x => x.Embedding.Length == queryVector.Length)
-                .OrderByDescending(x => TensorPrimitives.CosineSimilarity(x.Embedding, queryVector))
-                .Take(50)
-                .ToList();
-
-            return
-            [
-                .. textMatches.Concat(vectorMatches)
-                    .DistinctBy(x => x.Id)
-                    .Take(50)
-            ];
-        }
-        catch (OperationCanceledException)
-        {
-            return [];
-        }
-        catch (Exception ex)
-        {
-            if (token.IsCancellationRequested)
-            {
-                return [];
-            }
-
-            _logger.LogWarning(ex, "Vector search failed: {Message}", ex.Message);
-            query = query.Where(x =>
-                x.Name.Contains(value) ||
-                x.Content.Contains(value)
-            );
-            return await query.OrderBy(x => x.Name).AsNoTracking().Take(50).ToListAsync(token);
-        }
-    }
-
-    public async Task<List<Tag>> GetTagsWithDetailsAsync()
-    {
-        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        return await dbContext.Tags
-            .Include(t => t.Owner)
-            .Include(t => t.TargetTagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .ThenInclude(t => t.Owner)
-            .AsNoTracking()
-            .ToListAsync();
-    }
     public async Task CreateTagWithoutEmbeddingAsync(Tag newTag)
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();

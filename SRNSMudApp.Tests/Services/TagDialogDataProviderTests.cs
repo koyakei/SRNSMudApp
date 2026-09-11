@@ -8,7 +8,7 @@ using SRNSMudApp.Tests.TestSupport;
 
 namespace SRNSMudApp.Tests.Services;
 
-public class TagDialogDataProviderTests : IAsyncLifetime
+public class TagCqsServiceTests : IAsyncLifetime
 {
     private MsSqlTestDatabase _sharedDb = null!;
 
@@ -19,7 +19,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private (ApplicationDbContext dbContext, TagDialogDataProvider provider, Mock<ITagEmbeddingService> embeddingMock, string tid) CreateScope()
+    private (ApplicationDbContext dbContext, TagSearchQueryService queryService, TagCommandService commandService, Mock<ITagEmbeddingService> embeddingMock, string tid) CreateScope()
     {
         var tid = Guid.NewGuid().ToString("N")[..8];
         var dbContext = new ApplicationDbContext(_sharedDb.Options);
@@ -28,18 +28,19 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             .ReturnsAsync(() => new ApplicationDbContext(_sharedDb.Options));
 
         var embeddingMock = new Mock<ITagEmbeddingService>();
-        var provider = new TagDialogDataProvider(mockDbFactory.Object, embeddingMock.Object);
-        return (dbContext, provider, embeddingMock, tid);
+        var queryService = new TagSearchQueryService(mockDbFactory.Object, embeddingMock.Object);
+        var commandService = new TagCommandService(mockDbFactory.Object, embeddingMock.Object);
+        return (dbContext, queryService, commandService, embeddingMock, tid);
     }
 
     [Fact]
     public async Task SearchTagsWithFallbackAsync_WhenTokenCancelled_ReturnsEmptyListWithoutThrowing()
     {
-        var (_, provider, _, _) = CreateScope();
+        var (_, queryService, _, _, _) = CreateScope();
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var result = await provider.SearchTagsWithFallbackAsync("any", cts.Token);
+        var result = await queryService.SearchTagsWithFallbackAsync("any", cts.Token);
 
         Assert.NotNull(result);
         Assert.Empty(result);
@@ -48,7 +49,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task SearchTagsWithFallbackAsync_WhenValueIsEmpty_ReturnsTagsOrderedByName()
     {
-        var (dbContext, provider, _, tid) = CreateScope();
+        var (dbContext, queryService, _, _, tid) = CreateScope();
         await using (dbContext)
         {
             var userId = $"u_{tid}";
@@ -59,7 +60,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             dbContext.Tags.AddRange(tagB, tagA);
             await dbContext.SaveChangesAsync();
 
-            var result = await provider.SearchTagsWithFallbackAsync(null);
+            var result = await queryService.SearchTagsWithFallbackAsync(null);
 
             Assert.Contains(result, t => t.Name == tagA.Name);
             Assert.Contains(result, t => t.Name == tagB.Name);
@@ -73,7 +74,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task SearchTagsWithFallbackAsync_WhenVectorSearchFails_FallsBackToTextSearch()
     {
-        var (dbContext, provider, embeddingMock, tid) = CreateScope();
+        var (dbContext, queryService, _, embeddingMock, tid) = CreateScope();
         await using (dbContext)
         {
             var userId = $"u_{tid}";
@@ -89,7 +90,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             embeddingMock.Setup(e => e.GenerateEmbeddingAsync(It.IsAny<string>()))
                 .ThrowsAsync(new InvalidOperationException("API error"));
 
-            var result = await provider.SearchTagsWithFallbackAsync(keyword);
+            var result = await queryService.SearchTagsWithFallbackAsync(keyword);
 
             Assert.Equal(2, result.Count);
             Assert.Contains(result, t => t.Id == tag1.Id);
@@ -101,7 +102,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
     [Fact]
     public async Task UpdateTagAsync_WhenAllowedUserGroupIdsProvided_ShouldSyncAutoApproveUserGroups()
     {
-        var (dbContext, provider, _, tid) = CreateScope();
+        var (dbContext, _, commandService, _, tid) = CreateScope();
         await using (dbContext)
         {
             var userId = $"u_{tid}";
@@ -116,7 +117,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             dbContext.Tags.Add(tag);
             await dbContext.SaveChangesAsync();
 
-            bool updated = await provider.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group2.Id]);
+            bool updated = await commandService.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group2.Id]);
             Assert.True(updated);
 
             dbContext.ChangeTracker.Clear();
@@ -128,7 +129,7 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             Assert.Contains(loadedTag.AutoApproveUserGroups, g => g.UserGroupId == group1.Id);
             Assert.Contains(loadedTag.AutoApproveUserGroups, g => g.UserGroupId == group2.Id);
 
-            bool updated2 = await provider.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group3.Id]);
+            bool updated2 = await commandService.UpdateTagAsync(tag.Id, $"Tag_{tid}", "content", false, [group1.Id, group3.Id]);
             Assert.True(updated2);
 
             dbContext.ChangeTracker.Clear();
@@ -143,14 +144,59 @@ public class TagDialogDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task UpdateTagAsync_WhenNameIsUnchanged_ShouldNotRegenerateEmbedding()
+    {
+        var (dbContext, _, commandService, embeddingMock, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            Assert.True(await commandService.UpdateTagAsync(tag.Id, tag.Name, "Updated content"));
+
+            embeddingMock.Verify(e => e.GenerateEmbeddingAsync(It.IsAny<string>()), Times.Never);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateTagAsync_WhenNameChanges_ShouldRegenerateEmbeddingAfterSavingName()
+    {
+        var (dbContext, _, commandService, embeddingMock, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+            var tag = new Tag { Name = $"OldTag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            embeddingMock
+                .Setup(e => e.GenerateEmbeddingAsync($"NewTag_{tid}"))
+                .ReturnsAsync(new ReadOnlyMemory<float>([1.0f, 2.0f]));
+
+            Assert.True(await commandService.UpdateTagAsync(tag.Id, $"NewTag_{tid}", tag.Content));
+
+            embeddingMock.Verify(e => e.GenerateEmbeddingAsync($"NewTag_{tid}"), Times.Once);
+            dbContext.ChangeTracker.Clear();
+            var savedTag = await dbContext.Tags.FindAsync(tag.Id);
+            Assert.NotNull(savedTag);
+            Assert.Equal($"NewTag_{tid}", savedTag.Name);
+            Assert.Equal([1.0f, 2.0f], savedTag.Embedding);
+        }
+    }
+
     /// <summary>
     ///     自動承認委任グループが未指定（空）の状態でタグの内容を更新した際、外部キー制約違反とならず
-    ///     AutoApproveUserGroupId が null として保存されることを検証する。
+    ///     自動承認グループが空として保存されることを検証する。
     /// </summary>
     [Fact]
-    public async Task UpdateTagAsync_WhenAllowedUserGroupIdsIsEmpty_ShouldUpdateContentAndSetNullAutoApproveUserGroupId()
+    public async Task UpdateTagAsync_WhenAllowedUserGroupIdsIsEmpty_ShouldUpdateContentAndClearAutoApproveUserGroups()
     {
-        var (dbContext, provider, _, tid) = CreateScope();
+        var (dbContext, _, commandService, _, tid) = CreateScope();
         await using (dbContext)
         {
             var userId = $"u_{tid}";
@@ -162,31 +208,30 @@ public class TagDialogDataProviderTests : IAsyncLifetime
                 Content = "Initial Content",
                 OwnerId = userId,
                 AutoAcceptIncomingTaggingRequests = false,
-                AutoApproveUserGroupId = null
             };
             dbContext.Tags.Add(tag);
             await dbContext.SaveChangesAsync();
 
             // When editing tag content without selecting any auto-approve groups (empty collection)
-            bool updated = await provider.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
+            bool updated = await commandService.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
             Assert.True(updated);
 
             dbContext.ChangeTracker.Clear();
             var reloaded = await dbContext.Tags.FindAsync(tag.Id);
             Assert.NotNull(reloaded);
             Assert.Equal("Updated Content", reloaded.Content);
-            Assert.Null(reloaded.AutoApproveUserGroupId);
+            Assert.Empty(reloaded.AutoApproveUserGroups);
         }
     }
 
     /// <summary>
     ///     設定済みの自動承認委任グループを空にしてタグを更新した際、
-    ///     AutoApproveUserGroupId が正常に null へ更新されることを検証する。
+    ///     設定済みの自動承認グループが正常に解除されることを検証する。
     /// </summary>
     [Fact]
-    public async Task UpdateTagAsync_WhenClearingExistingAutoApproveUserGroup_ShouldSetAutoApproveUserGroupIdToNull()
+    public async Task UpdateTagAsync_WhenClearingExistingAutoApproveUserGroup_ShouldClearAutoApproveUserGroups()
     {
-        var (dbContext, provider, _, tid) = CreateScope();
+        var (dbContext, _, commandService, _, tid) = CreateScope();
         await using (dbContext)
         {
             var userId = $"u_{tid}";
@@ -202,20 +247,25 @@ public class TagDialogDataProviderTests : IAsyncLifetime
                 Content = "Initial Content",
                 OwnerId = userId,
                 AutoAcceptIncomingTaggingRequests = false,
-                AutoApproveUserGroupId = group.Id
             };
+            tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+            {
+                Tag = tag,
+                UserGroupId = group.Id,
+                OwnerId = userId
+            });
             dbContext.Tags.Add(tag);
             await dbContext.SaveChangesAsync();
 
             // Clear allowed user groups
-            bool updated = await provider.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
+            bool updated = await commandService.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
             Assert.True(updated);
 
             dbContext.ChangeTracker.Clear();
             var reloaded = await dbContext.Tags.FindAsync(tag.Id);
             Assert.NotNull(reloaded);
             Assert.Equal("Updated Content", reloaded.Content);
-            Assert.Null(reloaded.AutoApproveUserGroupId);
+            Assert.Empty(reloaded.AutoApproveUserGroups);
         }
     }
 }

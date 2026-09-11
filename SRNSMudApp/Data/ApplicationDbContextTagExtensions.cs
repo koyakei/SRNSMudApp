@@ -66,11 +66,6 @@ public static class ApplicationDbContextTagExtensions
             .Select(g => g.UserGroupId)
             .ToListAsync();
 
-        if (tag.AutoApproveUserGroupId.HasValue && !allowedGroupIds.Contains(tag.AutoApproveUserGroupId.Value))
-        {
-            allowedGroupIds.Add(tag.AutoApproveUserGroupId.Value);
-        }
-
         if (allowedGroupIds.Count > 0)
         {
             return await context.UserGroupMembers

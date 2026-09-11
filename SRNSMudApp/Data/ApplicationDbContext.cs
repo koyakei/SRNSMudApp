@@ -118,11 +118,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(t => t.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+#pragma warning disable CS0618 // 旧カラムは既存データの後方互換に必要なため EF マッピングだけ保持する
         _ = builder.Entity<Tag>()
             .HasOne(t => t.AutoApproveUserGroup)
             .WithMany()
             .HasForeignKey(t => t.AutoApproveUserGroupId)
             .OnDelete(DeleteBehavior.SetNull);
+#pragma warning restore CS0618
 
         // Node (hierarchyid) のインデックス設定
         _ = builder.Entity<Tag>()

@@ -165,9 +165,14 @@ public class TaggingContractProposeTests : TaggingContractTestBase
         {
             Name = $"DelegatedTag_{tid}",
             OwnerId = tagOwnerId,
-            AutoApproveUserGroupId = group.Id,
             CachedWeight = 10
         };
+        tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+        {
+            Tag = tag,
+            UserGroupId = group.Id,
+            OwnerId = tagOwnerId
+        });
         dbContext.Items.Add(targetItem);
         dbContext.Tags.Add(tag);
         await dbContext.SaveChangesAsync();
@@ -221,9 +226,14 @@ public class TaggingContractProposeTests : TaggingContractTestBase
         {
             Name = $"DelegatedTag_{tid}",
             OwnerId = tagOwnerId,
-            AutoApproveUserGroupId = group.Id,
             CachedWeight = 10
         };
+        tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+        {
+            Tag = tag,
+            UserGroupId = group.Id,
+            OwnerId = tagOwnerId
+        });
         dbContext.Items.Add(targetItem);
         dbContext.Tags.Add(tag);
         await dbContext.SaveChangesAsync();

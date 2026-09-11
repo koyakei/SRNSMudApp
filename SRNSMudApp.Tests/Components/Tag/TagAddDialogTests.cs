@@ -19,14 +19,16 @@ namespace SRNSMudApp.Tests.Components.Tag;
 public sealed class TagAddDialogTests : IAsyncLifetime
 {
     private readonly BunitContext _ctx = new();
-    private readonly Mock<ITagDialogDataProvider> _dialogDataMock = new();
+    private readonly Mock<ITagSearchQueryService> _queryServiceMock = new();
+    private readonly Mock<ITagCommandService> _commandServiceMock = new();
     private readonly IRenderedComponent<MudPopoverProvider> _popoverProvider;
 
     public TagAddDialogTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
-        _ = _ctx.Services.AddScoped(_ => _dialogDataMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _queryServiceMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _commandServiceMock.Object);
         _ = _ctx.Services.AddAuthorizationCore();
         _ = _ctx.Services.AddAuth("user-1");
         _popoverProvider = _ctx.Render<MudPopoverProvider>();
@@ -37,7 +39,7 @@ public sealed class TagAddDialogTests : IAsyncLifetime
     [Fact]
     public async Task DialogContent_ContainsChildTagCreationTab()
     {
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
         IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
@@ -65,7 +67,7 @@ public sealed class TagAddDialogTests : IAsyncLifetime
             CachedWeight = 5
         };
 
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([parentTag]);
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([parentTag]);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
         IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
@@ -96,8 +98,8 @@ public sealed class TagAddDialogTests : IAsyncLifetime
             CachedWeight = 3
         };
 
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
-        _dialogDataMock.Setup(d => d.SearchTagsAsync("テスト"))
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
+        _queryServiceMock.Setup(d => d.SearchTagsAsync("テスト"))
             .ReturnsAsync([sampleTag]);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
@@ -137,8 +139,8 @@ public sealed class TagAddDialogTests : IAsyncLifetime
             CachedWeight = 3
         };
 
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([sampleTag]);
-        _dialogDataMock.Setup(d => d.SearchTagsAsync("テスト"))
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([sampleTag]);
+        _queryServiceMock.Setup(d => d.SearchTagsAsync("テスト"))
             .ReturnsAsync([sampleTag]);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
@@ -182,9 +184,9 @@ public sealed class TagAddDialogTests : IAsyncLifetime
             CachedWeight = 5
         };
 
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([parentTag]);
-        _dialogDataMock.Setup(d => d.FindTagByNameAsync("新しい子タグ")).ReturnsAsync((SRNSMudApp.Data.Tag?)null);
-        _dialogDataMock.Setup(d => d.CreateTagAsync(It.IsAny<SRNSMudApp.Data.Tag>())).Returns(Task.CompletedTask);
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([parentTag]);
+        _queryServiceMock.Setup(d => d.FindTagByNameAsync("新しい子タグ")).ReturnsAsync((SRNSMudApp.Data.Tag?)null);
+        _commandServiceMock.Setup(d => d.CreateTagAsync(It.IsAny<SRNSMudApp.Data.Tag>())).Returns(Task.CompletedTask);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
         IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
@@ -228,14 +230,14 @@ public sealed class TagAddDialogTests : IAsyncLifetime
         Assert.Equal("子タグ詳細", createdTag.Content);
         Assert.Equal(parentTag.Id, createdTag.ParentTagId);
 
-        _dialogDataMock.Verify(d => d.CreateTagAsync(It.Is<SRNSMudApp.Data.Tag>(
+        _commandServiceMock.Verify(d => d.CreateTagAsync(It.Is<SRNSMudApp.Data.Tag>(
             t => t.Name == "新しい子タグ" && t.ParentTagId == parentTag.Id)), Times.Once);
     }
 
     [Fact]
     public async Task CancelButton_CancelsDialog()
     {
-        _dialogDataMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([]);
 
         IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
         IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();

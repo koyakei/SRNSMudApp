@@ -1,21 +1,10 @@
 @using SRNSMudApp.Data
 @using SRNSMudApp.Services
 
-<MudAutocomplete T="Tag"
-                 Label="@Label"
-                 Value="Value"
-                 ValueChanged="OnValueChanged"
-                 SearchFunc="@SearchTagsAsync"
-                 ToStringFunc="@(tag => tag == null ? null : tag.Name)"
-                 Placeholder="@Placeholder"
-                 ResetValueOnEmptyText="@ResetValueOnEmptyText"
-                 Clearable="@Clearable"
-                 Variant="@Variant"
-                 Dense="@Dense"
-                 Margin="@Margin"
-                 Class="@Class"
-                 Style="@Style"
-                 MaxItems="@MaxItems">
+<MudAutocomplete T="Tag" Label="@Label" Value="Value" ValueChanged="OnValueChanged" SearchFunc="@SearchTagsAsync"
+                 ToStringFunc="@(tag => tag == null ? null : tag.Name)" Placeholder="@Placeholder"
+                 ResetValueOnEmptyText="@ResetValueOnEmptyText" Clearable="@Clearable" Variant="@Variant" Dense="@Dense"
+                 Margin="@Margin" Class="@Class" Style="@Style" MaxItems="@MaxItems">
 
     <ItemTemplate Context="tag">
         @if (ItemTemplate != null)
@@ -26,9 +15,11 @@
         {
             <div class="d-flex flex-column">
                 <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary"
+                             Class="mr-1" />
                     <MudText Typo="Typo.body1" Class="font-weight-bold">@tag.Name</MudText>
-                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" Class="ml-2 px-1">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"
+                             Class="ml-2 px-1">
                         @tag.CachedWeight
                     </MudChip>
                 </div>
@@ -65,7 +56,7 @@
     [Parameter] public Func<string?, CancellationToken, Task<IEnumerable<Tag>>>? CustomSearchFunc { get; set; }
     [Parameter] public RenderFragment<Tag>? ItemTemplate { get; set; }
 
-    [Inject] private ITagDialogDataProvider TagDialogData { get; set; } = null!;
+    [Inject] private ITagSearchQueryService TagSearchQueryService { get; set; } = null!;
 
     private async Task OnValueChanged(Tag? tag)
     {
@@ -80,6 +71,6 @@
             return await CustomSearchFunc(value, token);
         }
 
-        return await TagDialogData.SearchTagsWithFallbackAsync(value, token);
+        return await TagSearchQueryService.SearchTagsWithFallbackAsync(value, token);
     }
 }

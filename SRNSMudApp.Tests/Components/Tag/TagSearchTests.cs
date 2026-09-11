@@ -17,13 +17,13 @@ namespace SRNSMudApp.Tests.Components.Tag;
 public sealed class TagSearchTests : IAsyncLifetime
 {
     private readonly BunitContext _ctx = new();
-    private readonly Mock<ITagDialogDataProvider> _dialogDataMock = new();
+    private readonly Mock<ITagSearchQueryService> _queryServiceMock = new();
 
     public TagSearchTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
-        _ = _ctx.Services.AddScoped(_ => _dialogDataMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _queryServiceMock.Object);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -40,7 +40,7 @@ public sealed class TagSearchTests : IAsyncLifetime
             CachedWeight = 5
         };
 
-        _ = _dialogDataMock
+        _ = _queryServiceMock
             .Setup(d => d.SearchTagsWithFallbackAsync("反社会的勢力", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SRNSMudApp.Data.Tag> { yakuzaTag });
 
@@ -53,7 +53,7 @@ public sealed class TagSearchTests : IAsyncLifetime
         provider.WaitForState(() => provider.Markup.Contains("ヤクザ"), TimeSpan.FromSeconds(5));
 
         Assert.Contains("ヤクザ", provider.Markup);
-        _dialogDataMock.Verify(d => d.SearchTagsWithFallbackAsync("反社会的勢力", It.IsAny<CancellationToken>()), Times.Once);
+        _queryServiceMock.Verify(d => d.SearchTagsWithFallbackAsync("反社会的勢力", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     public async Task DisposeAsync()

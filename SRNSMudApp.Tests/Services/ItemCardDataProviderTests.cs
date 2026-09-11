@@ -130,9 +130,14 @@ public class ItemCardDataProviderTests : IAsyncLifetime
             {
                 Name = $"delegated_{tid}",
                 OwnerId = otherOwnerId,
-                AutoApproveUserGroupId = group.Id,
                 CachedWeight = 0
             };
+            tag.AutoApproveUserGroups.Add(new TagAutoApproveUserGroup
+            {
+                Tag = tag,
+                UserGroupId = group.Id,
+                OwnerId = otherOwnerId
+            });
             db.Tags.Add(tag);
             await db.SaveChangesAsync();
 

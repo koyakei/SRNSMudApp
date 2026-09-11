@@ -41,8 +41,10 @@ public class Tag : BaseEntity
     ///     自動承認を委任するユーザーグループの ID。
     ///     設定されている場合、このグループに属するメンバーからのリクエストが自動承認される。
     /// </summary>
+    [Obsolete("後方互換のために保持しています。新規コードでは AutoApproveUserGroups を使用してください。")]
     public int? AutoApproveUserGroupId { get; set; }
 
+    [Obsolete("後方互換のために保持しています。新規コードでは AutoApproveUserGroups を使用してください。")]
     public UserGroup? AutoApproveUserGroup { get; set; }
 
     /// <summary>

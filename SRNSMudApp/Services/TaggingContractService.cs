@@ -369,7 +369,7 @@ public class TaggingContractService(
 
     /// <summary>
     ///     タグの自動承認設定を確認し、条件を満たしていれば即時承認する。
-    ///     - 委任グループ（AutoApproveUserGroupId）が設定されている場合: リクエスト送信者が該当グループのメンバーであれば即時承認。
+    ///     - 委任グループ（AutoApproveUserGroups）が設定されている場合: リクエスト送信者が該当グループのメンバーであれば即時承認。
     ///     - 委任グループ未設定かつ AutoAcceptIncomingTaggingRequests が有効な場合: 即時承認。
     ///     <see cref="ProposeGratisContractAsync" /> および <see cref="ProposeMutualContractAsync" /> から共有して使用する。
     /// </summary>
@@ -382,7 +382,7 @@ public class TaggingContractService(
         var tagInfo = await dbContext.Tags
             .AsNoTracking()
             .Where(t => t.Id == requestedTagId)
-            .Select(t => new { t.AutoAcceptIncomingTaggingRequests, t.AutoApproveUserGroupId })
+            .Select(t => new { t.AutoAcceptIncomingTaggingRequests })
             .FirstOrDefaultAsync();
 
         if (tagInfo is null)
@@ -395,11 +395,6 @@ public class TaggingContractService(
             .Where(g => g.TagId == requestedTagId)
             .Select(g => g.UserGroupId)
             .ToListAsync();
-
-        if (tagInfo.AutoApproveUserGroupId.HasValue && !allowedGroupIds.Contains(tagInfo.AutoApproveUserGroupId.Value))
-        {
-            allowedGroupIds.Add(tagInfo.AutoApproveUserGroupId.Value);
-        }
 
         var shouldAutoAccept = false;
 

@@ -1,11 +1,11 @@
 @page "/Tag/TagList"
 @rendermode InteractiveServer
 @using SRNSMudApp.Services
-@inject ITagDialogDataProvider TagDialogData
+@inject ITagSearchQueryService TagSearchQueryService
 
 <MudText Typo="Typo.h4" GutterBottom="true">Tag List</MudText>
 
-<SRNSMudApp.Components.Tag.TagTable Tags="@tags" OnDataChanged="LoadDataAsync"/>
+<SRNSMudApp.Components.Tag.TagTable Tags="@tags" OnDataChanged="LoadDataAsync" />
 
 @code {
     private List<Tag>? tags;
@@ -17,7 +17,7 @@
 
     private async Task LoadDataAsync()
     {
-        tags = await TagDialogData.GetTagsWithDetailsAsync();
+        tags = await TagSearchQueryService.GetTagsWithDetailsAsync();
 
         // StateHasChanged();
     }

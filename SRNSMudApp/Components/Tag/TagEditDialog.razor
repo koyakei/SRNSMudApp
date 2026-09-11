@@ -1,7 +1,7 @@
 @using System.Security.Claims
 @using SRNSMudApp.Data
 @using SRNSMudApp.Services
-@inject ITagDialogDataProvider TagDialogData
+@inject ITagCommandService TagCommandService
 @inject IUserGroupDataProvider UserGroupData
 @inject ISnackbar Snackbar
 @inject ITagEmbeddingService TagEmbeddingService
@@ -48,10 +48,6 @@
         _editContent = Tag.Content;
 
         var initialGroups = Tag.AutoApproveUserGroups.Select(g => g.UserGroupId).ToHashSet();
-        if (initialGroups.Count == 0 && Tag.AutoApproveUserGroupId.HasValue)
-        {
-            initialGroups.Add(Tag.AutoApproveUserGroupId.Value);
-        }
         _selectedGroupIds = initialGroups;
 
         string? currentUserId = null;
@@ -86,14 +82,13 @@
 
         try
         {
-            bool updated = await TagDialogData.UpdateTagAsync(Tag.Id, _editName, _editContent,
+            bool updated = await TagCommandService.UpdateTagAsync(Tag.Id, _editName, _editContent,
                 Tag.AutoAcceptIncomingTaggingRequests, _selectedGroupIds);
 
             switch (updated)
             {
                 // 成功した場合はダイアログを閉じ、結果として true を返す
                 case true:
-                    Tag.AutoApproveUserGroupId = _selectedGroupIds.Where(id => id > 0).Cast<int?>().FirstOrDefault();
                     MudDialog.Close(DialogResult.Ok(true));
                     break;
                 case false:
