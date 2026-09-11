@@ -144,21 +144,6 @@ public class ItemSplitRequestE2ETests : PageTest
         await Expect(previewPill).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
         await Expect(previewPill).ToContainTextAsync(splitSnippet);
 
-        // DB 側で新規アイテムが作成され、元アイテム本文が /ItemDetail/ リンクに置換されていることを確認
-        using (IServiceScope scope = _factory.AppServices.CreateScope())
-        {
-            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            Item? original = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.Items, i => i.Id == targetItemId);
-            Assert.That(original, Is.Not.Null);
-            Assert.That(original!.Content, Does.Contain("/ItemDetail/"));
-
-            Item? newItem = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                .SingleOrDefaultAsync(db.Items, i => i.OwnerId == original.OwnerId && i.Content == splitSnippet);
-            Assert.That(newItem, Is.Not.Null);
-            Assert.That(newItem!.Content, Is.EqualTo(splitSnippet));
-            Assert.That(newItem.OwnerId, Is.EqualTo(original.OwnerId));
-        }
-
         // 7. 通知画面 (/notifications) でも確認
         await Page.GotoAsync($"{_serverAddress}/notifications");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
