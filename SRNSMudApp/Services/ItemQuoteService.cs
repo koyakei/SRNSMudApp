@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services.Resolvers;
 
 namespace SRNSMudApp.Services;
 
@@ -11,10 +12,15 @@ namespace SRNSMudApp.Services;
 ///     アイテムの引用（引用リツイート）および引用されたアイテム一覧の取得を担当するサービス実装クラス。
 /// </summary>
 /// <param name="dbFactory">DbContext ファクトリ。</param>
-public class ItemQuoteService(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemQuoteService
+/// <param name="sourceResolvers">優先順位順に実行する元アイテム解決戦略。</param>
+public class ItemQuoteService(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    IEnumerable<IItemSourceResolver> sourceResolvers) : IItemQuoteService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly IReadOnlyList<IItemSourceResolver> _sourceResolvers =
+        sourceResolvers?.ToArray() ?? throw new ArgumentNullException(nameof(sourceResolvers));
 
     /// <inheritdoc />
     public async Task<Item?> CreateQuoteItemAsync(
@@ -149,43 +155,13 @@ public class ItemQuoteService(IDbContextFactory<ApplicationDbContext> dbFactory)
             return null;
         }
 
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-        // 1. まず対象アイテムの QuotedItemId を確認
-        int? quotedItemId = await context.Items
-            .AsNoTracking()
-            .Where(i => i.Id == itemId)
-            .Select(i => i.QuotedItemId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (quotedItemId is { } parentId && parentId > 0)
+        foreach (IItemSourceResolver resolver in _sourceResolvers)
         {
-            return await GetQuotedItemAsync(parentId, cancellationToken);
-        }
-
-        // 2. フォールバック: ItemSplitRequest で CreatedItemId が一致する元の OriginalItemId を探す
-        int? originalItemId = await context.ItemSplitRequests
-            .AsNoTracking()
-            .Where(r => r.CreatedItemId == itemId)
-            .Select(r => (int?)r.OriginalItemId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (originalItemId is { } splitOriginId && splitOriginId > 0)
-        {
-            return await GetQuotedItemAsync(splitOriginId, cancellationToken);
-        }
-
-        // 3. フォールバック: 本文に /ItemDetail/{itemId} リンクを含んでいる元アイテムを探す
-        var linkUrl = $"/ItemDetail/{itemId}";
-        int? linkingItemId = await context.Items
-            .AsNoTracking()
-            .Where(i => i.Id != itemId && i.Content != null && i.Content.Contains(linkUrl))
-            .Select(i => (int?)i.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (linkingItemId is { } linkOriginId && linkOriginId > 0)
-        {
-            return await GetQuotedItemAsync(linkOriginId, cancellationToken);
+            Item? sourceItem = await resolver.ResolveSourceAsync(itemId, cancellationToken);
+            if (sourceItem is not null)
+            {
+                return sourceItem;
+            }
         }
 
         return null;

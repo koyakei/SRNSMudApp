@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Resolvers;
 using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Contracts;
 using SRNSMudApp.Services.Dialogs;
@@ -99,6 +100,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IItemTagService, ItemTagService>();
         services.AddScoped<IItemReplyService, ItemReplyService>();
         services.AddScoped<IItemReactionService, ItemReactionService>();
+        // 登録順が元アイテム解決の優先順位になる。
+        services.AddScoped<IItemSourceResolver, QuotedItemIdSourceResolver>();
+        services.AddScoped<IItemSourceResolver, ItemSplitRequestSourceResolver>();
+        services.AddScoped<IItemSourceResolver, ItemLinkSourceResolver>();
         services.AddScoped<IItemQuoteService, ItemQuoteService>();
         services.AddScoped<ITagEdgeService, TagEdgeService>();
 

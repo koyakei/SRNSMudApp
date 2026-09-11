@@ -11,12 +11,36 @@ public interface IItemSplitService
     /// <summary>
     ///     他ユーザーの Item に対し、選択テキストを別アイテムに分割するリクエストを申請する。
     /// </summary>
+    /// <param name="originalItemId">分割元アイテムの ID。</param>
+    /// <param name="selectedText">分割対象として選択された本文。</param>
+    /// <param name="requesterUserId">リクエストを申請するユーザーの ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成された分割リクエスト、または失敗理由。</returns>
     Task<Result<ItemSplitRequest>> RequestSplitAsync(int originalItemId, string selectedText, string requesterUserId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     アイテム所有者による選択テキストの直接分割を実行する。
+    ///     新規アイテムを作成し、元アイテムの本文内の選択テキストを新規アイテムへのリンクに置換する。
+    /// </summary>
+    /// <param name="originalItemId">分割元アイテムの ID。</param>
+    /// <param name="selectedText">分割対象として選択された本文。</param>
+    /// <param name="ownerUserId">分割元アイテムの所有者ユーザー ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成されたアイテム、または失敗理由。</returns>
+    Task<Result<Item>> SplitDirectlyAsync(
+        int originalItemId,
+        string selectedText,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     アイテム所有者が分割リクエストを承認する。
     ///     新規アイテムが作成され、元アイテムの本文内の選択テキストが新規アイテムへのリンクに置換される。
     /// </summary>
+    /// <param name="splitRequestId">承認対象の分割リクエスト ID。</param>
+    /// <param name="ownerUserId">分割元アイテムの所有者ユーザー ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成されたアイテム、または失敗理由。</returns>
     Task<Result<Item>> ApproveSplitAsync(int splitRequestId, string ownerUserId, CancellationToken cancellationToken = default);
 
     /// <summary>

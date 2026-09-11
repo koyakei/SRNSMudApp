@@ -15,7 +15,7 @@ public interface IItemQuoteService
     /// <param name="userId">投稿者のユーザーID。</param>
     /// <param name="initialTagIds">初期付与するタグIDのコレクション（任意）。</param>
     /// <param name="cancellationToken">キャンセレーショントークン。</param>
-    /// <returns>作成されたアイテム。</returns>
+    /// <returns>作成されたアイテム。引用元が存在しない場合は <see langword="null" />。</returns>
     Task<Item?> CreateQuoteItemAsync(
         int quotedItemId,
         string content,
@@ -28,7 +28,7 @@ public interface IItemQuoteService
     /// </summary>
     /// <param name="quotedItemId">元アイテムID。</param>
     /// <param name="cancellationToken">キャンセレーショントークン。</param>
-    /// <returns>引用しているアイテムのリスト。</returns>
+    /// <returns>引用しているアイテムのリスト。該当するアイテムがない場合は空のリスト。</returns>
     Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
         int quotedItemId,
         CancellationToken cancellationToken = default);
@@ -38,7 +38,7 @@ public interface IItemQuoteService
     /// </summary>
     /// <param name="quotedItemId">元アイテムID。</param>
     /// <param name="cancellationToken">キャンセレーショントークン。</param>
-    /// <returns>引用件数。</returns>
+    /// <returns>引用件数。該当する引用がない場合は 0。</returns>
     Task<int> GetQuoteCountAsync(
         int quotedItemId,
         CancellationToken cancellationToken = default);

@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -593,34 +592,19 @@ public partial class ItemCard : IAsyncDisposable
 
         try
         {
-            var newItem = new Data.Item
+            Result<Data.Item> splitResult = await ItemSplitService.SplitDirectlyAsync(Item.Id, selectedText, CurrentUserId);
+            switch (splitResult)
             {
-                Content = selectedText,
-                OwnerId = CurrentUserId,
-                IsPrivate = Item.IsPrivate,
-                TargetUserGroupId = Item.TargetUserGroupId,
-                QuotedItemId = Item.Id,
-                ItemKindJson = JsonSerializer.Serialize(new QuoteItem(Item.Id))
-            };
-
-            await ItemCardData.CreateItemAsync(newItem, []);
-
-            var linkUrl = $"/ItemDetail/{newItem.Id}";
-            int index = Item.Content.IndexOf(selectedText, StringComparison.Ordinal);
-            if (index >= 0)
-            {
-                var updatedContent = Item.Content.Remove(index, selectedText.Length).Insert(index, linkUrl);
-                bool updated = await ItemCardData.UpdateItemContentAsync(Item.Id, updatedContent);
-                if (updated)
-                {
+                case Success<Data.Item> success:
+                    var linkUrl = $"/ItemDetail/{success.Value.Id}";
+                    int index = Item.Content.IndexOf(selectedText, StringComparison.Ordinal);
+                    Item.Content = Item.Content.Remove(index, selectedText.Length).Insert(index, linkUrl);
                     _ = Snackbar.Add("アイテムを分割しました。", Severity.Success);
-                    Item.Content = updatedContent;
                     await NotifyDataChangedAsync();
-                }
-                else
-                {
-                    _ = Snackbar.Add("元のアイテムの更新に失敗しました。", Severity.Error);
-                }
+                    break;
+                case Failure fail:
+                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
             }
         }
         catch (Exception ex)

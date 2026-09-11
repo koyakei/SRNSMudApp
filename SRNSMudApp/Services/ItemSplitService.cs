@@ -90,6 +90,58 @@ public class ItemSplitService(
     }
 
     /// <inheritdoc />
+    public async Task<Result<Item>> SplitDirectlyAsync(
+        int originalItemId,
+        string selectedText,
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (originalItemId <= 0)
+        {
+            return Result.Fail<Item>("分割対象のアイテムが指定されていません。");
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            return Result.Fail<Item>("分割するテキストが指定されていません。");
+        }
+
+        if (string.IsNullOrWhiteSpace(ownerUserId))
+        {
+            return Result.Fail<Item>("所有者ユーザーが指定されていません。");
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        Item? originalItem = await context.Items
+            .FirstOrDefaultAsync(i => i.Id == originalItemId, cancellationToken);
+
+        if (originalItem is null)
+        {
+            return Result.Fail<Item>("分割対象のアイテムが見つかりません。");
+        }
+
+        if (originalItem.OwnerId != ownerUserId)
+        {
+            return Result.Fail<Item>("このアイテムを分割する権限がありません。");
+        }
+
+        int index = originalItem.Content.IndexOf(selectedText, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            return Result.Fail<Item>("選択されたテキストが元アイテムの本文に含まれていません。");
+        }
+
+        Item newItem = await CreateSplitItemAsync(context, originalItem, selectedText, index, cancellationToken);
+        originalItem.UpdatedDate = DateTime.UtcNow;
+        _ = await context.SaveChangesAsync(cancellationToken);
+
+        _notificationService.NotifyNotificationsChanged();
+
+        return Result.Ok(newItem);
+    }
+
+    /// <inheritdoc />
     public async Task<Result<Item>> ApproveSplitAsync(
         int splitRequestId,
         string ownerUserId,
@@ -128,25 +180,9 @@ public class ItemSplitService(
             return Result.Fail<Item>("元アイテムの本文が更新されたため、指定されたテキストが見つかりません。");
         }
 
-        // 1. 新規アイテム作成（所有者は元アイテムの所有者、元アイテムを引用元として保持）
-        var newItem = new Item
-        {
-            Content = request.SelectedText,
-            OwnerId = originalItem.OwnerId,
-            IsPrivate = originalItem.IsPrivate,
-            TargetUserGroupId = originalItem.TargetUserGroupId,
-            QuotedItemId = originalItem.Id,
-            ItemKindJson = JsonSerializer.Serialize(new QuoteItem(originalItem.Id)),
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
-        };
+        Item newItem = await CreateSplitItemAsync(context, originalItem, request.SelectedText, index, cancellationToken);
 
-        _ = context.Items.Add(newItem);
-        _ = await context.SaveChangesAsync(cancellationToken);
-
-        // 2. 元アイテム本文の該当テキストを /ItemDetail/{newItem.Id} リンクに置換
-        var linkUrl = $"/ItemDetail/{newItem.Id}";
-        originalItem.Content = originalItem.Content.Remove(index, request.SelectedText.Length).Insert(index, linkUrl);
+        // 元アイテム本文の該当テキストを /ItemDetail/{newItem.Id} リンクに置換
         originalItem.UpdatedDate = DateTime.UtcNow;
 
         // 3. リクエスト状態更新
@@ -159,6 +195,35 @@ public class ItemSplitService(
         _notificationService.NotifyNotificationsChanged();
 
         return Result.Ok(newItem);
+    }
+
+    private static async Task<Item> CreateSplitItemAsync(
+        ApplicationDbContext context,
+        Item originalItem,
+        string selectedText,
+        int selectedTextIndex,
+        CancellationToken cancellationToken)
+    {
+        // 所有者・公開範囲・引用元の扱いを直接分割と承認分割で統一する。
+        string originalContent = originalItem.Content;
+        var newItem = new Item
+        {
+            Content = selectedText,
+            OwnerId = originalItem.OwnerId,
+            IsPrivate = originalItem.IsPrivate,
+            TargetUserGroupId = originalItem.TargetUserGroupId,
+            QuotedItemId = originalItem.Id,
+            ItemKindJson = JsonSerializer.Serialize(new QuoteItem(originalItem.Id)),
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+
+        _ = context.Items.Add(newItem);
+        _ = await context.SaveChangesAsync(cancellationToken);
+        originalItem.Content = originalContent.Remove(selectedTextIndex, selectedText.Length)
+            .Insert(selectedTextIndex, $"/ItemDetail/{newItem.Id}");
+
+        return newItem;
     }
 
     /// <inheritdoc />

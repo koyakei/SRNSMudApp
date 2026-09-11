@@ -16,6 +16,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
+using SRNSMudApp.Services.Resolvers;
 
 namespace SRNSMudApp.Tests.TestSupport;
 
@@ -50,6 +51,9 @@ public static class BunitTestSetup
             .AddScoped<ITaggingRequestActions, TaggingRequestActions>()
             .AddScoped<ISystemTagEnsurer, SystemTagEnsurer>()
             .AddScoped<IDialogLauncher, DialogLauncher>()
+            .AddScoped<IItemSourceResolver, QuotedItemIdSourceResolver>()
+            .AddScoped<IItemSourceResolver, ItemSplitRequestSourceResolver>()
+            .AddScoped<IItemSourceResolver, ItemLinkSourceResolver>()
             .AddScoped<IItemQuoteService, ItemQuoteService>()
             .AddScoped<ITagCardDataProvider, TagCardDataProvider>()
             .AddScoped<IItemCardDataProvider, ItemCardDataProvider>()

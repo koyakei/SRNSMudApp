@@ -72,6 +72,114 @@ public class ItemSplitServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SplitDirectlyAsync_Success_CreatesQuotedItemAndReplacesSelectedText()
+    {
+        var (dbContext, service, mockNotification, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            await dbContext.SeedUsersAsync(ownerId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = "前半_[分割対象]_後半",
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.SplitDirectlyAsync(
+                originalItem.Id,
+                "[分割対象]",
+                ownerId);
+
+            Assert.True(result is Success<Item>);
+            switch (result)
+            {
+                case Success<Item> success:
+                    Assert.Equal("[分割対象]", success.Value.Content);
+                    Assert.Equal(ownerId, success.Value.OwnerId);
+                    Assert.Equal(originalItem.Id, success.Value.QuotedItemId);
+
+                    dbContext.ChangeTracker.Clear();
+                    Item? updatedOriginal = await dbContext.Items.FindAsync(originalItem.Id);
+                    Assert.NotNull(updatedOriginal);
+                    Assert.Equal($"前半_/ItemDetail/{success.Value.Id}_後半", updatedOriginal.Content);
+                    break;
+            }
+
+            mockNotification.Verify(n => n.NotifyNotificationsChanged(), Times.Once);
+        }
+    }
+
+    [Fact]
+    public async Task SplitDirectlyAsync_Fails_WhenUserIsNotOwner()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var otherUserId = $"other_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, otherUserId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = $"分割対象_{tid}"
+            };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.SplitDirectlyAsync(
+                originalItem.Id,
+                $"分割対象_{tid}",
+                otherUserId);
+
+            Assert.True(result is Failure);
+            switch (result)
+            {
+                case Failure failure:
+                    Assert.Contains("権限がありません", failure.ErrorMessage);
+                    break;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SplitDirectlyAsync_Fails_WhenSelectedTextIsNotInOriginalItem()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            await dbContext.SeedUsersAsync(ownerId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = $"本文_{tid}"
+            };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.SplitDirectlyAsync(
+                originalItem.Id,
+                "存在しないテキスト",
+                ownerId);
+
+            Assert.True(result is Failure);
+            switch (result)
+            {
+                case Failure failure:
+                    Assert.Contains("本文に含まれていません", failure.ErrorMessage);
+                    break;
+            }
+        }
+    }
+
+    [Fact]
     public async Task RequestSplitAsync_Fails_WhenTextNotInItem()
     {
         var (dbContext, service, _, tid) = CreateScope();

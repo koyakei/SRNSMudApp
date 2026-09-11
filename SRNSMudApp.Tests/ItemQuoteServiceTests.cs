@@ -4,6 +4,7 @@ using Moq;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Resolvers;
 
 namespace SRNSMudApp.Tests;
 
@@ -26,7 +27,13 @@ public class ItemQuoteServiceTests : IAsyncLifetime
         mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new ApplicationDbContext(_sharedDb.Options));
 
-        var service = new ItemQuoteService(mockDbFactory.Object);
+        IItemSourceResolver[] sourceResolvers =
+        [
+            new QuotedItemIdSourceResolver(mockDbFactory.Object),
+            new ItemSplitRequestSourceResolver(mockDbFactory.Object),
+            new ItemLinkSourceResolver(mockDbFactory.Object)
+        ];
+        var service = new ItemQuoteService(mockDbFactory.Object, sourceResolvers);
         return (dbContext, service, tid);
     }
 
