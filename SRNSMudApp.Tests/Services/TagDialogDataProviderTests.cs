@@ -143,6 +143,10 @@ public class TagDialogDataProviderTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    ///     自動承認委任グループが未指定（空）の状態でタグの内容を更新した際、外部キー制約違反とならず
+    ///     AutoApproveUserGroupId が null として保存されることを検証する。
+    /// </summary>
     [Fact]
     public async Task UpdateTagAsync_WhenAllowedUserGroupIdsIsEmpty_ShouldUpdateContentAndSetNullAutoApproveUserGroupId()
     {
@@ -175,6 +179,10 @@ public class TagDialogDataProviderTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    ///     設定済みの自動承認委任グループを空にしてタグを更新した際、
+    ///     AutoApproveUserGroupId が正常に null へ更新されることを検証する。
+    /// </summary>
     [Fact]
     public async Task UpdateTagAsync_WhenClearingExistingAutoApproveUserGroup_ShouldSetAutoApproveUserGroupIdToNull()
     {

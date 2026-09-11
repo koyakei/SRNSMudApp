@@ -35,7 +35,15 @@ public interface ITagDialogDataProvider
     /// <summary>ベクトルを生成せずにタグを作成する (旧 AddTag ページの挙動を維持)。</summary>
     Task CreateTagWithoutEmbeddingAsync(Tag newTag);
 
-    /// <summary>タグ名・内容・自動承認設定を更新し、ベクトルを再生成する。対象が存在しない場合は false。</summary>
+    /// <summary>
+    ///     タグ名・内容・自動承認設定を更新し、ベクトルを再生成する。対象が存在しない場合は false。
+    /// </summary>
+    /// <param name="tagId">更新対象のタグ ID。</param>
+    /// <param name="name">更新後のタグ名。</param>
+    /// <param name="content">更新後のタグ詳細内容。</param>
+    /// <param name="autoAcceptIncomingTaggingRequests">タグ付けリクエストを自動承認するかどうか。</param>
+    /// <param name="allowedUserGroupIds">自動承認を委任するユーザーグループ ID の一覧。空または未指定の場合は委任を解除。</param>
+    /// <returns>更新に成功した場合は true、対象のタグが存在しない場合は false。</returns>
     Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null);
 
     /// <summary>全タグを対象にテキスト+ベクトル検索を行う (失敗時はテキスト検索にフォールバック、最大 50 件)。</summary>
@@ -115,6 +123,7 @@ public class TagDialogDataProvider(
         _ = dbContext.Tags.Add(newTag);
         _ = await dbContext.SaveChangesAsync();
     }
+    /// <inheritdoc />
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ユーザー入力由来の任意の例外を UI 向けメッセージに変換するため広く捕捉する")]
     public async Task<bool> UpdateTagAsync(int tagId, string name, string? content, bool autoAcceptIncomingTaggingRequests = false, IEnumerable<int>? allowedUserGroupIds = null)
@@ -163,6 +172,7 @@ public class TagDialogDataProvider(
                 }
             }
 
+            // targetGroupIds が空または無効値（0以下）の場合は null を設定し、外部キー制約違反（FK_Tags_UserGroups_AutoApproveUserGroupId）を防止する
             tagToUpdate.AutoApproveUserGroupId = targetGroupIds.Where(id => id > 0).Cast<int?>().FirstOrDefault();
         }
 
