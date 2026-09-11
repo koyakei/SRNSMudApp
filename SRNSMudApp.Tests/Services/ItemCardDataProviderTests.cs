@@ -147,6 +147,38 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CanUserAttachTagDirectlyAsync_WhenOnlyLegacyGroupColumnIsSet_ReturnsFalse()
+    {
+        var (db, sut, userId, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var otherOwnerId = $"legacy_owner_{tid}";
+            await db.SeedUsersAsync(otherOwnerId);
+
+            var group = new UserGroup { Name = $"LegacyGroup_{tid}", OwnerId = otherOwnerId };
+            group.Members.Add(new UserGroupMember { UserGroup = group, UserId = userId, OwnerId = otherOwnerId });
+            db.UserGroups.Add(group);
+            await db.SaveChangesAsync();
+
+#pragma warning disable CS0618 // 旧カラムから新しい中間テーブルへ移行する挙動を検証するため意図的に設定する
+            var tag = new Tag
+            {
+                Name = $"legacy_only_{tid}",
+                OwnerId = otherOwnerId,
+                AutoApproveUserGroupId = group.Id,
+                CachedWeight = 0
+            };
+#pragma warning restore CS0618
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var canAttach = await sut.CanUserAttachTagDirectlyAsync(tag.Id, userId);
+
+            Assert.False(canAttach);
+        }
+    }
+
+    [Fact]
     public async Task CanUserAttachTagDirectlyAsync_WhenNotAutoApproved_ReturnsFalse()
     {
         var (db, sut, userId, _, _, tid) = await CreateScopeAsync();
