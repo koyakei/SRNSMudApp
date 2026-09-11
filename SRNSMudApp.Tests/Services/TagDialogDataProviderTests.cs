@@ -142,4 +142,72 @@ public class TagDialogDataProviderTests : IAsyncLifetime
             Assert.DoesNotContain(reloadedTag.AutoApproveUserGroups, g => g.UserGroupId == group2.Id);
         }
     }
+
+    [Fact]
+    public async Task UpdateTagAsync_WhenAllowedUserGroupIdsIsEmpty_ShouldUpdateContentAndSetNullAutoApproveUserGroupId()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag = new Tag
+            {
+                Name = $"Tag_{tid}",
+                Content = "Initial Content",
+                OwnerId = userId,
+                AutoAcceptIncomingTaggingRequests = false,
+                AutoApproveUserGroupId = null
+            };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // When editing tag content without selecting any auto-approve groups (empty collection)
+            bool updated = await provider.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
+            Assert.True(updated);
+
+            dbContext.ChangeTracker.Clear();
+            var reloaded = await dbContext.Tags.FindAsync(tag.Id);
+            Assert.NotNull(reloaded);
+            Assert.Equal("Updated Content", reloaded.Content);
+            Assert.Null(reloaded.AutoApproveUserGroupId);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateTagAsync_WhenClearingExistingAutoApproveUserGroup_ShouldSetAutoApproveUserGroupIdToNull()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var group = new UserGroup { Name = $"G_{tid}", OwnerId = userId };
+            dbContext.UserGroups.Add(group);
+            await dbContext.SaveChangesAsync();
+
+            var tag = new Tag
+            {
+                Name = $"Tag_{tid}",
+                Content = "Initial Content",
+                OwnerId = userId,
+                AutoAcceptIncomingTaggingRequests = false,
+                AutoApproveUserGroupId = group.Id
+            };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // Clear allowed user groups
+            bool updated = await provider.UpdateTagAsync(tag.Id, tag.Name, "Updated Content", false, []);
+            Assert.True(updated);
+
+            dbContext.ChangeTracker.Clear();
+            var reloaded = await dbContext.Tags.FindAsync(tag.Id);
+            Assert.NotNull(reloaded);
+            Assert.Equal("Updated Content", reloaded.Content);
+            Assert.Null(reloaded.AutoApproveUserGroupId);
+        }
+    }
 }

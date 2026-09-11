@@ -163,7 +163,7 @@ public class TagDialogDataProvider(
                 }
             }
 
-            tagToUpdate.AutoApproveUserGroupId = targetGroupIds.FirstOrDefault();
+            tagToUpdate.AutoApproveUserGroupId = targetGroupIds.Where(id => id > 0).Cast<int?>().FirstOrDefault();
         }
 
         // タグ名が変更された場合などに備え、ベクトルも再生成する

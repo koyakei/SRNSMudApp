@@ -11,12 +11,11 @@
         <MudTextField T="string" @bind-Value="_editName" Label="タグ名" Variant="Variant.Outlined" Class="mb-4"
                       AutoFocus="true" Required="true" RequiredError="タグ名は必須です" />
 
-        <MudTextField T="string" @bind-Value="_editContent" Label="内容" Variant="Variant.Outlined" Lines="3"
-                      MaxLines="5" Class="mb-4" />
+        <MudTextField T="string" @bind-Value="_editContent" Label="内容" Variant="Variant.Outlined" Lines="3" MaxLines="5"
+                      Class="mb-4" />
 
-        <MudSelect T="int" @bind-SelectedValues="_selectedGroupIds" Label="自動承認を許可するユーザーグループ"
-                   MultiSelection="true" Variant="Variant.Outlined" Clearable="true"
-                   HelperText="選択されたいずれかのグループに所属するユーザーからのタグ付けリクエストが自動承認されます。">
+        <MudSelect T="int" @bind-SelectedValues="_selectedGroupIds" Label="自動承認を許可するユーザーグループ" MultiSelection="true"
+                   Variant="Variant.Outlined" Clearable="true" HelperText="選択されたいずれかのグループに所属するユーザーからのタグ付けリクエストが自動承認されます。">
             @foreach (var group in _myGroups)
             {
                 <MudSelectItem T="int" Value="@group.Id">@group.Name</MudSelectItem>
@@ -94,7 +93,7 @@
             {
                 // 成功した場合はダイアログを閉じ、結果として true を返す
                 case true:
-                    Tag.AutoApproveUserGroupId = _selectedGroupIds.Cast<int?>().FirstOrDefault();
+                    Tag.AutoApproveUserGroupId = _selectedGroupIds.Where(id => id > 0).Cast<int?>().FirstOrDefault();
                     MudDialog.Close(DialogResult.Ok(true));
                     break;
                 case false:
