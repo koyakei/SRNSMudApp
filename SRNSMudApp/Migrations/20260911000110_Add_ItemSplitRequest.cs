@@ -31,40 +31,38 @@ public partial class _20260911000110_Add_ItemSplitRequest : Migration
             },
             constraints: table =>
             {
-            table.PrimaryKey("PK_ItemSplitRequests", x => x.Id);
-            table.ForeignKey(
-                name: "FK_ItemSplitRequests_AspNetUsers_OwnerId",
-                column: x => x.OwnerId,
-                principalTable: "AspNetUsers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-            table.ForeignKey(
-                name: "FK_ItemSplitRequests_AspNetUsers_OwnerUserId",
-                column: x => x.OwnerUserId,
-                principalTable: "AspNetUsers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-            table.ForeignKey(
-                name: "FK_ItemSplitRequests_AspNetUsers_RequesterUserId",
-                column: x => x.RequesterUserId,
-                principalTable: "AspNetUsers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-            table.ForeignKey(
-                name: "FK_ItemSplitRequests_Items_CreatedItemId",
-                column: x => x.CreatedItemId,
-                principalTable: "Items",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
-        onDelete: ReferentialAction.Restrict);
-        table.ForeignKey(
-            name: "FK_ItemSplitRequests_Items_OriginalItemId",
-            column: x => x.OriginalItemId,
-            principalTable: "Items",
-            principalColumn: "Id",
-            onDelete: ReferentialAction.Cascade);
-    onDelete: ReferentialAction.Restrict);
-    });
+                table.PrimaryKey("PK_ItemSplitRequests", x => x.Id);
+                table.ForeignKey(
+                    name: "FK_ItemSplitRequests_AspNetUsers_OwnerId",
+                    column: x => x.OwnerId,
+                    principalTable: "AspNetUsers",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Restrict);
+                table.ForeignKey(
+                    name: "FK_ItemSplitRequests_AspNetUsers_OwnerUserId",
+                    column: x => x.OwnerUserId,
+                    principalTable: "AspNetUsers",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Restrict);
+                table.ForeignKey(
+                    name: "FK_ItemSplitRequests_AspNetUsers_RequesterUserId",
+                    column: x => x.RequesterUserId,
+                    principalTable: "AspNetUsers",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Restrict);
+                table.ForeignKey(
+                    name: "FK_ItemSplitRequests_Items_CreatedItemId",
+                    column: x => x.CreatedItemId,
+                    principalTable: "Items",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Restrict);
+                table.ForeignKey(
+                    name: "FK_ItemSplitRequests_Items_OriginalItemId",
+                    column: x => x.OriginalItemId,
+                    principalTable: "Items",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Restrict);
+            });
 
         migrationBuilder.CreateIndex(
             name: "IX_ItemSplitRequests_CreatedItemId",

@@ -1511,13 +1511,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.HasOne("SRNSMudApp.Data.Item", "CreatedItem")
                     .WithMany()
                     .HasForeignKey("CreatedItemId")
-                    .OnDelete(DeleteBehavior.SetNull);
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne("SRNSMudApp.Data.Item", "OriginalItem")
                     .WithMany()
                     .HasForeignKey("OriginalItemId")
-                    .OnDelete(DeleteBehavior.Cascade)
                     .OnDelete(DeleteBehavior.Restrict)
                     .IsRequired();
 

@@ -139,7 +139,6 @@ using (IServiceScope scope = app.Services.CreateScope())
                 {
                     await db.Database.MigrateAsync();
                 }
-                catch (Exception)
                 catch (Exception ex)
                 {
                     // Ignore if already migrated

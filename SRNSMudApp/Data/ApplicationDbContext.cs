@@ -521,14 +521,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasOne(r => r.OriginalItem)
             .WithMany()
             .HasForeignKey(r => r.OriginalItemId)
-            .OnDelete(DeleteBehavior.Cascade);
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<ItemSplitRequest>()
             .HasOne(r => r.CreatedItem)
             .WithMany()
             .HasForeignKey(r => r.CreatedItemId)
-            .OnDelete(DeleteBehavior.SetNull);
             .OnDelete(DeleteBehavior.Restrict);
 
         _ = builder.Entity<ItemSplitRequest>()
