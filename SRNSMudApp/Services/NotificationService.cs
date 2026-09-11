@@ -30,7 +30,11 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId))
                 .Concat(BuildReportResolvedNotifications(raw.ResolvedReports ?? [], raw.ReadStates))
                 .Concat(BuildSplitRequestNotifications(raw.SplitRequests ?? [], raw.ReadStates))
-                .Concat(BuildResolvedSplitNotifications(raw.ResolvedSplitRequests ?? [], raw.ReadStates));
+                .Concat(BuildResolvedSplitNotifications(raw.ResolvedSplitRequests ?? [], raw.ReadStates))
+                .Concat(BuildTagContentProposalNotifications(raw.TagContentProposals ?? [], raw.ReadStates))
+                .Concat(BuildResolvedTagContentProposalNotifications(raw.ResolvedTagContentProposals ?? [], raw.ReadStates))
+                .Concat(BuildTagNameProposalNotifications(raw.TagNameProposals ?? [], raw.ReadStates))
+                .Concat(BuildResolvedTagNameProposalNotifications(raw.ResolvedTagNameProposals ?? [], raw.ReadStates));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
@@ -329,6 +333,162 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 IsRead = IsRead(readStates, request.Id, sourceType),
                 ActorName = ownerName,
                 AssociatedItemId = request.OriginalItemId
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildTagContentProposalNotifications(
+        IReadOnlyList<TagContentProposal> proposals,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return proposals.Select(proposal =>
+        {
+            var requesterName = proposal.RequesterUser?.UserName ?? "ユーザー";
+            var tagName = proposal.Tag?.Name ?? "不明なタグ";
+            var snippet = proposal.ProposedContent.Length > 20
+                ? $"{proposal.ProposedContent[..20]}..."
+                : proposal.ProposedContent;
+            var message = $"{requesterName} さんからタグ「{tagName}」の編集提案が届いています: 「{snippet}」";
+
+            return new NotificationDto
+            {
+                SourceId = proposal.Id,
+                Kind = new TagContentProposalNotification(
+                    proposal.Id,
+                    proposal.TagId,
+                    tagName,
+                    requesterName,
+                    proposal.ProposedContent,
+                    proposal.Reason,
+                    proposal.Status),
+                Message = message,
+                CreatedAt = new DateTimeOffset(proposal.CreatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/TagDetail/{proposal.TagId}"),
+                IsRead = IsRead(readStates, proposal.Id, "TagContentProposal"),
+                ActorName = requesterName,
+                HighlightTagId = proposal.TagId
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildResolvedTagContentProposalNotifications(
+        IReadOnlyList<TagContentProposal> proposals,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return proposals.Select(proposal =>
+        {
+            var ownerName = proposal.OwnerUser?.UserName ?? "所有者";
+            var tagName = proposal.Tag?.Name ?? "タグ";
+            var snippet = proposal.ProposedContent.Length > 20
+                ? $"{proposal.ProposedContent[..20]}..."
+                : proposal.ProposedContent;
+
+            var isApproved = proposal.Status == TradeStatus.Executed;
+            var message = isApproved
+                ? $"{ownerName} さんがタグ「{tagName}」の編集提案（「{snippet}」）を承認しました。"
+                : $"{ownerName} さんがタグ「{tagName}」の編集提案（「{snippet}」）を却下しました。";
+
+            if (!isApproved && !string.IsNullOrWhiteSpace(proposal.RejectReason))
+            {
+                message += $" (理由: {proposal.RejectReason})";
+            }
+
+            var sourceType = isApproved ? "TagContentProposalApproved" : "TagContentProposalRejected";
+            NotificationType kind = isApproved
+                ? new TagContentProposalApprovedNotification(proposal.Id, proposal.TagId, tagName)
+                : new TagContentProposalRejectedNotification(proposal.Id, proposal.TagId, tagName, proposal.RejectReason);
+
+            return new NotificationDto
+            {
+                SourceId = proposal.Id,
+                Kind = kind,
+                Message = message,
+                CreatedAt = new DateTimeOffset(proposal.UpdatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/TagDetail/{proposal.TagId}"),
+                IsRead = IsRead(readStates, proposal.Id, sourceType),
+                ActorName = ownerName,
+                HighlightTagId = proposal.TagId
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildTagNameProposalNotifications(
+        IReadOnlyList<TagNameProposal> proposals,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return proposals.Select(proposal =>
+        {
+            var requesterName = proposal.RequesterUser?.UserName ?? "ユーザー";
+            var currentTagName = proposal.Tag?.Name ?? "不明なタグ";
+            var message = $"{requesterName} さんからタグ「{currentTagName}」の名前変更提案（「{proposal.ProposedName}」）が届いています。";
+
+            return new NotificationDto
+            {
+                SourceId = proposal.Id,
+                Kind = new TagNameProposalNotification(
+                    proposal.Id,
+                    proposal.TagId,
+                    currentTagName,
+                    proposal.ProposedName,
+                    requesterName,
+                    proposal.Reason,
+                    proposal.Status),
+                Message = message,
+                CreatedAt = new DateTimeOffset(proposal.CreatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/TagDetail/{proposal.TagId}"),
+                IsRead = IsRead(readStates, proposal.Id, "TagNameProposal"),
+                ActorName = requesterName,
+                HighlightTagId = proposal.TagId
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildResolvedTagNameProposalNotifications(
+        IReadOnlyList<TagNameProposal> proposals,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(proposals);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return proposals.Select(proposal =>
+        {
+            var ownerName = proposal.OwnerUser?.UserName ?? "所有者";
+            var currentTagName = proposal.Tag?.Name ?? "タグ";
+
+            var isApproved = proposal.Status == TradeStatus.Executed;
+            var message = isApproved
+                ? $"{ownerName} さんがタグ「{currentTagName}」の名前変更提案（「{proposal.ProposedName}」）を承認しました。"
+                : $"{ownerName} さんがタグ「{currentTagName}」の名前変更提案（「{proposal.ProposedName}」）を却下しました。";
+
+            if (!isApproved && !string.IsNullOrWhiteSpace(proposal.RejectReason))
+            {
+                message += $" (理由: {proposal.RejectReason})";
+            }
+
+            var sourceType = isApproved ? "TagNameProposalApproved" : "TagNameProposalRejected";
+            NotificationType kind = isApproved
+                ? new TagNameProposalApprovedNotification(proposal.Id, proposal.TagId, proposal.ProposedName)
+                : new TagNameProposalRejectedNotification(proposal.Id, proposal.TagId, currentTagName, proposal.RejectReason);
+
+            return new NotificationDto
+            {
+                SourceId = proposal.Id,
+                Kind = kind,
+                Message = message,
+                CreatedAt = new DateTimeOffset(proposal.UpdatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/TagDetail/{proposal.TagId}"),
+                IsRead = IsRead(readStates, proposal.Id, sourceType),
+                ActorName = ownerName,
+                HighlightTagId = proposal.TagId
             };
         });
     }

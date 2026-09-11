@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.SqlServer.Types;
 using SRNSMudApp.Data;
@@ -13,14 +14,11 @@ using SRNSMudApp.Data;
 namespace SRNSMudApp.Migrations;
 
 [DbContext(typeof(ApplicationDbContext))]
-partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+[Migration("20260911120258_Add_TagContentProposal")]
+partial class _20260911120258_Add_TagContentProposal
 {
-    // If you encounter a merge conflict in the line below, it means you need to
-    // discard one of the migration branches and recreate its migrations on top of
-    // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20260911121250_Add_TagNameProposal";
-
-    protected override void BuildModel(ModelBuilder modelBuilder)
+    /// <inheritdoc />
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
         modelBuilder
@@ -927,68 +925,6 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("TagEdgeTagAttachments");
             });
 
-        modelBuilder.Entity("SRNSMudApp.Data.TagNameProposal", b =>
-            {
-                var id = b.Property<int>("Id")
-                    .ValueGeneratedOnAdd()
-                    .HasColumnType("int");
-
-                SqlServerPropertyBuilderExtensions.UseIdentityColumn(id);
-
-                b.Property<DateTime>("CreatedDate")
-                    .HasColumnType("datetime2");
-
-                b.Property<string>("OwnerId")
-                    .IsRequired()
-                    .HasColumnType("nvarchar(450)");
-
-                b.Property<string>("OwnerUserId")
-                    .IsRequired()
-                    .HasMaxLength(450)
-                    .HasColumnType("nvarchar(450)");
-
-                b.Property<string>("ProposedName")
-                    .IsRequired()
-                    .HasMaxLength(100)
-                    .HasColumnType("nvarchar(100)");
-
-                b.Property<string>("Reason")
-                    .HasMaxLength(500)
-                    .HasColumnType("nvarchar(500)");
-
-                b.Property<string>("RejectReason")
-                    .HasMaxLength(500)
-                    .HasColumnType("nvarchar(500)");
-
-                b.Property<string>("RequesterUserId")
-                    .IsRequired()
-                    .HasMaxLength(450)
-                    .HasColumnType("nvarchar(450)");
-
-                b.Property<int>("Status")
-                    .HasColumnType("int");
-
-                b.Property<int>("TagId")
-                    .HasColumnType("int");
-
-                b.Property<DateTime>("UpdatedDate")
-                    .HasColumnType("datetime2");
-
-                b.HasKey("Id");
-
-                b.HasIndex("OwnerId");
-
-                b.HasIndex("OwnerUserId");
-
-                b.HasIndex("RequesterUserId");
-
-                b.HasIndex("Status");
-
-                b.HasIndex("TagId");
-
-                b.ToTable("TagNameProposals");
-            });
-
         modelBuilder.Entity("SRNSMudApp.Data.TagRelation", b =>
             {
                 var id = b.Property<int>("Id")
@@ -1855,41 +1791,6 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Tag");
 
                 b.Navigation("TagEdge");
-            });
-
-        modelBuilder.Entity("SRNSMudApp.Data.TagNameProposal", b =>
-            {
-                b.HasOne("SRNSMudApp.Data.ApplicationUser", "Owner")
-                    .WithMany()
-                    .HasForeignKey("OwnerId")
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .IsRequired();
-
-                b.HasOne("SRNSMudApp.Data.ApplicationUser", "OwnerUser")
-                    .WithMany()
-                    .HasForeignKey("OwnerUserId")
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .IsRequired();
-
-                b.HasOne("SRNSMudApp.Data.ApplicationUser", "RequesterUser")
-                    .WithMany()
-                    .HasForeignKey("RequesterUserId")
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .IsRequired();
-
-                b.HasOne("SRNSMudApp.Data.Tag", "Tag")
-                    .WithMany()
-                    .HasForeignKey("TagId")
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .IsRequired();
-
-                b.Navigation("Owner");
-
-                b.Navigation("OwnerUser");
-
-                b.Navigation("RequesterUser");
-
-                b.Navigation("Tag");
             });
 
         modelBuilder.Entity("SRNSMudApp.Data.TagRelation", b =>

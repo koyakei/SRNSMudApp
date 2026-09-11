@@ -16,4 +16,8 @@ public record NotificationRawData(
     IReadOnlyList<NotificationReadState> ReadStates,
     IReadOnlyList<ContentReport>? ResolvedReports = null,
     IReadOnlyList<ItemSplitRequest>? SplitRequests = null,
-    IReadOnlyList<ItemSplitRequest>? ResolvedSplitRequests = null);
+    IReadOnlyList<ItemSplitRequest>? ResolvedSplitRequests = null,
+    IReadOnlyList<TagContentProposal>? TagContentProposals = null,
+    IReadOnlyList<TagContentProposal>? ResolvedTagContentProposals = null,
+    IReadOnlyList<TagNameProposal>? TagNameProposals = null,
+    IReadOnlyList<TagNameProposal>? ResolvedTagNameProposals = null);

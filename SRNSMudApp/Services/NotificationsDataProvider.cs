@@ -145,6 +145,40 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                         (r.Status == TradeStatus.Executed || r.Status == TradeStatus.Rejected))
             .ToListAsync(cancellationToken);
 
+        // 9. Tag Content proposals targeting the user (as tag owner)
+        List<TagContentProposal> tagContentProposals = await context.TagContentProposals!
+            .AsNoTracking()
+            .Include(p => p.RequesterUser)
+            .Include(p => p.Tag)
+            .Where(p => p.OwnerUserId == userId && p.RequesterUserId != userId)
+            .ToListAsync(cancellationToken);
+
+        // 10. Resolved Tag Content proposals (approved/rejected) for the requester
+        List<TagContentProposal> resolvedTagContentProposals = await context.TagContentProposals!
+            .AsNoTracking()
+            .Include(p => p.OwnerUser)
+            .Include(p => p.Tag)
+            .Where(p => p.RequesterUserId == userId &&
+                        (p.Status == TradeStatus.Executed || p.Status == TradeStatus.Rejected))
+            .ToListAsync(cancellationToken);
+
+        // 11. Tag Name proposals targeting the user (as tag owner)
+        List<TagNameProposal> tagNameProposals = await context.TagNameProposals!
+            .AsNoTracking()
+            .Include(p => p.RequesterUser)
+            .Include(p => p.Tag)
+            .Where(p => p.OwnerUserId == userId && p.RequesterUserId != userId)
+            .ToListAsync(cancellationToken);
+
+        // 12. Resolved Tag Name proposals (approved/rejected) for the requester
+        List<TagNameProposal> resolvedTagNameProposals = await context.TagNameProposals!
+            .AsNoTracking()
+            .Include(p => p.OwnerUser)
+            .Include(p => p.Tag)
+            .Where(p => p.RequesterUserId == userId &&
+                        (p.Status == TradeStatus.Executed || p.Status == TradeStatus.Rejected))
+            .ToListAsync(cancellationToken);
+
         return new NotificationRawData(
             tagRequests,
             itemReplies,
@@ -154,7 +188,11 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             readStates,
             resolvedReports,
             splitRequests,
-            resolvedSplitRequests);
+            resolvedSplitRequests,
+            tagContentProposals,
+            resolvedTagContentProposals,
+            tagNameProposals,
+            resolvedTagNameProposals);
     }
 
     /// <inheritdoc />

@@ -558,4 +558,222 @@ public class NotificationServiceTests
         Assert.Contains("不適切な分割", rejectedDto.Message);
         Assert.True(rejectedDto.Kind is ItemSplitRejectedNotification);
     }
+
+    [Fact]
+    public void BuildTagContentProposalNotifications_MapsPropertiesCorrectly()
+    {
+        // Arrange
+        List<TagContentProposal> proposals =
+        [
+            new()
+            {
+                Id = 70,
+                TagId = 88,
+                RequesterUserId = "userA",
+                OwnerUserId = "userB",
+                ProposedContent = "新しいタグの説明文",
+                Reason = "説明の追加",
+                Status = TradeStatus.Proposed,
+                CreatedDate = new DateTime(2026, 4, 1, 12, 0, 0, DateTimeKind.Utc),
+                OwnerId = "userA",
+                Tag = new Tag { Id = 88, Name = "C#", OwnerId = "userB" },
+                RequesterUser = new ApplicationUser { UserName = "Alice" }
+            }
+        ];
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildTagContentProposalNotifications(proposals, readStates)];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Equal(70, dto.SourceId);
+        Assert.Equal("/TagDetail/88", dto.TargetUrl.ToHref());
+        Assert.Equal("Alice", dto.ActorName);
+        Assert.False(dto.IsRead);
+        Assert.Contains("Alice さんからタグ「C#」の編集提案が届いています", dto.Message);
+        Assert.True(dto.Kind is TagContentProposalNotification);
+        switch (dto.Kind)
+        {
+            case TagContentProposalNotification note:
+                Assert.Equal(70, note.ProposalId);
+                Assert.Equal(88, note.TagId);
+                Assert.Equal("C#", note.TagName);
+                Assert.Equal("Alice", note.RequesterName);
+                Assert.Equal("新しいタグの説明文", note.ProposedContent);
+                Assert.Equal("説明の追加", note.Reason);
+                Assert.Equal(TradeStatus.Proposed, note.Status);
+                break;
+        }
+    }
+
+    [Fact]
+    public void BuildResolvedTagContentProposalNotifications_BuildsApprovedAndRejectedDtos()
+    {
+        // Arrange
+        var approved = new TagContentProposal
+        {
+            Id = 71,
+            TagId = 88,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            ProposedContent = "承認された説明文",
+            Status = TradeStatus.Executed,
+            UpdatedDate = new DateTime(2026, 4, 2, 10, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            Tag = new Tag { Id = 88, Name = "C#", OwnerId = "ownerUser" },
+            OwnerId = "reqUser"
+        };
+
+        var rejected = new TagContentProposal
+        {
+            Id = 72,
+            TagId = 89,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            ProposedContent = "却下された説明文",
+            Status = TradeStatus.Rejected,
+            RejectReason = "不要な説明です",
+            UpdatedDate = new DateTime(2026, 4, 2, 11, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            Tag = new Tag { Id = 89, Name = "F#", OwnerId = "ownerUser" },
+            OwnerId = "reqUser"
+        };
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildResolvedTagContentProposalNotifications([approved, rejected], readStates)];
+
+        // Assert
+        Assert.Equal(2, dtos.Count);
+
+        NotificationDto approvedDto = dtos[0];
+        Assert.Equal(71, approvedDto.SourceId);
+        Assert.False(approvedDto.IsRead);
+        Assert.Equal("Bob", approvedDto.ActorName);
+        Assert.Equal("/TagDetail/88", approvedDto.TargetUrl.ToHref());
+        Assert.Contains("Bob さんがタグ「C#」の編集提案（「承認された説明文」）を承認しました", approvedDto.Message);
+        Assert.True(approvedDto.Kind is TagContentProposalApprovedNotification);
+
+        NotificationDto rejectedDto = dtos[1];
+        Assert.Equal(72, rejectedDto.SourceId);
+        Assert.False(rejectedDto.IsRead);
+        Assert.Equal("Bob", rejectedDto.ActorName);
+        Assert.Equal("/TagDetail/89", rejectedDto.TargetUrl.ToHref());
+        Assert.Contains("却下しました", rejectedDto.Message);
+        Assert.Contains("不要な説明です", rejectedDto.Message);
+        Assert.True(rejectedDto.Kind is TagContentProposalRejectedNotification);
+    }
+
+    [Fact]
+    public void BuildTagNameProposalNotifications_MapsPropertiesCorrectly()
+    {
+        // Arrange
+        List<TagNameProposal> proposals =
+        [
+            new()
+            {
+                Id = 80,
+                TagId = 99,
+                RequesterUserId = "userA",
+                OwnerUserId = "userB",
+                ProposedName = "Rustacean",
+                Reason = "より適切な名称への変更",
+                Status = TradeStatus.Proposed,
+                CreatedDate = new DateTime(2026, 5, 1, 12, 0, 0, DateTimeKind.Utc),
+                OwnerId = "userA",
+                Tag = new Tag { Id = 99, Name = "Rust", OwnerId = "userB" },
+                RequesterUser = new ApplicationUser { UserName = "Alice" }
+            }
+        ];
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildTagNameProposalNotifications(proposals, readStates)];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Equal(80, dto.SourceId);
+        Assert.Equal("/TagDetail/99", dto.TargetUrl.ToHref());
+        Assert.Equal("Alice", dto.ActorName);
+        Assert.False(dto.IsRead);
+        Assert.Contains("Alice さんからタグ「Rust」の名前変更提案（「Rustacean」）が届いています", dto.Message);
+        Assert.True(dto.Kind is TagNameProposalNotification);
+        switch (dto.Kind)
+        {
+            case TagNameProposalNotification note:
+                Assert.Equal(80, note.ProposalId);
+                Assert.Equal(99, note.TagId);
+                Assert.Equal("Rust", note.CurrentTagName);
+                Assert.Equal("Rustacean", note.ProposedName);
+                Assert.Equal("Alice", note.RequesterName);
+                Assert.Equal("より適切な名称への変更", note.Reason);
+                Assert.Equal(TradeStatus.Proposed, note.Status);
+                break;
+        }
+    }
+
+    [Fact]
+    public void BuildResolvedTagNameProposalNotifications_BuildsApprovedAndRejectedDtos()
+    {
+        // Arrange
+        var approved = new TagNameProposal
+        {
+            Id = 81,
+            TagId = 99,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            ProposedName = "Rustacean",
+            Status = TradeStatus.Executed,
+            UpdatedDate = new DateTime(2026, 5, 2, 10, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            Tag = new Tag { Id = 99, Name = "Rustacean", OwnerId = "ownerUser" },
+            OwnerId = "reqUser"
+        };
+
+        var rejected = new TagNameProposal
+        {
+            Id = 82,
+            TagId = 100,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            ProposedName = "GoLang",
+            Status = TradeStatus.Rejected,
+            RejectReason = "現在の名前が適切です",
+            UpdatedDate = new DateTime(2026, 5, 2, 11, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            Tag = new Tag { Id = 100, Name = "Go", OwnerId = "ownerUser" },
+            OwnerId = "reqUser"
+        };
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildResolvedTagNameProposalNotifications([approved, rejected], readStates)];
+
+        // Assert
+        Assert.Equal(2, dtos.Count);
+
+        NotificationDto approvedDto = dtos[0];
+        Assert.Equal(81, approvedDto.SourceId);
+        Assert.False(approvedDto.IsRead);
+        Assert.Equal("Bob", approvedDto.ActorName);
+        Assert.Equal("/TagDetail/99", approvedDto.TargetUrl.ToHref());
+        Assert.Contains("Bob さんがタグ「Rustacean」の名前変更提案（「Rustacean」）を承認しました", approvedDto.Message);
+        Assert.True(approvedDto.Kind is TagNameProposalApprovedNotification);
+
+        NotificationDto rejectedDto = dtos[1];
+        Assert.Equal(82, rejectedDto.SourceId);
+        Assert.False(rejectedDto.IsRead);
+        Assert.Equal("Bob", rejectedDto.ActorName);
+        Assert.Equal("/TagDetail/100", rejectedDto.TargetUrl.ToHref());
+        Assert.Contains("却下しました", rejectedDto.Message);
+        Assert.Contains("現在の名前が適切です", rejectedDto.Message);
+        Assert.True(rejectedDto.Kind is TagNameProposalRejectedNotification);
+    }
 }

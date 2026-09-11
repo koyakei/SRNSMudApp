@@ -75,7 +75,8 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(ITagEdgeService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITaggingService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(INotificationService) && d.Lifetime == ServiceLifetime.Scoped);
-        Assert.Contains(services, d => d.ServiceType == typeof(ITimelineRecorder) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ITagContentProposalService) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(ITagNameProposalService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITagWeightLedgerService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IContentReportService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IReportTargetHandlerFactory) && d.Lifetime == ServiceLifetime.Scoped);
@@ -142,6 +143,12 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new ContentReportService(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<ICommandHandler<ResolveContentReportCommand, Result<bool>>>().Object));
         Assert.Throws<ArgumentNullException>(() => new ResolveContentReportHandler(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<INotificationService>().Object));
         Assert.Throws<ArgumentNullException>(() => new ReportTargetHandlerFactory(null!));
+        Assert.Throws<ArgumentNullException>(() => new TagContentProposalService(null!, new Moq.Mock<INotificationService>().Object, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagContentProposalService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagContentProposalService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, new Moq.Mock<INotificationService>().Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new TagNameProposalService(null!, new Moq.Mock<INotificationService>().Object, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagNameProposalService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, null!, new Moq.Mock<ITagEmbeddingService>().Object));
+        Assert.Throws<ArgumentNullException>(() => new TagNameProposalService(new Moq.Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ApplicationDbContext>>().Object, new Moq.Mock<INotificationService>().Object, null!));
     }
 
     [Fact]

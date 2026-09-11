@@ -41,6 +41,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TagAutoApproveUserGroup> TagAutoApproveGroups { get; set; } = null!;
     public DbSet<ContentReport> ContentReports { get; set; } = null!;
     public DbSet<ItemSplitRequest> ItemSplitRequests { get; set; } = null!;
+    public DbSet<TagContentProposal> TagContentProposals { get; set; } = null!;
+    public DbSet<TagNameProposal> TagNameProposals { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -540,6 +542,80 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         _ = builder.Entity<ItemSplitRequest>()
             .HasIndex(r => r.Status);
+
+        // --- TagContentProposal Configuration ---
+        _ = builder.Entity<TagContentProposal>()
+            .HasOne(p => p.Owner)
+            .WithMany()
+            .HasForeignKey(p => p.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasOne(p => p.RequesterUser)
+            .WithMany()
+            .HasForeignKey(p => p.RequesterUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasOne(p => p.OwnerUser)
+            .WithMany()
+            .HasForeignKey(p => p.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasOne(p => p.Tag)
+            .WithMany()
+            .HasForeignKey(p => p.TagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasIndex(p => p.TagId);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasIndex(p => p.RequesterUserId);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasIndex(p => p.OwnerUserId);
+
+        _ = builder.Entity<TagContentProposal>()
+            .HasIndex(p => p.Status);
+
+        // --- TagNameProposal Configuration ---
+        _ = builder.Entity<TagNameProposal>()
+            .HasOne(p => p.Owner)
+            .WithMany()
+            .HasForeignKey(p => p.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasOne(p => p.RequesterUser)
+            .WithMany()
+            .HasForeignKey(p => p.RequesterUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasOne(p => p.OwnerUser)
+            .WithMany()
+            .HasForeignKey(p => p.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasOne(p => p.Tag)
+            .WithMany()
+            .HasForeignKey(p => p.TagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasIndex(p => p.TagId);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasIndex(p => p.RequesterUserId);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasIndex(p => p.OwnerUserId);
+
+        _ = builder.Entity<TagNameProposal>()
+            .HasIndex(p => p.Status);
     }
 
     /// <inheritdoc />

@@ -3,9 +3,12 @@
 @rendermode InteractiveServer
 @using SRNSMudApp.Services
 @using SRNSMudApp.Data
+@using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Components.UI
 @inject ITagDetailDataProvider TagDetailData
 @inject ITagDialogDataProvider TagDialogData
+@inject ITagContentProposalService TagContentProposalService
+@inject ITagNameProposalService TagNameProposalService
 @inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
@@ -31,12 +34,28 @@
                     @(_isFollowing ? "フォロー解除" : "フォロー")
                 </MudButton>
             }
-            <MudSwitch T="bool" Value="@(_tag.AutoAcceptIncomingTaggingRequests)" ValueChanged="OnAutoAcceptChangedAsync"
-                       Label="自動承認" Color="Color.Primary" Class="mr-2" />
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
-                       OnClick="@OpenEditDialog" Class="mr-2">
-                編集
-            </MudButton>
+            @if (_currentUserId == _tag.OwnerId)
+            {
+                <MudSwitch T="bool" Value="@(_tag.AutoAcceptIncomingTaggingRequests)" ValueChanged="OnAutoAcceptChangedAsync"
+                           Label="自動承認" Color="Color.Primary" Class="mr-2" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@OpenEditDialog" Class="mr-2">
+                    編集
+                </MudButton>
+            }
+            else if (_currentUserId is not null)
+            {
+                <MudMenu Label="編集を提案" Variant="Variant.Outlined" Color="Color.Primary"
+                         StartIcon="@Icons.Material.Filled.EditNote" EndIcon="@Icons.Material.Filled.ArrowDropDown" Class="mr-2">
+                    @if (!_tag.IsSystem && _tag.OwnerId != "system" && _tag.Name != "全て∀")
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.DriveFileRenameOutline" OnClick="@OpenNameProposalDialog">タグ名変更を提案
+                        </MudMenuItem>
+                    }
+                    <MudMenuItem Icon="@Icons.Material.Filled.EditNote" OnClick="@OpenContentProposalDialog">内容変更を提案
+                    </MudMenuItem>
+                </MudMenu>
+            }
             <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Report"
                        OnClick="@OpenReportDialogAsync">
                 通報
@@ -96,6 +115,136 @@
             <MudTabPanel Text="リクエスト" BadgeData="@_pendingRequests.Count()" BadgeColor="Color.Error">
                 <TaggingRequestList Requests="_pendingRequests" OnRequestChanged="LoadDataAsync" />
             </MudTabPanel>
+            <MudTabPanel Text="編集提案" BadgeData="@(_pendingProposals.Count + _pendingNameProposals.Count)"
+                         BadgeColor="Color.Info">
+                @if (_pendingProposals.Count == 0 && _pendingNameProposals.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        現在、保留中の編集提案はありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        @foreach (var nameProposal in _pendingNameProposals)
+                        {
+                            <MudCard Outlined="true" Class="rounded-lg">
+                                <MudCardContent>
+                                    <div class="d-flex justify-space-between align-center mb-2">
+                                        <div class="d-flex align-center">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                                                     Class="mr-2">
+                                                タグ名変更
+                                            </MudChip>
+                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                            </MudAvatar>
+                                            <MudText Typo="Typo.subtitle2">
+                                                <MudLink Href="@($"/User/UserDetail/{nameProposal.RequesterUserId}")">
+                                                    @(nameProposal.RequesterUser?.UserName ?? "不明なユーザー")
+                                                </MudLink>
+                                            </MudText>
+                                        </div>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @nameProposal.CreatedDate.ToLocalTime().ToString("g")
+                                        </MudText>
+                                    </div>
+                                    <MudText Typo="Typo.body2" Class="mb-1">
+                                        <strong>提案された新しいタグ名:</strong> <span
+                                        class="font-weight-bold ml-1">@nameProposal.ProposedName</span>
+                                    </MudText>
+                                    @if (!string.IsNullOrWhiteSpace(nameProposal.Reason))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                                            <strong>提案理由:</strong> @nameProposal.Reason
+                                        </MudText>
+                                    }
+                                    <div class="d-flex justify-end gap-2 mt-2">
+                                        @if (_currentUserId == _tag.OwnerId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                       StartIcon="@Icons.Material.Filled.Check"
+                                                       OnClick="@(() => ApproveNameProposalAsync(nameProposal.Id))">
+                                                承認
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                       StartIcon="@Icons.Material.Filled.Close"
+                                                       OnClick="@(() => RejectNameProposalAsync(nameProposal.Id))">
+                                                却下
+                                            </MudButton>
+                                        }
+                                        else if (_currentUserId == nameProposal.RequesterUserId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                                                       OnClick="@(() => CancelNameProposalAsync(nameProposal.Id))">
+                                                取り下げ
+                                            </MudButton>
+                                        }
+                                    </div>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+
+                        @foreach (var proposal in _pendingProposals)
+                        {
+                            <MudCard Outlined="true" Class="rounded-lg">
+                                <MudCardContent>
+                                    <div class="d-flex justify-space-between align-center mb-2">
+                                        <div class="d-flex align-center">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined"
+                                                     Class="mr-2">
+                                                内容変更
+                                            </MudChip>
+                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                            </MudAvatar>
+                                            <MudText Typo="Typo.subtitle2">
+                                                <MudLink Href="@($"/User/UserDetail/{proposal.RequesterUserId}")">
+                                                    @(proposal.RequesterUser?.UserName ?? "不明なユーザー")
+                                                </MudLink>
+                                            </MudText>
+                                        </div>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @proposal.CreatedDate.ToLocalTime().ToString("g")
+                                        </MudText>
+                                    </div>
+                                    <MudText Typo="Typo.body2" Class="mb-2">
+                                        <strong>提案内容:</strong> @proposal.ProposedContent
+                                    </MudText>
+                                    @if (!string.IsNullOrWhiteSpace(proposal.Reason))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                                            <strong>提案理由:</strong> @proposal.Reason
+                                        </MudText>
+                                    }
+                                    <div class="d-flex justify-end gap-2 mt-2">
+                                        @if (_currentUserId == _tag.OwnerId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                       StartIcon="@Icons.Material.Filled.Check"
+                                                       OnClick="@(() => ApproveProposalAsync(proposal.Id))">
+                                                承認
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                       StartIcon="@Icons.Material.Filled.Close"
+                                                       OnClick="@(() => RejectProposalAsync(proposal.Id))">
+                                                却下
+                                            </MudButton>
+                                        }
+                                        else if (_currentUserId == proposal.RequesterUserId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                                                       OnClick="@(() => CancelProposalAsync(proposal.Id))">
+                                                取り下げ
+                                            </MudButton>
+                                        }
+                                    </div>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
             <MudTabPanel Text="Weight 履歴 / 取引履歴">
                 <SRNSMudApp.Components.UI.TagWeightLedgerList Ledgers="_weightLedgers" />
             </MudTabPanel>
@@ -117,6 +266,8 @@
     private IEnumerable<TagWeightLedger> _weightLedgers = [];
     private IEnumerable<PublicTradeOffer> _publicOffers = [];
     private IEnumerable<TaggingRequestEntity> _pendingRequests = [];
+    private IReadOnlyList<TagContentProposal> _pendingProposals = [];
+    private IReadOnlyList<TagNameProposal> _pendingNameProposals = [];
     private bool _isFollowing;
     private string? _currentUserId;
 
@@ -145,6 +296,8 @@
         _weightLedgers = data.WeightLedgers;
         _publicOffers = data.PublicOffers;
         _pendingRequests = data.PendingRequests;
+        _pendingProposals = await TagContentProposalService.GetPendingProposalsForTagAsync(TagId);
+        _pendingNameProposals = await TagNameProposalService.GetPendingProposalsForTagAsync(TagId);
     }
 
     private async Task OpenEditDialog()
@@ -218,5 +371,183 @@
         };
 
         _ = await DialogLauncher.ShowAsync<ReportContentDialog>("不適切な投稿を通報", parameters, options);
+    }
+
+    private async Task OpenContentProposalDialog()
+    {
+        if (_tag is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "Tag", _tag }
+        };
+
+        var dialog = await DialogLauncher.ShowAsync<TagContentProposalDialog>("タグ内容の編集提案", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task OpenNameProposalDialog()
+    {
+        if (_tag is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "Tag", _tag }
+        };
+
+        var dialog = await DialogLauncher.ShowAsync<TagNameProposalDialog>("タグ名の編集提案", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ApproveProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        Result<Tag> result = await TagContentProposalService.ApproveProposalAsync(proposalId, _currentUserId);
+        switch (result)
+        {
+            case Success<Tag>:
+                Snackbar.Add("編集提案を承認しました。", Severity.Success);
+                await LoadDataAsync();
+                break;
+            case Failure fail:
+                Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    private async Task RejectProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("編集提案を却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            var comment = result.Data as string;
+            Result<bool> rejectResult = await TagContentProposalService.RejectProposalAsync(proposalId, _currentUserId, comment);
+            switch (rejectResult)
+            {
+                case Success<bool>:
+                    Snackbar.Add("編集提案を却下しました。", Severity.Success);
+                    await LoadDataAsync();
+                    break;
+                case Failure fail:
+                    Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task CancelProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        Result<bool> result = await TagContentProposalService.CancelProposalAsync(proposalId, _currentUserId);
+        switch (result)
+        {
+            case Success<bool>:
+                Snackbar.Add("編集提案を取り下げました。", Severity.Success);
+                await LoadDataAsync();
+                break;
+            case Failure fail:
+                Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    private async Task ApproveNameProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        Result<Tag> result = await TagNameProposalService.ApproveProposalAsync(proposalId, _currentUserId);
+        switch (result)
+        {
+            case Success<Tag>:
+                Snackbar.Add("名前変更提案を承認しました。", Severity.Success);
+                await LoadDataAsync();
+                break;
+            case Failure fail:
+                Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    private async Task RejectNameProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("名前変更提案を却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            var comment = result.Data as string;
+            Result<bool> rejectResult = await TagNameProposalService.RejectProposalAsync(proposalId, _currentUserId, comment);
+            switch (rejectResult)
+            {
+                case Success<bool>:
+                    Snackbar.Add("名前変更提案を却下しました。", Severity.Success);
+                    await LoadDataAsync();
+                    break;
+                case Failure fail:
+                    Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task CancelNameProposalAsync(int proposalId)
+    {
+        if (_currentUserId is null)
+        {
+            return;
+        }
+
+        Result<bool> result = await TagNameProposalService.CancelProposalAsync(proposalId, _currentUserId);
+        switch (result)
+        {
+            case Success<bool>:
+                Snackbar.Add("名前変更提案を取り下げました。", Severity.Success);
+                await LoadDataAsync();
+                break;
+            case Failure fail:
+                Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
     }
 }

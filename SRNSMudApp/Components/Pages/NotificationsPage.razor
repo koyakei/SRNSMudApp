@@ -63,87 +63,192 @@
                                 </div>
                             </div>
 
-                            @if (notification.AssociatedItem != null)
+                            @if (notification.Kind is TagContentProposalNotification proposalNote)
                             {
+                                var isPending = proposalNote.Status == TradeStatus.Proposed;
                                 <div class="pl-11 mt-1">
-                                    @if (notification.Kind is TagRequestNotification reqNote)
-                                    {
-                                        var isPending = reqNote.Status == TradeStatus.Proposed;
-                                        // RequestInfoを動的に生成して渡す
-                                        var reqInfo = new SRNSMudApp.Components.UI.RequestInfo
-                                        {
-                                            IsTaggingRequest = true,
-                                            RequestType = reqNote.RequestType,
-                                            ProposedWeight = reqNote.ProposedWeight,
-                                            TargetItemId = reqNote.TargetItemId,
-                                            TargetItemContent = notification.AssociatedItem?.Content,
-                                            TargetTagId = reqNote.TargetTagId,
-                                            TargetTagName = reqNote.TargetTagName,
-                                            Status = reqNote.Status
-                                        };
-                                        <SRNSMudApp.Components.UI.RequestInfoAlert RequestInfo="reqInfo" CanApprove="isPending"
-                                                                                   CanReject="isPending" OnApprove="@(() => ApproveRequestAsync(notification))"
-                                                                                   OnReject="@(() => RejectRequestAsync(notification))" />
-                                    }
-                                    @if (notification.Kind is ItemSplitRequestNotification splitNote)
-                                    {
-                                        var isPending = splitNote.Status == TradeStatus.Proposed;
-                                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true"
-                                                  Class="mb-3 py-1 px-3" NoIcon="true">
-                                            <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
+                                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true"
+                                              Class="mb-3 py-2 px-3" NoIcon="true">
+                                        <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
+                                            <div class="d-flex flex-column">
                                                 <div class="d-flex align-center">
-                                                    <MudIcon Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
-                                                             Color="Color.Info" Class="mr-2" />
+                                                    <MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Small"
+                                                             Color="Color.Primary" Class="mr-2" />
                                                     <MudText Typo="Typo.body2">
-                                                        分割対象テキスト: <span class="font-italic ml-1">「@(splitNote.SelectedText.Length > 30 ?
-                                                                                                                                                            $"{splitNote.SelectedText[..30]}..." : splitNote.SelectedText)」</span>
-                                                        @switch (splitNote.Status)
+                                                        タグ: <strong>@proposalNote.TagName</strong>
+                                                        @switch (proposalNote.Status)
                                                         {
                                                             case TradeStatus.Executed:
-                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2"
-                                                                         data-testid="item-split-approved-status">承認済み
-                                                                </MudChip>
-                                                                break;
+                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">
+                                                                    承認済み</MudChip>
+                                                                    break;
                                                             case TradeStatus.Rejected:
-                                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">却下済み
-                                                                </MudChip>
-                                                                break;
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">却下済み
+                                                                        </MudChip>
+                                                                        break;
+                                                                    }
+                                                                </MudText>
+                                                        </div>
+                                                        <MudText Typo="Typo.body2" Class="mt-1">
+                                                            提案内容: <span class="font-italic ml-1">「@(proposalNote.ProposedContent.Length > 50
+                                                                                                        ? $"{proposalNote.ProposedContent[..50]}..." :
+                                                                                                        proposalNote.ProposedContent)」</span>
+                                                        </MudText>
+                                                        @if (!string.IsNullOrWhiteSpace(proposalNote.Reason))
+                                                        {
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                                                理由: @proposalNote.Reason
+                                                            </MudText>
                                                         }
-                                                    </MudText>
-                                                </div>
-                                                @switch (isPending)
-                                                {
-                                                    case true:
+                                                    </div>
+                                                    @if (isPending)
+                                                    {
                                                         <div class="d-flex align-center">
                                                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
-                                                                       OnClick="@(() => ApproveSplitRequestAsync(notification))" Class="mr-1 py-0 px-2"
+                                                                       OnClick="@(() => ApproveTagProposalAsync(notification))" Class="mr-1 py-0 px-2"
                                                                        StartIcon="@Icons.Material.Filled.Check">承認</MudButton>
                                                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
-                                                                       OnClick="@(() => RejectSplitRequestAsync(notification))" Class="py-0 px-2"
+                                                                       OnClick="@(() => RejectTagProposalAsync(notification))" Class="py-0 px-2"
                                                                        StartIcon="@Icons.Material.Filled.Close">却下</MudButton>
                                                         </div>
-                                                        break;
-                                                }
-                                            </div>
-                                        </MudAlert>
+                                                    }
+                                                </div>
+                                            </MudAlert>
+                                        </div>
                                     }
-                                    @{
-                                        var highlightEvents = NotificationsViewModel.CreateHighlightEvents(notification, _userId);
-                                    }
-                                    <SRNSMudApp.Components.UI.ItemCard Item="@notification.AssociatedItem" AllTags="@_allTags"
-                                                                       AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_userId"
-                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId" CurrentUserBadTagId="@_currentUserBadTagId"
-                                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
-                                                                       CurrentUserZenTagId="@_currentUserZenTagId" CurrentUserBiTagId="@_currentUserBiTagId"
-                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" HighlightEvents="highlightEvents" />
-                                </div>
-                            }
-                        </div>
-                    </MudListItem>
-                    <MudDivider />
-                }
-            </MudList>
-        }
-    </MudPaper>
-</MudContainer>
+                                    @if (notification.Kind is TagNameProposalNotification nameProposalNote)
+                                    {
+                                        var isPending = nameProposalNote.Status == TradeStatus.Proposed;
+                                        <div class="pl-11 mt-1">
+                                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true"
+                                                      Class="mb-3 py-2 px-3" NoIcon="true">
+                                                <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
+                                                    <div class="d-flex flex-column">
+                                                        <div class="d-flex align-center">
+                                                            <MudIcon Icon="@Icons.Material.Filled.DriveFileRenameOutline" Size="Size.Small"
+                                                                     Color="Color.Primary" Class="mr-2" />
+                                                            <MudText Typo="Typo.body2">
+                                                                タグ: <strong>@nameProposalNote.CurrentTagName</strong>
+                                                                @switch (nameProposalNote.Status)
+                                                                {
+                                                                    case TradeStatus.Executed:
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">
+                                                                            承認済み</MudChip>
+                                                                            break;
+                                                            case TradeStatus.Rejected:
+                                                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">却下済み
+                                                                                </MudChip>
+                                                                                break;
+                                                                            }
+                                                                        </MudText>
+                                                                </div>
+                                                                <MudText Typo="Typo.body2" Class="mt-1">
+                                                                    提案された新しい名前: <strong>@nameProposalNote.ProposedName</strong>
+                                                                </MudText>
+                                                                @if (!string.IsNullOrWhiteSpace(nameProposalNote.Reason))
+                                                                {
+                                                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                                                        理由: @nameProposalNote.Reason
+                                                                    </MudText>
+                                                                }
+                                                            </div>
+                                                            @if (isPending)
+                                                            {
+                                                                <div class="d-flex align-center">
+                                                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                                               OnClick="@(() => ApproveTagNameProposalAsync(notification))"
+                                                                               Class="mr-1 py-0 px-2" StartIcon="@Icons.Material.Filled.Check">承認</MudButton>
+                                                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                                               OnClick="@(() => RejectTagNameProposalAsync(notification))" Class="py-0 px-2"
+                                                                               StartIcon="@Icons.Material.Filled.Close">却下</MudButton>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </MudAlert>
+                                                </div>
+                                            }
+
+                                            @if (notification.AssociatedItem != null)
+                                            {
+                                                <div class="pl-11 mt-1">
+                                                    @if (notification.Kind is TagRequestNotification reqNote)
+                                                    {
+                                                        var isPending = reqNote.Status == TradeStatus.Proposed;
+                                                        // RequestInfoを動的に生成して渡す
+                                                        var reqInfo = new SRNSMudApp.Components.UI.RequestInfo
+                                                        {
+                                                            IsTaggingRequest = true,
+                                                            RequestType = reqNote.RequestType,
+                                                            ProposedWeight = reqNote.ProposedWeight,
+                                                            TargetItemId = reqNote.TargetItemId,
+                                                            TargetItemContent = notification.AssociatedItem?.Content,
+                                                            TargetTagId = reqNote.TargetTagId,
+                                                            TargetTagName = reqNote.TargetTagName,
+                                                            Status = reqNote.Status
+                                                        };
+                                                        <SRNSMudApp.Components.UI.RequestInfoAlert RequestInfo="reqInfo" CanApprove="isPending"
+                                                                                                   CanReject="isPending" OnApprove="@(() => ApproveRequestAsync(notification))"
+                                                                                                   OnReject="@(() => RejectRequestAsync(notification))" />
+                                                    }
+                                                    @if (notification.Kind is ItemSplitRequestNotification splitNote)
+                                                    {
+                                                        var isPending = splitNote.Status == TradeStatus.Proposed;
+                                                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true"
+                                                                  Class="mb-3 py-1 px-3" NoIcon="true">
+                                                            <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
+                                                                <div class="d-flex align-center">
+                                                                    <MudIcon Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
+                                                                             Color="Color.Info" Class="mr-2" />
+                                                                    <MudText Typo="Typo.body2">
+                                                                        分割対象テキスト: <span class="font-italic ml-1">「@(splitNote.SelectedText.Length > 30 ?
+                                                                                                                                                                                                                                    $"{splitNote.SelectedText[..30]}..." : splitNote.SelectedText)」</span>
+                                                                        @switch (splitNote.Status)
+                                                                        {
+                                                                            case TradeStatus.Executed:
+                                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2"
+                                                                                         data-testid="item-split-approved-status">承認済み
+                                                                                </MudChip>
+                                                                                break;
+                                                                            case TradeStatus.Rejected:
+                                                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">却下済み
+                                                                                </MudChip>
+                                                                                break;
+                                                                        }
+                                                                    </MudText>
+                                                                </div>
+                                                                @switch (isPending)
+                                                                {
+                                                                    case true:
+                                                                        <div class="d-flex align-center">
+                                                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                                                       OnClick="@(() => ApproveSplitRequestAsync(notification))" Class="mr-1 py-0 px-2"
+                                                                                       StartIcon="@Icons.Material.Filled.Check">承認</MudButton>
+                                                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                                                       OnClick="@(() => RejectSplitRequestAsync(notification))" Class="py-0 px-2"
+                                                                                       StartIcon="@Icons.Material.Filled.Close">却下</MudButton>
+                                                                        </div>
+                                                                        break;
+                                                                }
+                                                            </div>
+                                                        </MudAlert>
+                                                    }
+                                                    @{
+                                                        var highlightEvents = NotificationsViewModel.CreateHighlightEvents(notification, _userId);
+                                                    }
+                                                    <SRNSMudApp.Components.UI.ItemCard Item="@notification.AssociatedItem" AllTags="@_allTags"
+                                                                                       AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_userId"
+                                                                                       CurrentUserGoodTagId="@_currentUserGoodTagId" CurrentUserBadTagId="@_currentUserBadTagId"
+                                                                                       CurrentUserShinjiTagId="@_currentUserShinjiTagId"
+                                                                                       CurrentUserZenTagId="@_currentUserZenTagId" CurrentUserBiTagId="@_currentUserBiTagId"
+                                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" HighlightEvents="highlightEvents" />
+                                                </div>
+                                            }
+                                        </div>
+                                    </MudListItem>
+                                    <MudDivider />
+                                }
+                            </MudList>
+                        }
+                    </MudPaper>
+                </MudContainer>
 

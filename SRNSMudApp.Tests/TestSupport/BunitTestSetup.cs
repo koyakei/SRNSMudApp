@@ -71,7 +71,8 @@ public static class BunitTestSetup
             .AddScoped<IUserDataProvider, UserDataProvider>()
             .AddScoped<IUserGroupDataProvider, UserGroupDataProvider>()
             .AddScoped<IAdminDataProvider, AdminDataProvider>()
-            .AddScoped<IItemSplitService, ItemSplitService>();
+            .AddScoped<IItemSplitService, ItemSplitService>()
+            .AddScoped<ITagNameProposalService, TagNameProposalService>();
     }
 
     /// <summary>
@@ -92,6 +93,8 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<IItemReactionService>().Object)
             .AddScoped(_ => new Mock<IItemQuoteService>().Object)
             .AddScoped(_ => new Mock<IItemSplitService>().Object)
+            .AddScoped(_ => new Mock<ITagContentProposalService>().Object)
+            .AddScoped(_ => new Mock<ITagNameProposalService>().Object)
             .AddScoped(_ => new Mock<ITaggingService>().Object)
             .AddScoped(_ => new Mock<ITagEmbeddingService>().Object)
             .AddScoped(_ => new Mock<INotificationService>().Object)

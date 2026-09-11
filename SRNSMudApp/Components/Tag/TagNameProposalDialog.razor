@@ -1,0 +1,102 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models.Unions
+@using SRNSMudApp.Services
+@inject ITagNameProposalService TagNameProposalService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">対象タグ</MudText>
+        <MudText Typo="Typo.h6" Class="mb-4 d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-2" />
+            @Tag.Name
+        </MudText>
+
+        <MudTextField T="string" Value="@Tag.Name" Label="現在のタグ名" Variant="Variant.Outlined" ReadOnly="true"
+                      Class="mb-4" />
+
+        <MudTextField T="string" @bind-Value="_proposedName" Label="提案する新しいタグ名" Variant="Variant.Outlined"
+                      AutoFocus="true" Required="true" RequiredError="タグ名は必須です" MaxLength="100" Counter="100"
+                      Validation="@(new Func<string, string?>(ValidateTagName))" Class="mb-4" />
+
+        <MudTextField T="string" @bind-Value="_reason" Label="提案理由・コメント（任意）" Variant="Variant.Outlined" Lines="2"
+                      Class="mb-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SubmitAsync">提案を送信</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public Tag Tag { get; set; } = null!;
+
+    private string _proposedName = string.Empty;
+    private string? _reason;
+
+    protected override void OnInitialized()
+    {
+        _proposedName = Tag.Name;
+    }
+
+    private static string? ValidateTagName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "タグ名は必須です";
+        }
+        if (value.Length > 100)
+        {
+            return "タグ名は100文字以内で入力してください";
+        }
+        if (!SRNSMudApp.Services.TagNameProposalService.TagNameRegex().IsMatch(value))
+        {
+            return "タグ名に使用できない文字が含まれています";
+        }
+        return null;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (AuthState is null)
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        var auth = await AuthState;
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            Snackbar.Add("ログインユーザー情報が取得できませんでした。", Severity.Warning);
+            return;
+        }
+
+        Result<TagNameProposal> result = await TagNameProposalService.ProposeNameAsync(
+            Tag.Id,
+            _proposedName,
+            _reason,
+            userId);
+
+        switch (result)
+        {
+            case Success<TagNameProposal>:
+                Snackbar.Add("名前変更提案を送信しました。", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+                break;
+            case Failure fail:
+                Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+}

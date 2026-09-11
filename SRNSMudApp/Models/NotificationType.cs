@@ -38,6 +38,26 @@ public record ItemSplitApprovedNotification(
 public record ItemSplitRejectedNotification(
     int SplitRequestId, int OriginalItemId, string? RejectReason);
 
+public record TagContentProposalNotification(
+    int ProposalId, int TagId, string TagName, string RequesterName,
+    string ProposedContent, string? Reason, TradeStatus Status);
+
+public record TagContentProposalApprovedNotification(
+    int ProposalId, int TagId, string TagName);
+
+public record TagContentProposalRejectedNotification(
+    int ProposalId, int TagId, string TagName, string? RejectReason);
+
+public record TagNameProposalNotification(
+    int ProposalId, int TagId, string CurrentTagName, string ProposedName,
+    string RequesterName, string? Reason, TradeStatus Status);
+
+public record TagNameProposalApprovedNotification(
+    int ProposalId, int TagId, string NewTagName);
+
+public record TagNameProposalRejectedNotification(
+    int ProposalId, int TagId, string TagName, string? RejectReason);
+
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
 public readonly union NotificationType(
     TagRequestNotification,
@@ -48,7 +68,13 @@ public readonly union NotificationType(
     ReportResolvedNotification,
     ItemSplitRequestNotification,
     ItemSplitApprovedNotification,
-    ItemSplitRejectedNotification)
+    ItemSplitRejectedNotification,
+    TagContentProposalNotification,
+    TagContentProposalApprovedNotification,
+    TagContentProposalRejectedNotification,
+    TagNameProposalNotification,
+    TagNameProposalApprovedNotification,
+    TagNameProposalRejectedNotification)
 {
     public readonly string Icon => this switch
     {
@@ -61,6 +87,12 @@ public readonly union NotificationType(
         ItemSplitRequestNotification => Icons.Material.Filled.VerticalSplit,
         ItemSplitApprovedNotification => Icons.Material.Filled.CallSplit,
         ItemSplitRejectedNotification => Icons.Material.Filled.Cancel,
+        TagContentProposalNotification => Icons.Material.Filled.EditNote,
+        TagContentProposalApprovedNotification => Icons.Material.Filled.CheckCircle,
+        TagContentProposalRejectedNotification => Icons.Material.Filled.Cancel,
+        TagNameProposalNotification => Icons.Material.Filled.DriveFileRenameOutline,
+        TagNameProposalApprovedNotification => Icons.Material.Filled.CheckCircle,
+        TagNameProposalRejectedNotification => Icons.Material.Filled.Cancel,
         _ => throw new UnreachableException()
     };
 
@@ -75,6 +107,12 @@ public readonly union NotificationType(
         ItemSplitRequestNotification => "Primary",
         ItemSplitApprovedNotification => "Success",
         ItemSplitRejectedNotification => "Error",
+        TagContentProposalNotification => "Primary",
+        TagContentProposalApprovedNotification => "Success",
+        TagContentProposalRejectedNotification => "Error",
+        TagNameProposalNotification => "Primary",
+        TagNameProposalApprovedNotification => "Success",
+        TagNameProposalRejectedNotification => "Error",
         _ => throw new UnreachableException()
     };
 
@@ -89,6 +127,12 @@ public readonly union NotificationType(
         ItemSplitRequestNotification => "ItemSplitRequest",
         ItemSplitApprovedNotification => "ItemSplitApproved",
         ItemSplitRejectedNotification => "ItemSplitRejected",
+        TagContentProposalNotification => "TagContentProposal",
+        TagContentProposalApprovedNotification => "TagContentProposalApproved",
+        TagContentProposalRejectedNotification => "TagContentProposalRejected",
+        TagNameProposalNotification => "TagNameProposal",
+        TagNameProposalApprovedNotification => "TagNameProposalApproved",
+        TagNameProposalRejectedNotification => "TagNameProposalRejected",
         _ => throw new UnreachableException()
     };
 }

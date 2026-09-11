@@ -25,7 +25,7 @@ namespace SRNSMudApp.E2ETests;
 
 public class MockExternalTokenVerificationService : IExternalTokenVerificationService
 {
-    public Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token)
+    public Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token, CancellationToken cancellationToken = default)
     {
         if (token.StartsWith("mock-"))
         {

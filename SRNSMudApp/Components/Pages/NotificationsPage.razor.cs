@@ -42,6 +42,8 @@ public partial class NotificationsPage
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private IItemSplitService ItemSplitService { get; set; } = null!;
+    [Inject] private ITagContentProposalService TagContentProposalService { get; set; } = null!;
+    [Inject] private ITagNameProposalService TagNameProposalService { get; set; } = null!;
 
     private string? _userId;
     private IReadOnlyList<NotificationDto> _notifications = [];
@@ -260,6 +262,158 @@ public partial class NotificationsPage
                             NotificationDto updated = notification with
                             {
                                 Kind = splitNote with { Status = TradeStatus.Rejected },
+                                IsRead = true
+                            };
+                            _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                        }
+                        StateHasChanged();
+                        break;
+                    case Failure fail:
+                        _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ApproveTagProposalAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        Result<Data.Tag> result = await TagContentProposalService.ApproveProposalAsync(notification.SourceId, _userId);
+        switch (result)
+        {
+            case Success<Data.Tag>:
+                _ = Snackbar.Add("編集提案を承認しました。", Severity.Success);
+                if (notification.Kind is TagContentProposalNotification proposalNote)
+                {
+                    NotificationDto updated = notification with
+                    {
+                        Kind = proposalNote with { Status = TradeStatus.Executed },
+                        IsRead = true
+                    };
+                    _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                }
+                await FetchTagsAsync();
+                StateHasChanged();
+                break;
+            case Failure fail:
+                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task RejectTagProposalAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("編集提案を却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                var comment = result.Data as string;
+                Result<bool> rejectResult = await TagContentProposalService.RejectProposalAsync(notification.SourceId, _userId, comment);
+                switch (rejectResult)
+                {
+                    case Success<bool>:
+                        _ = Snackbar.Add("編集提案を却下しました。", Severity.Success);
+                        if (notification.Kind is TagContentProposalNotification proposalNote)
+                        {
+                            NotificationDto updated = notification with
+                            {
+                                Kind = proposalNote with { Status = TradeStatus.Rejected },
+                                IsRead = true
+                            };
+                            _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                        }
+                        StateHasChanged();
+                        break;
+                    case Failure fail:
+                        _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ApproveTagNameProposalAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        Result<Data.Tag> result = await TagNameProposalService.ApproveProposalAsync(notification.SourceId, _userId);
+        switch (result)
+        {
+            case Success<Data.Tag>:
+                _ = Snackbar.Add("名前変更提案を承認しました。", Severity.Success);
+                if (notification.Kind is TagNameProposalNotification proposalNote)
+                {
+                    NotificationDto updated = notification with
+                    {
+                        Kind = proposalNote with { Status = TradeStatus.Executed },
+                        IsRead = true
+                    };
+                    _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                }
+                await FetchTagsAsync();
+                StateHasChanged();
+                break;
+            case Failure fail:
+                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task RejectTagNameProposalAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("名前変更提案を却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                var comment = result.Data as string;
+                Result<bool> rejectResult = await TagNameProposalService.RejectProposalAsync(notification.SourceId, _userId, comment);
+                switch (rejectResult)
+                {
+                    case Success<bool>:
+                        _ = Snackbar.Add("名前変更提案を却下しました。", Severity.Success);
+                        if (notification.Kind is TagNameProposalNotification proposalNote)
+                        {
+                            NotificationDto updated = notification with
+                            {
+                                Kind = proposalNote with { Status = TradeStatus.Rejected },
                                 IsRead = true
                             };
                             _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
