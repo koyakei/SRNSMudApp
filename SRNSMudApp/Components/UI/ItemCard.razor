@@ -54,7 +54,8 @@
                         {
                             case true:
                                 <MudIconButton Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
-                                               Color="Color.Secondary" OnClick="SplitSelectionAsync" title="選択テキストを別アイテムに分割" />
+                                               Color="Color.Secondary" OnClick="SplitSelectionAsync" title="選択テキストを別アイテムに分割"
+                                               data-testid="@($"direct-split-button-{Item.Id}")" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
                                                OnClick="EditItemAsync" title="このアイテムを編集" />
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
@@ -63,7 +64,8 @@
                             case false:
                                 <MudIconButton Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
                                                Color="Color.Secondary" OnClick="RequestSplitSelectionAsync"
-                                               title="選択テキストを別アイテムに分割するリクエストを送信" />
+                                               title="選択テキストを別アイテムに分割するリクエストを送信"
+                                               data-testid="@($"request-split-button-{Item.Id}")" />
                                 <MudIconButton Icon="@Icons.Material.Outlined.Report" Size="Size.Small" Color="Color.Default"
                                                OnClick="ReportItemAsync" title="このアイテムを通報" />
                                 break;
@@ -78,7 +80,7 @@
                             @foreach (var req in _pendingSplitRequests)
                             {
                                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-2 py-1 px-3"
-                                          NoIcon="true">
+                                          NoIcon="true" data-testid="@($"pending-split-alert-{req.Id}")">
                                     <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
                                         <div class="d-flex align-center">
                                             <MudIcon Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
@@ -95,15 +97,18 @@
                                                 case true:
                                                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                                                                OnClick="@(() => ApproveSplitRequestAsync(req))" Class="mr-1 py-0 px-2"
-                                                               StartIcon="@Icons.Material.Filled.Check">承認</MudButton>
+                                                               StartIcon="@Icons.Material.Filled.Check"
+                                                               data-testid="@($"approve-split-request-{req.Id}")">承認</MudButton>
                                                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
                                                                OnClick="@(() => RejectSplitRequestAsync(req))" Class="py-0 px-2"
-                                                               StartIcon="@Icons.Material.Filled.Close">却下</MudButton>
+                                                               StartIcon="@Icons.Material.Filled.Close"
+                                                               data-testid="@($"reject-split-request-{req.Id}")">却下</MudButton>
                                                     break;
                                                 case false when req.RequesterUserId == CurrentUserId:
                                                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                                                                OnClick="@(() => CancelSplitRequestAsync(req))" Class="py-0 px-2"
-                                                               StartIcon="@Icons.Material.Filled.Cancel">取り下げ</MudButton>
+                                                               StartIcon="@Icons.Material.Filled.Cancel"
+                                                               data-testid="@($"cancel-split-request-{req.Id}")">取り下げ</MudButton>
                                                     break;
                                             }
                                         </div>
