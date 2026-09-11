@@ -99,7 +99,7 @@ public sealed class ItemListFocusTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ItemCardClick_NavigatesToItemDetail()
+    public void ItemCardClick_FocusesCard_DoesNotNavigateToItemDetail()
     {
         var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
         List<SRNSMudApp.Data.Item> items = [item1];
@@ -116,6 +116,32 @@ public sealed class ItemListFocusTests : IAsyncLifetime
         cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
 
         cut.Find("#item-card-1").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var focusedStyle = cut.Find("#item-card-1").GetAttribute("style") ?? "";
+            Assert.Contains("border-width: 2px", focusedStyle);
+            Assert.DoesNotContain("/ItemDetail/1", navigationManager.Uri);
+        });
+    }
+
+    [Fact]
+    public void UpdatedDateClick_NavigatesToItemDetail()
+    {
+        var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
+        List<SRNSMudApp.Data.Item> items = [item1];
+
+        _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/");
+
+        IRenderedComponent<ResourceList> cut =
+            _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, items));
+
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
+
+        cut.Find("#item-card-1 a[href='/ItemDetail/1']").Click();
         cut.WaitForAssertion(() => Assert.Contains("/ItemDetail/1", navigationManager.Uri));
     }
 
@@ -214,7 +240,7 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ClickingItemCardInItemList_NavigatesToItemDetail()
+    public void ClickingItemCardInItemList_DoesNotNavigateToItemDetail()
     {
         var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
         var item1 = new SRNSMudApp.Data.Item
@@ -243,6 +269,39 @@ public sealed class ItemListFocusWithTagFilterTests : IAsyncLifetime
         NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
 
         cut.Find("#item-card-1").Click();
+        cut.WaitForAssertion(() => Assert.DoesNotContain("/ItemDetail/1", navigationManager.Uri));
+    }
+
+    [Fact]
+    public void ClickingUpdatedDateInItemList_NavigatesToItemDetail()
+    {
+        var tag = new SRNSMudApp.Data.Tag { Id = 10, Name = TagName, OwnerId = UserId };
+        var item1 = new SRNSMudApp.Data.Item
+        {
+            Id = 1,
+            Content = "Navigate item 1",
+            OwnerId = UserId,
+            Owner = new ApplicationUser { Id = UserId, UserName = "tagfocus_user" },
+            TagRelations = [new TagRelation { TagId = 10, Tag = tag, ItemId = 1, OwnerId = UserId, Weight = 1 }]
+        };
+
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>()))
+            .ReturnsAsync(new ItemListPageData([item1], []));
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
+
+        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+
+        cut.Find("#item-card-1 a[href='/ItemDetail/1']").Click();
         cut.WaitForAssertion(() => Assert.Contains("/ItemDetail/1", navigationManager.Uri));
     }
 

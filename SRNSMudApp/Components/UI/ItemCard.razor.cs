@@ -175,16 +175,6 @@ public partial class ItemCard : IAsyncDisposable
         {
             await OnFocus.InvokeAsync(Item.Id);
         }
-
-        if (EnableNavigation)
-        {
-            var currentPath = new Uri(NavigationManager.Uri).AbsolutePath;
-            var targetPath = $"/ItemDetail/{Item.Id}";
-            if (!string.Equals(currentPath, targetPath, StringComparison.OrdinalIgnoreCase))
-            {
-                NavigationManager.NavigateTo(targetPath);
-            }
-        }
     }
 
     private string GetItemCardStyle() => ItemCardViewModel.GetItemCardStyle(IsFocused);

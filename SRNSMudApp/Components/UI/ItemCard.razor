@@ -2,8 +2,7 @@
 @using SRNSMudApp.Models
 
 <MudCard id="@($"item-card-{Item.Id}")" @onclick="HandleCardClickAsync" Outlined="true"
-         Class="@($"rounded-xl scroll-observe-target {(EnableNavigation ? "cursor-pointer" : "")}")"
-         Style="@GetItemCardStyle()">
+         Class="rounded-xl scroll-observe-target" Style="@GetItemCardStyle()">
     <MudCardContent Class="pa-4">
         <div class="d-flex align-start">
             <div @onclick:stopPropagation="true">
@@ -38,7 +37,7 @@
                         <ItemCardContent ItemId="Item.Id" LoadPreview="PreviewService.GetPreviewAsync"
                                          Content="@Item.Content" OwnerId="@Item.OwnerId" OwnerUserName="@(Item.Owner?.UserName)"
                                          UpdatedDate="Item.UpdatedDate" IsPrivate="Item.IsPrivate"
-                                         TargetUserGroupName="@(Item.TargetUserGroup?.Name)" />
+                                         TargetUserGroupName="@(Item.TargetUserGroup?.Name)" EnableNavigation="EnableNavigation" />
 
                         @* 引用元アイテムプレビュー *@
                         @if (Item.QuotedItemId.HasValue)
@@ -64,8 +63,7 @@
                             case false:
                                 <MudIconButton Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small"
                                                Color="Color.Secondary" OnClick="RequestSplitSelectionAsync"
-                                               title="選択テキストを別アイテムに分割するリクエストを送信"
-                                               data-testid="@($"request-split-button-{Item.Id}")" />
+                                               title="選択テキストを別アイテムに分割するリクエストを送信" data-testid="@($"request-split-button-{Item.Id}")" />
                                 <MudIconButton Icon="@Icons.Material.Outlined.Report" Size="Size.Small" Color="Color.Default"
                                                OnClick="ReportItemAsync" title="このアイテムを通報" />
                                 break;

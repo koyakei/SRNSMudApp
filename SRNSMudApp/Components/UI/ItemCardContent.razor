@@ -3,6 +3,7 @@
    オーバーフロー検知の JS インターオープンをここに集約する。 *@
 @using SRNSMudApp.Models
 @inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
 <div>
@@ -52,12 +53,19 @@
                 break;
         }
         <span class="mx-1">|</span>
-        最終更新:
-        <span @onclick:stopPropagation="true">
-            <MudLink Href="@($"/ItemDetail/{ItemId}")" Color="Color.Inherit" Underline="Underline.Hover">
-                @UpdatedDate.ToLocalTime().ToString("g")
-            </MudLink>
-        </span>
+        @switch (EnableNavigation)
+        {
+            case true:
+                <span @onclick:stopPropagation="true">
+                    <MudLink Href="@($"/ItemDetail/{ItemId}")" OnClick="NavigateToDetail" Color="Color.Inherit" Underline="Underline.Hover">
+                        最終更新: @UpdatedDate.ToLocalTime().ToString("g")
+                    </MudLink>
+                </span>
+                break;
+            case false:
+                <span>最終更新: @UpdatedDate.ToLocalTime().ToString("g")</span>
+                break;
+        }
         @if (IsPrivate)
         {
             <span class="mx-1">|</span>
@@ -83,6 +91,7 @@
     [Parameter] public DateTime UpdatedDate { get; set; }
     [Parameter] public bool IsPrivate { get; set; }
     [Parameter] public string? TargetUserGroupName { get; set; }
+    [Parameter] public bool EnableNavigation { get; set; } = true;
 
     /// <summary>リンクプレビュー取得デリゲート（UrlPreviewCard へ委譲）。</summary>
     [Parameter] public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }
@@ -188,6 +197,11 @@
                 _needsOverflowCheck = true; // 折りたたみ時に再チェック
                 break;
         }
+    }
+
+    private void NavigateToDetail()
+    {
+        NavigationManager.NavigateTo($"/ItemDetail/{ItemId}");
     }
 
     public async ValueTask DisposeAsync()
