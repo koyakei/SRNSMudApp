@@ -219,6 +219,7 @@ public class ItemSplitServiceTests : IAsyncLifetime
                     Assert.Equal($"[切り抜く部分_{tid}]", success.Value.Content);
                     Assert.Equal(ownerId, success.Value.OwnerId);
                     Assert.True(success.Value.IsPrivate);
+                    Assert.Equal(originalItem.Id, success.Value.QuotedItemId);
                     createdId = success.Value.Id;
                     break;
             }

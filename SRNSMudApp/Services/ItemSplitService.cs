@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
@@ -126,13 +128,15 @@ public class ItemSplitService(
             return Result.Fail<Item>("元アイテムの本文が更新されたため、指定されたテキストが見つかりません。");
         }
 
-        // 1. 新規アイテム作成（所有者は元アイテムの所有者）
+        // 1. 新規アイテム作成（所有者は元アイテムの所有者、元アイテムを引用元として保持）
         var newItem = new Item
         {
             Content = request.SelectedText,
             OwnerId = originalItem.OwnerId,
             IsPrivate = originalItem.IsPrivate,
             TargetUserGroupId = originalItem.TargetUserGroupId,
+            QuotedItemId = originalItem.Id,
+            ItemKindJson = JsonSerializer.Serialize(new QuoteItem(originalItem.Id)),
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };

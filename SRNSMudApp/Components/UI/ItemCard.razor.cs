@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -597,7 +598,9 @@ public partial class ItemCard : IAsyncDisposable
                 Content = selectedText,
                 OwnerId = CurrentUserId,
                 IsPrivate = Item.IsPrivate,
-                TargetUserGroupId = Item.TargetUserGroupId
+                TargetUserGroupId = Item.TargetUserGroupId,
+                QuotedItemId = Item.Id,
+                ItemKindJson = JsonSerializer.Serialize(new QuoteItem(Item.Id))
             };
 
             await ItemCardData.CreateItemAsync(newItem, []);

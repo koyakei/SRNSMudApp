@@ -31,17 +31,40 @@
                     </div>
                     break;
                 case false:
+                    @if (_sourceItem != null)
+                    {
+                        <div class="mb-3" data-testid="source-item-container">
+                            <MudText Typo="Typo.subtitle2" Class="mb-1 d-flex align-center gap-1 font-weight-bold">
+                                <MudIcon Icon="@Icons.Material.Filled.VerticalSplit" Size="Size.Small" Color="Color.Primary" />
+                                分割元・引用元のアイテム
+                            </MudText>
+                            <ItemCard Item="@_sourceItem" CurrentUserId="@CurrentUserId" AllTags="@AllTags"
+                                      AllTagRelationsToTags="@AllTagRelationsToTags" EnableNavigation="true"
+                                      OnDataChanged="LoadQuotedItemsAsync" />
+                        </div>
+                        <MudDivider Class="my-3" />
+                    }
+
                     @switch (_quotedItems.Count)
                     {
                         case 0:
-                            <div class="pa-4 text-center">
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" data-testid="no-quotes-message">
-                                    このアイテムを引用した投稿はまだありません。
-                                </MudText>
-                            </div>
+                            @if (_sourceItem == null)
+                            {
+                                <div class="pa-4 text-center">
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" data-testid="no-quotes-message">
+                                        このアイテムを引用した投稿はまだありません。
+                                    </MudText>
+                                </div>
+                            }
                             break;
                         default:
                             <div class="d-flex flex-column gap-3 py-2" data-testid="quoted-items-container">
+                                @if (_sourceItem != null)
+                                {
+                                    <MudText Typo="Typo.subtitle2" Class="mb-1 font-weight-bold">
+                                        このアイテムを引用した投稿
+                                    </MudText>
+                                }
                                 @foreach (var quote in _quotedItems)
                                 {
                                     <ItemCard Item="@quote" CurrentUserId="@CurrentUserId" AllTags="@AllTags"
@@ -68,6 +91,7 @@
     [Parameter] public IReadOnlyList<Tag> AllTags { get; set; } = [];
     [Parameter] public IReadOnlyList<TagRelationToTag> AllTagRelationsToTags { get; set; } = [];
 
+    private Item? _sourceItem;
     private IReadOnlyList<Item> _quotedItems = [];
     private bool _isLoading = true;
 
@@ -81,6 +105,7 @@
         _isLoading = true;
         try
         {
+            _sourceItem = await ItemQuoteService.GetSourceItemAsync(TargetItem.Id);
             _quotedItems = await ItemQuoteService.GetQuotedByItemsAsync(TargetItem.Id);
         }
         finally

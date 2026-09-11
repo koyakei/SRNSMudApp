@@ -163,4 +163,105 @@ public class ItemQuoteServiceTests : IAsyncLifetime
             Assert.Equal(targetItem.Content, retrieved.Content);
         }
     }
+
+    [Fact]
+    public async Task GetSourceItemAsync_WithQuotedItemId_ShouldReturnSourceItem()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var originalItem = new Item { Content = $"Original_{tid}", OwnerId = userId };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var splitItem = new Item { Content = $"Split_{tid}", OwnerId = userId, QuotedItemId = originalItem.Id };
+            dbContext.Items.Add(splitItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? source = await service.GetSourceItemAsync(splitItem.Id);
+            Assert.NotNull(source);
+            Assert.Equal(originalItem.Id, source.Id);
+            Assert.Equal(originalItem.Content, source.Content);
+        }
+    }
+
+    [Fact]
+    public async Task GetSourceItemAsync_FallbackWithItemSplitRequest_ShouldReturnOriginalItem()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var originalItem = new Item { Content = $"Original_{tid}", OwnerId = userId };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var splitItem = new Item { Content = $"Split_{tid}", OwnerId = userId }; // QuotedItemId は未設定
+            dbContext.Items.Add(splitItem);
+            await dbContext.SaveChangesAsync();
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                CreatedItemId = splitItem.Id,
+                RequesterUserId = userId,
+                OwnerUserId = userId,
+                SelectedText = "Split",
+                Status = TradeStatus.Executed,
+                OwnerId = userId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            Item? source = await service.GetSourceItemAsync(splitItem.Id);
+            Assert.NotNull(source);
+            Assert.Equal(originalItem.Id, source.Id);
+        }
+    }
+
+    [Fact]
+    public async Task GetSourceItemAsync_FallbackWithContentLink_ShouldReturnLinkingItem()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var splitItem = new Item { Content = $"Split_{tid}", OwnerId = userId };
+            dbContext.Items.Add(splitItem);
+            await dbContext.SaveChangesAsync();
+
+            var originalItem = new Item { Content = $"前文 /ItemDetail/{splitItem.Id} 後文", OwnerId = userId };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? source = await service.GetSourceItemAsync(splitItem.Id);
+            Assert.NotNull(source);
+            Assert.Equal(originalItem.Id, source.Id);
+        }
+    }
+
+    [Fact]
+    public async Task GetSourceItemAsync_WhenNoSource_ShouldReturnNull()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var standaloneItem = new Item { Content = $"Standalone_{tid}", OwnerId = userId };
+            dbContext.Items.Add(standaloneItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? source = await service.GetSourceItemAsync(standaloneItem.Id);
+            Assert.Null(source);
+        }
+    }
 }

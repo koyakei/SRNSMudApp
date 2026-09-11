@@ -52,4 +52,15 @@ public interface IItemQuoteService
     Task<Item?> GetQuotedItemAsync(
         int quotedItemId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     指定したアイテムの引用元（または分割元）アイテムを取得する。
+    ///     QuotedItemId の参照のほか、分割リクエストや本文内リンクからのフォールバック解決も行う。
+    /// </summary>
+    /// <param name="itemId">対象アイテムID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>引用元または分割元のアイテム。存在しない場合は null。</returns>
+    Task<Item?> GetSourceItemAsync(
+        int itemId,
+        CancellationToken cancellationToken = default);
 }
