@@ -48,13 +48,14 @@ public class ItemSplitRequestE2ETests : PageTest
         using (IServiceScope scope = _factory.AppServices.CreateScope())
         {
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            ApplicationUser aliceUser = db.Users.FirstOrDefault(u => u.UserName == alice || u.Email == $"{alice}@example.com")
-                ?? db.Users.OrderByDescending(u => u.Id).First();
+            ApplicationUser? aliceUser = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .SingleOrDefaultAsync(db.Users, u => u.UserName == alice || u.Email == $"{alice}@example.com");
+            Assert.That(aliceUser, Is.Not.Null, $"ユーザー {alice} が作成されていません。");
 
             var item = new Item
             {
                 Content = originalContent,
-                OwnerId = aliceUser.Id,
+                OwnerId = aliceUser!.Id,
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             };
@@ -76,7 +77,7 @@ public class ItemSplitRequestE2ETests : PageTest
         await Expect(requestSplitBtn).ToBeVisibleAsync();
 
         // 3. JavaScript で分割対象テキストを選択
-        await Page.EvaluateAsync(@"(args) => {
+        bool selectionCreated = await Page.EvaluateAsync<bool>(@"(args) => {
             const el = document.querySelector('#item-card-' + args.itemId);
             const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
             let node;
@@ -89,10 +90,12 @@ public class ItemSplitRequestE2ETests : PageTest
                     const sel = window.getSelection();
                     sel.removeAllRanges();
                     sel.addRange(range);
-                    break;
+                    return true;
                 }
             }
+            return false;
         }", new { itemId = targetItemId, snippet = splitSnippet });
+        Assert.That(selectionCreated, Is.True, "分割対象テキストを選択できませんでした。");
 
         // 4. 分割リクエストボタンをクリック
         await requestSplitBtn.ClickAsync();
@@ -133,7 +136,7 @@ public class ItemSplitRequestE2ETests : PageTest
         await Expect(approveBtn).Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
 
         // 内部リンクプレビューのピルが表示されていることを確認
-        ILocator previewPill = aliceItemCard.Locator(".cursor-pointer.px-1.mx-1.rounded");
+        ILocator previewPill = aliceItemCard.Locator("[data-testid='internal-link-preview-pill']");
         await Expect(previewPill).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
         await Expect(previewPill).ToContainTextAsync(splitSnippet);
 
@@ -145,7 +148,8 @@ public class ItemSplitRequestE2ETests : PageTest
             Assert.That(original, Is.Not.Null);
             Assert.That(original!.Content, Does.Contain("/ItemDetail/"));
 
-            Item? newItem = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.Items.OrderByDescending(i => i.Id));
+            Item? newItem = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .SingleOrDefaultAsync(db.Items, i => i.OwnerId == original.OwnerId && i.Content == splitSnippet);
             Assert.That(newItem, Is.Not.Null);
             Assert.That(newItem!.Content, Is.EqualTo(splitSnippet));
             Assert.That(newItem.OwnerId, Is.EqualTo(original.OwnerId));

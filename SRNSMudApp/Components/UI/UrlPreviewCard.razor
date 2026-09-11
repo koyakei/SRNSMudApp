@@ -17,7 +17,7 @@
         </MudCard>
         break;
     case Loaded<LinkPreviewData> loaded when loaded.Data.IsSuccess && Url.StartsWith("/"):
-        <span @onclick="NavigateToUrl" class="cursor-pointer px-1 mx-1 rounded"
+        <span @onclick="NavigateToUrl" data-testid="internal-link-preview-pill" class="cursor-pointer px-1 mx-1 rounded"
               style="background-color: var(--mud-palette-action-default-hover); color: var(--mud-palette-primary);">
             @loaded.Data.Description
         </span>
