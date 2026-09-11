@@ -28,7 +28,9 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 .Concat(BuildApprovedRequestNotifications(raw.ApprovedRequests, raw.ReadStates))
                 .Concat(BuildReplyNotifications(raw.ItemReplies, raw.ReadStates, "ItemReply", userId))
                 .Concat(BuildReplyNotifications(raw.RequestReplies, raw.ReadStates, "RequestReply", userId))
-                .Concat(BuildReportResolvedNotifications(raw.ResolvedReports ?? [], raw.ReadStates));
+                .Concat(BuildReportResolvedNotifications(raw.ResolvedReports ?? [], raw.ReadStates))
+                .Concat(BuildSplitRequestNotifications(raw.SplitRequests ?? [], raw.ReadStates))
+                .Concat(BuildResolvedSplitNotifications(raw.ResolvedSplitRequests ?? [], raw.ReadStates));
 
         return [.. notifications.OrderByDescending(n => n.CreatedAt)];
     }
@@ -246,6 +248,87 @@ public class NotificationService(INotificationsDataProvider dataProvider) : INot
                 TargetUrl = targetUrl,
                 IsRead = IsRead(readStates, report.Id, "ReportResolved"),
                 ActorName = "管理者"
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildSplitRequestNotifications(
+        IReadOnlyList<ItemSplitRequest> requests,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return requests.Select(request =>
+        {
+            var requesterName = request.RequesterUser?.UserName ?? "ユーザー";
+            var snippet = request.SelectedText.Length > 20
+                ? $"{request.SelectedText[..20]}..."
+                : request.SelectedText;
+            var message = $"{requesterName} さんからアイテムのテキスト分割リクエストが届いています: 「{snippet}」";
+
+            return new NotificationDto
+            {
+                SourceId = request.Id,
+                Kind = new ItemSplitRequestNotification(
+                    request.Id,
+                    request.OriginalItemId,
+                    requesterName,
+                    request.SelectedText,
+                    request.Status),
+                Message = message,
+                CreatedAt = new DateTimeOffset(request.CreatedDate, TimeSpan.Zero),
+                TargetUrl = new RelativeUrl($"/ItemDetail/{request.OriginalItemId}"),
+                IsRead = IsRead(readStates, request.Id, "ItemSplitRequest"),
+                ActorName = requesterName,
+                AssociatedItemId = request.OriginalItemId
+            };
+        });
+    }
+
+    public static IEnumerable<NotificationDto> BuildResolvedSplitNotifications(
+        IReadOnlyList<ItemSplitRequest> requests,
+        IReadOnlyList<NotificationReadState> readStates)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(readStates);
+
+        return requests.Select(request =>
+        {
+            var ownerName = request.OwnerUser?.UserName ?? "所有者";
+            var snippet = request.SelectedText.Length > 20
+                ? $"{request.SelectedText[..20]}..."
+                : request.SelectedText;
+
+            var isApproved = request.Status == TradeStatus.Executed;
+            var message = isApproved
+                ? $"{ownerName} さんがアイテム分割リクエスト（「{snippet}」）を承認しました。"
+                : $"{ownerName} さんがアイテム分割リクエスト（「{snippet}」）を却下しました。";
+
+            if (!isApproved && !string.IsNullOrWhiteSpace(request.RejectReason))
+            {
+                message += $" (理由: {request.RejectReason})";
+            }
+
+            var sourceType = isApproved ? "ItemSplitApproved" : "ItemSplitRejected";
+            NotificationType kind = isApproved
+                ? new ItemSplitApprovedNotification(request.Id, request.OriginalItemId, request.CreatedItemId ?? 0)
+                : new ItemSplitRejectedNotification(request.Id, request.OriginalItemId, request.RejectReason);
+
+            var targetUrl = isApproved && request.CreatedItemId.HasValue
+                ? new RelativeUrl($"/ItemDetail/{request.CreatedItemId.Value}")
+                : new RelativeUrl($"/ItemDetail/{request.OriginalItemId}");
+
+            return new NotificationDto
+            {
+                SourceId = request.Id,
+                Kind = kind,
+                Message = message,
+                CreatedAt = new DateTimeOffset(request.UpdatedDate, TimeSpan.Zero),
+                TargetUrl = targetUrl,
+                IsRead = IsRead(readStates, request.Id, sourceType),
+                ActorName = ownerName,
+                AssociatedItemId = request.OriginalItemId
             };
         });
     }

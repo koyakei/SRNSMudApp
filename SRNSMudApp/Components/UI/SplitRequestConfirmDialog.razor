@@ -1,0 +1,27 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3 text-secondary">
+            選択したテキストを別アイテムに分割するリクエストを所有者に送信します。承認されると、元のアイテム内のテキストが新アイテムへのリンクに置き換わります。
+        </MudText>
+        <MudPaper Elevation="0" Class="pa-3 mud-background-gray rounded mb-3" Style="border-left: 4px solid var(--mud-palette-primary);">
+            <MudText Typo="Typo.caption" Color="Color.Primary" Class="font-weight-bold">選択されたテキスト:</MudText>
+            <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@SelectedText</MudText>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">リクエスト送信</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string SelectedText { get; set; } = string.Empty;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+}

@@ -32,6 +32,8 @@
     "dotnet format": true,
     "true": true,
     "git fsck": true,
-    "dotnet build": true
+    "dotnet build": true,
+    "git add": true,
+    "git commit": true
   }
 }

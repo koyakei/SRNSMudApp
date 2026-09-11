@@ -9,6 +9,7 @@ using MudBlazor;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
@@ -17,7 +18,7 @@ using SRNSMudApp.Services.Dialogs;
 
 // CA1508: union 型パターンマッチにおける解析器の誤検知のため抑制する。
 // IDE0051: ITaggingService は元の .razor の @inject を機械的に移したものであり、DI 登録を維持するため残す。
-#pragma warning disable CA1508, IDE0051
+#pragma warning disable CA1508, IDE0010, IDE0051
 
 namespace SRNSMudApp.Components.Pages;
 
@@ -40,6 +41,7 @@ public partial class NotificationsPage
     [Inject] private ITaggingService TaggingService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
+    [Inject] private IItemSplitService ItemSplitService { get; set; } = null!;
 
     private string? _userId;
     private IReadOnlyList<NotificationDto> _notifications = [];
@@ -192,6 +194,82 @@ public partial class NotificationsPage
                     _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
                 }
                 StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"エラー: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ApproveSplitRequestAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        Result<Data.Item> result = await ItemSplitService.ApproveSplitAsync(notification.SourceId, _userId);
+        switch (result)
+        {
+            case Success<Data.Item>:
+                _ = Snackbar.Add("分割リクエストを承認しました。", Severity.Success);
+                if (notification.Kind is ItemSplitRequestNotification splitNote)
+                {
+                    NotificationDto updated = notification with
+                    {
+                        Kind = splitNote with { Status = TradeStatus.Executed },
+                        IsRead = true
+                    };
+                    _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                }
+                await FetchAssociatedItemsAsync();
+                StateHasChanged();
+                break;
+            case Failure fail:
+                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task RejectSplitRequestAsync(NotificationDto notification)
+    {
+        if (_userId == null)
+        {
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("分割リクエストを却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                var comment = result.Data as string;
+                Result<bool> rejectResult = await ItemSplitService.RejectSplitAsync(notification.SourceId, _userId, comment);
+                switch (rejectResult)
+                {
+                    case Success<bool>:
+                        _ = Snackbar.Add("分割リクエストを却下しました。", Severity.Success);
+                        if (notification.Kind is ItemSplitRequestNotification splitNote)
+                        {
+                            NotificationDto updated = notification with
+                            {
+                                Kind = splitNote with { Status = TradeStatus.Rejected },
+                                IsRead = true
+                            };
+                            _notifications = [.. _notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+                        }
+                        StateHasChanged();
+                        break;
+                    case Failure fail:
+                        _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                        break;
+                }
             }
             catch (Exception ex)
             {

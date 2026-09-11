@@ -37,6 +37,7 @@ public partial class ItemCard : IAsyncDisposable
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
+    [Inject] private IItemSplitService ItemSplitService { get; set; } = null!;
     [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
@@ -82,6 +83,7 @@ public partial class ItemCard : IAsyncDisposable
 
     private DotNetObjectReference<ItemCard>? _dotNetRef;
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
+    private IReadOnlyList<ItemSplitRequest> _pendingSplitRequests = [];
     private int _loadedItemId;
 
     private int _replyCount;
@@ -103,6 +105,7 @@ public partial class ItemCard : IAsyncDisposable
 
         _loadedItemId = Item.Id;
         _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
+        _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
         _quoteCount = await ItemQuoteService.GetQuoteCountAsync(Item.Id);
         if (_isRepliesExpanded)
         {
@@ -633,6 +636,141 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 #pragma warning restore CA1031
+
+    private async Task RequestSplitSelectionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            _ = Snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        string selectedText;
+        try
+        {
+            selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
+        }
+        catch (JSException)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            _ = Snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
+            return;
+        }
+
+        if (Item.Content == null || !Item.Content.Contains(selectedText, StringComparison.Ordinal))
+        {
+            _ = Snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
+            return;
+        }
+
+        var parameters = new DialogParameters<SplitRequestConfirmDialog>
+        {
+            { x => x.SelectedText, selectedText }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<SplitRequestConfirmDialog>("アイテム分割リクエストの送信", parameters, options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            Result<ItemSplitRequest> splitResult = await ItemSplitService.RequestSplitAsync(Item.Id, selectedText, CurrentUserId);
+            switch (splitResult)
+            {
+                case Success<ItemSplitRequest>:
+                    _ = Snackbar.Add("アイテム分割リクエストを送信しました。", Severity.Success);
+                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                    await NotifyDataChangedAsync();
+                    break;
+                case Failure fail:
+                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task ApproveSplitRequestAsync(ItemSplitRequest request)
+    {
+        if (Item.OwnerId != CurrentUserId)
+        {
+            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
+            return;
+        }
+
+        Result<Data.Item> result = await ItemSplitService.ApproveSplitAsync(request.Id, CurrentUserId);
+        switch (result)
+        {
+            case Success<Data.Item> success:
+                _ = Snackbar.Add("分割リクエストを承認しました。", Severity.Success);
+                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                var linkUrl = $"/ItemDetail/{success.Value.Id}";
+                int index = Item.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
+                if (index >= 0)
+                {
+                    Item.Content = Item.Content.Remove(index, request.SelectedText.Length).Insert(index, linkUrl);
+                }
+                await NotifyDataChangedAsync();
+                break;
+            case Failure fail:
+                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
+
+    private async Task RejectSplitRequestAsync(ItemSplitRequest request)
+    {
+        if (Item.OwnerId != CurrentUserId)
+        {
+            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
+            return;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("分割リクエストを却下", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            var comment = result.Data as string;
+            Result<bool> rejectResult = await ItemSplitService.RejectSplitAsync(request.Id, CurrentUserId, comment);
+            switch (rejectResult)
+            {
+                case Success<bool>:
+                    _ = Snackbar.Add("分割リクエストを却下しました。", Severity.Success);
+                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                    await NotifyDataChangedAsync();
+                    break;
+                case Failure fail:
+                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+    }
+
+    private async Task CancelSplitRequestAsync(ItemSplitRequest request)
+    {
+        if (request.RequesterUserId != CurrentUserId)
+        {
+            _ = Snackbar.Add("リクエストを取り下げる権限がありません。", Severity.Error);
+            return;
+        }
+
+        Result<bool> cancelResult = await ItemSplitService.CancelSplitAsync(request.Id, CurrentUserId);
+        switch (cancelResult)
+        {
+            case Success<bool>:
+                _ = Snackbar.Add("分割リクエストを取り下げました。", Severity.Success);
+                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id);
+                await NotifyDataChangedAsync();
+                break;
+            case Failure fail:
+                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                break;
+        }
+    }
 
     private async Task DeleteItemAsync()
     {

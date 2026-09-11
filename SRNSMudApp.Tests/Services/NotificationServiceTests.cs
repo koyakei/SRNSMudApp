@@ -467,4 +467,95 @@ public class NotificationServiceTests
         // Assert
         Assert.True(eventFired);
     }
+
+    [Fact]
+    public void BuildSplitRequestNotifications_BuildsExpectedDto()
+    {
+        // Arrange
+        var request = new ItemSplitRequest
+        {
+            Id = 42,
+            OriginalItemId = 100,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            SelectedText = "分割されるテキスト内容",
+            Status = TradeStatus.Proposed,
+            CreatedDate = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc),
+            RequesterUser = new ApplicationUser { UserName = "Alice" },
+            OwnerId = "reqUser"
+        };
+        List<NotificationReadState> readStates = [new() { SourceId = 42, SourceType = "ItemSplitRequest", UserId = "ownerUser" }];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildSplitRequestNotifications([request], readStates)];
+
+        // Assert
+        Assert.Single(dtos);
+        NotificationDto dto = dtos[0];
+        Assert.Equal(42, dto.SourceId);
+        Assert.True(dto.IsRead);
+        Assert.Equal("Alice", dto.ActorName);
+        Assert.Equal(100, dto.AssociatedItemId);
+        Assert.Equal("/ItemDetail/100", dto.TargetUrl.ToHref());
+        Assert.Contains("Alice さんからアイテムのテキスト分割リクエスト", dto.Message);
+        Assert.True(dto.Kind is ItemSplitRequestNotification);
+    }
+
+    [Fact]
+    public void BuildResolvedSplitNotifications_BuildsApprovedAndRejectedDtos()
+    {
+        // Arrange
+        var approved = new ItemSplitRequest
+        {
+            Id = 51,
+            OriginalItemId = 101,
+            CreatedItemId = 201,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            SelectedText = "承認テキスト",
+            Status = TradeStatus.Executed,
+            UpdatedDate = new DateTime(2026, 3, 2, 10, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            OwnerId = "reqUser"
+        };
+
+        var rejected = new ItemSplitRequest
+        {
+            Id = 52,
+            OriginalItemId = 102,
+            RequesterUserId = "reqUser",
+            OwnerUserId = "ownerUser",
+            SelectedText = "却下テキスト",
+            Status = TradeStatus.Rejected,
+            RejectReason = "不適切な分割",
+            UpdatedDate = new DateTime(2026, 3, 2, 11, 0, 0, DateTimeKind.Utc),
+            OwnerUser = new ApplicationUser { UserName = "Bob" },
+            OwnerId = "reqUser"
+        };
+
+        List<NotificationReadState> readStates = [];
+
+        // Act
+        List<NotificationDto> dtos = [.. NotificationService.BuildResolvedSplitNotifications([approved, rejected], readStates)];
+
+        // Assert
+        Assert.Equal(2, dtos.Count);
+
+        NotificationDto approvedDto = dtos[0];
+        Assert.Equal(51, approvedDto.SourceId);
+        Assert.False(approvedDto.IsRead);
+        Assert.Equal("Bob", approvedDto.ActorName);
+        Assert.Equal("/ItemDetail/201", approvedDto.TargetUrl.ToHref());
+        Assert.Contains("Bob さんがアイテム分割リクエスト（「承認テキスト」）を承認しました", approvedDto.Message);
+        Assert.True(approvedDto.Kind is ItemSplitApprovedNotification);
+
+        NotificationDto rejectedDto = dtos[1];
+        Assert.Equal(52, rejectedDto.SourceId);
+        Assert.False(rejectedDto.IsRead);
+        Assert.Equal("Bob", rejectedDto.ActorName);
+        Assert.Equal("/ItemDetail/102", rejectedDto.TargetUrl.ToHref());
+        Assert.Contains("却下しました", rejectedDto.Message);
+        Assert.Contains("不適切な分割", rejectedDto.Message);
+        Assert.True(rejectedDto.Kind is ItemSplitRejectedNotification);
+    }
 }

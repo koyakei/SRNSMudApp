@@ -125,6 +125,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         // DBスキーマをマイグレーションで初期化はProgram.cs側で行われるため、ここでは削除する
         // (EnsureCreatedAsync を MigrateAsync に変更したため、重複を避ける)
+        // テスト用ホストのデータベースに対して保留中のマイグレーションを明示的に適用する
+        using (IServiceScope scope = _host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Database.Migrate();
+        }
 
         EndpointDataSource endpoints = _host.Services.GetRequiredService<EndpointDataSource>();
         File.WriteAllLines("/tmp/endpoints.txt",

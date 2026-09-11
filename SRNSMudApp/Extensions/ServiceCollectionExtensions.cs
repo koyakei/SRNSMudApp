@@ -100,6 +100,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IContentReportService, ContentReportService>();
+        services.AddScoped<IItemSplitService, ItemSplitService>();
 
         // 通報対象 Strategy (IReportTargetHandler) および Factory の登録
         services.AddScoped<IReportTargetHandler, ItemReportTargetHandler>();

@@ -128,6 +128,23 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             .Where(r => r.OwnerId == userId && r.Status != ReportStatus.Pending && r.HandledDate != null)
             .ToListAsync(cancellationToken);
 
+        // 7. Split requests targeting the user (as item owner)
+        List<ItemSplitRequest> splitRequests = await context.ItemSplitRequests!
+            .AsNoTracking()
+            .Include(r => r.RequesterUser)
+            .Include(r => r.OriginalItem)
+            .Where(r => r.OwnerUserId == userId && r.RequesterUserId != userId)
+            .ToListAsync(cancellationToken);
+
+        // 8. Resolved split requests (approved/rejected) for the requester
+        List<ItemSplitRequest> resolvedSplitRequests = await context.ItemSplitRequests!
+            .AsNoTracking()
+            .Include(r => r.OwnerUser)
+            .Include(r => r.OriginalItem)
+            .Where(r => r.RequesterUserId == userId &&
+                        (r.Status == TradeStatus.Executed || r.Status == TradeStatus.Rejected))
+            .ToListAsync(cancellationToken);
+
         return new NotificationRawData(
             tagRequests,
             itemReplies,
@@ -135,7 +152,9 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
             approvedRequests,
             requestReplies,
             readStates,
-            resolvedReports);
+            resolvedReports,
+            splitRequests,
+            resolvedSplitRequests);
     }
 
     /// <inheritdoc />

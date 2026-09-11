@@ -40,6 +40,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UserGroupMember> UserGroupMembers { get; set; } = null!;
     public DbSet<TagAutoApproveUserGroup> TagAutoApproveGroups { get; set; } = null!;
     public DbSet<ContentReport> ContentReports { get; set; } = null!;
+    public DbSet<ItemSplitRequest> ItemSplitRequests { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -496,6 +497,51 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         _ = builder.Entity<ContentReport>()
             .HasIndex(r => r.CreatedDate);
+
+        // --- ItemSplitRequest Configuration ---
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.Owner)
+            .WithMany()
+            .HasForeignKey(r => r.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.RequesterUser)
+            .WithMany()
+            .HasForeignKey(r => r.RequesterUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.OwnerUser)
+            .WithMany()
+            .HasForeignKey(r => r.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.OriginalItem)
+            .WithMany()
+            .HasForeignKey(r => r.OriginalItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.CreatedItem)
+            .WithMany()
+            .HasForeignKey(r => r.CreatedItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasIndex(r => r.OriginalItemId);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasIndex(r => r.RequesterUserId);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasIndex(r => r.OwnerUserId);
+
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasIndex(r => r.Status);
     }
 
     /// <inheritdoc />

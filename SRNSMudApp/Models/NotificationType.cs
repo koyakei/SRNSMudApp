@@ -28,6 +28,16 @@ public record ReportResolvedNotification(
     int ReportId, ReportStatus Status, string? ResolutionNote,
     ReportTargetType TargetType);
 
+public record ItemSplitRequestNotification(
+    int SplitRequestId, int OriginalItemId, string RequesterName,
+    string SelectedText, TradeStatus Status);
+
+public record ItemSplitApprovedNotification(
+    int SplitRequestId, int OriginalItemId, int CreatedItemId);
+
+public record ItemSplitRejectedNotification(
+    int SplitRequestId, int OriginalItemId, string? RejectReason);
+
 [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Union type handled by C# compiler")]
 public readonly union NotificationType(
     TagRequestNotification,
@@ -35,7 +45,10 @@ public readonly union NotificationType(
     RequestRejectedNotification,
     RequestApprovedNotification,
     RequestReplyNotification,
-    ReportResolvedNotification)
+    ReportResolvedNotification,
+    ItemSplitRequestNotification,
+    ItemSplitApprovedNotification,
+    ItemSplitRejectedNotification)
 {
     public readonly string Icon => this switch
     {
@@ -45,6 +58,9 @@ public readonly union NotificationType(
         RequestApprovedNotification => Icons.Material.Filled.CheckCircle,
         RequestReplyNotification => Icons.Material.Filled.Forum,
         ReportResolvedNotification => Icons.Material.Filled.FactCheck,
+        ItemSplitRequestNotification => Icons.Material.Filled.VerticalSplit,
+        ItemSplitApprovedNotification => Icons.Material.Filled.CallSplit,
+        ItemSplitRejectedNotification => Icons.Material.Filled.Cancel,
         _ => throw new UnreachableException()
     };
 
@@ -56,6 +72,9 @@ public readonly union NotificationType(
         RequestApprovedNotification => "Success",
         RequestReplyNotification => "Secondary",
         ReportResolvedNotification => "Warning",
+        ItemSplitRequestNotification => "Primary",
+        ItemSplitApprovedNotification => "Success",
+        ItemSplitRejectedNotification => "Error",
         _ => throw new UnreachableException()
     };
 
@@ -67,6 +86,9 @@ public readonly union NotificationType(
         RequestApprovedNotification => "RequestApproved",
         RequestReplyNotification => "RequestReply",
         ReportResolvedNotification => "ReportResolved",
+        ItemSplitRequestNotification => "ItemSplitRequest",
+        ItemSplitApprovedNotification => "ItemSplitApproved",
+        ItemSplitRejectedNotification => "ItemSplitRejected",
         _ => throw new UnreachableException()
     };
 }
