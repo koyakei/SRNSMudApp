@@ -79,10 +79,14 @@ public class ItemSplitRequestE2ETests : PageTest
         // 3. JavaScript で分割対象テキストを選択
         bool selectionCreated = await Page.EvaluateAsync<bool>(@"(args) => {
             const el = document.querySelector('#item-card-' + args.itemId);
+            if (!el) {
+                return false;
+            }
+
             const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
             let node;
             while (node = walker.nextNode()) {
-                const idx = node.nodeValue.indexOf(args.snippet);
+                const idx = (node.nodeValue ?? '').indexOf(args.snippet);
                 if (idx >= 0) {
                     const range = document.createRange();
                     range.setStart(node, idx);
@@ -106,7 +110,7 @@ public class ItemSplitRequestE2ETests : PageTest
         await Expect(dialog).ToContainTextAsync(splitSnippet);
 
         // ダイアログで「リクエスト送信」をクリック
-        ILocator confirmBtn = Page.Locator("[data-testid='confirm-split-request-button']");
+        ILocator confirmBtn = dialog.Locator("[data-testid='confirm-split-request-button']");
         await confirmBtn.ClickAsync();
         await Expect(dialog).Not.ToBeVisibleAsync();
 
