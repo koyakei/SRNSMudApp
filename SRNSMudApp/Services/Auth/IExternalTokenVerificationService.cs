@@ -4,5 +4,5 @@ namespace SRNSMudApp.Services.Auth;
 
 public interface IExternalTokenVerificationService
 {
-    Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token);
+    Task<Result<ExternalTokenPayload>> VerifyTokenAsync(string provider, string token, CancellationToken cancellationToken = default);
 }

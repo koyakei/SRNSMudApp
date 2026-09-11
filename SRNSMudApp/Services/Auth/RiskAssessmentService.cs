@@ -10,8 +10,10 @@ public class RiskAssessmentService(ILogger<RiskAssessmentService> logger)
     ///     Evaluates the risk of the current authentication request.
     ///     Currently a placeholder for future risk assessment rules (IP, Device, User behavior).
     /// </summary>
-    public Task<bool> IsRequestRiskyAsync(string? ipAddress, string? deviceId, string? userEmail)
+    public Task<bool> IsRequestRiskyAsync(string? ipAddress, string? deviceId, string? userEmail, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Add specific rules here in the future
         _logger.LogInformation("Risk assessment passed for IP: {IP}, Device: {Device}, User: {User}", ipAddress,
             deviceId, userEmail);
