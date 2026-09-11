@@ -9,9 +9,6 @@ using SRNSMudApp.Services.Reports;
 
 #endregion
 
-// IDE0010 / IDE0072: union 型・enum の網羅的 switch に対する誤検知抑制
-#pragma warning disable IDE0010, IDE0072
-
 namespace SRNSMudApp.Services.Commands;
 
 /// <summary>
@@ -39,21 +36,12 @@ public class ResolveContentReportHandler(
     INotificationService notificationService)
     : CommandHandlerBase<ResolveContentReportCommand, Result<bool>>
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
-        dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
-
-    private readonly IReportTargetHandlerFactory _handlerFactory =
-        handlerFactory ?? throw new ArgumentNullException(nameof(handlerFactory));
-
-    private readonly INotificationService _notificationService =
-        notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-
     /// <inheritdoc />
     protected override async Task<Result<bool>> ExecuteAsync(ResolveContentReportCommand command, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command.AdminUserId);
 
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        await using ApplicationDbContext context = await dbFactory.CreateDbContextAsync(cancellationToken);
 
         ContentReport? report = await context.ContentReports
             .Include(r => r.Item)
@@ -76,7 +64,7 @@ public class ResolveContentReportHandler(
 
             if (targetId.HasValue)
             {
-                IReportTargetHandler targetHandler = _handlerFactory.GetHandler(report.TargetType);
+                IReportTargetHandler targetHandler = handlerFactory.GetHandler(report.TargetType);
                 await targetHandler.DeleteTargetAsync(context, targetId.Value, cancellationToken);
             }
         }
@@ -96,6 +84,8 @@ public class ResolveContentReportHandler(
                 return failure;
             case Success<bool>:
                 break;
+            default:
+                return Result.Fail(ErrorMessages.UnsupportedReportStatus);
         }
 
         report.UpdatedDate = DateTime.UtcNow;
@@ -103,7 +93,7 @@ public class ResolveContentReportHandler(
         _ = await context.SaveChangesAsync(cancellationToken);
 
         // 通報者向けの通知状態変更をブロードキャスト
-        _notificationService.NotifyNotificationsChanged();
+        notificationService.NotifyNotificationsChanged();
 
         return new Success<bool>(true);
     }

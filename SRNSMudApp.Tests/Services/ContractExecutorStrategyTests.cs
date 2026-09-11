@@ -120,9 +120,9 @@ public class ContractExecutorStrategyTests : TaggingContractTestBase
     }
 
     [Fact]
-    public void ContractExecutorFactory_CreateDefault_ShouldContainAllStandardExecutors()
+    public void ContractExecutorFactory_StandardConfiguration_ShouldContainAllExecutors()
     {
-        var factory = ContractExecutorFactory.CreateDefault();
+        var factory = ContractExecutorFactoryTestBuilder.Create();
 
         Assert.NotNull(factory.GetExecutor(ContractTypes.Gratis));
         Assert.NotNull(factory.GetExecutor(ContractTypes.Mutual));

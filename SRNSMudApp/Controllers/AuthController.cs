@@ -29,23 +29,24 @@ public class AuthController(
     [HttpPost("external-login")]
     public async Task<IActionResult> ExternalLogin([FromBody] ExternalLoginRequest request)
     {
-        return await ((string.IsNullOrWhiteSpace(request.Provider) || string.IsNullOrWhiteSpace(request.Token)) switch
+        if (string.IsNullOrWhiteSpace(request.Provider) || string.IsNullOrWhiteSpace(request.Token))
         {
-            true => Task.FromResult<IActionResult>(BadRequest("Provider and Token are required.")),
-            false => ProcessTokenVerificationAsync(request)
-        });
+            return BadRequest("Provider and Token are required.");
+        }
+
+        return await ProcessTokenVerificationAsync(request);
     }
 
     private async Task<IActionResult> ProcessTokenVerificationAsync(ExternalLoginRequest request)
     {
         Result<ExternalTokenPayload> result = await _tokenService.VerifyTokenAsync(request.Provider, request.Token);
-        return await (result switch
+
+        if (result is not Success<ExternalTokenPayload> success || success.Value.ProviderKey is null)
         {
-            Failure => Task.FromResult<IActionResult>(Unauthorized("Invalid token.")),
-            Success<ExternalTokenPayload> { Value.ProviderKey: null } => Task.FromResult<IActionResult>(Unauthorized("Invalid token.")),
-            Success<ExternalTokenPayload> success => ProcessRiskAssessmentAsync(request, success.Value),
-            _ => Task.FromResult<IActionResult>(Unauthorized("Invalid token."))
-        });
+            return Unauthorized("Invalid token.");
+        }
+
+        return await ProcessRiskAssessmentAsync(request, success.Value);
     }
 
     private async Task<IActionResult> ProcessRiskAssessmentAsync(ExternalLoginRequest request, ExternalTokenPayload payload)
@@ -53,11 +54,12 @@ public class AuthController(
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
         var isRisky = await _riskService.IsRequestRiskyAsync(ip, request.DeviceId, payload.Email);
 
-        return await (isRisky switch
+        if (isRisky)
         {
-            true => Task.FromResult<IActionResult>(Forbid("Risk assessment failed.")),
-            false => ProcessUserLoginAsync(request, payload)
-        });
+            return Forbid("Risk assessment failed.");
+        }
+
+        return await ProcessUserLoginAsync(request, payload);
     }
 
     private async Task<IActionResult> ProcessUserLoginAsync(ExternalLoginRequest request, ExternalTokenPayload payload)
@@ -65,17 +67,17 @@ public class AuthController(
         var userLoginInfo = new UserLoginInfo(request.Provider, payload.ProviderKey, request.Provider);
         ApplicationUser? existingUser = await _userManager.FindByLoginAsync(request.Provider, payload.ProviderKey);
 
-        existingUser = existingUser switch
+        if (existingUser is null && !string.IsNullOrEmpty(payload.Email))
         {
-            null when !string.IsNullOrEmpty(payload.Email) => await _userManager.FindByEmailAsync(payload.Email),
-            _ => existingUser
-        };
+            existingUser = await _userManager.FindByEmailAsync(payload.Email);
+        }
 
-        return await (existingUser switch
+        if (existingUser is null)
         {
-            null => CreateNewUserAsync(payload, userLoginInfo),
-            _ => LinkAndSignInAsync(existingUser, userLoginInfo, request.Provider)
-        });
+            return await CreateNewUserAsync(payload, userLoginInfo);
+        }
+
+        return await LinkAndSignInAsync(existingUser, userLoginInfo, request.Provider);
     }
 
     private async Task<IActionResult> CreateNewUserAsync(ExternalTokenPayload payload, UserLoginInfo userLoginInfo)
@@ -89,30 +91,30 @@ public class AuthController(
 
         IdentityResult createResult = await _userManager.CreateAsync(newUser);
 
-        return await (createResult.Succeeded switch
+        if (!createResult.Succeeded)
         {
-            false => HandleCreateUserError(createResult),
-            true => AddLoginAndSignInAsync(newUser, userLoginInfo)
-        });
+            return HandleCreateUserError(createResult);
+        }
+
+        return await AddLoginAndSignInAsync(newUser, userLoginInfo);
     }
 
-    private Task<IActionResult> HandleCreateUserError(IdentityResult createResult)
+    private ObjectResult HandleCreateUserError(IdentityResult createResult)
     {
         _logger.LogError("Failed to create user: {Errors}",
             string.Join(", ", createResult.Errors.Select(e => e.Description)));
-        return Task.FromResult<IActionResult>(StatusCode(500, "Error creating user account."));
+        return StatusCode(500, "Error creating user account.");
     }
 
     private async Task<IActionResult> AddLoginAndSignInAsync(ApplicationUser newUser, UserLoginInfo userLoginInfo)
     {
         IdentityResult addLoginResult = await _userManager.AddLoginAsync(newUser, userLoginInfo);
 
-        _ = addLoginResult.Succeeded switch
+        if (!addLoginResult.Succeeded)
         {
-            false => (object)Task.Run(() => _logger.LogError("Failed to add login to user: {Errors}",
-                string.Join(", ", addLoginResult.Errors.Select(e => e.Description)))),
-            true => null
-        };
+            _logger.LogError("Failed to add login to user: {Errors}",
+                string.Join(", ", addLoginResult.Errors.Select(e => e.Description)));
+        }
 
         await _signInManager.SignInAsync(newUser, true);
         return Ok(new { success = true });
@@ -122,11 +124,10 @@ public class AuthController(
     {
         IList<UserLoginInfo> logins = await _userManager.GetLoginsAsync(existingUser);
 
-        _ = logins.Any(l => l.LoginProvider == provider && l.ProviderKey == userLoginInfo.ProviderKey) switch
+        if (!logins.Any(l => l.LoginProvider == provider && l.ProviderKey == userLoginInfo.ProviderKey))
         {
-            false => await _userManager.AddLoginAsync(existingUser, userLoginInfo),
-            true => null
-        };
+            _ = await _userManager.AddLoginAsync(existingUser, userLoginInfo);
+        }
 
         await _signInManager.SignInAsync(existingUser, true);
         return Ok(new { success = true });

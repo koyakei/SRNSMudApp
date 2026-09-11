@@ -51,7 +51,7 @@ public abstract class TaggingContractTestBase : IAsyncLifetime
         var mockDbFactory = new Mock<IDbContextFactory<ApplicationDbContext>>();
         mockDbFactory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new ApplicationDbContext(SharedDb.Options));
-        var svc = new TaggingContractService(mockDbFactory.Object, ContractExecutorFactory.CreateDefault());
+        var svc = new TaggingContractService(mockDbFactory.Object, ContractExecutorFactoryTestBuilder.Create());
         return new TaggingTestScope(ctx, svc, tid);
     }
 
