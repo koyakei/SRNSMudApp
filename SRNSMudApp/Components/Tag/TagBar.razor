@@ -1,0 +1,33 @@
+@* リンクプレビューなどのホバー時にアイテムに付与されたタグ一覧を横並び（バー状）で表示する専用コンポーネント。 *@
+@namespace SRNSMudApp.Components.Tag
+@using MudBlazor
+@using SRNSMudApp.Models
+
+<div class="tag-bar d-flex flex-wrap align-center gap-1" data-testid="tag-bar">
+    @foreach (var tag in Tags)
+    {
+        <MudChip T="string" Size="Size.Small" Class="ma-0"
+                 Style="background: #EEEDFE; color: #26215C; font-weight: 500; font-size: 0.75rem;">
+            <span>@tag.Name</span>
+            @switch (string.IsNullOrEmpty(tag.OwnerName))
+            {
+                case false:
+                    <span class="ml-1" style="color: #26215C; opacity: 0.85; font-size: 0.7rem;">(@tag.OwnerName)</span>
+                    break;
+            }
+            @switch (tag.Weight != 0)
+            {
+                case true:
+                    <span class="ml-1 font-weight-bold" style="color: #26215C; font-size: 0.7rem;">@tag.Weight</span>
+                    break;
+            }
+        </MudChip>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// 表示対象のタグプレビュー情報リスト。
+    /// </summary>
+    [Parameter] public IReadOnlyList<TagPreviewItem> Tags { get; set; } = [];
+}

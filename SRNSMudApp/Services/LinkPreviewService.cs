@@ -181,11 +181,10 @@ public partial class LinkPreviewService
         var tags = item.TagRelations
             .Where(tr => tr.Tag != null && !tr.Tag.IsSystem)
             .OrderByDescending(tr => tr.Weight)
-            .Take(3)
             .Select(tr =>
             {
                 var ownerName = tr.Tag.Owner?.UserName ?? (tr.Tag.GetKind() is Models.Unions.SystemClassificationTag ? "system" : "unknown");
-                return $"{tr.Tag.Name} ({ownerName})";
+                return new TagPreviewItem(tr.Tag.Id, tr.Tag.Name, ownerName, tr.Weight);
             })
             .ToList();
 
@@ -196,7 +195,8 @@ public partial class LinkPreviewService
         {
             Url = originalUrl,
             Title = $"Item #{item.Id}",
-            Description = text + (tags.Count > 0 ? $" | Tags: {string.Join(", ", tags)}" : ""),
+            Description = text,
+            Tags = tags,
             SiteName = "SRNSMudApp",
             IsSuccess = true
         };
@@ -233,6 +233,7 @@ public partial class LinkPreviewService
             Url = originalUrl,
             Title = $"Tag: {tag.Name} ({ownerName})",
             Description = text,
+            Tags = [new TagPreviewItem(tag.Id, tag.Name, ownerName, 0)],
             SiteName = "SRNSMudApp",
             IsSuccess = true
         };

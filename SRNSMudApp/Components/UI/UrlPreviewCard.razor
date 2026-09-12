@@ -3,6 +3,7 @@
    本コンポーネントはサービス注入なしでレンダリング可能。
    取得状態は AsyncPageState<LinkPreviewData> union で表現し、
    網羅的パターンマッチングにより描画を決定する (mainRules: if文撲滅)。 *@
+@using SRNSMudApp.Components.Tag
 @using SRNSMudApp.Models
 @namespace SRNSMudApp.Components.UI
 
@@ -17,10 +18,28 @@
         </MudCard>
         break;
     case Loaded<LinkPreviewData> loaded when loaded.Data.IsSuccess && Url.StartsWith("/"):
-        <span @onclick="NavigateToUrl" data-testid="internal-link-preview-pill" class="cursor-pointer px-1 mx-1 rounded"
-              style="background-color: var(--mud-palette-action-default-hover); color: var(--mud-palette-primary);">
-            @loaded.Data.Description
-        </span>
+        @switch (loaded.Data.Tags is { Count: > 0 })
+        {
+            case true:
+                <MudTooltip Placement="Placement.Top" Arrow="true">
+                    <ChildContent>
+                        <span @onclick="NavigateToUrl" data-testid="internal-link-preview-pill" class="cursor-pointer px-1 mx-1 rounded"
+                              style="background-color: var(--mud-palette-action-default-hover); color: var(--mud-palette-primary);">
+                            @loaded.Data.Description
+                        </span>
+                    </ChildContent>
+                    <TooltipContent>
+                        <TagBar Tags="@loaded.Data.Tags" />
+                    </TooltipContent>
+                </MudTooltip>
+                break;
+            case false:
+                <span @onclick="NavigateToUrl" data-testid="internal-link-preview-pill" class="cursor-pointer px-1 mx-1 rounded"
+                      style="background-color: var(--mud-palette-action-default-hover); color: var(--mud-palette-primary);">
+                    @loaded.Data.Description
+                </span>
+                break;
+        }
         break;
     case Loaded<LinkPreviewData> loaded when loaded.Data.IsSuccess:
         <MudCard Outlined="true" Class="mt-2 mb-2 rounded-lg preview-card" @onclick="NavigateToUrl">
