@@ -1,5 +1,7 @@
 namespace SRNSMudApp.Components.UI;
 
+using SRNSMudApp.Models;
+
 /// <summary>現在ユーザーの投票用システムタグ ID。</summary>
 public readonly record struct SystemTagIds(int? GoodTagId, int? BadTagId)
 {
@@ -52,11 +54,11 @@ public static class ResourceListViewModel
 
         List<Data.Tag> tagList = [.. tags];
         Data.Tag? shinjiTag = tagList.Find(
-            t => t.OwnerId == currentUserId && t.Name == "真実" && t.IsSystem);
+            t => t.OwnerId == currentUserId && t.Name == ReactionTagNames.Shinji && t.IsSystem);
         Data.Tag? zenTag = tagList.Find(
-            t => t.OwnerId == currentUserId && t.Name == "善" && t.IsSystem);
+            t => t.OwnerId == currentUserId && t.Name == ReactionTagNames.Zen && t.IsSystem);
         Data.Tag? biTag = tagList.Find(
-            t => t.OwnerId == currentUserId && t.Name == "美" && t.IsSystem);
+            t => t.OwnerId == currentUserId && t.Name == ReactionTagNames.Bi && t.IsSystem);
 
         return new ReactionTagIds(shinjiTag?.Id, zenTag?.Id, biTag?.Id);
     }

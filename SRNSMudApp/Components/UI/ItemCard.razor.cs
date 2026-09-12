@@ -23,21 +23,25 @@ namespace SRNSMudApp.Components.UI;
 
 /// <summary>
 ///     ItemCard のコードビハインド。
-///     マークアップ (.razor) 側は表示のみを担い、JS 連携・返信・投票・ダイアログ起動などの
-///     UI オーケストレーションはこちらに集約する。純粋な計算は <see cref="ItemCardViewModel" /> へ。
+///     マークアップ (.razor) 側は表示のみを担い、各操作は専用のコーディネーター
+///     (<see cref="IItemCardVoteCoordinator" />, <see cref="IItemCardSplitCoordinator" />, <see cref="IItemCardTagCoordinator" />)
+///     へ委譲して UI オーケストレーションに専念する（SRP 準拠）。
+///     純粋な計算は <see cref="ItemCardViewModel" /> へ。
 /// </summary>
 public partial class ItemCard : IAsyncDisposable
 {
+    [Inject] private IItemCardVoteCoordinator VoteCoordinator { get; set; } = null!;
+    [Inject] private IItemCardSplitCoordinator SplitCoordinator { get; set; } = null!;
+    [Inject] private IItemCardTagCoordinator TagCoordinator { get; set; } = null!;
     [Inject] private IItemTagService ItemTagService { get; set; } = null!;
     [Inject] private IItemReplyService ItemReplyService { get; set; } = null!;
-    [Inject] private IItemReactionService ItemReactionService { get; set; } = null!;
     [Inject] private IItemQuoteService ItemQuoteService { get; set; } = null!;
+    [Inject] private IItemSplitService ItemSplitService { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private ITaggingContractService TaggingContractService { get; set; } = null!;
     [Inject] private IItemCardDataProvider ItemCardData { get; set; } = null!;
-    [Inject] private IItemSplitService ItemSplitService { get; set; } = null!;
     [Inject] private LinkPreviewService PreviewService { get; set; } = null!;
     [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
@@ -179,6 +183,7 @@ public partial class ItemCard : IAsyncDisposable
 
     private string GetItemCardStyle() => ItemCardViewModel.GetItemCardStyle(IsFocused);
 
+    // --- Tagging Contract Request Alerts ---
     private async Task CancelTaggingRequestAsync()
     {
         if (Item.AsRequestOf is null)
@@ -221,6 +226,7 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 
+    // --- Reply Management ---
     private async Task ToggleRepliesAsync()
     {
         _isRepliesExpanded = !_isRepliesExpanded;
@@ -235,7 +241,7 @@ public partial class ItemCard : IAsyncDisposable
     {
         _replies = await ItemReplyService.GetItemRepliesAsync(Item.Id);
         _replyCount = _replies.Count;
-        UpdateTargetCandidates();
+        SyncSelectedTargets(GetReplyTargetCandidates());
     }
 
     private List<ReplyTargetCandidate> GetReplyTargetCandidates()
@@ -246,22 +252,21 @@ public partial class ItemCard : IAsyncDisposable
             candidates.Add(new ReplyTargetCandidate(Item.OwnerId, Item.Owner?.UserName ?? "オーナー"));
         }
 
+        HashSet<string> seen = [];
         foreach (var reply in _replies)
         {
             if (!string.IsNullOrEmpty(reply.OwnerId) && reply.OwnerId != CurrentUserId &&
-                !candidates.Any(c => c.Id == reply.OwnerId))
+                reply.OwnerId != Item.OwnerId && seen.Add(reply.OwnerId))
             {
                 candidates.Add(new ReplyTargetCandidate(reply.OwnerId, reply.Owner?.UserName ?? "ユーザー"));
             }
         }
 
-        UpdateTargetCandidates(candidates);
         return candidates;
     }
 
-    private void UpdateTargetCandidates(List<ReplyTargetCandidate>? candidates = null)
+    private void SyncSelectedTargets(List<ReplyTargetCandidate> candidates)
     {
-        candidates ??= [.. GetReplyTargetCandidatesInternal()];
         if (!_hasManuallyModifiedTargets)
         {
             _selectedTargetUserIds = [.. candidates.Select(c => c.Id)];
@@ -274,24 +279,6 @@ public partial class ItemCard : IAsyncDisposable
                 {
                     _selectedTargetUserIds.Add(candidate.Id);
                 }
-            }
-        }
-    }
-
-    private IEnumerable<ReplyTargetCandidate> GetReplyTargetCandidatesInternal()
-    {
-        if (!string.IsNullOrEmpty(Item.OwnerId) && Item.OwnerId != CurrentUserId)
-        {
-            yield return new ReplyTargetCandidate(Item.OwnerId, Item.Owner?.UserName ?? "オーナー");
-        }
-
-        HashSet<string> seen = [];
-        foreach (var reply in _replies)
-        {
-            if (!string.IsNullOrEmpty(reply.OwnerId) && reply.OwnerId != CurrentUserId &&
-                reply.OwnerId != Item.OwnerId && seen.Add(reply.OwnerId))
-            {
-                yield return new ReplyTargetCandidate(reply.OwnerId, reply.Owner?.UserName ?? "ユーザー");
             }
         }
     }
@@ -338,7 +325,7 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 
-    // --- Voting Logic ---
+    // --- Voting & Reaction Logic (Delegated to VoteCoordinator) ---
     private int GetItemScore() => ItemCardViewModel.GetItemScore(Item.TagRelations);
 
     private bool IsItemUpvoted() => ItemCardViewModel.IsItemUpvoted(Item.TagRelations, CurrentUserId, CurrentUserGoodTagId);
@@ -351,147 +338,55 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task ToggleItemVoteAsync(bool isUpvote)
     {
-        if (string.IsNullOrEmpty(CurrentUserId))
+        Func<Task>? ensureAsync = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
+        var success = await VoteCoordinator.ToggleVoteAsync(Item.Id, CurrentUserId, CurrentUserGoodTagId, isUpvote, ensureAsync);
+        if (success)
         {
-            _ = Snackbar.Add(ErrorMessages.LoginRequired, Severity.Warning);
-            return;
+            await NotifyDataChangedAsync();
         }
-
-        await (OnEnsureSystemTags.HasDelegate switch
-        {
-            true => OnEnsureSystemTags.InvokeAsync(),
-            false => Task.CompletedTask
-        });
-
-        if (!CurrentUserGoodTagId.HasValue)
-        {
-            _ = Snackbar.Add(ErrorMessages.SystemTagRetrievalFailed, Severity.Error);
-            return;
-        }
-
-        var targetWeight = isUpvote ? 1 : -1;
-        var goodTagId = CurrentUserGoodTagId.Value;
-
-        ItemVoteResult result = await ItemReactionService.ToggleItemVoteAsync(Item.Id, CurrentUserId, goodTagId, targetWeight);
-
-        TagRelation? existingRelation = Item.TagRelations.FirstOrDefault(tr => tr.Id == result.RelationId);
-        switch (result.Action)
-        {
-            case ItemVoteAction.Removed when existingRelation != null:
-                _ = Item.TagRelations.Remove(existingRelation);
-                break;
-            case ItemVoteAction.Updated when existingRelation != null:
-                existingRelation.Weight = result.Weight;
-                break;
-            case ItemVoteAction.Added:
-                {
-                    Item.TagRelations ??= [];
-                    Item.TagRelations.Add(new TagRelation
-                    {
-                        Id = result.RelationId,
-                        ItemId = Item.Id,
-                        TagId = goodTagId,
-                        OwnerId = CurrentUserId,
-                        Weight = result.Weight
-                    });
-                    break;
-                }
-        }
-
-        await NotifyDataChangedAsync();
     }
 
-    // --- Reaction Logic ---
     private int GetReactionScore(string reactionTagName)
         => ItemCardViewModel.GetReactionScore(Item.TagRelations, reactionTagName);
 
     private bool IsItemReactionUpvoted(string reactionTagName) => reactionTagName switch
     {
-        "真実" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, "真実"),
-        "善" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, "善"),
-        "美" => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, "美"),
+        ReactionTagNames.Shinji => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, ReactionTagNames.Shinji),
+        ReactionTagNames.Zen => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, ReactionTagNames.Zen),
+        ReactionTagNames.Bi => ItemCardViewModel.IsItemReactionUpvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, ReactionTagNames.Bi),
         _ => false
     };
 
     private bool IsItemReactionDownvoted(string reactionTagName) => reactionTagName switch
     {
-        "真実" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, "真実"),
-        "善" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, "善"),
-        "美" => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, "美"),
+        ReactionTagNames.Shinji => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserShinjiTagId, ReactionTagNames.Shinji),
+        ReactionTagNames.Zen => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserZenTagId, ReactionTagNames.Zen),
+        ReactionTagNames.Bi => ItemCardViewModel.IsItemReactionDownvoted(Item.TagRelations, CurrentUserId, CurrentUserBiTagId, ReactionTagNames.Bi),
         _ => false
     };
 
     private async Task VoteReactionAsync((string ReactionTagName, int TargetWeight) args)
     {
         (string reactionTagName, int targetWeight) = args;
-        if (string.IsNullOrEmpty(CurrentUserId))
-        {
-            _ = Snackbar.Add("ログインが必要です。", Severity.Warning);
-            return;
-        }
-
-        await (OnEnsureSystemTags.HasDelegate switch
-        {
-            true => OnEnsureSystemTags.InvokeAsync(),
-            false => Task.CompletedTask
-        });
-
         var reactionTagId = reactionTagName switch
         {
-            "真実" => CurrentUserShinjiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "真実" && t.IsSystem)?.Id,
-            "善" => CurrentUserZenTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "善" && t.IsSystem)?.Id,
-            "美" => CurrentUserBiTagId ?? AllTags.FirstOrDefault(t => t.OwnerId == CurrentUserId && t.Name == "美" && t.IsSystem)?.Id,
+            ReactionTagNames.Shinji => CurrentUserShinjiTagId,
+            ReactionTagNames.Zen => CurrentUserZenTagId,
+            ReactionTagNames.Bi => CurrentUserBiTagId,
             _ => null
         };
 
-        Data.Tag reactionTag;
-        if (!reactionTagId.HasValue)
+        Func<Task>? ensureAsync = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
+        var success = await VoteCoordinator.ToggleReactionAsync(
+            Item.Id, CurrentUserId, reactionTagName, targetWeight, reactionTagId, AllTags, ensureAsync);
+
+        if (success)
         {
-            reactionTag = await ItemReactionService.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
-            reactionTagId = reactionTag.Id;
+            await NotifyDataChangedAsync();
         }
-        else
-        {
-            reactionTag = AllTags.FirstOrDefault(t => t.Id == reactionTagId.Value)
-                ?? await ItemReactionService.EnsureReactionTagAsync(CurrentUserId, reactionTagName);
-        }
-
-        var tagId = reactionTagId.Value;
-        ItemVoteResult result = await ItemReactionService.ToggleItemReactionAsync(Item.Id, CurrentUserId, tagId, targetWeight);
-
-        TagRelation? existingRelation = Item.TagRelations.FirstOrDefault(tr =>
-            tr.Id == result.RelationId || (tr.TagId == tagId && tr.OwnerId == CurrentUserId));
-
-        switch (result.Action)
-        {
-            case ItemVoteAction.Removed when existingRelation != null:
-                _ = Item.TagRelations.Remove(existingRelation);
-                break;
-            case ItemVoteAction.Updated when existingRelation != null:
-                existingRelation.Weight = result.Weight;
-                break;
-            case ItemVoteAction.Added:
-                {
-                    Item.TagRelations ??= [];
-                    Item.TagRelations.Add(new TagRelation
-                    {
-                        Id = result.RelationId,
-                        ItemId = Item.Id,
-                        TagId = tagId,
-                        Tag = reactionTag,
-                        OwnerId = CurrentUserId,
-                        Weight = result.Weight
-                    });
-                    break;
-                }
-            default:
-                break;
-        }
-
-        await NotifyDataChangedAsync();
     }
 
-    // --- Quote Logic ---
+    // --- Quote Dialogs ---
     private async Task OpenQuoteDialogAsync()
     {
         if (string.IsNullOrEmpty(CurrentUserId))
@@ -536,7 +431,7 @@ public partial class ItemCard : IAsyncDisposable
         _ = await DialogLauncher.ShowAsync<QuotedItemListDialog>("引用された投稿一覧", parameters, options);
     }
 
-    // --- Edit/Delete Logic ---
+    // --- Edit / Delete / Report Logic ---
     private async Task EditItemAsync()
     {
         if (Item.OwnerId != CurrentUserId)
@@ -559,196 +454,6 @@ public partial class ItemCard : IAsyncDisposable
         }
     }
 
-#pragma warning disable CA1031
-    private async Task SplitSelectionAsync()
-    {
-        if (Item.OwnerId != CurrentUserId)
-        {
-            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
-            return;
-        }
-
-        string selectedText;
-        try
-        {
-            selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
-        }
-        catch (JSException)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(selectedText))
-        {
-            _ = Snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
-            return;
-        }
-
-        if (Item.Content == null || !Item.Content.Contains(selectedText, StringComparison.Ordinal))
-        {
-            _ = Snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
-            return;
-        }
-
-        try
-        {
-            Result<Data.Item> splitResult = await ItemSplitService.SplitDirectlyAsync(Item.Id, selectedText, CurrentUserId);
-            switch (splitResult)
-            {
-                case Success<Data.Item> success:
-                    var linkUrl = $"/ItemDetail/{success.Value.Id}";
-                    int index = Item.Content.IndexOf(selectedText, StringComparison.Ordinal);
-                    Item.Content = Item.Content.Remove(index, selectedText.Length).Insert(index, linkUrl);
-                    _ = Snackbar.Add("アイテムを分割しました。", Severity.Success);
-                    await NotifyDataChangedAsync();
-                    break;
-                case Failure fail:
-                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            _ = Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
-        }
-    }
-#pragma warning restore CA1031
-
-    private async Task RequestSplitSelectionAsync()
-    {
-        if (string.IsNullOrWhiteSpace(CurrentUserId))
-        {
-            _ = Snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
-            return;
-        }
-
-        string selectedText;
-        try
-        {
-            selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
-        }
-        catch (JSException)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(selectedText))
-        {
-            _ = Snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
-            return;
-        }
-
-        if (Item.Content == null || !Item.Content.Contains(selectedText, StringComparison.Ordinal))
-        {
-            _ = Snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
-            return;
-        }
-
-        var parameters = new DialogParameters<SplitRequestConfirmDialog>
-        {
-            { x => x.SelectedText, selectedText }
-        };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        IDialogReference dialog = await DialogLauncher.ShowAsync<SplitRequestConfirmDialog>("アイテム分割リクエストの送信", parameters, options);
-        DialogResult? result = await dialog.Result;
-
-        if (result is { Canceled: false })
-        {
-            Result<ItemSplitRequest> splitResult = await ItemSplitService.RequestSplitAsync(Item.Id, selectedText, CurrentUserId);
-            switch (splitResult)
-            {
-                case Success<ItemSplitRequest>:
-                    _ = Snackbar.Add("アイテム分割リクエストを送信しました。", Severity.Success);
-                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
-                    await NotifyDataChangedAsync();
-                    break;
-                case Failure fail:
-                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
-                    break;
-            }
-        }
-    }
-
-    private async Task ApproveSplitRequestAsync(ItemSplitRequest request)
-    {
-        if (Item.OwnerId != CurrentUserId)
-        {
-            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
-            return;
-        }
-
-        Result<Data.Item> result = await ItemSplitService.ApproveSplitAsync(request.Id, CurrentUserId);
-        switch (result)
-        {
-            case Success<Data.Item> success:
-                _ = Snackbar.Add("分割リクエストを承認しました。", Severity.Success);
-                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
-                var linkUrl = $"/ItemDetail/{success.Value.Id}";
-                int index = Item.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
-                if (index >= 0)
-                {
-                    Item.Content = Item.Content.Remove(index, request.SelectedText.Length).Insert(index, linkUrl);
-                }
-                await NotifyDataChangedAsync();
-                break;
-            case Failure fail:
-                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
-                break;
-        }
-    }
-
-    private async Task RejectSplitRequestAsync(ItemSplitRequest request)
-    {
-        if (Item.OwnerId != CurrentUserId)
-        {
-            _ = Snackbar.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error);
-            return;
-        }
-
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        IDialogReference dialog = await DialogLauncher.ShowAsync<RejectRequestDialog>("分割リクエストを却下", options);
-        DialogResult? result = await dialog.Result;
-
-        if (result is { Canceled: false })
-        {
-            var comment = result.Data as string;
-            Result<bool> rejectResult = await ItemSplitService.RejectSplitAsync(request.Id, CurrentUserId, comment);
-            switch (rejectResult)
-            {
-                case Success<bool>:
-                    _ = Snackbar.Add("分割リクエストを却下しました。", Severity.Success);
-                    _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
-                    await NotifyDataChangedAsync();
-                    break;
-                case Failure fail:
-                    _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
-                    break;
-            }
-        }
-    }
-
-    private async Task CancelSplitRequestAsync(ItemSplitRequest request)
-    {
-        if (request.RequesterUserId != CurrentUserId)
-        {
-            _ = Snackbar.Add("リクエストを取り下げる権限がありません。", Severity.Error);
-            return;
-        }
-
-        Result<bool> cancelResult = await ItemSplitService.CancelSplitAsync(request.Id, CurrentUserId);
-        switch (cancelResult)
-        {
-            case Success<bool>:
-                _ = Snackbar.Add("分割リクエストを取り下げました。", Severity.Success);
-                _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
-                await NotifyDataChangedAsync();
-                break;
-            case Failure fail:
-                _ = Snackbar.Add(fail.ErrorMessage, Severity.Error);
-                break;
-        }
-    }
-
     private async Task DeleteItemAsync()
     {
         if (Item.OwnerId != CurrentUserId)
@@ -759,7 +464,6 @@ public partial class ItemCard : IAsyncDisposable
 
         await ItemCardData.DeleteItemAsync(Item.Id);
         await NotifyDataChangedAsync();
-
         _ = Snackbar.Add("アイテムを削除しました。", Severity.Success);
     }
 
@@ -783,82 +487,79 @@ public partial class ItemCard : IAsyncDisposable
         _ = await DialogLauncher.ShowAsync<ReportContentDialog>("不適切な投稿を通報", parameters, options);
     }
 
-    // --- Tag Operations ---
+    // --- Text Split Logic (Delegated to SplitCoordinator) ---
+    private async Task SplitSelectionAsync()
+    {
+        var success = await SplitCoordinator.SplitSelectionAsync(Item, CurrentUserId);
+        if (success)
+        {
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task RequestSplitSelectionAsync()
+    {
+        ItemSplitRequest? request = await SplitCoordinator.RequestSplitSelectionAsync(Item, CurrentUserId);
+        if (request is not null)
+        {
+            await ReloadSplitRequestsAsync();
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task ApproveSplitRequestAsync(ItemSplitRequest request)
+    {
+        var success = await SplitCoordinator.ApproveSplitRequestAsync(Item, request, CurrentUserId);
+        if (success)
+        {
+            await ReloadSplitRequestsAsync();
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task RejectSplitRequestAsync(ItemSplitRequest request)
+    {
+        var success = await SplitCoordinator.RejectSplitRequestAsync(Item, request, CurrentUserId);
+        if (success)
+        {
+            await ReloadSplitRequestsAsync();
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task CancelSplitRequestAsync(ItemSplitRequest request)
+    {
+        var success = await SplitCoordinator.CancelSplitRequestAsync(request, CurrentUserId);
+        if (success)
+        {
+            await ReloadSplitRequestsAsync();
+            await NotifyDataChangedAsync();
+        }
+    }
+
+    private async Task ReloadSplitRequestsAsync()
+    {
+        _pendingSplitRequests = await ItemSplitService.GetPendingSplitRequestsForOriginalItemAsync(Item.Id) ?? [];
+    }
+
+    // --- Tag Operations (Delegated to TagCoordinator) ---
     private async Task OnAddTagClicked()
     {
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        IDialogReference dialog = await DialogLauncher.ShowAsync<TagAddDialog>("タグの追加", options);
-        DialogResult? result = await dialog.Result;
-
-        switch (result)
+        TagAddOutcome outcome = await TagCoordinator.PromptAndAddTagAsync(Item, CurrentUserId);
+        switch (outcome)
         {
-            case { Canceled: false, Data: Data.Tag selectedTag }:
-                await AddTagToItemAsync(selectedTag);
+            case TagAddOutcome.AddedDirectly:
+                await NotifyDataChangedAsync();
                 break;
-        }
-    }
-
-    private async Task AddTagToItemAsync(Data.Tag selectedTag)
-    {
-        Data.Tag? tagFromDb = await ItemCardData.GetTagWithOwnerAsync(selectedTag.Id);
-        if (tagFromDb is null)
-        {
-            return;
-        }
-
-        var canAttachDirectly = await ItemCardData.CanUserAttachTagDirectlyAsync(tagFromDb.Id, CurrentUserId);
-        if (!canAttachDirectly)
-        {
-            await ProposeTaggingContractAsync(tagFromDb);
-            return;
-        }
-
-        var alreadyExists = Item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
-        if (alreadyExists)
-        {
-            _ = Snackbar.Add(ErrorMessages.TagAlreadyAdded, Severity.Warning);
-            return;
-        }
-
-        await ExecuteAddTagToItemAsync(selectedTag, tagFromDb);
-    }
-
-    private async Task ProposeTaggingContractAsync(Data.Tag tagFromDb)
-    {
-        var parameters = new DialogParameters<ProposeContractDialog>
-        {
-            { x => x.TargetItem, Item },
-            { x => x.RequestedTag, tagFromDb },
-            { x => x.WeightDelta, 1 }
-        };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        IDialogReference dialog =
-            await DialogLauncher.ShowAsync<ProposeContractDialog>("コントラクトの提案", parameters, options);
-        DialogResult? result = await dialog.Result;
-
-        switch (result)
-        {
-            case { Canceled: false }:
-                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id);
+            case TagAddOutcome.ContractProposed:
+                _taggingRequests = await ItemTagService.GetTaggingRequestsForItemAsync(Item.Id) ?? [];
                 StateHasChanged();
                 await NotifyDataChangedAsync();
                 break;
+            case TagAddOutcome.None:
+            default:
+                break;
         }
-    }
-
-    private async Task ExecuteAddTagToItemAsync(Data.Tag selectedTag, Data.Tag tagFromDb)
-    {
-        TagRelation? newRelation =
-            await ItemCardData.AddFreeTagRelationAsync(Item.Id, selectedTag.Id, CurrentUserId);
-        if (newRelation is not null)
-        {
-            Item.TagRelations ??= [];
-            newRelation.Tag = tagFromDb;
-            Item.TagRelations.Add(newRelation);
-        }
-
-        _ = Snackbar.Add("タグを追加しました。", Severity.Success);
-        await NotifyDataChangedAsync();
     }
 
     /// <summary>親へデータ変更を通知する（デリゲート未接続なら何もしない）。</summary>

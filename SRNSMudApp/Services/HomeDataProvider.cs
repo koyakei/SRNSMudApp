@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Components.Pages;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 
 #endregion
@@ -73,7 +74,7 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        string[] systemTagNames = ["good", "bad", "真実", "善", "美"];
+        string[] systemTagNames = ["good", "bad", .. ReactionTagNames.All];
         Dictionary<string, Tag> existingTags = await context.Tags
             .Where(t => t.OwnerId == userId && t.IsSystem && systemTagNames.Contains(t.Name))
             .ToDictionaryAsync(t => t.Name, cancellationToken);
@@ -81,9 +82,9 @@ public class HomeDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory)
         var created = false;
         Tag goodTag = EnsureTag(context, existingTags.GetValueOrDefault("good"), "good", userId, ref created);
         Tag badTag = EnsureTag(context, existingTags.GetValueOrDefault("bad"), "bad", userId, ref created);
-        Tag shinjiTag = EnsureTag(context, existingTags.GetValueOrDefault("真実"), "真実", userId, ref created);
-        Tag zenTag = EnsureTag(context, existingTags.GetValueOrDefault("善"), "善", userId, ref created);
-        Tag biTag = EnsureTag(context, existingTags.GetValueOrDefault("美"), "美", userId, ref created);
+        Tag shinjiTag = EnsureTag(context, existingTags.GetValueOrDefault(ReactionTagNames.Shinji), ReactionTagNames.Shinji, userId, ref created);
+        Tag zenTag = EnsureTag(context, existingTags.GetValueOrDefault(ReactionTagNames.Zen), ReactionTagNames.Zen, userId, ref created);
+        Tag biTag = EnsureTag(context, existingTags.GetValueOrDefault(ReactionTagNames.Bi), ReactionTagNames.Bi, userId, ref created);
 
         if (created)
         {

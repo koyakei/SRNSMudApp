@@ -77,7 +77,10 @@ public static class BunitTestSetup
             .AddScoped<IUserGroupDataProvider, UserGroupDataProvider>()
             .AddScoped<IAdminDataProvider, AdminDataProvider>()
             .AddScoped<IItemSplitService, ItemSplitService>()
-            .AddScoped<ITagNameProposalService, TagNameProposalService>();
+            .AddScoped<ITagNameProposalService, TagNameProposalService>()
+            .AddScoped<IItemCardVoteCoordinator, ItemCardVoteCoordinator>()
+            .AddScoped<IItemCardSplitCoordinator, ItemCardSplitCoordinator>()
+            .AddScoped<IItemCardTagCoordinator, ItemCardTagCoordinator>();
     }
 
     /// <summary>
@@ -133,7 +136,10 @@ public static class BunitTestSetup
             })
             .AddScoped(_ => new Mock<IAdminDataProvider>().Object)
             .AddScoped(_ => new Mock<IUserDataProvider>().Object)
-            .AddScoped(_ => new Mock<IContentReportService>().Object);
+            .AddScoped(_ => new Mock<IContentReportService>().Object)
+            .AddScoped<IItemCardVoteCoordinator, ItemCardVoteCoordinator>()
+            .AddScoped<IItemCardSplitCoordinator, ItemCardSplitCoordinator>()
+            .AddScoped<IItemCardTagCoordinator, ItemCardTagCoordinator>();
     }
 
     /// <summary>

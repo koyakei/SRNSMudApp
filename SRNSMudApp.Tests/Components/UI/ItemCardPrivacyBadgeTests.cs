@@ -75,6 +75,22 @@ public sealed class ItemCardPrivacyBadgeTests : IAsyncLifetime
         Assert.Contains("グループ: 開発チーム", cut.Markup);
     }
 
+    [Fact]
+    public void PrivacyBadgeStrategyResolver_ReturnsNoBadgeForPublicItem()
+    {
+        Assert.Null(PrivacyBadgeStrategyResolver.Resolve(false, null));
+    }
+
+    [Fact]
+    public void PrivacyBadgeStrategyResolver_SelectsBadgeStrategyByContext()
+    {
+        PrivacyBadgeModel? followersBadge = PrivacyBadgeStrategyResolver.Resolve(true, null);
+        PrivacyBadgeModel? groupBadge = PrivacyBadgeStrategyResolver.Resolve(true, "開発チーム");
+
+        Assert.Equal("フォロワー限定", followersBadge?.Text);
+        Assert.Equal("グループ: 開発チーム", groupBadge?.Text);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

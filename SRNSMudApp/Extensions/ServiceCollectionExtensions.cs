@@ -2,11 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
-using SRNSMudApp.Services.Resolvers;
 using SRNSMudApp.Services.Commands;
 using SRNSMudApp.Services.Contracts;
 using SRNSMudApp.Services.Dialogs;
 using SRNSMudApp.Services.Reports;
+using SRNSMudApp.Services.Resolvers;
 
 namespace SRNSMudApp.Extensions;
 
@@ -116,6 +116,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IItemSplitService, ItemSplitService>();
         services.AddScoped<ITagContentProposalService, TagContentProposalService>();
         services.AddScoped<ITagNameProposalService, TagNameProposalService>();
+        services.AddScoped<IItemCardVoteCoordinator, ItemCardVoteCoordinator>();
+        services.AddScoped<IItemCardSplitCoordinator, ItemCardSplitCoordinator>();
+        services.AddScoped<IItemCardTagCoordinator, ItemCardTagCoordinator>();
 
         // 通報対象 Strategy (IReportTargetHandler) および Factory の登録
         services.AddScoped<IReportTargetHandler, ItemReportTargetHandler>();

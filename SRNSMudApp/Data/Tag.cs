@@ -28,7 +28,7 @@ public class Tag : BaseEntity
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "good", "bad" };
 
     public static readonly IReadOnlySet<string> ReactionTagNames =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "真実", "善", "美" };
+        new HashSet<string>(SRNSMudApp.Models.ReactionTagNames.All, StringComparer.OrdinalIgnoreCase);
 
     public bool IsSystem { get; set; }
 
