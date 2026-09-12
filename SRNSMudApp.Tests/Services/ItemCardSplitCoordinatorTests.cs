@@ -4,6 +4,7 @@ using Moq;
 
 using MudBlazor;
 
+using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Resources;
@@ -160,5 +161,122 @@ public class ItemCardSplitCoordinatorTests
 
         Assert.True(result);
         _snackbarMock.Verify(s => s.Add("分割リクエストを取り下げました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SplitSelectionAsync_WhenJSThrows_ReturnsFalse()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .ThrowsAsync(new JSException("JS Error"));
+
+        var result = await _coordinator.SplitSelectionAsync(item, OwnerId);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task SplitSelectionAsync_WhenServiceReturnsFailure_ShowsErrorSnackbar()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.SplitDirectlyAsync(1, "World", OwnerId, default))
+            .ReturnsAsync(new Failure("Split Failed"));
+
+        var result = await _coordinator.SplitSelectionAsync(item, OwnerId);
+
+        Assert.False(result);
+        _snackbarMock.Verify(s => s.Add("Split Failed", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WhenUserIdIsNullOrWhiteSpace_ShowsWarning()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, "");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("リクエストを送信するにはログインが必要です。", Severity.Warning, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_OnSuccess_ReturnsRequest()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var createdRequest = new ItemSplitRequest { Id = 12, OwnerId = OwnerId, RequesterUserId = RequesterId, SelectedText = "World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(true));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestConfirmDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(12, result.Id);
+        _snackbarMock.Verify(s => s.Add("アイテム分割リクエストを送信しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectSplitRequestAsync_WhenNotOwner_ShowsError()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var request = new ItemSplitRequest { Id = 10, OwnerId = OwnerId, SelectedText = "World" };
+
+        var result = await _coordinator.RejectSplitRequestAsync(item, request, "different-user");
+
+        Assert.False(result);
+        _snackbarMock.Verify(s => s.Add(ErrorMessages.NotAuthorizedToEdit, Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectSplitRequestAsync_OnSuccess_ReturnsTrue()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var request = new ItemSplitRequest { Id = 10, OwnerId = OwnerId, SelectedText = "World" };
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok<string?>("Rejection reason"));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(RejectRequestDialog), "分割リクエストを却下", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RejectSplitAsync(10, OwnerId, "Rejection reason", default))
+            .ReturnsAsync(new Success<bool>(true));
+
+        var result = await _coordinator.RejectSplitRequestAsync(item, request, OwnerId);
+
+        Assert.True(result);
+        _snackbarMock.Verify(s => s.Add("分割リクエストを却下しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Methods_ThrowArgumentNullException_WhenRequiredParametersAreNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId };
+        var request = new ItemSplitRequest { Id = 10, OwnerId = OwnerId };
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.SplitSelectionAsync(null!, OwnerId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.RequestSplitSelectionAsync(null!, RequesterId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.ApproveSplitRequestAsync(null!, request, OwnerId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.ApproveSplitRequestAsync(item, null!, OwnerId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.RejectSplitRequestAsync(null!, request, OwnerId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.RejectSplitRequestAsync(item, null!, OwnerId));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.CancelSplitRequestAsync(null!, RequesterId));
     }
 }

@@ -112,4 +112,48 @@ public class ItemCardVoteCoordinatorTests
         _itemReactionServiceMock.Verify(s => s.EnsureReactionTagAsync(UserId, ReactionTagNames.Shinji), Times.Once);
         _itemReactionServiceMock.Verify(s => s.ToggleItemReactionAsync(2, UserId, 20, 1), Times.Once);
     }
+
+    [Fact]
+    public async Task ToggleReactionAsync_WhenUserIdIsNullOrEmpty_ShowsLoginRequired()
+    {
+        var result = await _coordinator.ToggleReactionAsync(
+            2, "", ReactionTagNames.Shinji, targetWeight: 1, reactionTagId: 20, allTags: []);
+
+        Assert.False(result);
+        _snackbarMock.Verify(s => s.Add(ErrorMessages.LoginRequired, Severity.Warning, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ToggleReactionAsync_WhenTagIdSpecifiedInAllTags_UsesExistingTag()
+    {
+        var existingTag = new Tag { Id = 35, Name = ReactionTagNames.Zen, IsSystem = true, OwnerId = UserId };
+
+        _ = _itemReactionServiceMock
+            .Setup(s => s.ToggleItemReactionAsync(3, UserId, 35, 1))
+            .ReturnsAsync(new ItemVoteResult(ItemVoteAction.Added, 102, 1));
+
+        var result = await _coordinator.ToggleReactionAsync(
+            3, UserId, ReactionTagNames.Zen, targetWeight: 1, reactionTagId: 35, allTags: [existingTag]);
+
+        Assert.True(result);
+        _itemReactionServiceMock.Verify(s => s.ToggleItemReactionAsync(3, UserId, 35, 1), Times.Once);
+        _itemReactionServiceMock.Verify(s => s.EnsureReactionTagAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ToggleReactionAsync_WhenReactionTagNameIsNullOrWhiteSpace_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.ToggleReactionAsync(
+            1, UserId, null!, targetWeight: 1, reactionTagId: null, allTags: []));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _coordinator.ToggleReactionAsync(
+            1, UserId, "   ", targetWeight: 1, reactionTagId: null, allTags: []));
+    }
+
+    [Fact]
+    public async Task ToggleReactionAsync_WhenAllTagsIsNull_ThrowsArgumentNullException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.ToggleReactionAsync(
+            1, UserId, ReactionTagNames.Shinji, targetWeight: 1, reactionTagId: null, allTags: null!));
+    }
 }

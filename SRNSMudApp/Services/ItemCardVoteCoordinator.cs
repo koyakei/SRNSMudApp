@@ -63,9 +63,12 @@ public class ItemCardVoteCoordinator(
         IReadOnlyList<Tag> allTags,
         Func<Task>? ensureSystemTagsAsync = null)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reactionTagName);
+        ArgumentNullException.ThrowIfNull(allTags);
+
         if (string.IsNullOrEmpty(currentUserId))
         {
-            _ = _snackbar.Add("ログインが必要です。", Severity.Warning);
+            _ = _snackbar.Add(ErrorMessages.LoginRequired, Severity.Warning);
             return false;
         }
 

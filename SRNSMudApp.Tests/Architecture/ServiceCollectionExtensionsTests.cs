@@ -79,6 +79,9 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(ITagNameProposalService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(ITagWeightLedgerService) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IContentReportService) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(IItemCardVoteCoordinator) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(IItemCardSplitCoordinator) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(IItemCardTagCoordinator) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IReportTargetHandlerFactory) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Equal(2, services.Count(d => d.ServiceType == typeof(IReportTargetHandler)));
         Assert.Contains(services, d => d.ServiceType == typeof(ApplicationDbSaveChangesInterceptor) && d.Lifetime == ServiceLifetime.Singleton);

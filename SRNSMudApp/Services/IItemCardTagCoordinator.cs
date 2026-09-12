@@ -25,5 +25,8 @@ public interface IItemCardTagCoordinator
     /// <summary>
     ///     タグ追加ダイアログを表示し、ユーザー選択に応じて直接付与またはコントラクト提案を実行する。
     /// </summary>
+    /// <param name="item">タグを追加する対象アイテム。</param>
+    /// <param name="currentUserId">現在ログインしているユーザーの ID。</param>
+    /// <returns>タグ追加操作の結果（<see cref="TagAddOutcome" />）。</returns>
     Task<TagAddOutcome> PromptAndAddTagAsync(Item item, string currentUserId);
 }

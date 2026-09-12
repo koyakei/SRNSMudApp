@@ -131,4 +131,28 @@ public class ItemCardTagCoordinatorTests
         Assert.Equal(TagAddOutcome.ContractProposed, outcome);
         _dialogLauncherMock.Verify(l => l.ShowAsync(typeof(ProposeContractDialog), "コントラクトの提案", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()), Times.Once);
     }
+
+    [Fact]
+    public async Task PromptAndAddTagAsync_WhenItemIsNull_ThrowsArgumentNullException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.PromptAndAddTagAsync(null!, UserId));
+    }
+
+    [Fact]
+    public async Task PromptAndAddTagAsync_WhenTagNotFoundInDb_ReturnsNone()
+    {
+        var selectedTag = new Tag { Id = 99, Name = "NonExistentTag", OwnerId = UserId };
+        var item = new Item { Id = 1, OwnerId = UserId, TagRelations = [] };
+
+        _ = _dialogReferenceMock.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(selectedTag));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(TagAddDialog), "タグの追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(_dialogReferenceMock.Object);
+
+        _ = _itemCardDataMock.Setup(d => d.GetTagWithOwnerAsync(99)).ReturnsAsync((Tag?)null);
+
+        var outcome = await _coordinator.PromptAndAddTagAsync(item, UserId);
+
+        Assert.Equal(TagAddOutcome.None, outcome);
+    }
 }
