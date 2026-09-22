@@ -6,6 +6,7 @@
 # dotenv files
 .env
 *.bak
+*.lscache
 
 # User-specific files
 *.rsuser
