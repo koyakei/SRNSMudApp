@@ -131,7 +131,7 @@ public sealed class TagDetailPermissionRequestTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenClickPermissionRequestButton_OpensProposeContractDialog()
+    public async Task WhenClickPermissionRequestButton_OpensRequestTagPermissionDialog()
     {
         var tag = new SRNSMudApp.Data.Tag
         {
@@ -159,8 +159,8 @@ public sealed class TagDetailPermissionRequestTests : IAsyncLifetime
 
         _dialogLauncherMock
             .Setup(l => l.ShowAsync(
-                typeof(ProposeContractDialog),
-                "操作権限のリクエスト（コントラクト提案）",
+                typeof(RequestTagPermissionDialog),
+                "操作権限のリクエスト",
                 It.IsAny<DialogParameters?>(),
                 It.IsAny<DialogOptions?>()))
             .ReturnsAsync(dialogRefMock.Object);
@@ -175,8 +175,8 @@ public sealed class TagDetailPermissionRequestTests : IAsyncLifetime
         await cut.InvokeAsync(() => requestButton.Click());
 
         _dialogLauncherMock.Verify(l => l.ShowAsync(
-            typeof(ProposeContractDialog),
-            "操作権限のリクエスト（コントラクト提案）",
+            typeof(RequestTagPermissionDialog),
+            "操作権限のリクエスト",
             It.IsAny<DialogParameters?>(),
             It.IsAny<DialogOptions?>()), Times.Once);
     }

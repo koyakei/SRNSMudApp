@@ -1,0 +1,233 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models
+@using SRNSMudApp.Models.Unions
+@using SRNSMudApp.Services
+@inject IRightAssetDataProvider RightAssetDataProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex align-center gap-2 mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.Key" Color="Color.Primary" />
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                「@RequestedTag.Name」の操作権限リクエスト
+            </MudText>
+        </div>
+
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            このタグの操作権限（RightAsset）を保有者から譲渡・交換してもらうリクエストを送信します。
+        </MudText>
+
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <!-- リクエスト先ユーザー選択 -->
+            <MudSelect T="string" Label="リクエスト先ユーザー（必須）" @bind-Value="_selectedTargetUserId" Required="true"
+                       RequiredError="リクエスト先のユーザーを選択してください" Variant="Variant.Outlined" Class="mb-3"
+                       data-testid="request-target-user-select">
+                @foreach (var user in _selectableUsers)
+                {
+                    <MudSelectItem Value="@user.UserId">
+                        @user.DisplayName
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- 要求数量 -->
+            <MudNumericField T="int" Label="要求する操作権限の数量 (Amount)" @bind-Value="_requestedAmount" Min="1" Required="true"
+                             RequiredError="要求数量は1以上を入力してください" HelperText="@GetTargetUserAmountHelperText()"
+                             Variant="Variant.Outlined" Class="mb-3" data-testid="request-amount-field" />
+
+            <!-- 対価となる自分の操作権限（任意） -->
+            <MudSelect T="int?" Label="対価として提供する自分の操作権限（任意）" @bind-Value="_selectedOfferedAssetId" Clearable="true"
+                       Variant="Variant.Outlined" Class="mb-3" HelperText="未選択の場合は「無償でのリクエスト」となります"
+                       data-testid="offered-asset-select">
+                @foreach (var asset in _myAvailableAssets)
+                {
+                    <MudSelectItem Value="@((int?)asset.Id)">
+                        @($"{asset.TargetTagName} の操作権限 (保有残高: {asset.Amount})")
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- 対価提供数量 -->
+            @if (_selectedOfferedAssetId.HasValue)
+            {
+                <MudNumericField T="int" Label="提供する対価の数量 (Amount)" @bind-Value="_offeredAmount" Min="1"
+                                 Max="@GetSelectedAssetMaxAmount()" Required="true" RequiredError="提供数量は1以上を入力してください"
+                                 HelperText="@($"保有残高: {GetSelectedAssetMaxAmount()}")" Variant="Variant.Outlined" Class="mb-3"
+                                 data-testid="offered-amount-field" />
+            }
+
+            <!-- 依頼メッセージ -->
+            <MudTextField T="string" Label="依頼メッセージ（任意）" @bind-Value="_message" Lines="3" MaxLength="500" Counter="500"
+                          Placeholder="例: ○○の分類整理のため操作権限をいただけないでしょうか？" Variant="Variant.Outlined" Class="mb-2"
+                          data-testid="request-message-field" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SubmitAsync"
+                   Disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_selectedTargetUserId))"
+                   data-testid="submit-request-button">
+            @if (_isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">送信中...</span>
+            }
+            else
+            {
+                <span>リクエストを送信</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public Tag RequestedTag { get; set; } = null!;
+    [Parameter] public string? PresetTargetUserId { get; set; }
+    [Parameter] public IReadOnlyList<RightAssetHolderSummary> AvailableHolders { get; set; } = [];
+
+    private sealed record SelectableUser(string UserId, string DisplayName, int TotalAmount);
+
+    private MudForm? _form;
+    private bool _isValid = true;
+    private bool _isSubmitting;
+    private string _currentUserId = string.Empty;
+    private string? _selectedTargetUserId;
+    private int _requestedAmount = 1;
+    private int? _selectedOfferedAssetId;
+    private int _offeredAmount = 1;
+    private string? _message;
+    private List<SelectableUser> _selectableUsers = [];
+    private IReadOnlyList<UserAvailableRightAssetDto> _myAvailableAssets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var auth = await AuthState;
+            _currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        }
+
+        // 選択可能なリクエスト先ユーザー候補の構築
+        var usersMap = new Dictionary<string, SelectableUser>();
+
+        // タグオーナー（自分以外）を追加
+        if (!string.IsNullOrWhiteSpace(RequestedTag.OwnerId) && RequestedTag.OwnerId != _currentUserId)
+        {
+            var ownerName = RequestedTag.Owner?.UserName ?? RequestedTag.OwnerId;
+            usersMap[RequestedTag.OwnerId] = new SelectableUser(
+                RequestedTag.OwnerId,
+                $"{ownerName} (タグ作成者)",
+                0);
+        }
+
+        // 保有者一覧（自分以外）を追加
+        foreach (var holder in AvailableHolders.Where(h => h.UserId != _currentUserId && h.TotalAmount > 0))
+        {
+            var name = holder.UserName ?? holder.UserId;
+            var isOwner = holder.UserId == RequestedTag.OwnerId;
+            var roleSuffix = isOwner ? " [作成者]" : "";
+            usersMap[holder.UserId] = new SelectableUser(
+                holder.UserId,
+                $"{name}{roleSuffix} (有効保有量: {holder.TotalAmount})",
+                holder.TotalAmount);
+        }
+
+        _selectableUsers = usersMap.Values.ToList();
+
+        // 初期選択ユーザーの決定
+        if (!string.IsNullOrWhiteSpace(PresetTargetUserId) && usersMap.ContainsKey(PresetTargetUserId))
+        {
+            _selectedTargetUserId = PresetTargetUserId;
+        }
+        else if (_selectableUsers.Count > 0)
+        {
+            _selectedTargetUserId = _selectableUsers[0].UserId;
+        }
+
+        // ログインユーザーの保有RightAsset一覧（対価候補）を取得
+        if (!string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            _myAvailableAssets = await RightAssetDataProvider.GetAvailableRightAssetsForUserAsync(_currentUserId) ?? [];
+        }
+    }
+
+    private int GetSelectedAssetMaxAmount()
+    {
+        if (!_selectedOfferedAssetId.HasValue) return 1;
+        var asset = _myAvailableAssets.FirstOrDefault(a => a.Id == _selectedOfferedAssetId.Value);
+        return asset?.Amount ?? 1;
+    }
+
+    private string GetTargetUserAmountHelperText()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedTargetUserId)) return string.Empty;
+        var targetUser = _selectableUsers.FirstOrDefault(u => u.UserId == _selectedTargetUserId);
+        return targetUser is { TotalAmount: > 0 }
+            ? $"相手の有効保有残高: {targetUser.TotalAmount}"
+            : "相手の保有残高: 未確認または0";
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.ValidateAsync();
+            if (!_isValid) return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_selectedTargetUserId))
+        {
+            Snackbar.Add("リクエスト先のユーザーを選択してください。", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: RequestedTag.Id,
+                TargetUserId: _selectedTargetUserId,
+                RequestedAmount: _requestedAmount,
+                OfferedRightAssetId: _selectedOfferedAssetId,
+                OfferedAmount: _selectedOfferedAssetId.HasValue ? _offeredAmount : 0,
+                Message: _message);
+
+            var result = await RightAssetDataProvider.SubmitPermissionRequestAsync(_currentUserId, request);
+            switch (result)
+            {
+                case Success<bool>:
+                    Snackbar.Add("操作権限のリクエストを送信しました。", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                    break;
+                case Failure fail:
+                    Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"リクエスト送信中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
+

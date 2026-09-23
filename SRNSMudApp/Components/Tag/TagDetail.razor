@@ -346,6 +346,7 @@
                             <MudTh Style="text-align: right;">有効アセット件数</MudTh>
                             <MudTh Style="text-align: right;">燃焼済 (消費量)</MudTh>
                             <MudTh>最終更新日時</MudTh>
+                            <MudTh Style="text-align: center;">アクション</MudTh>
                         </HeaderContent>
                         <RowTemplate Context="holder">
                             <MudTd DataLabel="保有ユーザー">
@@ -385,6 +386,17 @@
                             </MudTd>
                             <MudTd DataLabel="最終更新日時">
                                 @(holder.LastUpdated?.ToLocalTime().ToString("yyyy/MM/dd HH:mm") ?? "-")
+                            </MudTd>
+                            <MudTd DataLabel="アクション" Style="text-align: center;">
+                                @if (_currentUserId is not null && holder.UserId != _currentUserId && holder.TotalAmount > 0)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.SwapHoriz"
+                                               OnClick="@(() => OpenRequestPermissionDialogAsync(holder.UserId))"
+                                               data-testid="@($"request-permission-holder-{holder.UserId}")">
+                                        リクエスト
+                                    </MudButton>
+                                }
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -899,20 +911,23 @@
         }
     }
 
-    private async Task OpenRequestPermissionDialogAsync()
+    private Task OpenRequestPermissionDialogAsync() => OpenRequestPermissionDialogAsync(null);
+
+    private async Task OpenRequestPermissionDialogAsync(string? presetUserId)
     {
         if (_tag is null || _currentUserId is null)
         {
             return;
         }
 
-        var parameters = new DialogParameters<ProposeContractDialog>
+        var parameters = new DialogParameters<RequestTagPermissionDialog>
         {
-            { x => x.RequestedTag, _tag }
+            { x => x.RequestedTag, _tag },
+            { x => x.PresetTargetUserId, presetUserId },
+            { x => x.AvailableHolders, _rightAssetOverview?.Holders ?? [] }
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        IDialogReference dialog = await DialogLauncher.ShowAsync<ProposeContractDialog>("操作権限のリクエスト（コントラクト提案）", parameters,
-options);
+        IDialogReference dialog = await DialogLauncher.ShowAsync<RequestTagPermissionDialog>("操作権限のリクエスト", parameters, options);
         DialogResult? result = await dialog.Result;
 
         if (result is { Canceled: false })

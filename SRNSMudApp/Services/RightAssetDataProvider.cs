@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 
 #endregion
 
@@ -30,14 +31,27 @@ public interface IRightAssetDataProvider
     /// <param name="cancellationToken">キャンセラレーショントークン。</param>
     /// <returns>タグごとの RightAsset 概要一覧。</returns>
     Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     ログインユーザーが所持する有効な RightAsset 一覧（対価アセット選択用）を取得する。
+    /// </summary>
+    Task<IReadOnlyList<UserAvailableRightAssetDto>> GetAvailableRightAssetsForUserAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     タグの操作権限（RightAsset）のリクエストを送信する。
+    /// </summary>
+    Task<Result<bool>> SubmitPermissionRequestAsync(string requesterUserId, TagPermissionRequestDto request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 ///     RightAsset の保有状況データを集計・取得する DataProvider 実装。
 /// </summary>
-public class RightAssetDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IRightAssetDataProvider
+public class RightAssetDataProvider(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    INotificationService? notificationService = null) : IRightAssetDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly INotificationService? _notificationService = notificationService;
 
     /// <inheritdoc />
     public async Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(int tagId, CancellationToken cancellationToken = default)
@@ -197,5 +211,124 @@ public class RightAssetDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
                 HolderCount: x.HolderCount
             ))
             .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UserAvailableRightAssetDto>> GetAvailableRightAssetsForUserAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return [];
+        }
+
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        return await dbContext.RightAssets
+            .AsNoTracking()
+            .Include(a => a.TargetTag)
+            .Where(a => a.OwnerId == userId && !a.IsBurned && a.Amount > 0)
+            .OrderBy(a => a.TargetTag.Name)
+            .Select(a => new UserAvailableRightAssetDto(
+                a.Id,
+                a.TargetTagId,
+                a.TargetTag.Name,
+                a.Amount))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> SubmitPermissionRequestAsync(string requesterUserId, TagPermissionRequestDto request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(requesterUserId))
+        {
+            return Result.Fail<bool>("リクエスト送信ユーザーが指定されていません。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TargetUserId))
+        {
+            return Result.Fail<bool>("リクエスト対象ユーザーが指定されていません。");
+        }
+
+        if (string.Equals(requesterUserId, request.TargetUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Fail<bool>("自分自身に操作権限をリクエストすることはできません。");
+        }
+
+        if (request.RequestedAmount <= 0)
+        {
+            return Result.Fail<bool>("リクエスト数量は1以上を指定してください。");
+        }
+
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        Tag? tag = await dbContext.Tags
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == request.RequestedTagId, cancellationToken);
+        if (tag is null)
+        {
+            return Result.Fail<bool>("対象のタグが見つかりません。");
+        }
+
+        ApplicationUser? targetUser = await dbContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == request.TargetUserId, cancellationToken);
+        if (targetUser is null)
+        {
+            return Result.Fail<bool>("対象ユーザーが見つかりません。");
+        }
+
+        RightAsset? offeredAsset = null;
+        if (request.OfferedRightAssetId.HasValue)
+        {
+            if (request.OfferedAmount <= 0)
+            {
+                return Result.Fail<bool>("提供する対価の数量は1以上を指定してください。");
+            }
+
+            offeredAsset = await dbContext.RightAssets
+                .AsNoTracking()
+                .Include(a => a.TargetTag)
+                .FirstOrDefaultAsync(a => a.Id == request.OfferedRightAssetId.Value && a.OwnerId == requesterUserId && !a.IsBurned, cancellationToken);
+
+            if (offeredAsset is null)
+            {
+                return Result.Fail<bool>("対価として指定されたアセットが存在しないか、すでに消費されています。");
+            }
+
+            if (offeredAsset.Amount < request.OfferedAmount)
+            {
+                return Result.Fail<bool>($"提供数量 ({request.OfferedAmount}) がアセットの保有残高 ({offeredAsset.Amount}) を超えています。");
+            }
+        }
+
+        var offeredSummary = offeredAsset != null
+            ? $"（対価: {offeredAsset.TargetTag.Name} x{request.OfferedAmount}）"
+            : "（無償リクエスト）";
+
+        var itemContent = $"【タグ操作権限リクエスト】\n" +
+                          $"タグ「{tag.Name}」の操作権限 {request.RequestedAmount} をリクエストしました。{offeredSummary}" +
+                          (string.IsNullOrWhiteSpace(request.Message) ? "" : $"\n\nメッセージ:\n{request.Message.Trim()}");
+
+        var requestItem = new Item
+        {
+            OwnerId = requesterUserId,
+            Content = itemContent,
+            NotificationRecipients =
+            [
+                new ItemReplyNotificationRecipient
+                {
+                    RecipientUserId = request.TargetUserId
+                }
+            ]
+        };
+
+        dbContext.Items.Add(requestItem);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _notificationService?.NotifyNotificationsChanged();
+
+        return Result.Ok(true);
     }
 }

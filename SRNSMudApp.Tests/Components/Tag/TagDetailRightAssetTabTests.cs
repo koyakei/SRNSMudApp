@@ -133,6 +133,13 @@ public sealed class TagDetailRightAssetTabTests : IAsyncLifetime
         Assert.Contains("Bob", cut.Markup);
         Assert.Contains("100", cut.Markup); // Alice's amount
         Assert.Contains("40", cut.Markup);  // Bob's amount
+
+        // 保有者テーブルにアクション列と「リクエスト」ボタンが存在することを検証
+        Assert.Contains("アクション", cut.Markup);
+        IElement? aliceRequestBtn = cut.FindAll("[data-testid='request-permission-holder-user-alice']").FirstOrDefault();
+        IElement? bobRequestBtn = cut.FindAll("[data-testid='request-permission-holder-user-bob']").FirstOrDefault();
+        Assert.NotNull(aliceRequestBtn);
+        Assert.NotNull(bobRequestBtn);
     }
 
     [Fact]

@@ -53,3 +53,23 @@ public sealed record TagRightAssetSummary(
     string? TagContent,
     int TotalAmount,
     int HolderCount);
+
+/// <summary>
+///     タグの操作権限（RightAsset）を他ユーザーへリクエストする際の入力データDTO。
+/// </summary>
+public sealed record TagPermissionRequestDto(
+    int RequestedTagId,
+    string TargetUserId,
+    int RequestedAmount,
+    int? OfferedRightAssetId = null,
+    int OfferedAmount = 0,
+    string? Message = null);
+
+/// <summary>
+///     対価として選択可能なユーザー所有の RightAsset 情報DTO。
+/// </summary>
+public sealed record UserAvailableRightAssetDto(
+    int Id,
+    int TargetTagId,
+    string TargetTagName,
+    int Amount);

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 
 #endregion
@@ -138,7 +139,7 @@ public class RightAssetDataProviderTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // Act
-            IReadOnlyList<TagRightAssetSummary> topTags = await sut.GetTopTagsWithRightAssetsAsync(5);
+            IReadOnlyList<TagRightAssetSummary> topTags = await sut.GetTopTagsWithRightAssetsAsync(50);
 
             // Assert
             Assert.True(topTags.Count >= 3);
@@ -154,6 +155,124 @@ public class RightAssetDataProviderTests : IAsyncLifetime
             Assert.Equal(5, top3.TotalAmount);
         }
     }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsForUserAsync_ReturnsOnlyActiveAssetsForUser()
+    {
+        var (db, sut, userA, userB, tag1Id, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var tag2 = new Tag { Name = $"MyTag2_{tid}", OwnerId = userA };
+            db.Tags.Add(tag2);
+            await db.SaveChangesAsync();
+
+            // userA: 有効 10 (tag1), 有効 20 (tag2), 燃焼済み 5 (tag1)
+            // userB: 有効 15 (tag1)
+            db.RightAssets.AddRange(
+                new RightAsset { TargetTagId = tag1Id, OwnerId = userA, Amount = 10, IsBurned = false },
+                new RightAsset { TargetTagId = tag2.Id, OwnerId = userA, Amount = 20, IsBurned = false },
+                new RightAsset { TargetTagId = tag1Id, OwnerId = userA, Amount = 5, IsBurned = true },
+                new RightAsset { TargetTagId = tag1Id, OwnerId = userB, Amount = 15, IsBurned = false }
+            );
+            await db.SaveChangesAsync();
+
+            // Act
+            IReadOnlyList<UserAvailableRightAssetDto> assets = await sut.GetAvailableRightAssetsForUserAsync(userA);
+
+            // Assert
+            Assert.Equal(2, assets.Count);
+            Assert.Contains(assets, a => a.TargetTagId == tag1Id && a.Amount == 10);
+            Assert.Contains(assets, a => a.TargetTagId == tag2.Id && a.Amount == 20);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitPermissionRequestAsync_WhenValidGratisRequest_SavesItemAndReturnsSuccess()
+    {
+        var (db, sut, userA, userB, tagId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagId,
+                TargetUserId: userA, // userB requests to userA
+                RequestedAmount: 5,
+                OfferedRightAssetId: null,
+                OfferedAmount: 0,
+                Message: "分類整理のため5ください"
+            );
+
+            // Act
+            var result = await sut.SubmitPermissionRequestAsync(userB, request);
+
+            // Assert
+            Assert.True(result is Success<bool>);
+
+            // DB にメッセージ Item が作られていること
+            var item = await db.Items
+                .Include(i => i.NotificationRecipients)
+                .FirstOrDefaultAsync(i => i.OwnerId == userB);
+
+            Assert.NotNull(item);
+            Assert.Contains("タグ操作権限リクエスト", item.Content);
+            Assert.Contains("無償リクエスト", item.Content);
+            Assert.Contains("分類整理のため5ください", item.Content);
+            Assert.Single(item.NotificationRecipients);
+            Assert.Equal(userA, item.NotificationRecipients.First().RecipientUserId);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitPermissionRequestAsync_WhenValidWithOfferedAsset_SavesItemAndReturnsSuccess()
+    {
+        var (db, sut, userA, userB, tag1Id, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var tag2 = new Tag { Name = $"OfferTag_{tid}", OwnerId = userB };
+            db.Tags.Add(tag2);
+            await db.SaveChangesAsync();
+
+            var offeredAsset = new RightAsset { TargetTagId = tag2.Id, OwnerId = userB, Amount = 10, IsBurned = false };
+            db.RightAssets.Add(offeredAsset);
+            await db.SaveChangesAsync();
+
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tag1Id,
+                TargetUserId: userA,
+                RequestedAmount: 3,
+                OfferedRightAssetId: offeredAsset.Id,
+                OfferedAmount: 2,
+                Message: "交換お願いします"
+            );
+
+            // Act
+            var result = await sut.SubmitPermissionRequestAsync(userB, request);
+
+            // Assert
+            Assert.True(result is Success<bool>);
+
+            var item = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(item);
+            Assert.Contains(tag2.Name, item.Content);
+            Assert.Contains("対価:", item.Content);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitPermissionRequestAsync_WhenRequestingSelf_ReturnsFailure()
+    {
+        var (_, sut, userA, _, tagId, _) = await CreateScopeAsync();
+
+        var request = new TagPermissionRequestDto(
+            RequestedTagId: tagId,
+            TargetUserId: userA,
+            RequestedAmount: 1
+        );
+
+        var result = await sut.SubmitPermissionRequestAsync(userA, request);
+
+        Assert.True(result is Failure fail && fail.ErrorMessage.Contains("自分自身"));
+    }
+
 
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
