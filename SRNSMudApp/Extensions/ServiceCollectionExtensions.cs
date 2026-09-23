@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITagHierarchyService, TagHierarchyService>();
         services.AddScoped<ITaggingImportDataProvider, TaggingImportDataProvider>();
         services.AddScoped<ITagLockService, TagLockService>();
+        services.AddScoped<IRightAssetDataProvider, RightAssetDataProvider>();
 
         return services;
     }

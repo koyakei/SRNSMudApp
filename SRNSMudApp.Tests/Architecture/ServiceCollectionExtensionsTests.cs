@@ -42,6 +42,7 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, d => d.ServiceType == typeof(IBountyDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IPublicOfferDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IContractLookupDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(IRightAssetDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
     }
 
     [Fact]

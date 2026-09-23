@@ -1,0 +1,382 @@
+@page "/RightAsset/Overview"
+@rendermode InteractiveServer
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models
+@using SRNSMudApp.Services
+@using SRNSMudApp.Components.Tag
+@inject IRightAssetDataProvider RightAssetDataProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>RightAsset 状況一覧 - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-10">
+    <div class="d-flex align-center mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h5" Class="font-weight-bold">RightAsset 保有状況</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                タグを指定して、誰がどれだけの RightAsset を保有しているかを確認できます。
+            </MudText>
+        </div>
+    </div>
+
+    <!-- 検索バー -->
+    <MudPaper Class="pa-4 mb-6" Elevation="2">
+        <TagAutocomplete Value="@_selectedTag"
+                         ValueChanged="OnTagSelectedAsync"
+                         Label="タグを検索してRightAsset状況を表示"
+                         Placeholder="タグ名または説明を入力..."
+                         Clearable="true" />
+    </MudPaper>
+
+    @if (_isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-6" />
+    }
+    else if (_overviewData != null)
+    {
+        <!-- タグ概要ヘッダーカード -->
+        <MudCard Class="mb-6" Elevation="2">
+            <MudCardContent>
+                <div class="d-flex justify-space-between align-start flex-wrap gap-4">
+                    <div>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
+                            <MudText Typo="Typo.h5" Class="font-weight-bold">@_overviewData.Tag.Name</MudText>
+                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">
+                                Weight: @_overviewData.Tag.CachedWeight
+                            </MudChip>
+                            @if (_overviewData.Tag.IsSystem)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">システムタグ</MudChip>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_overviewData.Tag.Content))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                                @_overviewData.Tag.Content
+                            </MudText>
+                        }
+                    </div>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.OpenInNew"
+                               Href="@($"/Tag/TagDetail/{_overviewData.Tag.Id}")">
+                        タグ詳細を見る
+                    </MudButton>
+                </div>
+            </MudCardContent>
+        </MudCard>
+
+        <!-- メトリクスカード群 -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex align-center justify-space-between" Elevation="1">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">総有効保有量</MudText>
+                        <MudText Typo="Typo.h5" Class="font-weight-bold" Color="Color.Primary">
+                            @_overviewData.TotalActiveAmount
+                        </MudText>
+                    </div>
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.Token" />
+                    </MudAvatar>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex align-center justify-space-between" Elevation="1">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">有効保有者数</MudText>
+                        <MudText Typo="Typo.h5" Class="font-weight-bold">
+                            @_overviewData.TotalHoldersCount 人
+                        </MudText>
+                    </div>
+                    <MudAvatar Color="Color.Success" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.People" />
+                    </MudAvatar>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex align-center justify-space-between" Elevation="1">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">有効アセット件数</MudText>
+                        <MudText Typo="Typo.h5" Class="font-weight-bold">
+                            @_overviewData.TotalActiveAssetsCount 件
+                        </MudText>
+                    </div>
+                    <MudAvatar Color="Color.Info" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" />
+                    </MudAvatar>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex align-center justify-space-between" Elevation="1">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">燃焼済み量 (Burned)</MudText>
+                        <MudText Typo="Typo.h5" Class="font-weight-bold" Color="Color.Dark">
+                            @_overviewData.TotalBurnedAmount
+                        </MudText>
+                    </div>
+                    <MudAvatar Color="Color.Default" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" />
+                    </MudAvatar>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- メインタブ: 保有者一覧 / アセット明細 -->
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            <MudTabPanel Text="保有者別サマリー" Icon="@Icons.Material.Filled.People">
+                <MudTable Items="@_overviewData.Holders"
+                          Dense="true"
+                          Hover="true"
+                          Striped="true"
+                          Breakpoint="Breakpoint.Sm"
+                          Loading="@_isLoading"
+                          LoadingProgressColor="Color.Info"
+                          data-testid="right-asset-holders-table">
+                    <HeaderContent>
+                        <MudTh>保有ユーザー</MudTh>
+                        <MudTh Style="text-align: right;">有効保有量</MudTh>
+                        <MudTh Style="width: 25%;">保有シェア</MudTh>
+                        <MudTh Style="text-align: right;">有効アセット件数</MudTh>
+                        <MudTh Style="text-align: right;">燃焼済 (消費量)</MudTh>
+                        <MudTh>最終更新日時</MudTh>
+                        <MudTh Style="text-align: center;">操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="保有ユーザー">
+                            <div class="d-flex align-center gap-2">
+                                <MudAvatar Size="Size.Small" Color="Color.Secondary">
+                                    @((context.UserName ?? context.UserId)[..1].ToUpperInvariant())
+                                </MudAvatar>
+                                <div>
+                                    <MudLink Href="@($"/User/UserDetail/{context.UserId}")" Underline="Underline.Hover">
+                                        <strong>@(context.UserName ?? context.UserId)</strong>
+                                    </MudLink>
+                                    @if (!string.IsNullOrEmpty(context.UserName))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                            ID: @context.UserId
+                                        </MudText>
+                                    }
+                                </div>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="有効保有量" Style="text-align: right;">
+                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                                @context.TotalAmount
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="保有シェア">
+                            @{
+                                var share = _overviewData.TotalActiveAmount > 0
+                                    ? (double)context.TotalAmount / _overviewData.TotalActiveAmount * 100
+                                    : 0;
+                            }
+                            <div class="d-flex align-center gap-2">
+                                <MudProgressLinear Color="Color.Primary"
+                                                   Value="@share"
+                                                   Rounded="true"
+                                                   Class="flex-grow-1" />
+                                <MudText Typo="Typo.caption" Style="min-width: 45px; text-align: right;">
+                                    @share.ToString("F1")%
+                                </MudText>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="有効アセット件数" Style="text-align: right;">
+                            @context.ActiveAssetCount 件
+                        </MudTd>
+                        <MudTd DataLabel="燃焼済 (消費量)" Style="text-align: right;">
+                            @if (context.BurnedAmount > 0)
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @context.BurnedAmount (@context.BurnedAssetCount 件)
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="最終更新日時">
+                            @(context.LastUpdated?.ToLocalTime().ToString("yyyy/MM/dd HH:mm") ?? "-")
+                        </MudTd>
+                        <MudTd DataLabel="操作" Style="text-align: center;">
+                            <MudIconButton Icon="@Icons.Material.Filled.Person"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           Href="@($"/User/UserDetail/{context.UserId}")"
+                                           Title="ユーザー詳細へ" />
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudAlert Severity="Severity.Normal" Class="my-4">
+                            このタグを保有しているユーザーはいません。
+                        </MudAlert>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudTabPanel>
+
+            <MudTabPanel Text="個別 RightAsset 明細" Icon="@Icons.Material.Filled.ListAlt">
+                <MudTable Items="@_overviewData.Assets"
+                          Dense="true"
+                          Hover="true"
+                          Striped="true"
+                          Breakpoint="Breakpoint.Sm"
+                          data-testid="right-asset-items-table">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>所有者</MudTh>
+                        <MudTh Style="text-align: right;">数量 (Amount)</MudTh>
+                        <MudTh>状態</MudTh>
+                        <MudTh>作成日時</MudTh>
+                        <MudTh>更新日時</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">#@context.Id</MudTd>
+                        <MudTd DataLabel="所有者">
+                            <MudLink Href="@($"/User/UserDetail/{context.OwnerId}")" Underline="Underline.Hover">
+                                @(context.OwnerName ?? context.OwnerId)
+                            </MudLink>
+                        </MudTd>
+                        <MudTd DataLabel="数量" Style="text-align: right;">
+                            <strong>@context.Amount</strong>
+                        </MudTd>
+                        <MudTd DataLabel="状態">
+                            @if (context.IsBurned)
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                                    @context.StatusSummary
+                                </MudChip>
+                            }
+                            else if (context.Amount > 0)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
+                                    有効
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                                    残高0
+                                </MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="作成日時">
+                            @context.CreatedDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm")
+                        </MudTd>
+                        <MudTd DataLabel="更新日時">
+                            @context.UpdatedDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm")
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudAlert Severity="Severity.Normal" Class="my-4">
+                            RightAsset のレコードが存在しません。
+                        </MudAlert>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudTabPanel>
+        </MudTabs>
+    }
+    else
+    {
+        <!-- 未選択時の案内と代表タグ -->
+        <MudAlert Severity="Severity.Info" Class="mb-6" Icon="@Icons.Material.Filled.Info">
+            上の検索バーからタグを入力して検索・選択すると、そのタグの RightAsset 保有状況が表示されます。
+        </MudAlert>
+
+        @if (_topTags.Count > 0)
+        {
+            <MudPaper Class="pa-4" Elevation="1">
+                <div class="d-flex align-center mb-3">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Primary" Class="mr-2" />
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">RightAsset 発行実績のあるタグ</MudText>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var tagSummary in _topTags)
+                    {
+                        <MudChip T="string"
+                                 Color="Color.Primary"
+                                 Variant="Variant.Outlined"
+                                 Icon="@Icons.Material.Filled.LocalOffer"
+                                 OnClick="@(() => OnSelectTopTagAsync(tagSummary.TagId))">
+                            @tagSummary.TagName (@tagSummary.TotalAmount 持分 / @tagSummary.HolderCount 人)
+                        </MudChip>
+                    }
+                </div>
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int? TagId { get; set; }
+
+    private Tag? _selectedTag;
+    private RightAssetOverviewData? _overviewData;
+    private IReadOnlyList<TagRightAssetSummary> _topTags = [];
+    private bool _isLoading;
+    private int? _loadedTagId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _topTags = await RightAssetDataProvider.GetTopTagsWithRightAssetsAsync(15);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (TagId.HasValue && TagId.Value != _loadedTagId)
+        {
+            await LoadDataByTagIdAsync(TagId.Value);
+        }
+        else if (!TagId.HasValue && _loadedTagId.HasValue)
+        {
+            _selectedTag = null;
+            _overviewData = null;
+            _loadedTagId = null;
+        }
+    }
+
+    private async Task OnTagSelectedAsync(Tag? tag)
+    {
+        _selectedTag = tag;
+        if (tag != null)
+        {
+            NavigationManager.NavigateTo($"/RightAsset/Overview?tagId={tag.Id}", replace: false);
+            await LoadDataByTagIdAsync(tag.Id);
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/RightAsset/Overview", replace: false);
+            _overviewData = null;
+            _loadedTagId = null;
+        }
+    }
+
+    private async Task OnSelectTopTagAsync(int tagId)
+    {
+        NavigationManager.NavigateTo($"/RightAsset/Overview?tagId={tagId}", replace: false);
+        await LoadDataByTagIdAsync(tagId);
+    }
+
+    private async Task LoadDataByTagIdAsync(int tagId)
+    {
+        _isLoading = true;
+        _loadedTagId = tagId;
+        try
+        {
+            _overviewData = await RightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId);
+            if (_overviewData != null)
+            {
+                _selectedTag = _overviewData.Tag;
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
+
