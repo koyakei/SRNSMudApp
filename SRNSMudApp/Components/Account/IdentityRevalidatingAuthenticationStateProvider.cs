@@ -37,11 +37,10 @@ internal sealed class IdentityRevalidatingAuthenticationStateProvider(
         ClaimsPrincipal principal)
     {
         ApplicationUser? user = await userManager.GetUserAsync(principal);
-        if (user is null)
-            if (user is null || user.IsBanned || await userManager.IsLockedOutAsync(user))
-            {
-                return false;
-            }
+        if (user is null || user.IsBanned || await userManager.IsLockedOutAsync(user))
+        {
+            return false;
+        }
 
         if (!userManager.SupportsUserSecurityStamp)
         {

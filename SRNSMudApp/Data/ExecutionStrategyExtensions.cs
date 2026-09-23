@@ -12,8 +12,7 @@ namespace SRNSMudApp.Data;
 ///     SQL Server 再実行戦略 (<see cref="SqlServerRetryingExecutionStrategy" />) 対応の
 ///     トランザクション実行ヘルパーを提供する。
 ///     手動 <c>BeginTransactionAsync</c> は再実行戦略と互換性がないため、
-///     <see cref="IExecutionStrategy.ExecuteAsync{TState,TResult}(TState,Func{DbContext,TState,Task{TResult}},Func{DbContext,TState,Task})" />
-///     を使用して再実行可能な単位として処理する。
+///     <see cref="IExecutionStrategy" /> を使用して再実行可能な単位として処理する。
 /// </summary>
 public static class ExecutionStrategyExtensions
 {

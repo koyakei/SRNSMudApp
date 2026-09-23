@@ -311,7 +311,7 @@ public class TaggingContractService(
                 return successResult;
             });
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("既に処理されている") || ex.Message.Contains("Unknown contract type"))
+        catch (InvalidOperationException ex) when (ex.Message.Contains("既に処理されている", StringComparison.Ordinal) || ex.Message.Contains("Unknown contract type", StringComparison.Ordinal))
         {
             return new Failure(ex.Message);
         }

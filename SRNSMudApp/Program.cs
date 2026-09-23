@@ -174,7 +174,7 @@ using (IServiceScope scope = app.Services.CreateScope())
     RoleManager<IdentityRole> roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     UserManager<ApplicationUser> userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-#pragma warning disable CA1031, RCS1075
+#pragma warning disable CA1031, CA1848, RCS1075
     try
     {
         await SeedLock.WaitAsync();
@@ -269,7 +269,7 @@ using (IServiceScope scope = app.Services.CreateScope())
     {
         app.Logger.LogWarning(ex, "DBシード処理中にエラーが発生しました。");
     }
-#pragma warning restore CA1031, RCS1075
+#pragma warning restore CA1031, CA1848, RCS1075
 }
 
 // Configure the HTTP request pipeline.

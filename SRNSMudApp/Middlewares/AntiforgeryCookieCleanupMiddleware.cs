@@ -2,6 +2,7 @@
 
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
@@ -77,7 +78,8 @@ public sealed partial class AntiforgeryCookieCleanupMiddleware
                 {
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        LogInvalidAntiforgeryCookie(_logger, string.Join(", ", invalidCookies));
+                        var invalidCookieNames = string.Join(", ", invalidCookies);
+                        LogInvalidAntiforgeryCookie(_logger, invalidCookieNames);
                     }
 
                     // ブラウザへクッキー削除レスポンスヘッダを発行（ルートパス指定と既定の双方で確実に消去）
@@ -120,6 +122,8 @@ public sealed partial class AntiforgeryCookieCleanupMiddleware
         await _next(context);
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "データ保護の任意の復号失敗（キー不一致、破損、形式不正など）を検知してfalseを返すため")]
     private static bool TryUnprotect(IDataProtector protector, string cookieValue)
     {
         try

@@ -29,10 +29,9 @@ public class FirstUserAdminServiceTests
         um.Setup(m => m.AddToRoleAsync(It.IsAny<ApplicationUser>(), "Admin"))
           .ReturnsAsync(IdentityResult.Success);
 
-        // Users プロパティは EF Core DbSet のため直接 Mock できない。
-        // AnyAsync を含むパスは統合テストで検証する。
+        // Users プロパティは EF Core DbSet のため非同期プロバイダを模倣する
         um.Setup(m => m.Users)
-          .Returns(Array.Empty<ApplicationUser>().AsQueryable());
+          .Returns(Array.Empty<ApplicationUser>().AsAsyncQueryable());
 
         return um;
     }
@@ -80,4 +79,3 @@ public class FirstUserAdminServiceTests
         um.Verify(m => m.AddToRoleAsync(It.IsAny<ApplicationUser>(), "Admin"), Times.Never);
     }
 }
-

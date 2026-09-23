@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
@@ -27,6 +29,8 @@ public class TagRelationService(IDbContextFactory<ApplicationDbContext> dbFactor
         });
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "トランザクション実行中の予期せぬ例外をFailure結果として捕捉するため")]
     private static async Task<Result<bool>> ExecuteLinkTagTransactionAsync(ApplicationDbContext context, Item item, Tag tag, string currentUserId, int requiredWeight)
     {
         try
@@ -127,6 +131,8 @@ public class TagRelationService(IDbContextFactory<ApplicationDbContext> dbFactor
             _ => Task.FromResult<Result<bool>>(new Failure("Item or Tag not found"))
         });
     }
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "トランザクション実行中の予期せぬ例外をFailure結果として捕捉するため")]
     private static async Task<Result<bool>> ExecuteAllocationTransactionAsync(ApplicationDbContext context, RightAsset rightAsset, Item item, Tag tag, string currentUserId, int manipulationDelta, int consumeAmount)
     {
         try
