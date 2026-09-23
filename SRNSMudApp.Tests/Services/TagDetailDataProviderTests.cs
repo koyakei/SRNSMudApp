@@ -82,6 +82,32 @@ public class TagDetailDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task GetTagDetailAsync_ReturnsRightAssetOverviewCorrectly()
+    {
+        var (db, sut, _, userId, parentTagId, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var asset1 = new RightAsset { TargetTagId = parentTagId, OwnerId = userId, Amount = 10, IsBurned = false };
+            var asset2 = new RightAsset { TargetTagId = parentTagId, OwnerId = userId, Amount = 5, IsBurned = false };
+            var assetBurned = new RightAsset { TargetTagId = parentTagId, OwnerId = userId, Amount = 3, IsBurned = true };
+
+            db.RightAssets.AddRange(asset1, asset2, assetBurned);
+            await db.SaveChangesAsync();
+
+            TagDetailPageData result = await sut.GetTagDetailAsync(parentTagId, userId);
+
+            Assert.NotNull(result.RightAssetOverview);
+            Assert.Equal(15, result.RightAssetOverview.TotalActiveAmount);
+            Assert.Equal(1, result.RightAssetOverview.TotalHoldersCount);
+            Assert.Equal(3, result.RightAssetOverview.TotalBurnedAmount);
+            Assert.Single(result.RightAssetOverview.Holders);
+            Assert.Equal(userId, result.RightAssetOverview.Holders[0].UserId);
+            Assert.Equal(15, result.RightAssetOverview.Holders[0].TotalAmount);
+            Assert.Equal(3, result.RightAssetOverview.Assets.Count);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

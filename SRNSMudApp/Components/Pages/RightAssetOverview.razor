@@ -11,7 +11,8 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-10">
     <div class="d-flex align-center mb-4">
-        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary"
+                 Class="mr-3" />
         <div>
             <MudText Typo="Typo.h5" Class="font-weight-bold">RightAsset 保有状況</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">
@@ -22,11 +23,8 @@
 
     <!-- 検索バー -->
     <MudPaper Class="pa-4 mb-6" Elevation="2">
-        <TagAutocomplete Value="@_selectedTag"
-                         ValueChanged="OnTagSelectedAsync"
-                         Label="タグを検索してRightAsset状況を表示"
-                         Placeholder="タグ名または説明を入力..."
-                         Clearable="true" />
+        <TagAutocomplete Value="@_selectedTag" ValueChanged="OnTagSelectedAsync" Label="タグを検索してRightAsset状況を表示"
+                         Placeholder="タグ名または説明を入力..." Clearable="true" />
     </MudPaper>
 
     @if (_isLoading)
@@ -48,7 +46,8 @@
                             </MudChip>
                             @if (_overviewData.Tag.IsSystem)
                             {
-                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">システムタグ</MudChip>
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">システムタグ
+                                </MudChip>
                             }
                         </div>
                         @if (!string.IsNullOrWhiteSpace(_overviewData.Tag.Content))
@@ -58,10 +57,8 @@
                             </MudText>
                         }
                     </div>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.OpenInNew"
-                               Href="@($"/Tag/TagDetail/{_overviewData.Tag.Id}")">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.OpenInNew"
+                               Href="@($"/TagDetail/{_overviewData.Tag.Id}")">
                         タグ詳細を見る
                     </MudButton>
                 </div>
@@ -127,14 +124,8 @@
         <!-- メインタブ: 保有者一覧 / アセット明細 -->
         <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
             <MudTabPanel Text="保有者別サマリー" Icon="@Icons.Material.Filled.People">
-                <MudTable Items="@_overviewData.Holders"
-                          Dense="true"
-                          Hover="true"
-                          Striped="true"
-                          Breakpoint="Breakpoint.Sm"
-                          Loading="@_isLoading"
-                          LoadingProgressColor="Color.Info"
-                          data-testid="right-asset-holders-table">
+                <MudTable Items="@_overviewData.Holders" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm"
+                          Loading="@_isLoading" LoadingProgressColor="Color.Info" data-testid="right-asset-holders-table">
                     <HeaderContent>
                         <MudTh>保有ユーザー</MudTh>
                         <MudTh Style="text-align: right;">有効保有量</MudTh>
@@ -175,9 +166,7 @@
                                     : 0;
                             }
                             <div class="d-flex align-center gap-2">
-                                <MudProgressLinear Color="Color.Primary"
-                                                   Value="@share"
-                                                   Rounded="true"
+                                <MudProgressLinear Color="Color.Primary" Value="@share" Rounded="true"
                                                    Class="flex-grow-1" />
                                 <MudText Typo="Typo.caption" Style="min-width: 45px; text-align: right;">
                                     @share.ToString("F1")%
@@ -203,11 +192,8 @@
                             @(context.LastUpdated?.ToLocalTime().ToString("yyyy/MM/dd HH:mm") ?? "-")
                         </MudTd>
                         <MudTd DataLabel="操作" Style="text-align: center;">
-                            <MudIconButton Icon="@Icons.Material.Filled.Person"
-                                           Size="Size.Small"
-                                           Color="Color.Primary"
-                                           Href="@($"/User/UserDetail/{context.UserId}")"
-                                           Title="ユーザー詳細へ" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary"
+                                           Href="@($"/User/UserDetail/{context.UserId}")" Title="ユーザー詳細へ" />
                         </MudTd>
                     </RowTemplate>
                     <NoRecordsContent>
@@ -219,11 +205,7 @@
             </MudTabPanel>
 
             <MudTabPanel Text="個別 RightAsset 明細" Icon="@Icons.Material.Filled.ListAlt">
-                <MudTable Items="@_overviewData.Assets"
-                          Dense="true"
-                          Hover="true"
-                          Striped="true"
-                          Breakpoint="Breakpoint.Sm"
+                <MudTable Items="@_overviewData.Assets" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm"
                           data-testid="right-asset-items-table">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
@@ -296,11 +278,8 @@
                 <div class="d-flex flex-wrap gap-2">
                     @foreach (var tagSummary in _topTags)
                     {
-                        <MudChip T="string"
-                                 Color="Color.Primary"
-                                 Variant="Variant.Outlined"
-                                 Icon="@Icons.Material.Filled.LocalOffer"
-                                 OnClick="@(() => OnSelectTopTagAsync(tagSummary.TagId))">
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined"
+                                 Icon="@Icons.Material.Filled.LocalOffer" OnClick="@(() => OnSelectTopTagAsync(tagSummary.TagId))">
                             @tagSummary.TagName (@tagSummary.TotalAmount 持分 / @tagSummary.HolderCount 人)
                         </MudChip>
                     }

@@ -199,4 +199,3 @@ public class RightAssetDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .ToList();
     }
 }
-

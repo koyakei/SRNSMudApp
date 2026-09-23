@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using SRNSMudApp.Services
 @using SRNSMudApp.Data
+@using SRNSMudApp.Models
 @using SRNSMudApp.Models.Unions
 @using SRNSMudApp.Components.UI
 @using SRNSMudApp.Components.Contract
@@ -296,6 +297,149 @@
             <MudTabPanel Text="関連オファー">
                 <SRNSMudApp.Components.UI.PublicTradeOfferList Offers="_publicOffers" OnOfferTriggered="LoadDataAsync" />
             </MudTabPanel>
+            <MudTabPanel Text="操作権限" Icon="@Icons.Material.Filled.Key" BadgeData="@(_rightAssetOverview?.TotalHoldersCount)"
+                         BadgeColor="Color.Primary">
+                <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
+                    <div class="d-flex align-center gap-3">
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold">RightAsset 保有状況</MudText>
+                        @if (_rightAssetOverview is not null)
+                        {
+                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                                総保有量: @_rightAssetOverview.TotalActiveAmount
+                            </MudChip>
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                                保有者: @_rightAssetOverview.TotalHoldersCount 人
+                            </MudChip>
+                        }
+                    </div>
+                    <div class="d-flex gap-2">
+                        @if (_currentUserId is not null && _currentUserId != _tag.OwnerId)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Send" OnClick="@OpenRequestPermissionDialogAsync">
+                                操作権限をリクエスト
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.OpenInNew" Href="@($"/RightAsset/Overview?tagId={TagId}")">
+                            RightAsset 詳細画面を開く
+                        </MudButton>
+                    </div>
+                </div>
+
+                @if (_rightAssetOverview is null || _rightAssetOverview.Holders.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Normal" Class="my-3">
+                        このタグに対する有効な RightAsset はまだ発行されていません。
+                    </MudAlert>
+                }
+                else
+                {
+                    <!-- 保有者一覧テーブル -->
+                    <MudText Typo="Typo.body2" Class="font-weight-bold mb-2">保有者一覧（誰がどれだけ持っているか）</MudText>
+                    <MudTable Items="@_rightAssetOverview.Holders" Dense="true" Hover="true" Striped="true" Class="mb-6"
+                              data-testid="tag-detail-right-asset-holders-table">
+                        <HeaderContent>
+                            <MudTh>保有ユーザー</MudTh>
+                            <MudTh Style="text-align: right;">有効保有量</MudTh>
+                            <MudTh Style="width: 25%;">保有シェア</MudTh>
+                            <MudTh Style="text-align: right;">有効アセット件数</MudTh>
+                            <MudTh Style="text-align: right;">燃焼済 (消費量)</MudTh>
+                            <MudTh>最終更新日時</MudTh>
+                        </HeaderContent>
+                        <RowTemplate Context="holder">
+                            <MudTd DataLabel="保有ユーザー">
+                                <div class="d-flex align-center gap-2">
+                                    <MudAvatar Size="Size.Small" Color="Color.Secondary">
+                                        @((holder.UserName ?? holder.UserId)[..1].ToUpperInvariant())
+                                    </MudAvatar>
+                                    <MudLink Href="@($"/User/UserDetail/{holder.UserId}")" Underline="Underline.Hover">
+                                        <strong>@(holder.UserName ?? holder.UserId)</strong>
+                                    </MudLink>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="有効保有量" Style="text-align: right;">
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                                    @holder.TotalAmount
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="保有シェア">
+                                @{
+                                    var share = _rightAssetOverview.TotalActiveAmount > 0
+                                        ? (double)holder.TotalAmount / _rightAssetOverview.TotalActiveAmount * 100
+                                        : 0;
+                                }
+                                <div class="d-flex align-center gap-2">
+                                    <MudProgressLinear Color="Color.Primary" Value="@share" Rounded="true"
+                                                       Class="flex-grow-1" />
+                                    <MudText Typo="Typo.caption" Style="min-width: 45px; text-align: right;">
+                                        @share.ToString("F1")%
+                                    </MudText>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="有効アセット件数" Style="text-align: right;">
+                                @holder.ActiveAssetCount 件
+                            </MudTd>
+                            <MudTd DataLabel="燃焼済 (消費量)" Style="text-align: right;">
+                                @(holder.BurnedAmount > 0 ? $"{holder.BurnedAmount} ({holder.BurnedAssetCount} 件)" : "-")
+                            </MudTd>
+                            <MudTd DataLabel="最終更新日時">
+                                @(holder.LastUpdated?.ToLocalTime().ToString("yyyy/MM/dd HH:mm") ?? "-")
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <!-- 個別アセット明細テーブル -->
+                    <MudExpansionPanels Class="mt-3">
+                        <MudExpansionPanel Text="@($"個別 RightAsset 明細 ({_rightAssetOverview.Assets.Count} 件)")"
+                                           Icon="@Icons.Material.Filled.ListAlt">
+                            <MudTable Items="@_rightAssetOverview.Assets" Dense="true" Hover="true" Striped="true">
+                                <HeaderContent>
+                                    <MudTh>ID</MudTh>
+                                    <MudTh>所有者</MudTh>
+                                    <MudTh Style="text-align: right;">数量</MudTh>
+                                    <MudTh>状態</MudTh>
+                                    <MudTh>作成日時</MudTh>
+                                </HeaderContent>
+                                <RowTemplate Context="asset">
+                                    <MudTd DataLabel="ID">#@asset.Id</MudTd>
+                                    <MudTd DataLabel="所有者">
+                                        <MudLink Href="@($"/User/UserDetail/{asset.OwnerId}")" Underline="Underline.Hover">
+                                            @(asset.OwnerName ?? asset.OwnerId)
+                                        </MudLink>
+                                    </MudTd>
+                                    <MudTd DataLabel="数量" Style="text-align: right;">
+                                        <strong>@asset.Amount</strong>
+                                    </MudTd>
+                                    <MudTd DataLabel="状態">
+                                        @if (asset.IsBurned)
+                                        {
+                                            <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                                                @asset.StatusSummary
+                                            </MudChip>
+                                        }
+                                        else if (asset.Amount > 0)
+                                        {
+                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
+                                                有効
+                                            </MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                                                残高0
+                                            </MudChip>
+                                        }
+                                    </MudTd>
+                                    <MudTd DataLabel="作成日時">
+                                        @asset.CreatedDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm")
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+            </MudTabPanel>
         </MudTabs>
     }
 </MudContainer>
@@ -313,6 +457,7 @@
     private IEnumerable<TaggingRequestEntity> _pendingRequests = [];
     private IReadOnlyList<TagContentProposal> _pendingProposals = [];
     private IReadOnlyList<TagNameProposal> _pendingNameProposals = [];
+    private RightAssetOverviewData? _rightAssetOverview;
     private bool _isFollowing;
     private string? _currentUserId;
     private bool _isAdmin;
@@ -347,6 +492,7 @@
         _weightLedgers = data.WeightLedgers;
         _publicOffers = data.PublicOffers;
         _pendingRequests = data.PendingRequests;
+        _rightAssetOverview = data.RightAssetOverview;
         _pendingProposals = await TagContentProposalService.GetPendingProposalsForTagAsync(TagId);
         _pendingNameProposals = await TagNameProposalService.GetPendingProposalsForTagAsync(TagId);
         _areAncestorsLocked = await TagLockService.AreAncestorsLockedAsync(TagId);

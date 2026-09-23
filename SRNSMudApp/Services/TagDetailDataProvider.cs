@@ -3,6 +3,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 
 using Tag = SRNSMudApp.Data.Tag;
 
@@ -18,7 +19,8 @@ public sealed record TagDetailPageData(
     IReadOnlyList<Tag> RelatedTags,
     IReadOnlyList<TagWeightLedger> WeightLedgers,
     IReadOnlyList<PublicTradeOffer> PublicOffers,
-    IReadOnlyList<TaggingRequestEntity> PendingRequests);
+    IReadOnlyList<TaggingRequestEntity> PendingRequests,
+    RightAssetOverviewData? RightAssetOverview = null);
 
 /// <summary>
 ///     TagDetail コンポーネント用のデータアクセスを分離するインターフェース。
@@ -55,12 +57,15 @@ public interface ITagDetailDataProvider
 public class TagDetailDataProvider(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     ITagLockService? tagLockService = null,
-    ITagCommandService? tagCommandService = null) : ITagDetailDataProvider
+    ITagCommandService? tagCommandService = null,
+    IRightAssetDataProvider? rightAssetDataProvider = null) : ITagDetailDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly ITagLockService? _tagLockService = tagLockService;
     private readonly ITagCommandService? _tagCommandService = tagCommandService;
+    private readonly IRightAssetDataProvider _rightAssetDataProvider =
+        rightAssetDataProvider ?? new RightAssetDataProvider(dbFactory);
     public async Task<TagDetailPageData> GetTagDetailAsync(int tagId, string? currentUserId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
@@ -130,6 +135,9 @@ public class TagDetailDataProvider(
             .AsNoTracking()
             .ToListAsync();
 
+        RightAssetOverviewData? rightAssetOverview =
+            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId);
+
         return new TagDetailPageData(
             tag,
             isFollowing,
@@ -137,7 +145,8 @@ public class TagDetailDataProvider(
             relatedTags,
             weightLedgers,
             publicOffers,
-            pendingRequests);
+            pendingRequests,
+            rightAssetOverview);
     }
 
     public async Task<bool> ToggleFollowAsync(int tagId, string currentUserId)

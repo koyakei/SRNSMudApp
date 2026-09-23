@@ -53,4 +53,3 @@ public sealed record TagRightAssetSummary(
     string? TagContent,
     int TotalAmount,
     int HolderCount);
-
