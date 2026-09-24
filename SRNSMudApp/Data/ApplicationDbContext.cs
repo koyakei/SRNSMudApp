@@ -45,6 +45,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TagContentProposal> TagContentProposals { get; set; } = null!;
     public DbSet<TagNameProposal> TagNameProposals { get; set; } = null!;
     public DbSet<TagLockSetting> TagLockSettings { get; set; } = null!;
+    public DbSet<UserDepositWallet> UserDepositWallets { get; set; } = null!;
+    public DbSet<JpycDepositTransaction> JpycDepositTransactions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -240,6 +242,37 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(l => l.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // -- UserDepositWallet のリレーションおよびインデックス設定 --
+        _ = builder.Entity<UserDepositWallet>()
+            .HasOne(w => w.Owner)
+            .WithMany()
+            .HasForeignKey(w => w.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<UserDepositWallet>()
+            .HasIndex(w => new { w.OwnerId, w.NetworkName })
+            .IsUnique();
+
+        _ = builder.Entity<UserDepositWallet>()
+            .HasIndex(w => w.DepositAddress);
+
+        // -- JpycDepositTransaction のリレーションおよびインデックス設定 --
+        _ = builder.Entity<JpycDepositTransaction>()
+            .HasOne(t => t.Owner)
+            .WithMany()
+            .HasForeignKey(t => t.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        _ = builder.Entity<JpycDepositTransaction>()
+            .HasIndex(t => t.TransactionHash)
+            .IsUnique();
+
+        _ = builder.Entity<JpycDepositTransaction>()
+            .HasIndex(t => t.DepositAddress);
+
+        _ = builder.Entity<JpycDepositTransaction>()
+            .HasIndex(t => t.OwnerId);
 
         // -- TagWeightLedger のリレーション設定 --
         _ = builder.Entity<TagWeightLedger>()

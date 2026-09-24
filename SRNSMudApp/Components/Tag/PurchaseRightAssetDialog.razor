@@ -1,0 +1,333 @@
+@using System.Security.Claims
+@using SRNSMudApp.Data
+@using SRNSMudApp.Models
+@using SRNSMudApp.Models.Unions
+@using SRNSMudApp.Services
+@inject IRightAssetPurchaseService PurchaseService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex align-center gap-2 mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Color="Color.Primary" />
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                「@RequestedTag.Name」の操作権限を JPYC で購入
+            </MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+            日本円連動ステーブルコイン <strong>JPYC</strong> (1 JPYC = 1円) を送金して、このタグの操作権限（RightAsset）を購入できます。<br />
+            システムがあなた専用の受取ウォレット宛ての送金トランザクション完了を確認した上で、RightAsset を付与します。
+        </MudAlert>
+
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <!-- 数量と単価設定 -->
+            <MudGrid Class="mb-3">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="int" Label="購入数量 (Amount)" @bind-Value="_amount" Min="1" Required="true"
+                                     RequiredError="1以上の数量を入力してください" Variant="Variant.Outlined"
+                                     data-testid="purchase-amount-field" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="int" Label="1権限あたりの価格 (JPYC)" @bind-Value="_unitPriceJpyc" Min="1"
+                                     Required="true" RequiredError="1以上の単価を入力してください" HelperText="1 JPYC = 1円相当 (任意に調整可能)"
+                                     Variant="Variant.Outlined" data-testid="unit-price-field" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- 合計支払額サマリー -->
+            <MudPaper Class="pa-3 mb-4 d-flex justify-space-between align-center" Elevation="0" Outlined="true"
+                      Style="background-color: var(--mud-palette-background-grey);">
+                <div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">合計支払金額</MudText>
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="font-weight-bold">
+                        @TotalJpyc.ToString("N0") JPYC
+                    </MudText>
+                </div>
+                <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                    ¥@TotalJpyc.ToString("N0") 相当
+                </MudChip>
+            </MudPaper>
+
+            <!-- ネットワーク選択 -->
+            <MudSelect T="string" Label="支払いネットワーク" Value="_selectedNetworkName" ValueChanged="OnNetworkChangedAsync"
+                       Variant="Variant.Outlined" Class="mb-3" data-testid="network-select">
+                @foreach (var net in _networks)
+                {
+                    <MudSelectItem Value="@net.Name">
+                        @net.DisplayName @(net.IsRecommended ? " [推奨]" : "")
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (CurrentNetwork is not null)
+            {
+                <!-- コントラクト・送金情報カード -->
+                <MudCard Outlined="true" Class="mb-3 pa-3">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-weight-bold d-block mb-1">
+                        あなた専用の受取ウォレットアドレス (Deposit Address)
+                    </MudText>
+                    <div class="d-flex align-center gap-1 mb-2">
+                        @if (_isLoadingWallet)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">受取アドレスを取得中...</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Style="word-break: break-all; font-family: monospace; font-weight: bold; color: var(--mud-palette-primary);"
+                                     data-testid="deposit-address-text">
+                                @_depositAddress
+                            </MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                           OnClick="@(() => CopyToClipboard(_depositAddress, "あなた専用の受取アドレス"))" Title="コピー" />
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                        ※ あなたのアカウント専用のアドレスです。MetaMask等から上記アドレス宛てに <strong>@TotalJpyc.ToString("N0") JPYC</strong> を送金してください。
+                    </MudText>
+
+                    <MudDivider Class="my-2" />
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="font-weight-bold d-block mb-1">
+                        JPYC コントラクトアドレス (@CurrentNetwork.DisplayName)
+                    </MudText>
+                    <div class="d-flex align-center gap-1 mb-2">
+                        <MudText Typo="Typo.body2" Style="word-break: break-all; font-family: monospace;">
+                            @CurrentNetwork.ContractAddress
+                        </MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                       OnClick="@(() => CopyToClipboard(CurrentNetwork.ContractAddress, "コントラクトアドレス"))" Title="コピー" />
+                    </div>
+
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
+                        @if (CurrentNetwork.IsTestnet && !string.IsNullOrWhiteSpace(CurrentNetwork.FaucetUrl))
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.WaterDrop" Href="@CurrentNetwork.FaucetUrl" Target="_blank"
+                                       data-testid="faucet-link-button">
+                                テスト用 JPYC を取得 (Faucet)
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.HelpOutline"
+                                   Href="https://faq.jpyc.co.jp/s/article/developer-documentation" Target="_blank">
+                            JPYC 開発者ドキュメント
+                        </MudButton>
+                    </div>
+                </MudCard>
+            }
+
+            <!-- 送金確認（TxHash） -->
+            <div class="d-flex align-center justify-space-between mb-1">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">送金トランザクション確認</MudText>
+                @if (CurrentNetwork?.IsTestnet == true)
+                {
+                    <MudLink Typo="Typo.caption" Underline="Underline.Hover" OnClick="@SimulatePaymentAsync"
+                             data-testid="simulate-payment-link">
+                        テスト送金をシミュレートしてTxHashを取得
+                    </MudLink>
+                }
+            </div>
+            <MudTextField T="string" Label="トランザクションハッシュ (TxHash)" @bind-Value="_transactionHash" Placeholder="0x..."
+                          Variant="Variant.Outlined" Class="mb-3" Required="true" RequiredError="トランザクションハッシュを入力してください"
+                          HelperText="送金完了後に発行されたトランザクションハッシュを入力してください。システムが送金完了を検証します。"
+                          data-testid="txhash-field" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SubmitAsync"
+                   Disabled="@(_isSubmitting || _isLoadingWallet)" data-testid="confirm-purchase-button">
+            @if (_isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">トランザクション確認中...</span>
+            }
+            else
+            {
+                <span>送金を確認してRightAssetを受け取る</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter] public Tag RequestedTag { get; set; } = null!;
+    [Parameter] public int DefaultAmount { get; set; } = 1;
+    [Parameter] public int DefaultUnitPriceJpyc { get; set; } = 100;
+
+    private MudForm? _form;
+    private bool _isValid = true;
+    private bool _isSubmitting;
+    private bool _isLoadingWallet = true;
+    private string _currentUserId = string.Empty;
+    private string _depositAddress = string.Empty;
+
+    private int _amount = 1;
+    private int _unitPriceJpyc = 100;
+    private string _selectedNetworkName = "polygon-amoy";
+    private string _transactionHash = string.Empty;
+
+    private IReadOnlyList<JpycNetworkInfo> _networks = [];
+
+    private int TotalJpyc => _amount * _unitPriceJpyc;
+
+    private JpycNetworkInfo? CurrentNetwork =>
+        _networks.FirstOrDefault(n => n.Name == _selectedNetworkName) ?? _networks.FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var auth = await AuthState;
+            _currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        }
+
+        _amount = DefaultAmount > 0 ? DefaultAmount : 1;
+        _unitPriceJpyc = DefaultUnitPriceJpyc > 0 ? DefaultUnitPriceJpyc : 100;
+
+        _networks = PurchaseService.GetSupportedNetworks();
+        var recommended = _networks.FirstOrDefault(n => n.IsRecommended);
+        if (recommended != null)
+        {
+            _selectedNetworkName = recommended.Name;
+        }
+        else if (_networks.Count > 0)
+        {
+            _selectedNetworkName = _networks[0].Name;
+        }
+
+        await LoadDepositWalletAsync();
+    }
+
+    private async Task OnNetworkChangedAsync(string newNetwork)
+    {
+        _selectedNetworkName = newNetwork;
+        await LoadDepositWalletAsync();
+    }
+
+    private async Task LoadDepositWalletAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            _isLoadingWallet = false;
+            return;
+        }
+
+        _isLoadingWallet = true;
+        try
+        {
+            var wallet = await PurchaseService.GetOrCreateUserDepositWalletAsync(_currentUserId, _selectedNetworkName);
+            _depositAddress = wallet.DepositAddress;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"受取ウォレットの取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoadingWallet = false;
+        }
+    }
+
+    private async Task SimulatePaymentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _transactionHash = await PurchaseService.SimulateDepositAsync(
+                _currentUserId,
+                _selectedNetworkName,
+                TotalJpyc);
+            if (_form is not null)
+            {
+                await _form.ValidateAsync();
+            }
+            Snackbar.Add("あなた専用アドレス宛ての送金をシミュレートしました。TxHashを自動入力しました。", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"シミュレーションに失敗しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CopyToClipboard(string text, string label)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add($"{label}をクリップボードにコピーしました。", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add($"{label}: {text}", Severity.Info);
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.ValidateAsync();
+            if (!_isValid) return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            Snackbar.Add("ログインが必要です。", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_transactionHash))
+        {
+            Snackbar.Add("トランザクションハッシュを入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var request = new JpycPurchaseRequestDto(
+                RequestedTagId: RequestedTag.Id,
+                Amount: _amount,
+                UnitPriceJpyc: _unitPriceJpyc,
+                NetworkName: CurrentNetwork?.DisplayName ?? _selectedNetworkName,
+                TransactionHash: _transactionHash.Trim());
+
+            var result = await PurchaseService.PurchaseRightAssetWithJpycAsync(_currentUserId, request);
+            switch (result)
+            {
+                case Success<RightAsset> success:
+                    Snackbar.Add($"送金完了を確認しました！操作権限 {request.Amount} を付与しました（{request.TotalJpycAmount:N0} JPYC）", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(success.Value));
+                    break;
+                case Failure fail:
+                    Snackbar.Add(fail.ErrorMessage, Severity.Error);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"トランザクション確認中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

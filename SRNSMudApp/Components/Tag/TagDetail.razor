@@ -320,6 +320,14 @@
                                 操作権限をリクエスト
                             </MudButton>
                         }
+                        @if (_currentUserId is not null)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.ShoppingCart" OnClick="@OpenPurchaseDialogAsync"
+                                       data-testid="purchase-right-asset-button">
+                                JPYCで購入
+                            </MudButton>
+                        }
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                    StartIcon="@Icons.Material.Filled.OpenInNew" Href="@($"/RightAsset/Overview?tagId={TagId}")">
                             RightAsset 詳細画面を開く
@@ -928,6 +936,27 @@
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
         IDialogReference dialog = await DialogLauncher.ShowAsync<RequestTagPermissionDialog>("操作権限のリクエスト", parameters, options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task OpenPurchaseDialogAsync()
+    {
+        if (_tag is null || _currentUserId is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<PurchaseRightAssetDialog>
+        {
+            { x => x.RequestedTag, _tag }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<PurchaseRightAssetDialog>("操作権限の購入 (JPYC)", parameters, options);
         DialogResult? result = await dialog.Result;
 
         if (result is { Canceled: false })

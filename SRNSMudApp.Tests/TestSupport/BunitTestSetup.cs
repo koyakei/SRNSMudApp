@@ -184,7 +184,16 @@ public static class BunitTestSetup
             })
             .AddScoped<IItemCardVoteCoordinator, ItemCardVoteCoordinator>()
             .AddScoped<IItemCardSplitCoordinator, ItemCardSplitCoordinator>()
-            .AddScoped<IItemCardTagCoordinator, ItemCardTagCoordinator>();
+            .AddScoped<IItemCardTagCoordinator, ItemCardTagCoordinator>()
+            .AddScoped(_ => new Mock<IJpycTransactionVerifier>().Object)
+            .AddScoped(_ =>
+            {
+                var mock = new Mock<IRightAssetPurchaseService>();
+                mock.Setup(p => p.GetSupportedNetworks()).Returns([]);
+                mock.Setup(p => p.GetOrCreateUserDepositWalletAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new UserDepositWalletDto("user", "polygon-amoy", "0x0000000000000000000000000000000000000000", DateTime.UtcNow));
+                return mock.Object;
+            });
     }
 
     /// <summary>

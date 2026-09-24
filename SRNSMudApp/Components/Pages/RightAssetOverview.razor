@@ -5,6 +5,7 @@
 @using SRNSMudApp.Services
 @using SRNSMudApp.Components.Tag
 @inject IRightAssetDataProvider RightAssetDataProvider
+@inject IDialogLauncher DialogLauncher
 @inject NavigationManager NavigationManager
 
 <PageTitle>RightAsset 状況一覧 - SRNS</PageTitle>
@@ -57,10 +58,17 @@
                             </MudText>
                         }
                     </div>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.OpenInNew"
-                               Href="@($"/TagDetail/{_overviewData.Tag.Id}")">
-                        タグ詳細を見る
-                    </MudButton>
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.ShoppingCart" OnClick="@OpenPurchaseDialogAsync"
+                                   data-testid="overview-purchase-jpyc-button">
+                            JPYCで購入
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.OpenInNew" Href="@($"/TagDetail/{_overviewData.Tag.Id}")">
+                            タグ詳細を見る
+                        </MudButton>
+                    </div>
                 </div>
             </MudCardContent>
         </MudCard>
@@ -355,6 +363,28 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task OpenPurchaseDialogAsync()
+    {
+        if (_overviewData?.Tag is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<PurchaseRightAssetDialog>
+        {
+            { x => x.RequestedTag, _overviewData.Tag }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<PurchaseRightAssetDialog>("操作権限の購入 (JPYC)", parameters,
+options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is { Canceled: false } && _loadedTagId.HasValue)
+        {
+            await LoadDataByTagIdAsync(_loadedTagId.Value);
         }
     }
 }
