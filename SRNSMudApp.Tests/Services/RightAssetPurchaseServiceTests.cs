@@ -255,6 +255,145 @@ public class RightAssetPurchaseServiceTests : IAsyncLifetime
         Assert.True(result3 is Failure);
     }
 
+    [Fact]
+    public async Task PurchaseRightAssetWithJpycAsync_WhenTagNotFound_ReturnsFailure()
+    {
+        var (_, sut, userId, _, _) = await CreateScopeAsync();
+        var nonExistentTagId = 999999;
+        var validTx = "0x" + new string('a', 64);
+
+        var request = new JpycPurchaseRequestDto(
+            RequestedTagId: nonExistentTagId,
+            Amount: 1,
+            UnitPriceJpyc: 100,
+            NetworkName: "polygon-amoy",
+            TransactionHash: validTx);
+
+        var result = await sut.PurchaseRightAssetWithJpycAsync(userId, request);
+
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException($"Expected Failure but got {result}")
+        };
+        Assert.Contains("対象のタグが見つかりません", fail.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PurchaseRightAssetWithJpycAsync_WhenUserIdIsNullOrWhitespace_ReturnsFailure(string emptyUserId)
+    {
+        var (_, sut, _, tagId, _) = await CreateScopeAsync();
+        var request = new JpycPurchaseRequestDto(tagId, 1, 100, "polygon-amoy", "0x123");
+
+        var result = await sut.PurchaseRightAssetWithJpycAsync(emptyUserId, request);
+
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException($"Expected Failure but got {result}")
+        };
+        Assert.Contains("ログインユーザーが指定されていません", fail.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task PurchaseRightAssetWithJpycAsync_WhenRequestIsNull_ThrowsArgumentNullException()
+    {
+        var (_, sut, userId, _, _) = await CreateScopeAsync();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            sut.PurchaseRightAssetWithJpycAsync(userId, null!));
+    }
+
+    [Theory]
+    [InlineData(-1, 100, "購入数量は1以上")]
+    [InlineData(1, -100, "1アセットあたりのJPYC単価は1以上")]
+    public async Task PurchaseRightAssetWithJpycAsync_WhenNegativeValues_ReturnsFailure(int amount, int unitPrice, string expectedError)
+    {
+        var (_, sut, userId, tagId, _) = await CreateScopeAsync();
+        var request = new JpycPurchaseRequestDto(tagId, amount, unitPrice, "polygon-amoy", "0x" + new string('a', 64));
+
+        var result = await sut.PurchaseRightAssetWithJpycAsync(userId, request);
+
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException($"Expected Failure but got {result}")
+        };
+        Assert.Contains(expectedError, fail.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task PurchaseRightAssetWithJpycAsync_WhenInvalidTxHashFormat_ReturnsFailure()
+    {
+        var (_, sut, userId, tagId, _) = await CreateScopeAsync();
+        var request = new JpycPurchaseRequestDto(
+            RequestedTagId: tagId,
+            Amount: 1,
+            UnitPriceJpyc: 100,
+            NetworkName: "polygon-amoy",
+            TransactionHash: "invalid-not-hex-format");
+
+        var result = await sut.PurchaseRightAssetWithJpycAsync(userId, request);
+
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException($"Expected Failure but got {result}")
+        };
+        Assert.Contains("有効なトランザクションハッシュ", fail.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserDepositWalletAsync_DifferentNetworks_CreatesSeparateWallets()
+    {
+        var (db, sut, userId, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var walletAmoy = await sut.GetOrCreateUserDepositWalletAsync(userId, "polygon-amoy");
+            var walletSepolia = await sut.GetOrCreateUserDepositWalletAsync(userId, "ethereum-sepolia");
+
+            Assert.Equal("polygon-amoy", walletAmoy.NetworkName);
+            Assert.Equal("ethereum-sepolia", walletSepolia.NetworkName);
+
+            // 決定論的アドレス生成ロジックによりアドレス自体は同一導出だが、ネットワークごとに個別レコードが保持される
+            var dbWallets = await db.UserDepositWallets.Where(w => w.OwnerId == userId).ToListAsync();
+            Assert.Equal(2, dbWallets.Count);
+            Assert.Contains(dbWallets, w => w.NetworkName == "polygon-amoy");
+            Assert.Contains(dbWallets, w => w.NetworkName == "ethereum-sepolia");
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task GetOrCreateUserDepositWalletAsync_WhenUserIdIsNullOrWhitespace_ThrowsArgumentException(string? invalidUserId)
+    {
+        var (_, sut, _, _, _) = await CreateScopeAsync();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            sut.GetOrCreateUserDepositWalletAsync(invalidUserId!, "polygon-amoy"));
+    }
+
+    [Fact]
+    public async Task SimulateDepositAsync_CreatesWalletAndReturnsValidTxHash()
+    {
+        var (db, sut, userId, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var txHash = await sut.SimulateDepositAsync(userId, "polygon-amoy", 500);
+
+            Assert.StartsWith("0x", txHash);
+            Assert.Equal(66, txHash.Length);
+
+            // ウォレットがDBに保存されていること
+            var wallet = await db.UserDepositWallets.FirstOrDefaultAsync(w => w.OwnerId == userId && w.NetworkName == "polygon-amoy");
+            Assert.NotNull(wallet);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {
