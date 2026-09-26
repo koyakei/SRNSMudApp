@@ -71,4 +71,3 @@ internal class TestAsyncQueryProvider<TEntity>(IQueryProvider inner) : IAsyncQue
             .Invoke(null, [executionResult])!;
     }
 }
-
