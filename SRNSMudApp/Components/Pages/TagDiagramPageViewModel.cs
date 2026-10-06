@@ -35,6 +35,8 @@ public class TagDiagramPageViewModel
     public List<ItemEntity> ContextItems { get; private set; } = [];
 
     public HashSet<int> PinnedTagIds { get; } = [];
+    public HashSet<int> HiddenTagIds { get; } = [];
+    public HashSet<int> HiddenItemIds { get; } = [];
 
     public TagEdge? SelectedEdge { get; set; }
     public TagEntity? FocusedTag { get; set; }
@@ -46,6 +48,7 @@ public class TagDiagramPageViewModel
     public bool NeighborhoodOnly { get; set; }
     public bool ContextOnly { get; set; } = true;
     public int DisplayedTagsCount { get; private set; }
+    public int DisplayedEdgesCount { get; private set; }
 
     // エッジ作成モード関連の内部状態
     public bool IsEdgeCreationMode { get; private set; }
@@ -74,9 +77,13 @@ public class TagDiagramPageViewModel
     public async Task ReloadDiagramAsync(int? queryItemId, bool preserveExtraVisibleTags = false)
     {
         var preservedExtraIds = preserveExtraVisibleTags ? PinnedTagIds.ToHashSet() : null;
+        var preservedHiddenTagIds = preserveExtraVisibleTags ? HiddenTagIds.ToHashSet() : null;
+        var preservedHiddenItemIds = preserveExtraVisibleTags ? HiddenItemIds.ToHashSet() : null;
         IsLoading = true;
         SelectedEdge = null;
         PinnedTagIds.Clear();
+        HiddenTagIds.Clear();
+        HiddenItemIds.Clear();
 
         try
         {
@@ -89,6 +96,22 @@ public class TagDiagramPageViewModel
                 foreach (int id in preservedExtraIds)
                 {
                     _ = PinnedTagIds.Add(id);
+                }
+            }
+
+            if (preservedHiddenTagIds != null)
+            {
+                foreach (int id in preservedHiddenTagIds)
+                {
+                    _ = HiddenTagIds.Add(id);
+                }
+            }
+
+            if (preservedHiddenItemIds != null)
+            {
+                foreach (int id in preservedHiddenItemIds)
+                {
+                    _ = HiddenItemIds.Add(id);
                 }
             }
 
@@ -178,7 +201,12 @@ public class TagDiagramPageViewModel
     /// </summary>
     public IReadOnlyList<TagEntity> GetTagsToDisplay(int? queryItemId)
     {
-        HashSet<int> connectedTagIds = Edges
+        List<TagEdge> activeEdges = Edges
+            .Where(e => !HiddenTagIds.Contains(e.SourceTagId) && !HiddenTagIds.Contains(e.TargetTagId))
+            .ToList();
+        DisplayedEdgesCount = activeEdges.Count;
+
+        HashSet<int> connectedTagIds = activeEdges
             .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
             .ToHashSet();
 
@@ -202,7 +230,7 @@ public class TagDiagramPageViewModel
                 _ = focusIds.Add(SecondFocusedTag.Id);
             }
 
-            HashSet<int> neighborIds = Edges
+            HashSet<int> neighborIds = activeEdges
                 .Where(e => focusIds.Contains(e.SourceTagId) || focusIds.Contains(e.TargetTagId))
                 .SelectMany(e => new[] { e.SourceTagId, e.TargetTagId })
                 .Concat(focusIds)
@@ -221,6 +249,11 @@ public class TagDiagramPageViewModel
         else
         {
             tagsToDisplay = Tags;
+        }
+
+        if (HiddenTagIds.Count > 0)
+        {
+            tagsToDisplay = tagsToDisplay.Where(t => !HiddenTagIds.Contains(t.Id));
         }
 
         List<TagEntity> list = tagsToDisplay.ToList();
@@ -346,10 +379,68 @@ public class TagDiagramPageViewModel
         ExitEdgeCreationMode();
     }
 
+    /// <summary>
+    ///     指定したタグを画面表示から消す（非表示にする）。
+    /// </summary>
+    /// <param name="tagId">非表示にするタグID。</param>
+    public void HideTag(int tagId)
+    {
+        _ = HiddenTagIds.Add(tagId);
+        _ = PinnedTagIds.Remove(tagId);
+
+        if (FocusedTag?.Id == tagId)
+        {
+            ClearFirstTag();
+        }
+        else if (SecondFocusedTag?.Id == tagId)
+        {
+            ClearSecondTag();
+        }
+
+        if (SelectedEdge?.SourceTagId == tagId || SelectedEdge?.TargetTagId == tagId)
+        {
+            SelectedEdge = null;
+        }
+
+        if (EdgeCreationSourceTag?.Id == tagId)
+        {
+            EdgeCreationSourceTag = null;
+        }
+        if (EdgeCreationTargetTag?.Id == tagId)
+        {
+            EdgeCreationTargetTag = null;
+        }
+        if (EdgeCreationAttachTag?.Id == tagId)
+        {
+            EdgeCreationAttachTag = null;
+            EdgeCreationAttachAsset = null;
+            EdgeCreationAvailableAssets.Clear();
+        }
+    }
+
+    /// <summary>
+    ///     指定したアイテムノードを画面表示から消す（非表示にする）。
+    /// </summary>
+    /// <param name="itemId">非表示にするアイテムID。</param>
+    public void HideItem(int itemId)
+    {
+        _ = HiddenItemIds.Add(itemId);
+    }
+
+    /// <summary>
+    ///     非表示にされたすべてのタグおよびアイテムノードを再表示する。
+    /// </summary>
+    public void RestoreHiddenNodes()
+    {
+        HiddenTagIds.Clear();
+        HiddenItemIds.Clear();
+    }
+
     public void HandleTagSelection(TagEntity tag)
     {
         ArgumentNullException.ThrowIfNull(tag);
 
+        _ = HiddenTagIds.Remove(tag.Id);
         _ = PinnedTagIds.Add(tag.Id);
         if (FocusedTag == null)
         {
@@ -380,6 +471,7 @@ public class TagDiagramPageViewModel
             return;
         }
 
+        _ = HiddenTagIds.Remove(tag.Id);
         _ = PinnedTagIds.Add(tag.Id);
         if (FocusedTag == null)
         {
@@ -403,6 +495,7 @@ public class TagDiagramPageViewModel
     {
         if (tag != null)
         {
+            _ = HiddenTagIds.Remove(tag.Id);
             _ = PinnedTagIds.Add(tag.Id);
         }
         SecondFocusedTag = tag;
@@ -414,6 +507,7 @@ public class TagDiagramPageViewModel
         int newlyAdded = 0;
         foreach (TagEntity child in children)
         {
+            _ = HiddenTagIds.Remove(child.Id);
             if (PinnedTagIds.Add(child.Id))
             {
                 newlyAdded++;

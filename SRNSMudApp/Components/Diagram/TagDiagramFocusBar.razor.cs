@@ -35,6 +35,7 @@ public partial class TagDiagramFocusBar : ComponentBase
     [Parameter] public EventCallback<(TagEntity? Source, TagEntity? Target)> OnOpenCreateEdgeDialog { get; set; }
     [Parameter] public EventCallback<TagEdge> OnSelectEdge { get; set; }
     [Parameter] public EventCallback<TagEntity?> OnSecondTagFocusedFromSearch { get; set; }
+    [Parameter] public EventCallback<TagEntity> OnHideFocusedTag { get; set; }
 
     private bool _isFocusTreeOpen;
     private bool _isSecondFocusTreeOpen;

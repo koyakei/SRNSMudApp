@@ -561,4 +561,126 @@ public sealed class TagDiagramPageViewModelTests
         Assert.NotNull(_sut.GetExistingEdgeBetween(1, 2));
         Assert.Null(_sut.GetExistingEdgeBetween(1, 3));
     }
+
+    [Fact]
+    public void HideTag_AddsToHiddenTagIds_AndClearsFocusAndPinnedTags()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        TagEntity tag2 = CreateTag(2, "Tag 2");
+        _sut.Tags.AddRange([tag1, tag2]);
+        _sut.FocusedTag = tag1;
+        _sut.SecondFocusedTag = tag2;
+        _ = _sut.PinnedTagIds.Add(tag1.Id);
+        _sut.SelectedEdge = CreateEdge(10, 1, 2);
+
+        // Act
+        _sut.HideTag(1);
+
+        // Assert
+        Assert.Contains(1, _sut.HiddenTagIds);
+        Assert.DoesNotContain(1, _sut.PinnedTagIds);
+        Assert.Equal(tag2, _sut.FocusedTag);
+        Assert.Null(_sut.SecondFocusedTag);
+        Assert.Null(_sut.SelectedEdge);
+    }
+
+    [Fact]
+    public void GetTagsToDisplay_ExcludesHiddenTags()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        TagEntity tag2 = CreateTag(2, "Tag 2");
+        TagEntity tag3 = CreateTag(3, "Tag 3");
+        _sut.Tags.AddRange([tag1, tag2, tag3]);
+        _sut.OnlyConnectedTags = false;
+
+        // Act
+        _sut.HideTag(2);
+        IReadOnlyList<TagEntity> result = _sut.GetTagsToDisplay(queryItemId: null);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, t => t.Id == 1);
+        Assert.DoesNotContain(result, t => t.Id == 2);
+        Assert.Contains(result, t => t.Id == 3);
+        Assert.Equal(2, _sut.DisplayedTagsCount);
+    }
+
+    [Fact]
+    public void GetTagsToDisplay_WhenTagHidden_ExcludesConnectedEdgesAndUpdatesDisplayedEdgesCount()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        TagEntity tag2 = CreateTag(2, "Tag 2");
+        TagEntity tag3 = CreateTag(3, "Tag 3");
+        _sut.Tags.AddRange([tag1, tag2, tag3]);
+        _sut.Edges.Add(CreateEdge(10, 1, 2));
+        _sut.Edges.Add(CreateEdge(20, 1, 3));
+        _sut.OnlyConnectedTags = true;
+
+        // Act
+        _sut.HideTag(2);
+        IReadOnlyList<TagEntity> result = _sut.GetTagsToDisplay(queryItemId: null);
+
+        // Assert: tag2 is hidden, edge (1->2) is excluded, only edge (1->3) remains active
+        Assert.DoesNotContain(result, t => t.Id == 2);
+        Assert.Contains(result, t => t.Id == 1);
+        Assert.Contains(result, t => t.Id == 3);
+        Assert.Equal(1, _sut.DisplayedEdgesCount);
+    }
+
+    [Fact]
+    public void RestoreHiddenNodes_ClearsHiddenTagIdsAndHiddenItemIds()
+    {
+        // Arrange
+        _sut.HideTag(1);
+        _sut.HideItem(100);
+        Assert.Single(_sut.HiddenTagIds);
+        Assert.Single(_sut.HiddenItemIds);
+
+        // Act
+        _sut.RestoreHiddenNodes();
+
+        // Assert
+        Assert.Empty(_sut.HiddenTagIds);
+        Assert.Empty(_sut.HiddenItemIds);
+    }
+
+    [Fact]
+    public void OnTagFocusedFromSearch_RemovesTagFromHiddenTagIds()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        _sut.Tags.Add(tag1);
+        _sut.HideTag(1);
+        Assert.Contains(1, _sut.HiddenTagIds);
+
+        // Act
+        _sut.OnTagFocusedFromSearch(tag1);
+
+        // Assert
+        Assert.DoesNotContain(1, _sut.HiddenTagIds);
+        Assert.Contains(1, _sut.PinnedTagIds);
+        Assert.Equal(tag1, _sut.FocusedTag);
+    }
+
+    [Fact]
+    public void PinChildTags_RemovesChildrenFromHiddenTagIds()
+    {
+        // Arrange
+        TagEntity parent = CreateTag(1, "Parent");
+        TagEntity child = CreateTag(2, "Child", parentId: 1);
+        _sut.Tags.AddRange([parent, child]);
+        _sut.HideTag(2);
+        Assert.Contains(2, _sut.HiddenTagIds);
+
+        // Act
+        int newlyAdded = _sut.PinChildTags(1);
+
+        // Assert
+        Assert.Equal(1, newlyAdded);
+        Assert.DoesNotContain(2, _sut.HiddenTagIds);
+        Assert.Contains(2, _sut.PinnedTagIds);
+    }
 }

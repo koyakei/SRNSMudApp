@@ -37,7 +37,7 @@
                  Class="ml-1 px-1 tag-weight-chip">
             @Node.Tag.CachedWeight
         </MudChip>
-        <span @onclick:stopPropagation="true">
+        <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
             <MudTooltip Text="@(Node.ChildCount > 0 ? $"子タグ ({Node.ChildCount}件) を画面上に表示" : "子タグはありません")">
                 <MudIconButton Icon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small"
                                Color="@(Node.IsFocused ? Color.Warning : Color.Primary)" Class="pa-0 ml-1 tag-show-children-button"
@@ -45,14 +45,20 @@
                                Disabled="@(Node.ChildCount == 0)" OnClick="HandleShowChildNodes" />
             </MudTooltip>
         </span>
-        <span @onclick:stopPropagation="true">
+        <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
             <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Color="Color.Default"
                            Class="pa-0 ml-1 tag-tree-button" Title="タグツリーを表示" OnClick="ToggleTree" />
         </span>
-        <span @onclick:stopPropagation="true">
+        <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
             <MudTooltip Text="タグ詳細へ遷移">
                 <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
                                Class="pa-0 ml-1 tag-detail-button" Title="タグ詳細へ遷移" OnClick="NavigateToTagDetail" />
+            </MudTooltip>
+        </span>
+        <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">
+            <MudTooltip Text="画面表示から消す">
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
+                               Class="pa-0 ml-1 tag-hide-node-button" Title="画面表示から消す" OnClick="HandleHideNode" />
             </MudTooltip>
         </span>
     </div>

@@ -243,6 +243,59 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
     }
 
     [Fact]
+    public void TagDiagramPage_HidesNodeFromDiagram_AndRestoresIt()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "TagAlpha", OwnerId = TestUserId, CachedWeight = 5 };
+        var tag2 = new TagEntity { Id = 2, Name = "TagBeta", OwnerId = TestUserId, CachedWeight = 3 };
+        var tag3 = new TagEntity { Id = 3, Name = "TagGamma", OwnerId = TestUserId, CachedWeight = 2 };
+        var edge1 = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId, SourceTag = tag1, TargetTag = tag2 };
+        var edge2 = new TagEdge { Id = 102, SourceTagId = 2, TargetTagId = 3, OwnerId = TestUserId, SourceTag = tag2, TargetTag = tag3 };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1, tag2, tag3]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge1, edge2]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // 初期状態: 3ノード表示、2エッジ表示
+        Assert.Equal(3, diagram.Nodes.Count);
+        Assert.Equal(2, diagram.Links.OfType<TagEdgeLink>().Count());
+        var node1 = diagram.Nodes.OfType<TagNode>().First(n => n.Tag.Id == 1);
+        Assert.NotNull(node1.RequestHideNode);
+
+        // tag1 の画面表示から消すコールバックを呼び出す
+        cut.InvokeAsync(() => node1.RequestHideNode(tag1));
+
+        // Assert: tag1 がダイアグラムから消え、tag2 と tag3 (2ノード) のみ表示され、edge1 は消えて edge2 (1エッジ) のみ残る
+        cut.WaitForState(() => diagram.Nodes.Count == 2);
+        Assert.DoesNotContain(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 1);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 2);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 3);
+        Assert.Single(diagram.Links.OfType<TagEdgeLink>());
+        Assert.Equal(102, diagram.Links.OfType<TagEdgeLink>().First().Edge.Id);
+
+        // 再表示ボタンが表示されていること
+        cut.WaitForState(() => cut.FindAll("button.tag-restore-hidden-button").Count > 0);
+        var restoreBtn = cut.Find("button.tag-restore-hidden-button");
+        Assert.Contains("非表示 (1) を再表示", restoreBtn.TextContent);
+
+        // 再表示ボタンをクリック
+        cut.InvokeAsync(() => restoreBtn.Click());
+
+        // Assert: 3ノードに戻り、2エッジも復元すること
+        cut.WaitForState(() => diagram.Nodes.Count == 3);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 1);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 2);
+        Assert.Contains(diagram.Nodes.OfType<TagNode>(), n => n.Tag.Id == 3);
+        Assert.Equal(2, diagram.Links.OfType<TagEdgeLink>().Count());
+    }
+
+    [Fact]
     public async Task TagDiagramPage_EntersEdgeCreationMode_PreservingFocus_AndExpandsChildren()
     {
         // Arrange

@@ -70,6 +70,11 @@ public partial class TagNodeWidget : ComponentBase
         NavigationManager.NavigateTo($"/TagDetail/{Node.Tag.Id}");
     }
 
+    private void HandleHideNode()
+    {
+        Node.RequestHideNode?.Invoke(Node.Tag);
+    }
+
     private static string GetPortClass(PortAlignment alignment) => alignment switch
     {
         PortAlignment.Top => "port-top",

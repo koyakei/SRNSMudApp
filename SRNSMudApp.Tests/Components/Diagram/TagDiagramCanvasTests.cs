@@ -234,6 +234,31 @@ public class TagDiagramCanvasTests : IAsyncDisposable
     }
 
     [Fact]
+    public void TagNodeWidget_RendersHideNodeButton_AndInvokesCallback()
+    {
+        var diagram = new BlazorDiagram();
+        var tag = new TagEntity { Id = 10, Name = "TargetTag", OwnerId = "user1" };
+        TagEntity? hiddenTag = null;
+        var node = new TagNode(tag, new Point(20, 20))
+        {
+            RequestHideNode = t => hiddenTag = t
+        };
+        diagram.Nodes.Add(node);
+
+        var cut = _ctx.Render<TagNodeWidget>(parameters => parameters
+            .Add(p => p.Node, node)
+            .AddCascadingValue(diagram));
+
+        var hideBtn = cut.Find("button.tag-hide-node-button");
+        Assert.NotNull(hideBtn);
+
+        hideBtn.Click();
+
+        Assert.NotNull(hiddenTag);
+        Assert.Equal(10, hiddenTag.Id);
+    }
+
+    [Fact]
     public void TagEdgeLink_InitializesWithDirectionArrow_AndThemeColors()
     {
         var tag1 = new TagEntity { Id = 1, Name = "Source", OwnerId = "user1" };

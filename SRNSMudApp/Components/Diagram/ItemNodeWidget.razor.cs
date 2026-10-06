@@ -47,4 +47,9 @@ public partial class ItemNodeWidget : ComponentBase
     {
         NavigationManager.NavigateTo($"/ItemDetail/{Node.Item.Id}");
     }
+
+    private void HandleHideNode()
+    {
+        Node.RequestHideNode?.Invoke(Node.Item);
+    }
 }

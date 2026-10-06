@@ -12,10 +12,16 @@
                  style="background: var(--mud-palette-surface); border-bottom: 1px solid var(--mud-palette-lines-default);">
                 <MudIconButton Icon="@Icons.Material.Filled.Compress" Size="Size.Small" OnClick="ToggleExpand"
                                Class="item-compress-button" />
-                <span @onclick:stopPropagation="true">
+                <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
                     <MudTooltip Text="アイテム詳細へ遷移">
                         <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
                                        Class="ml-1 item-detail-button" Title="アイテム詳細へ遷移" OnClick="NavigateToItemDetail" />
+                    </MudTooltip>
+                </span>
+                <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">
+                    <MudTooltip Text="画面表示から消す">
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
+                                       Class="ml-1 item-hide-node-button" Title="画面表示から消す" OnClick="HandleHideNode" />
                     </MudTooltip>
                 </span>
             </div>
@@ -44,11 +50,18 @@
                 </div>
                 <MudIconButton Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" OnClick="ToggleExpand"
                                Class="ml-auto flex-shrink-0 item-expand-button" />
-                <span @onclick:stopPropagation="true">
+                <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
                     <MudTooltip Text="アイテム詳細へ遷移">
                         <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
                                        Class="ml-1 flex-shrink-0 item-detail-button" Title="アイテム詳細へ遷移"
                                        OnClick="NavigateToItemDetail" />
+                    </MudTooltip>
+                </span>
+                <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">
+                    <MudTooltip Text="画面表示から消す">
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default"
+                                       Class="ml-1 flex-shrink-0 item-hide-node-button" Title="画面表示から消す"
+                                       OnClick="HandleHideNode" />
                     </MudTooltip>
                 </span>
             </div>

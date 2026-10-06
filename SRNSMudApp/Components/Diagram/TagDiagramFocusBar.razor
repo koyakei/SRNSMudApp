@@ -35,7 +35,12 @@
                                            EnableNavigation="true" OnTagClick="HandleFocusFromTree" EnableAddChild="true"
                                            OnAddChildTag="tag => OnAddChildTag.InvokeAsync(tag)" />
                 </MudPopover>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="pa-0"
+                <MudTooltip Text="画面表示から消す">
+                    <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" Color="Color.Default"
+                                   Class="pa-0 ml-1 tag-focus-hide-button" Title="画面表示から消す"
+                                   OnClick="() => OnHideFocusedTag.InvokeAsync(FocusedTag)" />
+                </MudTooltip>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="pa-0 ml-1"
                                Title="始点タグを解除" OnClick="() => OnClearFirstTag.InvokeAsync()" />
             </div>
 
@@ -83,7 +88,12 @@
                                                EnableExpand="true" EnableNavigation="true" OnTagClick="HandleFocusFromTree" EnableAddChild="true"
                                                OnAddChildTag="tag => OnAddChildTag.InvokeAsync(tag)" />
                     </MudPopover>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="pa-0"
+                    <MudTooltip Text="画面表示から消す">
+                        <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" Color="Color.Default"
+                                       Class="pa-0 ml-1 tag-second-focus-hide-button" Title="画面表示から消す"
+                                       OnClick="() => OnHideFocusedTag.InvokeAsync(SecondFocusedTag)" />
+                    </MudTooltip>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="pa-0 ml-1"
                                    Title="終点タグを解除" OnClick="() => OnClearSecondTag.InvokeAsync()" />
                 </div>
             }

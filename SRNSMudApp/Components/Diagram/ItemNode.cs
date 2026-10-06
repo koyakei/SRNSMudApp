@@ -28,6 +28,11 @@ public class ItemNode : NodeModel
     public bool IsExpanded { get; set; }
 
     /// <summary>
+    ///     このノードを画面表示から消す（非表示にする）ことを要求するコールバック。
+    /// </summary>
+    public Action<ItemEntity>? RequestHideNode { get; set; }
+
+    /// <summary>
     ///     <see cref="ItemNode"/> クラスの新しいインスタンスを初期化する。
     /// </summary>
     /// <param name="item">表示対象の Item エンティティ。</param>

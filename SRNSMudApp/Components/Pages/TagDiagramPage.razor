@@ -55,8 +55,17 @@
             表示タグ: @ViewModel.DisplayedTagsCount / @ViewModel.Tags.Count
         </MudChip>
         <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">
-            Edges: @ViewModel.Edges.Count
+            表示 Edge: @ViewModel.DisplayedEdgesCount / @ViewModel.Edges.Count
         </MudChip>
+
+        @if (ViewModel.HiddenTagIds.Count > 0 || ViewModel.HiddenItemIds.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Visibility" OnClick="RestoreHiddenNodes"
+                       Class="tag-restore-hidden-button" Title="非表示ノードをすべて再表示">
+                非表示 (@(ViewModel.HiddenTagIds.Count + ViewModel.HiddenItemIds.Count)) を再表示
+            </MudButton>
+        }
 
         <MudButton Variant="@(ViewModel.IsEdgeCreationMode ? Variant.Filled : Variant.Outlined)"
                    Color="@(ViewModel.IsEdgeCreationMode ? Color.Warning : Color.Primary)" StartIcon="@Icons.Material.Filled.AltRoute"
@@ -84,7 +93,7 @@
                     OnShowChildNodes="HandleShowChildNodes" OnFocusTagFromTree="FocusTagFromHeaderTree"
                     OnAddChildTag="HandleAddChildTag" OnToggleEdgeCreationMode="ToggleEdgeCreationModeAsync"
                     OnOpenCreateEdgeDialog="args => OpenCreateEdgeDialog(args.Source, args.Target)" OnSelectEdge="HandleEdgeSelected"
-                    OnSecondTagFocusedFromSearch="OnSecondTagFocusedFromSearch" />
+                    OnSecondTagFocusedFromSearch="OnSecondTagFocusedFromSearch" OnHideFocusedTag="HandleHideTagNode" />
 
 @* エッジ作成モードパネル（現在フォーカスを維持したまま子タグ同士・タグ間のエッジを形成・タグ付け） *@
 <TagEdgeCreationPanel IsEdgeCreationMode="ViewModel.IsEdgeCreationMode" FocusedTag="ViewModel.FocusedTag" AllTags="ViewModel.Tags"

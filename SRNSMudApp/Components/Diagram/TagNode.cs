@@ -47,6 +47,11 @@ public class TagNode : NodeModel
     public Action<TagEntity>? RequestShowChildNodes { get; set; }
 
     /// <summary>
+    ///     このノードを画面表示から消す（非表示にする）ことを要求するコールバック。
+    /// </summary>
+    public Action<TagEntity>? RequestHideNode { get; set; }
+
+    /// <summary>
     ///     このノードが持つ子タグの件数を取得する。
     /// </summary>
     public int ChildCount => AllTags.Count(t => t.ParentTagId == Tag.Id);
