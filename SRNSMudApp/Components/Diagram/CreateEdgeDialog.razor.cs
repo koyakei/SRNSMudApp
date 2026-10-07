@@ -21,6 +21,11 @@ public partial class CreateEdgeDialog : ComponentBase
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = null!;
 
+    [Inject]
+    private IServiceProvider ServiceProvider { get; set; } = null!;
+
+    public CreateEdgeViewModel ViewModel { get; private set; } = null!;
+
     [Parameter]
     public IReadOnlyList<TagEntity> AvailableTags { get; set; } = [];
 
@@ -30,56 +35,27 @@ public partial class CreateEdgeDialog : ComponentBase
     [Parameter]
     public TagEntity? InitialTargetTag { get; set; }
 
-    private TagEntity? _sourceTag;
-    private TagEntity? _targetTag;
-
     protected override void OnInitialized()
     {
-        if (InitialSourceTag != null)
-        {
-            _sourceTag = InitialSourceTag;
-        }
-
-        if (InitialTargetTag != null)
-        {
-            _targetTag = InitialTargetTag;
-        }
+        ViewModel = ServiceProvider.GetService<CreateEdgeViewModel>() ?? new CreateEdgeViewModel();
+        ViewModel.Initialize(AvailableTags, InitialSourceTag, InitialTargetTag);
     }
 
-    private bool CanSubmit =>
-        _sourceTag != null &&
-        _targetTag != null &&
-        _sourceTag.Id != _targetTag.Id;
+
 
     private Task<IEnumerable<TagEntity>> SearchSourceTags(string value, CancellationToken token) =>
-        SearchTagsInternal(value, _targetTag?.Id);
+        Task.FromResult(ViewModel.SearchSourceTags(value));
 
     private Task<IEnumerable<TagEntity>> SearchTargetTags(string value, CancellationToken token) =>
-        SearchTagsInternal(value, _sourceTag?.Id);
-
-    private Task<IEnumerable<TagEntity>> SearchTagsInternal(string value, int? excludeId)
-    {
-        IEnumerable<TagEntity> query = AvailableTags;
-        if (excludeId.HasValue)
-        {
-            query = query.Where(t => t.Id != excludeId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            query = query.Where(t => t.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
-        }
-
-        return Task.FromResult(query.Take(20));
-    }
+        Task.FromResult(ViewModel.SearchTargetTags(value));
 
     private void Cancel() => MudDialog.Cancel();
 
     private void Submit()
     {
-        if (CanSubmit)
+        if (ViewModel.SubmitResult is { } result)
         {
-            MudDialog.Close(DialogResult.Ok((SourceTagId: _sourceTag!.Id, TargetTagId: _targetTag!.Id)));
+            MudDialog.Close(DialogResult.Ok((SourceTagId: result.SourceTagId, TargetTagId: result.TargetTagId)));
         }
     }
 }

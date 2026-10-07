@@ -2,7 +2,7 @@
 
 namespace SRNSMudApp.Services.Auth;
 
-public class RiskAssessmentService(ILogger<RiskAssessmentService> logger)
+public class RiskAssessmentService(ILogger<RiskAssessmentService> logger) : IRiskAssessmentService
 {
     private readonly ILogger<RiskAssessmentService> _logger = logger;
 

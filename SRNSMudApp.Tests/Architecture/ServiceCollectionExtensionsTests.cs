@@ -150,8 +150,10 @@ public class ServiceCollectionExtensionsTests
         Assert.Throws<ArgumentNullException>(() => new ItemLinkPreviewProvider(null!));
         Assert.Throws<ArgumentNullException>(() => new TagLinkPreviewProvider(null!));
         Assert.Throws<ArgumentNullException>(() => new UserLinkPreviewProvider(null!));
-        Assert.Throws<ArgumentNullException>(() => new ExternalOgpLinkPreviewProvider(null!, new Moq.Mock<Microsoft.Extensions.Logging.ILogger<ExternalOgpLinkPreviewProvider>>().Object));
+        Assert.Throws<ArgumentNullException>(() => new ExternalOgpLinkPreviewProvider((IHttpClientFactory)null!, new Moq.Mock<Microsoft.Extensions.Logging.ILogger<ExternalOgpLinkPreviewProvider>>().Object));
+        Assert.Throws<ArgumentNullException>(() => new ExternalOgpLinkPreviewProvider((HttpClient)null!, new Moq.Mock<Microsoft.Extensions.Logging.ILogger<ExternalOgpLinkPreviewProvider>>().Object));
         Assert.Throws<ArgumentNullException>(() => new ExternalOgpLinkPreviewProvider(new HttpClient(), null!));
+        Assert.Throws<ArgumentNullException>(() => new ExternalOgpLinkPreviewProvider(new Moq.Mock<IHttpClientFactory>().Object, null!));
         Assert.Throws<ArgumentNullException>(() => new ContentReportService(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<ICommandHandler<ResolveContentReportCommand, Result<bool>>>().Object));
         Assert.Throws<ArgumentNullException>(() => new ResolveContentReportHandler(null!, new Moq.Mock<IReportTargetHandlerFactory>().Object, new Moq.Mock<INotificationService>().Object));
         Assert.Throws<ArgumentNullException>(() => new ReportTargetHandlerFactory(null!));
@@ -186,5 +188,30 @@ public class ServiceCollectionExtensionsTests
         Assert.Equal("TagName", info.TargetTagName);
         Assert.Equal(TradeStatus.Proposed, info.Status);
         Assert.Equal(TaggingRequestType.Add, info.RequestType);
+    }
+
+    [Fact]
+    public void AddViewModels_RegistersDialogViewModelsAsTransient_AndPageViewModelsAsScoped()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new Moq.Mock<IUserDataProvider>().Object);
+
+        // Act
+        services.AddViewModels();
+
+        // Assert: STATE-01 ダイアログ用 ViewModel が Transient に登録されていることを検証
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Item.AddItemViewModel) && d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Item.ItemEditViewModel) && d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Contract.ProposeContractViewModel) && d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Tag.TagAddViewModel) && d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Tag.TagEditViewModel) && d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Bounty.BountyCreateViewModel) && d.Lifetime == ServiceLifetime.Transient);
+
+        // Assert: ページ・Circuit 単位の ViewModel が Scoped に登録されていることを検証
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Item.ItemDetailViewModel) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.Tag.TagDetailViewModel) && d.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, d => d.ServiceType == typeof(global::SRNSMudApp.Components.User.UserDetailViewModel) && d.Lifetime == ServiceLifetime.Scoped);
     }
 }

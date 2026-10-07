@@ -16,70 +16,63 @@ using SRNSMudApp.Models;
 /// </summary>
 public partial class ReactionCommentDialog : ComponentBase, IDisposable
 {
-    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; } = null!;
+    [CascadingParameter]
+    public IMudDialogInstance MudDialog { get; set; } = null!;
 
-    [Parameter] public string ReactionTagName { get; set; } = "リアクション";
+    [Parameter]
+    public string ReactionTagName { get; set; } = "リアクション";
 
-    private string? Comment { get; set; }
-    private int _remainingSeconds = 10;
-    private bool _isCursorHovered;
+    [Inject]
+    private IServiceProvider ServiceProvider { get; set; } = null!;
+
+    public ReactionCommentViewModel ViewModel { get; private set; } = null!;
+
     private CancellationTokenSource? _cts;
     private bool _disposed;
 
     protected override void OnInitialized()
     {
+        ViewModel = ServiceProvider.GetService<ReactionCommentViewModel>() ?? new ReactionCommentViewModel();
+        ViewModel.StateChanged += OnViewModelStateChanged;
+        ViewModel.Completed += OnViewModelCompleted;
+
         _cts = new CancellationTokenSource();
-        _ = StartCountdownAsync(_cts.Token);
+        _ = ViewModel.StartCountdownAsync(_cts.Token);
     }
 
-    private async Task StartCountdownAsync(CancellationToken ct)
+
+
+    private void OnViewModelStateChanged()
     {
-        try
-        {
-            while (_remainingSeconds > 0 && !_isCursorHovered && !ct.IsCancellationRequested)
-            {
-                await Task.Delay(1000, ct);
-                if (_isCursorHovered || ct.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                _remainingSeconds--;
-                await InvokeAsync(StateHasChanged);
-            }
-
-            if (!_isCursorHovered && _remainingSeconds <= 0 && !ct.IsCancellationRequested && !_disposed)
-            {
-                await InvokeAsync(() =>
-                {
-                    if (!_disposed)
-                    {
-                        MudDialog.Close(DialogResult.Ok(new ReactionCommentDialogResult(true, null)));
-                    }
-                });
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // キャンセルされた場合は正常終了
-        }
+        _ = InvokeAsync(StateHasChanged);
     }
 
-    public void OnCursorEnter()
+    private void OnViewModelCompleted(ReactionCommentDialogResult result)
     {
-        if (_isCursorHovered)
+        if (_disposed)
         {
             return;
         }
 
-        _isCursorHovered = true;
+        _ = InvokeAsync(() =>
+        {
+            if (!_disposed)
+            {
+                MudDialog.Close(DialogResult.Ok(result));
+            }
+        });
+    }
+
+    public void OnCursorEnter()
+    {
+        ViewModel.OnCursorEnter();
         _cts?.Cancel();
     }
 
     private void Save()
     {
         _cts?.Cancel();
-        MudDialog.Close(DialogResult.Ok(new ReactionCommentDialogResult(true, Comment)));
+        ViewModel.Save();
     }
 
     public void Dispose()
@@ -94,6 +87,8 @@ public partial class ReactionCommentDialog : ComponentBase, IDisposable
         {
             if (disposing)
             {
+                ViewModel.StateChanged -= OnViewModelStateChanged;
+                ViewModel.Completed -= OnViewModelCompleted;
                 _cts?.Cancel();
                 _cts?.Dispose();
             }

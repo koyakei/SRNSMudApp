@@ -15,6 +15,7 @@ using SmartComponents.LocalEmbeddings;
 using SRNSMudApp.Components;
 using SRNSMudApp.Components.Account;
 using SRNSMudApp.Data;
+using SRNSMudApp.Data.Interceptors;
 using SRNSMudApp.Extensions;
 using SRNSMudApp.Middlewares;
 using SRNSMudApp.Models.Push;
@@ -50,9 +51,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
     }
 }
 
-// Add Auth services
 builder.Services.AddScoped<IExternalTokenVerificationService, ExternalTokenVerificationService>();
-builder.Services.AddScoped<RiskAssessmentService>();
+builder.Services.AddScoped<IRiskAssessmentService, RiskAssessmentService>();
+builder.Services.AddScoped(sp => (RiskAssessmentService)sp.GetRequiredService<IRiskAssessmentService>());
 
 // Add controllers for API endpoints
 builder.Services.AddControllers();
@@ -124,7 +125,8 @@ if (!builder.Environment.IsEnvironment("Testing"))
         throw new InvalidOperationException("本番環境では環境変数 'MSSQL_SA_PASSWORD' の設定が必須です。デフォルトのフォールバックパスワードは使用できません。");
     }
 
-    _ = builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    _ = builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
+        {
             options.UseSqlServer(connectionString, sqlOptions =>
             {
                 sqlOptions.UseHierarchyId();
@@ -134,11 +136,19 @@ if (!builder.Environment.IsEnvironment("Testing"))
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(30),
                     errorNumbersToAdd: null);
-            }),
+            });
+            // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
+            var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
+            if (interceptor != null)
+            {
+                options.AddInterceptors(interceptor);
+            }
+        },
         ServiceLifetime.Scoped, // DbContext 自体は今まで通り Scoped (Identity用)
         ServiceLifetime.Singleton); // 設定情報(Options)を Singleton に変更 (Factory用)
 
-    _ = builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
+    _ = builder.Services.AddDbContextFactory<ApplicationDbContext>((sp, options) =>
+    {
         options.UseSqlServer(connectionString, sqlOptions =>
         {
             sqlOptions.UseHierarchyId();
@@ -148,7 +158,14 @@ if (!builder.Environment.IsEnvironment("Testing"))
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
                 errorNumbersToAdd: null);
-        }));
+        });
+        // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
+        var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
+        if (interceptor != null)
+        {
+            options.AddInterceptors(interceptor);
+        }
+    });
 }
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -169,6 +186,10 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 
 // Register LinkPreview providers and services (Strategy Pattern)
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(ExternalOgpLinkPreviewProvider.HttpClientName, client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent", "SRNSMudApp-LinkPreviewBot/1.0");
+});
 builder.Services.AddHttpClient<SRNSMudApp.Client.Services.IItemListApiClient, SRNSMudApp.Client.Services.ItemListApiClient>((sp, client) =>
 {
     var httpContextAccessor = sp.GetService<IHttpContextAccessor>();

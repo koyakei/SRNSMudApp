@@ -13,8 +13,9 @@ public class UserDetailActionViewModel : UserDetailViewModel
 {
     public UserDetailActionViewModel(
         IUserDataProvider userDataProvider,
-        UserManager<ApplicationUser>? userManager = null)
-        : base(userDataProvider, userManager)
+        UserManager<ApplicationUser>? userManager = null,
+        IServiceScopeFactory? scopeFactory = null)
+        : base(userDataProvider, userManager, scopeFactory)
     {
     }
 }

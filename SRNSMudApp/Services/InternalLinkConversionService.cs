@@ -8,7 +8,6 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
@@ -56,7 +55,7 @@ public class InternalLinkConversionService(
             }
 
             // 既存のURLや内部リンク部分を特定し、検索対象外にする
-            IReadOnlyList<ContentSegment> segments = ItemCardViewModel.GetContentSegments(content);
+            IReadOnlyList<ContentSegment> segments = ContentParser.GetContentSegments(content);
             List<(int Start, int End)> urlRanges = BuildUrlRanges(content, segments);
 
             // 各タグ名でテキスト内の一致候補を検出

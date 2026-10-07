@@ -43,10 +43,11 @@ public class ApplicationDbSaveChangesInterceptor(TimeProvider? timeProvider = nu
 
         if (eventData.Context is ApplicationDbContext context)
         {
-            EnsureTaggableTargets(context);
-            CleanupTaggableTargets(context);
+            // DATA-04: 非同期メソッド呼び出しにより Sync-over-Async を解消
+            await EnsureTaggableTargetsAsync(context, cancellationToken).ConfigureAwait(false);
+            await CleanupTaggableTargetsAsync(context, cancellationToken).ConfigureAwait(false);
             UpdateTimestamps(context);
-            ValidateRootTagConstraint(context);
+            await ValidateRootTagConstraintAsync(context, cancellationToken).ConfigureAwait(false);
             await EnforceTagWeightLimitsAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
@@ -65,6 +66,30 @@ public class ApplicationDbSaveChangesInterceptor(TimeProvider? timeProvider = nu
             {
                 var target = context.TaggableTargets.Local.FirstOrDefault(t => t.Id == entry.Entity.TagTargetId)
                     ?? context.TaggableTargets.FirstOrDefault(t => t.Id == entry.Entity.TagTargetId);
+                if (target != null)
+                {
+                    _ = context.TaggableTargets.Remove(target);
+                }
+            }
+            else if (entry.Entity.TagTarget != null)
+            {
+                _ = context.TaggableTargets.Remove(entry.Entity.TagTarget);
+            }
+        }
+    }
+
+    private static async Task CleanupTaggableTargetsAsync(ApplicationDbContext context, CancellationToken cancellationToken)
+    {
+        var deletedTaggables = context.ChangeTracker.Entries<ITaggable>()
+            .Where(e => e.State == EntityState.Deleted)
+            .ToList();
+
+        foreach (var entry in deletedTaggables)
+        {
+            if (entry.Entity.TagTargetId > 0)
+            {
+                var target = context.TaggableTargets.Local.FirstOrDefault(t => t.Id == entry.Entity.TagTargetId)
+                    ?? await context.TaggableTargets.FirstOrDefaultAsync(t => t.Id == entry.Entity.TagTargetId, cancellationToken).ConfigureAwait(false);
                 if (target != null)
                 {
                     _ = context.TaggableTargets.Remove(target);
@@ -170,6 +195,99 @@ public class ApplicationDbSaveChangesInterceptor(TimeProvider? timeProvider = nu
         }
     }
 
+    private static async Task EnsureTaggableTargetsAsync(ApplicationDbContext context, CancellationToken cancellationToken)
+    {
+        var itemEntries = context.ChangeTracker.Entries<Item>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in itemEntries)
+        {
+            if (entry.Entity.TagTarget == null && entry.Entity.TagTargetId == 0)
+            {
+                entry.Entity.TagTarget = new TaggableTarget
+                {
+                    OwnerId = entry.Entity.OwnerId,
+                    TargetType = "Item"
+                };
+            }
+        }
+
+        var edgeEntries = context.ChangeTracker.Entries<TagEdge>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in edgeEntries)
+        {
+            if (entry.Entity.TagTarget == null && entry.Entity.TagTargetId == 0)
+            {
+                entry.Entity.TagTarget = new TaggableTarget
+                {
+                    OwnerId = entry.Entity.OwnerId,
+                    TargetType = "TagEdge"
+                };
+            }
+        }
+
+        var requestEntries = context.ChangeTracker.Entries<TaggingRequestEntity>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        foreach (var entry in requestEntries)
+        {
+            if (entry.Entity.Target == null && entry.Entity.TargetId == 0)
+            {
+                var targetItem = entry.Entity.TargetItem;
+                if (targetItem != null)
+                {
+                    if (targetItem.TagTarget == null && targetItem.TagTargetId == 0)
+                    {
+                        targetItem.TagTarget = new TaggableTarget
+                        {
+                            OwnerId = targetItem.OwnerId,
+                            TargetType = "Item"
+                        };
+                    }
+
+                    if (targetItem.TagTarget != null)
+                    {
+                        entry.Entity.Target = targetItem.TagTarget;
+                    }
+                    else if (targetItem.TagTargetId > 0)
+                    {
+                        entry.Entity.TargetId = targetItem.TagTargetId;
+                    }
+                }
+                else if (entry.Entity.TargetItemId > 0)
+                {
+                    var item = context.Items.Local.FirstOrDefault(i => i.Id == entry.Entity.TargetItemId)
+                        ?? await context.Items.FirstOrDefaultAsync(i => i.Id == entry.Entity.TargetItemId, cancellationToken).ConfigureAwait(false);
+
+                    if (item != null)
+                    {
+                        if (item.TagTarget == null && item.TagTargetId == 0)
+                        {
+                            item.TagTarget = new TaggableTarget
+                            {
+                                OwnerId = item.OwnerId,
+                                TargetType = "Item"
+                            };
+                        }
+
+                        if (item.TagTarget != null)
+                        {
+                            entry.Entity.Target = item.TagTarget;
+                        }
+                        else if (item.TagTargetId > 0)
+                        {
+                            entry.Entity.TargetId = item.TagTargetId;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void UpdateTimestamps(ApplicationDbContext context)
     {
         var entries = context.ChangeTracker
@@ -238,6 +356,82 @@ public class ApplicationDbSaveChangesInterceptor(TimeProvider? timeProvider = nu
                             .Concat(context.Tags.Where(t => t.ParentTagId == rootTagId || t.Node.GetAncestor(1) == rootNode).Select(t => t.Node))
                             .OrderByDescending(n => n)
                             .FirstOrDefault();
+
+                        entry.Entity.Node = rootNode.GetDescendant(lastChildNode, null);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
+                    }
+                }
+                else if (entry.Entity.Node == HierarchyId.GetRoot())
+                {
+                    throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
+                }
+            }
+            else if (entry.State is EntityState.Modified)
+            {
+                if (entry.Entity.Name != Tag.RootTagName && entry.Entity.Node == HierarchyId.GetRoot())
+                {
+                    throw new InvalidOperationException($"親ノードを持たないルートタグは '{Tag.RootTagName}' 以外作成・更新できません。");
+                }
+            }
+        }
+    }
+
+    private static async Task ValidateRootTagConstraintAsync(ApplicationDbContext context, CancellationToken cancellationToken)
+    {
+        Tag? rootTag = null;
+        HierarchyId? rootNode = null;
+        var rootTagId = 0;
+
+        foreach (EntityEntry<Tag> entry in context.ChangeTracker.Entries<Tag>())
+        {
+            if (entry.State is EntityState.Added)
+            {
+                if (entry.Entity.Name == Tag.RootTagName)
+                {
+                    entry.Entity.Node = HierarchyId.GetRoot();
+                    entry.Entity.ParentTagId = null;
+                    continue;
+                }
+
+                if (entry.Entity.Node is null)
+                {
+                    if (rootTag is null && rootNode is null)
+                    {
+                        rootTag = context.Tags.Local.FirstOrDefault(t => t.Name == Tag.RootTagName)
+                                  ?? await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName, cancellationToken).ConfigureAwait(false);
+                        if (rootTag != null)
+                        {
+                            rootTagId = rootTag.Id;
+                            rootNode = rootTag.Node;
+                        }
+                    }
+
+                    if (rootNode != null)
+                    {
+                        if (!entry.Entity.ParentTagId.HasValue && rootTagId != 0)
+                        {
+                            entry.Entity.ParentTagId = rootTagId;
+                        }
+
+                        var remoteLastChild = await context.Tags
+                            .Where(t => t.ParentTagId == rootTagId || (t.Node != null && t.Node.GetAncestor(1) == rootNode))
+                            .Select(t => t.Node)
+                            .OrderByDescending(n => n)
+                            .FirstOrDefaultAsync(cancellationToken)
+                            .ConfigureAwait(false);
+
+                        var localLastChild = context.Tags.Local
+                            .Where(t => t.ParentTagId == rootTagId || (t.Node != null && t.Node.GetAncestor(1) == rootNode))
+                            .Select(t => t.Node)
+                            .OrderByDescending(n => n)
+                            .FirstOrDefault();
+
+                        HierarchyId? lastChildNode = (localLastChild != null && remoteLastChild != null)
+                            ? (localLastChild > remoteLastChild ? localLastChild : remoteLastChild)
+                            : (localLastChild ?? remoteLastChild);
 
                         entry.Entity.Node = rootNode.GetDescendant(lastChildNode, null);
                     }

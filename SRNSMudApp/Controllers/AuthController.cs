@@ -17,7 +17,7 @@ namespace SRNSMudApp.Controllers;
 [EnableRateLimiting("AuthRateLimit")]
 public partial class AuthController(
     IExternalTokenVerificationService tokenService,
-    RiskAssessmentService riskService,
+    IRiskAssessmentService riskService,
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
     IFirstUserAdminService firstUserAdminService,

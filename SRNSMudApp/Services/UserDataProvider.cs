@@ -26,7 +26,15 @@ public sealed record UserDetailPageData(
     int FollowersCount = 0,
     IReadOnlyList<ApplicationUser>? FollowingUsers = null,
     IReadOnlyList<ApplicationUser>? FollowerUsers = null,
-    IReadOnlyList<Tag>? ReactionTags = null);
+    IReadOnlyList<Tag>? ReactionTags = null,
+    UserProfileDto? Profile = null)
+{
+    /// <summary>
+    ///     公開プロファイル DTO を取得する（Profile が明示されていない場合は User から生成）。
+    /// </summary>
+    public UserProfileDto? UserProfile => Profile ?? UserProfileDto.FromEntity(User);
+}
+
 
 /// <summary>
 ///     ユーザー系コンポーネント用のデータアクセスを分離するインターフェース。

@@ -14,13 +14,16 @@ public class UserDetailViewModel
 {
     private readonly IUserDataProvider _userDataProvider;
     private readonly UserManager<ApplicationUser>? _userManager;
+    private readonly IServiceScopeFactory? _scopeFactory;
 
     public UserDetailViewModel(
         IUserDataProvider userDataProvider,
-        UserManager<ApplicationUser>? userManager = null)
+        UserManager<ApplicationUser>? userManager = null,
+        IServiceScopeFactory? scopeFactory = null)
     {
         _userDataProvider = userDataProvider ?? throw new ArgumentNullException(nameof(userDataProvider));
         _userManager = userManager;
+        _scopeFactory = scopeFactory;
     }
 
     public string UserId { get; private set; } = string.Empty;
@@ -29,6 +32,7 @@ public class UserDetailViewModel
     public bool IsLoading { get; private set; } = true;
 
     public ApplicationUser? User { get; private set; }
+    public UserProfileDto? UserProfile { get; private set; }
     public IReadOnlyList<Data.Tag> UserTags { get; private set; } = [];
     public IReadOnlyList<Data.Item> UserItems { get; private set; } = [];
     public IReadOnlyList<Data.Tag> ReactionTags { get; private set; } = [];
@@ -76,6 +80,7 @@ public class UserDetailViewModel
             }
 
             User = page?.User;
+            UserProfile = page?.UserProfile;
 
             if (page is not null)
             {
@@ -155,6 +160,26 @@ public class UserDetailViewModel
         if (string.IsNullOrEmpty(targetUserId))
         {
             return IdentityResult.Failed(new IdentityError { Description = "ユーザーIDが指定されていません。" });
+        }
+
+        // DATA-03: Blazor Circuit 内で長期生存する UserManager (および付随する Scoped DbContext) との並行競合を防ぐため、
+        // 短命なスコープ内で UserManager を解決して操作する
+        if (_scopeFactory != null)
+        {
+            await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+            var scopedUserManager = scope.ServiceProvider.GetService<UserManager<ApplicationUser>>();
+            if (scopedUserManager == null)
+            {
+                return IdentityResult.Failed(new IdentityError { Description = "UserManager が利用できません。" });
+            }
+
+            ApplicationUser? scopedUser = await scopedUserManager.FindByIdAsync(targetUserId);
+            if (scopedUser == null)
+            {
+                return IdentityResult.Failed(new IdentityError { Description = "ユーザーが見つかりません。" });
+            }
+
+            return await scopedUserManager.AddToRoleAsync(scopedUser, "Admin");
         }
 
         if (_userManager == null)

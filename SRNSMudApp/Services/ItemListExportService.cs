@@ -3,7 +3,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
 
-using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 
@@ -171,7 +170,7 @@ public sealed class ItemListExportService(ILinkPreviewService linkPreviewService
 
     private async Task<List<ExportLinkPreviewDto>> BuildLinkPreviewsAsync(string? content)
     {
-        IEnumerable<string> urls = ItemCardViewModel.ExtractUrls(content).Take(MaxLinkPreviewsPerItem);
+        IEnumerable<string> urls = ContentParser.ExtractUrls(content).Take(MaxLinkPreviewsPerItem);
         ExportLinkPreviewDto?[] previews = await Task.WhenAll(urls.Select(async url =>
         {
             LinkPreviewData preview = await _linkPreviewService.GetPreviewAsync(url);

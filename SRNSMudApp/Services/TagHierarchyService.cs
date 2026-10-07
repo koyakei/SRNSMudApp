@@ -102,7 +102,8 @@ public class TagHierarchyService(
         {
             try
             {
-                IJSObjectReference module = await jsRuntime.InvokeAsync<IJSObjectReference>(
+                // LEAK-01: 動的インポートした JS モジュールを確実に破棄し、Circuit およびブラウザのハンドルリークを防止する
+                await using IJSObjectReference module = await jsRuntime.InvokeAsync<IJSObjectReference>(
                     "import", cancellationToken, "./js/tagHierarchy.js");
 
                 // 新規タグも含めて判定させる
