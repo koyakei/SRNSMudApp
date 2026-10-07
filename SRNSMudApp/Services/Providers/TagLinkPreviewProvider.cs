@@ -45,6 +45,7 @@ public partial class TagLinkPreviewProvider(IDbContextFactory<ApplicationDbConte
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         var tag = await db.Tags
+            .AsNoTracking()
             .Include(t => t.Owner)
             .FirstOrDefaultAsync(t => t.Id == tagId, cancellationToken);
 

@@ -12,7 +12,7 @@ namespace SRNSMudApp.Components.Tag;
 /// </summary>
 public sealed class GenericTagEditorViewModel
 {
-    private readonly ITaggingService _taggingService;
+    private readonly IDirectTaggingService _taggingService;
 
     public GenericTagEditorViewModel(ITaggingService taggingService)
     {

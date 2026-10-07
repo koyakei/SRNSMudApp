@@ -7,7 +7,7 @@ namespace SRNSMudApp.Services;
 ///     このインターフェイスを通じてモックを差し込めるため、
 ///     bUnit によるコンポーネントテストで DB 依存を排除できる。
 /// </summary>
-public interface IItemTagService
+public interface IItemTagService : ITagRelationToTagService
 {
     /// <summary>
     ///     アイテムに指定タグの TagRelation を追加する。
@@ -43,21 +43,8 @@ public interface IItemTagService
     Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId);
 
     /// <summary>
-    ///     TagRelationToTag (タグにタグを関連付け) を追加する。
+    ///     アイテムに紐づく保留中タグ付けリクエスト一覧を取得する。
     /// </summary>
-    Task<string?> AddTagToTagAsync(int targetTagId, int tagId, string currentUserId);
-
-    /// <summary>
-    ///     TagRelationToTag を削除する。
-    /// </summary>
-    Task<string?> RemoveTagToTagRelationAsync(int relationId, string currentUserId);
-
-    /// <summary>
-    ///     タグの ParentTagId を変更する（子タグとして設定）。
-    /// </summary>
-    Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId,
-        IReadOnlyList<Tag> allTagsForCycleCheck);
-
     Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId);
 }
 

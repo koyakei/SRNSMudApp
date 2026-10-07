@@ -45,6 +45,7 @@ public partial class ItemLinkPreviewProvider(IDbContextFactory<ApplicationDbCont
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         var item = await db.Items
+            .AsNoTracking()
             .Include(i => i.TagRelations)
                 .ThenInclude(tr => tr.Tag)
                     .ThenInclude(t => t.Owner)

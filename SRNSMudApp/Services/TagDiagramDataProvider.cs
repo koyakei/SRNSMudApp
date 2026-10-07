@@ -24,6 +24,7 @@ public class TagDiagramDataProvider(
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var item = await context.Items
+            .AsNoTracking()
             .Include(i => i.TagRelations)
             .FirstOrDefaultAsync(i => i.Id == itemId);
 
@@ -65,6 +66,7 @@ public class TagDiagramDataProvider(
         if (linkedItemIds.Count > 0)
         {
             var linkedTags = await context.TagRelations
+                .AsNoTracking()
                 .Where(tr => linkedItemIds.Contains(tr.ItemId))
                 .Select(tr => tr.TagId)
                 .ToListAsync();
@@ -84,7 +86,7 @@ public class TagDiagramDataProvider(
     public async Task<List<Item>> GetContextItemsAsync(int itemId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        var item = await context.Items.FirstOrDefaultAsync(i => i.Id == itemId);
+        var item = await context.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == itemId);
         if (item == null) return [];
 
         var linkedItemIds = new List<int> { itemId };
@@ -109,6 +111,7 @@ public class TagDiagramDataProvider(
         if (linkedItemIds.Count > 0)
         {
             return await context.Items
+                .AsNoTracking()
                 .Include(i => i.TagRelations)
                 .Where(i => linkedItemIds.Contains(i.Id))
                 .ToListAsync();

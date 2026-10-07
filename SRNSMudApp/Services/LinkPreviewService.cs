@@ -35,7 +35,11 @@ public sealed partial class LinkPreviewService : ILinkPreviewService
 
     /// <inheritdoc />
     [SuppressMessage("Design", "CA1054:URI parameters should not be strings", Justification = "Handles relative internal and external URLs")]
-    public async Task<LinkPreviewData> GetPreviewAsync(string url)
+    public Task<LinkPreviewData> GetPreviewAsync(string url) => GetPreviewAsync(url, CancellationToken.None);
+
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1054:URI parameters should not be strings", Justification = "Handles relative internal and external URLs")]
+    public async Task<LinkPreviewData> GetPreviewAsync(string url, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -63,7 +67,7 @@ public sealed partial class LinkPreviewService : ILinkPreviewService
 
             try
             {
-                var result = await provider.GetPreviewAsync(uri, url);
+                var result = await provider.GetPreviewAsync(uri, url, cancellationToken);
                 if (result.IsSuccess)
                 {
                     _cache[normalizedUrl] = result;

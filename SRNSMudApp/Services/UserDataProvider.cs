@@ -361,7 +361,7 @@ public class UserDataProvider(
     public async Task<ApplicationUser?> FindUserByIdAsync(string userId)
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
-        return await dbContext.Users.FindAsync(userId);
+        return await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
     }
 
     public async Task<List<ApplicationUser>> GetUsersByIdsAsync(IEnumerable<string> userIds)

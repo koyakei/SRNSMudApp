@@ -18,7 +18,7 @@ public class ItemDetailViewModel
 {
     private readonly IItemDetailDataProvider _detailData;
     private readonly ITaggingContractService _taggingContractService;
-    private readonly ITaggingService _taggingService;
+    private readonly ITagRequestRejectionService _taggingService;
     private readonly IItemReplyService _itemReplyService;
     private readonly ISystemTagEnsurer _systemTagEnsurer;
 

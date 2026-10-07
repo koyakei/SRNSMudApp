@@ -30,4 +30,3 @@ public sealed class FirebaseOptions
     /// </summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ServiceAccountJson);
 }
-

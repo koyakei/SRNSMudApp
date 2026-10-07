@@ -45,18 +45,7 @@ public partial class ExternalOgpLinkPreviewProvider : ILinkPreviewProvider
 
     private sealed class SingleHttpClientFactory(HttpClient client) : IHttpClientFactory
     {
-        private readonly HttpClient _client = ConfigureHttpClient(client);
-        public HttpClient CreateClient(string name) => _client;
-    }
-
-    private static HttpClient ConfigureHttpClient(HttpClient client)
-    {
-        ArgumentNullException.ThrowIfNull(client);
-        if (!client.DefaultRequestHeaders.Contains("User-Agent"))
-        {
-            client.DefaultRequestHeaders.Add("User-Agent", "SRNSMudApp-LinkPreviewBot/1.0");
-        }
-        return client;
+        public HttpClient CreateClient(string name) => client;
     }
 
     /// <inheritdoc />
@@ -82,9 +71,13 @@ public partial class ExternalOgpLinkPreviewProvider : ILinkPreviewProvider
         try
         {
             HttpClient client = _httpClientFactory.CreateClient(HttpClientName);
-            ConfigureHttpClient(client);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            if (!request.Headers.Contains("User-Agent"))
+            {
+                request.Headers.TryAddWithoutValidation("User-Agent", "SRNSMudApp-LinkPreviewBot/1.0");
+            }
+
             using HttpResponseMessage response =
                 await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 

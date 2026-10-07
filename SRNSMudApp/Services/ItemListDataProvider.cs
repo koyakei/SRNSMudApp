@@ -173,7 +173,7 @@ public class ItemListDataProvider(
     public async Task<Tag?> FindTagByNameAsync(string tagName)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
+        return await context.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -446,12 +446,14 @@ public class ItemListDataProvider(
             .ToDictionaryAsync(t => t.Id);
 
         List<TagRelation> itemTags = await context.TagRelations
+            .AsNoTracking()
             .Where(tr => itemIds.Contains(tr.ItemId))
             .ToListAsync();
 
         var relatedTagIds = itemTags.Select(t => t.TagId).Distinct().ToList();
 
         List<TagRelationToTag> tagToTags = await context.TagRelationToTags
+            .AsNoTracking()
             .Where(trt => relatedTagIds.Contains(trt.TargetTagId))
             .ToListAsync();
 

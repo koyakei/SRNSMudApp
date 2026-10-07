@@ -36,17 +36,17 @@ public class ApproveTaggingRequestHandler(ITaggingContractService contractServic
 /// <summary>
 ///     タグ付けリクエスト却下コマンドのハンドラー。
 /// </summary>
-/// <param name="taggingService">タグサービス。</param>
-public class RejectTaggingRequestHandler(ITaggingService taggingService)
+/// <param name="rejectionService">リクエスト却下サービス。</param>
+public class RejectTaggingRequestHandler(ITagRequestRejectionService rejectionService)
     : CommandHandlerBase<RejectTaggingRequestCommand, Result<bool>>
 {
-    private readonly ITaggingService _taggingService =
-        taggingService ?? throw new ArgumentNullException(nameof(taggingService));
+    private readonly ITagRequestRejectionService _rejectionService =
+        rejectionService ?? throw new ArgumentNullException(nameof(rejectionService));
 
     /// <inheritdoc />
     protected override async Task<Result<bool>> ExecuteAsync(RejectTaggingRequestCommand command, CancellationToken cancellationToken)
     {
-        await _taggingService.RejectRequestAsync(command.RequestId, command.CurrentUserId, command.Reason);
+        await _rejectionService.RejectRequestAsync(command.RequestId, command.CurrentUserId, command.Reason);
         return new Success<bool>(true);
     }
 }

@@ -119,7 +119,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITimelineRecorder, TimelineRecorder>();
         services.AddScoped<ITagWeightLedgerService, TagWeightLedgerService>();
         services.AddScoped<IItemListExportService, ItemListExportService>();
-        services.AddScoped<IItemTagService, ItemTagService>();
+        services.AddScoped<ItemTagService>();
+        services.AddScoped<IItemTagService>(sp => sp.GetRequiredService<ItemTagService>());
+        services.AddScoped<ITagRelationToTagService>(sp => sp.GetRequiredService<ItemTagService>());
         services.AddScoped<IItemReplyService, ItemReplyService>();
         services.AddScoped<IItemReactionService, ItemReactionService>();
         // 登録順が元アイテム解決の優先順位になる。
@@ -130,7 +132,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITagEdgeService, TagEdgeService>();
 
         // 他のサービスに合わせて Scoped ライフタイムに統一 (IDbContextFactory からコンテキストを生成するため安全)
-        services.AddScoped<ITaggingService, TaggingService>();
+        services.AddScoped<TaggingService>();
+        services.AddScoped<ITaggingService>(sp => sp.GetRequiredService<TaggingService>());
+        services.AddScoped<IDirectTaggingService>(sp => sp.GetRequiredService<TaggingService>());
+        services.AddScoped<ITagRequestRejectionService>(sp => sp.GetRequiredService<TaggingService>());
         services.AddScoped<ITaggingRequestActions, TaggingRequestActions>();
         services.AddScoped<ISystemTagEnsurer, SystemTagEnsurer>();
         services.AddScoped<INotificationService, NotificationService>();
