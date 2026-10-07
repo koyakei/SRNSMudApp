@@ -35,21 +35,21 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "Azure: Deploy Bicep (srns - West US 3)",
+      "label": "Azure: Deploy Bicep (srnsjeast - Japan East)",
       "type": "shell",
-      "command": "az deployment group create --resource-group srns --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
+      "command": "az deployment group create --resource-group srnsjeast --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
       "problemMatcher": []
     },
     {
-      "label": "Azure: Validate Bicep (srns - West US 3)",
+      "label": "Azure: Validate Bicep (srnsjeast - Japan East)",
       "type": "shell",
-      "command": "az deployment group validate --resource-group srns --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
+      "command": "az deployment group validate --resource-group srnsjeast --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
       "problemMatcher": []
     },
     {
-      "label": "Azure: What-If Bicep (srns - West US 3)",
+      "label": "Azure: What-If Bicep (srnsjeast - Japan East)",
       "type": "shell",
-      "command": "az deployment group what-if --resource-group srns --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
+      "command": "az deployment group what-if --resource-group srnsjeast --template-file ${workspaceFolder}/main.bicep --parameters ${workspaceFolder}/main.bicepparam",
       "problemMatcher": []
     }
   ]

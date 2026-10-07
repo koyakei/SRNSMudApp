@@ -87,6 +87,13 @@ param vapidPublicKey string = ''
 @secure()
 param vapidPrivateKey string = ''
 
+@description('Firebase プロジェクト ID。')
+param firebaseProjectId string = ''
+
+@description('Firebase サービスアカウント秘密鍵 JSON。')
+@secure()
+param firebaseServiceAccountJson string = ''
+
 @description('初回起動時の DB 自動マイグレーション（テーブル作成）を有効にするかどうか。')
 param autoMigrate bool = true
 
@@ -322,6 +329,22 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
               {
                 name: 'Vapid__PrivateKey'
                 value: vapidPrivateKey
+              }
+            ]
+          : [],
+        !empty(firebaseProjectId)
+          ? [
+              {
+                name: 'Firebase__ProjectId'
+                value: firebaseProjectId
+              }
+            ]
+          : [],
+        !empty(firebaseServiceAccountJson)
+          ? [
+              {
+                name: 'Firebase__ServiceAccountJson'
+                value: firebaseServiceAccountJson
               }
             ]
           : []

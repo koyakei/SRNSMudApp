@@ -2,7 +2,9 @@ using './main.bicep'
 
 param name = 'srns'
 // param location = 'japaneast' // 未指定の場合はデプロイ先リソースグループのリージョン（resourceGroup().location）に自動追従します
-param appServiceSku = 'B1' // B1: Basic (VNet統合有効)
+param hostingPlanName = 'ASP-srns-b1'
+param appServiceSku = 'F1' // F1: Free (VNet統合不可)
+param enableVnet = false // VNet統合を無効化
 param linuxFxVersion = 'DOTNETCORE|11.0'
 
 param serverName = 'srns-server'
@@ -31,10 +33,14 @@ param googleClientId = '890065771342-2ruam1rjo1ppvjs5fe11n4eh7mp7t9vv.apps.googl
 // param notificationHubConnectionString = readEnvironmentVariable('NOTIFICATION_HUB_CONNECTION_STRING', '')
 // param notificationHubName = 'srns-hub'
 
-// Web Push (VAPID) 設定（未指定時は appsettings.json の設定が利用されます）
-// param vapidSubject = 'mailto:admin@example.com'
-// param vapidPublicKey = readEnvironmentVariable('VAPID_PUBLIC_KEY', '')
-// param vapidPrivateKey = readEnvironmentVariable('VAPID_PRIVATE_KEY', '')
+// Web Push (VAPID) 設定
+param vapidSubject = 'mailto:admin@example.com'
+param vapidPublicKey = 'BME5mMIYAibD51e8ERrgTU6u-Vl14GmGmXkxSgnHh_9RjPAKRWYs17cQzLFkKJo8u2-2fKeLYENgbByXjJinVSc'
+param vapidPrivateKey = ''
+
+// Firebase 設定
+param firebaseProjectId = 'srnswebapp'
+param firebaseServiceAccountJson = ''
 
 // 継続的デプロイ (GitHub Actions)
 param gitHubRepoUrl = 'https://github.com/hnutKoyanagi/SRNSMudApp'
