@@ -1,7 +1,6 @@
-namespace SRNSMudApp.Client.Components;
-
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,15 +12,20 @@ using SRNSMudApp.Client.Models;
 using SRNSMudApp.Client.Models.Api;
 using SRNSMudApp.Client.Services;
 
+namespace SRNSMudApp.Client.Components;
+
 /// <summary>
 /// WebAssembly (WASM) 上で動作するアイテム・タグの検索および一覧表示コンポーネント。
 /// <see cref="IItemListApiClient"/> を通じてサーバー API を非同期に呼び出します。
 /// </summary>
-public partial class ItemSearchView : ComponentBase
+public sealed partial class ItemSearchView : ComponentBase
 {
     [Inject]
     private IItemListApiClient ApiClient { get; set; } = null!;
 
+    /// <summary>
+    /// アイテムクリック時に通知されるコールバック。
+    /// </summary>
     [Parameter]
     public EventCallback<int> OnItemClick { get; set; }
 
@@ -65,8 +69,8 @@ public partial class ItemSearchView : ComponentBase
         }
 
         var alreadyExists = suggestion.TagId.HasValue
-            ? _selectedFilters.Exists(f => f.TagId == suggestion.TagId)
-            : _selectedFilters.Exists(f => f.TagName.Equals(suggestion.TagName, StringComparison.OrdinalIgnoreCase) && f.UserName == suggestion.UserName);
+            ? _selectedFilters.Any(f => f.TagId == suggestion.TagId)
+            : _selectedFilters.Any(f => f.TagName.Equals(suggestion.TagName, StringComparison.OrdinalIgnoreCase) && f.UserName == suggestion.UserName);
 
         if (!alreadyExists)
         {
@@ -85,7 +89,7 @@ public partial class ItemSearchView : ComponentBase
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
             var text = _searchText.Trim();
-            if (!_selectedFilters.Exists(f => f.TagName.Equals(text, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(f.UserName)))
+            if (!_selectedFilters.Any(f => f.TagName.Equals(text, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(f.UserName)))
             {
                 _selectedFilters.Add(new TagSuggestion(null, text, null));
                 _searchText = string.Empty;
@@ -115,6 +119,10 @@ public partial class ItemSearchView : ComponentBase
         }
     }
 
+    /// <summary>
+    /// 現在の検索条件に基づいてサーバー API からアイテム・タグデータを非同期に読み込みます。
+    /// </summary>
+    /// <returns>非同期タスク。</returns>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
     public async Task LoadDataAsync()
     {
@@ -124,11 +132,13 @@ public partial class ItemSearchView : ComponentBase
 
         try
         {
-            var filterDtos = _selectedFilters.ConvertAll(f => new ItemListFilterDto(
-                TagId: f.TagId,
-                TagName: f.TagId.HasValue ? null : f.TagName,
-                UserName: f.UserName
-            ));
+            var filterDtos = _selectedFilters
+                .Select(f => new ItemListFilterDto(
+                    TagId: f.TagId,
+                    TagName: f.TagId.HasValue ? null : f.TagName,
+                    UserName: f.UserName
+                ))
+                .ToList();
 
             var request = new ItemListQueryRequest(
                 Filters: filterDtos,
