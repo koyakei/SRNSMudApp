@@ -107,7 +107,8 @@ public sealed class WebPushNotificationService(
         ArgumentNullException.ThrowIfNull(subscription);
         ArgumentNullException.ThrowIfNull(payload);
 
-        if (string.IsNullOrWhiteSpace(_vapidOptions.PublicKey) || string.IsNullOrWhiteSpace(_vapidOptions.PrivateKey))
+        string privateKey = _vapidOptions.GetEffectivePrivateKey();
+        if (string.IsNullOrWhiteSpace(_vapidOptions.PublicKey) || string.IsNullOrWhiteSpace(privateKey))
         {
             throw new InvalidOperationException("VAPIDキー（PublicKey / PrivateKey）が設定されていません。");
         }
@@ -116,7 +117,7 @@ public sealed class WebPushNotificationService(
         var vapidDetails = new VapidDetails(
             _vapidOptions.Subject,
             _vapidOptions.PublicKey,
-            _vapidOptions.PrivateKey);
+            privateKey);
 
         var pushSubscription = new PushSubscription(
             subscription.Endpoint,
