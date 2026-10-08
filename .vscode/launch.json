@@ -25,14 +25,6 @@
       "cwd": "${workspaceFolder}/SRNSMudApp.Client",
       "url": "http://localhost:5009",
       "browser": "chrome"
-    },
-    {
-      "name": "Debug SRNSMudApp.Client (Chrome)",
-      "type": "pwa-chrome",
-      "request": "launch",
-      "url": "http://localhost:5009",
-      "webRoot": "${workspaceFolder}/SRNSMudApp.Client",
-      "inspectUri": "{wsProtocol}://{url.hostname}:{url.port}/_framework/debug/ws-proxy?browser={browserInspectUri}"
     }
   ],
   "compounds": [
