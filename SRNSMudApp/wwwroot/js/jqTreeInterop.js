@@ -82,6 +82,12 @@ window.jqTreeInterop = {
                     $title.addClass('locked-tag-title');
                 }
 
+                if (node.isHighlighted) {
+                    $li.addClass('highlighted-tag-node');
+                    const $title = $li.find('.jqtree-title');
+                    $title.addClass('highlighted-tag-title');
+                }
+
                 if (isLoggedIn) {
                     const $title = $li.find('.jqtree-title');
                     $title.before('<input type="checkbox" class="tag-checkbox" data-id="' + node.id + '" style="margin-right: 8px; cursor: pointer;" />');

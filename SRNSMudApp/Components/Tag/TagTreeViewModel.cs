@@ -223,10 +223,30 @@ public class TagTreeViewModel
     // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする（CA1869: インスタンス生成はキャッシュ）
     private static readonly JsonSerializerOptions CachedSerializerOptions = new() { MaxDepth = 1024 };
 
-    /// <summary>検索語でタグを絞り込む。空の場合は自分のタグを優先して上位 2000 件返す。BAN されたユーザーのタグは除外する。</summary>
+    /// <summary>
+    ///     検索語に合致する表示可能タグのID集合を取得する。
+    ///     検索語が空または空白の場合は空の集合を返す。
+    /// </summary>
+    public static IReadOnlySet<int> GetMatchingTagIds(IEnumerable<Data.Tag> tags, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return new HashSet<int>();
+        }
+
+        return tags
+            .Where(t => t.IsTagVisibleToUser() && t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Id)
+            .ToHashSet();
+    }
+
+    /// <summary>
+    ///     検索語でタグを絞り込む。空の場合は自分のタグを優先して上位 2000 件返す。BAN されたユーザーのタグは除外する。
+    ///     検索語が指定されている場合、合致したタグ自身、その祖先ノード（ルートまでの経路）、およびその配下のサブノード（子孫）を含める。
+    /// </summary>
     public static IEnumerable<Data.Tag> FilterTags(IReadOnlyList<Data.Tag> tags, string? searchText, string? currentUserId)
     {
-        var visibleTags = tags.Where(t => t.IsTagVisibleToUser());
+        var visibleTags = tags.Where(t => t.IsTagVisibleToUser()).ToList();
         if (string.IsNullOrWhiteSpace(searchText))
         {
             return visibleTags
@@ -235,22 +255,43 @@ public class TagTreeViewModel
                 .Take(2000);
         }
 
-        var baseTags = visibleTags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
-        HashSet<int> resultIds = [];
-
-        foreach (Data.Tag tag in baseTags)
+        var matchingIds = GetMatchingTagIds(visibleTags, searchText);
+        if (matchingIds.Count == 0)
         {
-            _ = resultIds.Add(tag.Id);
+            return [];
+        }
 
-            Data.Tag current = tag;
-            var stopAncestors = false;
-            while (current.ParentTagId != null && !stopAncestors)
+        HashSet<int> resultIds = [.. matchingIds];
+
+        // 祖先ノード（Ancestors）を追加
+        foreach (var tagId in matchingIds)
+        {
+            Data.Tag? current = visibleTags.Find(t => t.Id == tagId);
+            while (current?.ParentTagId != null)
             {
-                Data.Tag? parent = tags.FirstOrDefault(t => t.Id == current.ParentTagId);
-                stopAncestors = parent == null || !parent.IsTagVisibleToUser() || !resultIds.Add(parent.Id);
-                if (!stopAncestors)
+                Data.Tag? parent = visibleTags.Find(t => t.Id == current.ParentTagId);
+                if (parent == null || !resultIds.Add(parent.Id))
                 {
-                    current = parent!;
+                    break;
+                }
+                current = parent;
+            }
+        }
+
+        // サブノード（Descendants）を追加
+        var childrenLookup = visibleTags
+            .Where(t => t.ParentTagId != null && t.ParentTagId != t.Id)
+            .ToLookup(t => t.ParentTagId!.Value);
+
+        Queue<int> queue = new(matchingIds);
+        while (queue.Count > 0)
+        {
+            var currentId = queue.Dequeue();
+            foreach (var child in childrenLookup[currentId])
+            {
+                if (resultIds.Add(child.Id))
+                {
+                    queue.Enqueue(child.Id);
                 }
             }
         }
@@ -260,20 +301,22 @@ public class TagTreeViewModel
 
     /// <summary>JqTree 用のツリーデータを構築する。</summary>
     public static IReadOnlyList<object> BuildTreeData(int? parentId, IEnumerable<Data.Tag> filteredTags)
-        => BuildTreeData(parentId, filteredTags, null, null, null);
+        => BuildTreeData(parentId, filteredTags, null, null, null, null);
 
     public static IReadOnlyList<object> BuildTreeData(
         int? parentId,
         IEnumerable<Data.Tag> filteredTags,
         IReadOnlyList<PendingTagMoveDto>? pendingMoves = null,
         string? currentUserId = null,
-        IReadOnlySet<int>? lockedTagIds = null)
+        IReadOnlySet<int>? lockedTagIds = null,
+        IReadOnlySet<int>? highlightedTagIds = null)
         => BuildTreeDataInternal(
             parentId,
             filteredTags as IReadOnlyCollection<Data.Tag> ?? [.. filteredTags],
             pendingMoves ?? [],
             currentUserId,
             lockedTagIds,
+            highlightedTagIds,
             []);
 
     private static List<object> BuildTreeDataInternal(
@@ -282,6 +325,7 @@ public class TagTreeViewModel
         IReadOnlyList<PendingTagMoveDto> pendingMoves,
         string? currentUserId,
         IReadOnlySet<int>? lockedTagIds,
+        IReadOnlySet<int>? highlightedTagIds,
         HashSet<int> visitedInPath)
     {
         List<object> result = [];
@@ -315,9 +359,10 @@ public class TagTreeViewModel
             var isLocked = (lockedTagIds != null && lockedTagIds.Contains(child.Id)) ||
                            child.IsLocked ||
                            child.Name == Data.Tag.RootTagName;
+            var isHighlighted = highlightedTagIds != null && highlightedTagIds.Contains(child.Id);
 
             HashSet<int> nextVisited = [.. visitedInPath, child.Id];
-            List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, pendingMoves, currentUserId, lockedTagIds, nextVisited);
+            List<object> nodeChildren = BuildTreeDataInternal(child.Id, tagList, pendingMoves, currentUserId, lockedTagIds, highlightedTagIds, nextVisited);
             switch (nodeChildren.Count)
             {
                 case 0:
@@ -325,7 +370,8 @@ public class TagTreeViewModel
                     {
                         id = child.Id,
                         name = child.Name,
-                        isLocked
+                        isLocked,
+                        isHighlighted
                     });
                     continue;
                 default:
@@ -337,6 +383,7 @@ public class TagTreeViewModel
                 id = child.Id,
                 name = child.Name,
                 isLocked,
+                isHighlighted,
                 children = nodeChildren
             });
         }
@@ -363,15 +410,16 @@ public class TagTreeViewModel
     }
 
     public static string SerializeTreeData(IEnumerable<Data.Tag> filteredTags)
-        => SerializeTreeData(filteredTags, null, null, null);
+        => SerializeTreeData(filteredTags, null, null, null, null);
 
     public static string SerializeTreeData(
         IEnumerable<Data.Tag> filteredTags,
         IReadOnlyList<PendingTagMoveDto>? pendingMoves = null,
         string? currentUserId = null,
-        IReadOnlySet<int>? lockedTagIds = null)
+        IReadOnlySet<int>? lockedTagIds = null,
+        IReadOnlySet<int>? highlightedTagIds = null)
     {
-        IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags, pendingMoves, currentUserId, lockedTagIds);
+        IReadOnlyList<object> treeData = BuildTreeData(null, filteredTags, pendingMoves, currentUserId, lockedTagIds, highlightedTagIds);
         return JsonSerializer.Serialize(treeData, CachedSerializerOptions);
     }
 

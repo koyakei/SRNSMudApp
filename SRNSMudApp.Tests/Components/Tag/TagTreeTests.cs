@@ -224,6 +224,18 @@ public sealed class TagTreeTests : IAsyncLifetime
     }
 
     [Fact]
+    public void JqTreeInteropScript_ContainsHighlightedTagSupport()
+    {
+        var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "SRNSMudApp", "wwwroot", "js", "jqTreeInterop.js"));
+
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("isHighlighted", script);
+        Assert.Contains("highlighted-tag-node", script);
+        Assert.Contains("highlighted-tag-title", script);
+    }
+
+    [Fact]
     public async Task CancelMoveRequest_WhenCalled_InvokesCancelTagMoveAsyncAndReloadsTree()
     {
         // Arrange

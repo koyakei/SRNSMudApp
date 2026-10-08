@@ -523,4 +523,74 @@ public class TagTreeViewModelTests
         Assert.Contains(filtered, t => t.Id == activeTag.Id);
         Assert.DoesNotContain(filtered, t => t.Id == bannedTag.Id);
     }
+
+    [Fact]
+    public void FilterTags_WhenSearchTextMatchesNode_IncludesHitNodeAncestorsAndDescendants()
+    {
+        // 階層: Root(1) -> Parent(2) -> HitTag(3) -> Child(4) -> GrandChild(5)
+        // 別系統: Unrelated(6) -> UnrelatedChild(7)
+        List<TagEntity> tags =
+        [
+            NewTag(1, "Root", CurrentUserId),
+            NewTag(2, "Parent", CurrentUserId, parentTagId: 1),
+            NewTag(3, "HitTag", CurrentUserId, parentTagId: 2),
+            NewTag(4, "Child", CurrentUserId, parentTagId: 3),
+            NewTag(5, "GrandChild", CurrentUserId, parentTagId: 4),
+            NewTag(6, "Unrelated", CurrentUserId),
+            NewTag(7, "UnrelatedChild", CurrentUserId, parentTagId: 6)
+        ];
+
+        var filtered = TagTreeViewModel.FilterTags(tags, "HitTag", CurrentUserId).ToList();
+
+        // 祖先 (1, 2)、ヒットノード自身 (3)、サブノード（子・孫 4, 5）が含まれること
+        Assert.Contains(filtered, t => t.Id == 1);
+        Assert.Contains(filtered, t => t.Id == 2);
+        Assert.Contains(filtered, t => t.Id == 3);
+        Assert.Contains(filtered, t => t.Id == 4);
+        Assert.Contains(filtered, t => t.Id == 5);
+
+        // 無関係なノードは含まれないこと
+        Assert.DoesNotContain(filtered, t => t.Id == 6);
+        Assert.DoesNotContain(filtered, t => t.Id == 7);
+    }
+
+    [Fact]
+    public void GetMatchingTagIds_WhenSearchTextMatches_ReturnsOnlyDirectMatches()
+    {
+        List<TagEntity> tags =
+        [
+            NewTag(1, "Root", CurrentUserId),
+            NewTag(2, "HitTag", CurrentUserId, parentTagId: 1),
+            NewTag(3, "ChildOfHit", CurrentUserId, parentTagId: 2),
+            NewTag(4, "AnotherHitTag", CurrentUserId)
+        ];
+
+        var matchingIds = TagTreeViewModel.GetMatchingTagIds(tags, "HitTag");
+
+        Assert.Equal(2, matchingIds.Count);
+        Assert.Contains(2, matchingIds);
+        Assert.Contains(4, matchingIds);
+        Assert.DoesNotContain(1, matchingIds);
+        Assert.DoesNotContain(3, matchingIds);
+    }
+
+    [Fact]
+    public void SerializeTreeData_WhenHighlightedTagIdsProvided_OutputsIsHighlightedTrueForMatchedTagsOnly()
+    {
+        List<TagEntity> tags =
+        [
+            NewTag(1, "Parent", CurrentUserId),
+            NewTag(2, "HitTag", CurrentUserId, parentTagId: 1),
+            NewTag(3, "Child", CurrentUserId, parentTagId: 2)
+        ];
+
+        HashSet<int> highlightedIds = [2];
+
+        var json = TagTreeViewModel.SerializeTreeData(tags, null, CurrentUserId, null, highlightedIds);
+
+        Assert.NotNull(json);
+        Assert.Contains("\"id\":1,\"name\":\"Parent\",\"isLocked\":false,\"isHighlighted\":false", json);
+        Assert.Contains("\"id\":2,\"name\":\"HitTag\",\"isLocked\":false,\"isHighlighted\":true", json);
+        Assert.Contains("\"id\":3,\"name\":\"Child\",\"isLocked\":false,\"isHighlighted\":false", json);
+    }
 }

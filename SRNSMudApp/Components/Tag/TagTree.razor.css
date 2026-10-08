@@ -39,3 +39,21 @@
     background-color: var(--mud-palette-grey-darken1, #757575);
     color: #ffffff !important;
 }
+
+::deep .highlighted-tag-title {
+    background-color: var(--mud-palette-warning-hover, rgba(255, 152, 0, 0.25));
+    border: 1px solid var(--mud-palette-warning, #ff9800);
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+::deep .highlighted-tag-node > .jqtree-element {
+    background-color: rgba(255, 152, 0, 0.08);
+    border-radius: 4px;
+}
+
+::deep .locked-tag-node.highlighted-tag-node > .jqtree-element .locked-tag-title {
+    border: 2px solid var(--mud-palette-warning, #ff9800);
+    box-shadow: 0 0 6px var(--mud-palette-warning, #ff9800);
+}

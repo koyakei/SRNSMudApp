@@ -98,8 +98,15 @@ public partial class TagTree : IAsyncDisposable
 
     private IEnumerable<Data.Tag> GetFilteredTags() => TagTreeViewModel.FilterTags(ViewModel.Tags, _searchText, _currentUserId);
 
+    private IReadOnlySet<int> GetHighlightedTagIds() => TagTreeViewModel.GetMatchingTagIds(ViewModel.Tags, _searchText);
+
     private string GetSerializedTreeData() =>
-        TagTreeViewModel.SerializeTreeData(GetFilteredTags(), ViewModel.PendingMoves, _currentUserId, ViewModel.LockedTagIds);
+        TagTreeViewModel.SerializeTreeData(
+            GetFilteredTags(),
+            ViewModel.PendingMoves,
+            _currentUserId,
+            ViewModel.LockedTagIds,
+            GetHighlightedTagIds());
 
     /// <summary>初期化済みの場合、jqTree 側のデータを現在のフィルタ結果で差し替える。</summary>
     private async Task ReloadTreeDataAsync()
