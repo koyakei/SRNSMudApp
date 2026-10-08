@@ -11,7 +11,7 @@
         <div class="d-flex align-center">
             <MudTextField T="string" Value="@_searchText" ValueChanged="OnSearchTextChanged" Placeholder="タグを検索..."
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mr-4"
-                          Immediate="true" DebounceInterval="300"/>
+                          Immediate="true" DebounceInterval="300" Clearable="true"/>
             <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
                        OnClick="@DeleteSelectedTags" Disabled="@(string.IsNullOrEmpty(_currentUserId))">
                 選択したタグを削除

@@ -2,6 +2,7 @@ using System.IO;
 
 using Bunit;
 
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -266,6 +267,164 @@ public sealed class TagTreeTests : IAsyncLifetime
         _treeDataMock.Verify(d => d.CancelTagMoveAsync(99, "test-user-id"), Times.Once);
         ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
         Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("キャンセルしました"));
+    }
+
+    [Fact]
+    public async Task SearchFilterChange_UpdatesUrlQuery()
+    {
+        // Arrange
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/tag-tree");
+
+        _treeDataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([]);
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        IRenderedComponent<MudTextField<string>> searchInput = component.FindComponent<MudTextField<string>>();
+
+        // Act 1: 検索文字列を入力
+        await component.InvokeAsync(() => searchInput.Instance.ValueChanged.InvokeAsync("AlphaTag"));
+
+        // Assert 1: search クエリが URL に反映される
+        component.WaitForAssertion(() => Assert.Contains("search=AlphaTag", navigationManager.Uri));
+
+        // Act 2: 検索文字列をクリア
+        await component.InvokeAsync(() => searchInput.Instance.ValueChanged.InvokeAsync(""));
+
+        // Assert 2: search クエリが URL から除去される
+        component.WaitForAssertion(() => Assert.DoesNotContain("search=", navigationManager.Uri));
+    }
+
+    [Fact]
+    public void DeepLinkUrl_RestoresSearchFilter_WithSearchQuery()
+    {
+        // Arrange
+        var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
+        var child1 = new SRNSMudApp.Data.Tag { Id = 2, Name = "Child1", ParentTagId = 1, IsSystem = false, OwnerId = "test-user-id" };
+        var child2 = new SRNSMudApp.Data.Tag { Id = 3, Name = "Child2", ParentTagId = 1, IsSystem = false, OwnerId = "test-user-id" };
+
+        _treeDataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([rootTag, child1, child2]);
+
+        List<JSRuntimeInvocation> jsInteropInvocations = [];
+        _ctx.JSInterop.SetupVoid("jqTreeInterop.init", invocation =>
+        {
+            jsInteropInvocations.Add(invocation);
+            return true;
+        });
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/tag-tree?search=Child1");
+
+        // Act
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
+
+        // Assert: 検索パラメータ "Child1" で初期化され、Child1 がハイライト・Child2 は除外される
+        component.WaitForAssertion(() => Assert.NotEmpty(jsInteropInvocations));
+
+        JSRuntimeInvocation invocation = jsInteropInvocations.First(i => i.Identifier == "jqTreeInterop.init");
+        var treeDataJson = invocation.Arguments[1] as string;
+
+        Assert.NotNull(treeDataJson);
+        Assert.Contains("\"id\":2", treeDataJson);
+        Assert.Contains("\"isHighlighted\":true", treeDataJson);
+        Assert.DoesNotContain("\"id\":3", treeDataJson);
+
+        IRenderedComponent<MudTextField<string>> searchInput = component.FindComponent<MudTextField<string>>();
+        Assert.Equal("Child1", searchInput.Find("input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task DeepLinkUrl_RestoresSearchFilter_WithQQueryFallback_AndClearsQOnUpdate()
+    {
+        // Arrange
+        var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
+        var child1 = new SRNSMudApp.Data.Tag { Id = 2, Name = "Child1", ParentTagId = 1, IsSystem = false, OwnerId = "test-user-id" };
+
+        _treeDataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([rootTag, child1]);
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/tag-tree?q=Child1");
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        IRenderedComponent<MudTextField<string>> searchInput = component.FindComponent<MudTextField<string>>();
+        Assert.Equal("Child1", searchInput.Find("input").GetAttribute("value"));
+
+        // Act: 検索文字列を更新
+        await component.InvokeAsync(() => searchInput.Instance.ValueChanged.InvokeAsync("UpdatedTag"));
+
+        // Assert: 新しいパラメータ search が設定され、古いパラメータ q は除去される
+        component.WaitForAssertion(() =>
+        {
+            Assert.Contains("search=UpdatedTag", navigationManager.Uri);
+            Assert.DoesNotContain("q=", navigationManager.Uri);
+        });
+    }
+
+    [Fact]
+    public async Task SearchFilterChange_PreservesExistingTagIdQuery()
+    {
+        // Arrange
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/tag-tree?tagId=99");
+
+        _treeDataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([]);
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        IRenderedComponent<MudTextField<string>> searchInput = component.FindComponent<MudTextField<string>>();
+
+        // Act: 検索文字列を入力
+        await component.InvokeAsync(() => searchInput.Instance.ValueChanged.InvokeAsync("Filtered"));
+
+        // Assert: tagId=99 が保持されたまま search=Filtered が付加される
+        component.WaitForAssertion(() =>
+        {
+            Assert.Contains("tagId=99", navigationManager.Uri);
+            Assert.Contains("search=Filtered", navigationManager.Uri);
+        });
+    }
+
+    [Fact]
+    public void QueryParameterChange_UpdatesSearchTextAndReloadsTree()
+    {
+        // Arrange
+        var rootTag = new SRNSMudApp.Data.Tag { Id = 1, Name = "Root", IsSystem = false, OwnerId = "test-user-id" };
+        var child1 = new SRNSMudApp.Data.Tag { Id = 2, Name = "Child1", ParentTagId = 1, IsSystem = false, OwnerId = "test-user-id" };
+        var child2 = new SRNSMudApp.Data.Tag { Id = 3, Name = "Child2", ParentTagId = 1, IsSystem = false, OwnerId = "test-user-id" };
+
+        _treeDataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([rootTag, child1, child2]);
+
+        List<JSRuntimeInvocation> loadDataInvocations = [];
+        _ctx.JSInterop.SetupVoid("jqTreeInterop.loadData", invocation =>
+        {
+            loadDataInvocations.Add(invocation);
+            return true;
+        });
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/tag-tree");
+
+        IRenderedComponent<TagTree> component = _ctx.Render<TagTree>();
+        component.WaitForAssertion(() => Assert.NotNull(component.Instance));
+
+        // Act: 外部ナビゲーションまたはブラウザ進む/戻るで URL クエリが search=Child2 に変更
+        navigationManager.NavigateTo("http://localhost/tag-tree?search=Child2");
+
+        // Assert: loadData が呼ばれ、Child2 のみ含まれるツリーデータで更新される
+        component.WaitForAssertion(() => Assert.NotEmpty(loadDataInvocations));
+
+        var treeDataJson = loadDataInvocations.Last().Arguments[1] as string;
+        Assert.NotNull(treeDataJson);
+        Assert.Contains("\"id\":3", treeDataJson);
+        Assert.Contains("\"isHighlighted\":true", treeDataJson);
+        Assert.DoesNotContain("\"id\":2", treeDataJson);
+
+        IRenderedComponent<MudTextField<string>> searchInput = component.FindComponent<MudTextField<string>>();
+        Assert.Equal("Child2", searchInput.Find("input").GetAttribute("value"));
     }
 
     public async Task DisposeAsync()
