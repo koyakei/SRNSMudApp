@@ -55,6 +55,7 @@ public class TagTreeDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags
             .Where(t => !Tag.VoteTagNames.Contains(t.Name) && !Tag.ReactionTagNames.Contains(t.Name))
+            .WhereVisibleToUser()
             .OrderBy(t => t.Node)
             .AsNoTracking()
             .ToListAsync();
@@ -332,7 +333,9 @@ public class TagTreeDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<TaggingRequestEntity> requests = await context.TaggingRequestEntities
             .Include(r => r.RequestedTag)
+                .ThenInclude(t => t.Owner)
             .Where(r => r.ContractType == ContractTypes.Move && r.Status == TradeStatus.Proposed)
+            .Where(r => r.RequestedTag == null || r.RequestedTag.Owner == null || !r.RequestedTag.Owner.IsBanned)
             .AsNoTracking()
             .ToListAsync();
 

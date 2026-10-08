@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
@@ -11,24 +12,20 @@ namespace SRNSMudApp.Tests.Services;
 
 /// <summary>
 ///     <see cref="SystemTagSeedService" /> のシステムタグシード処理に関する単体テスト。
-///     ローカル SQL Server を使用し、独立したユーザー ID 名前空間でシードと冪等性を検証する。
+///     テスト用 SQL Server（SharedMsSqlTestDatabase）を使用し、独立したユーザー ID 名前空間でシードと冪等性を検証する。
 /// </summary>
-public class SystemTagSeedServiceTests
+public class SystemTagSeedServiceTests : IAsyncLifetime
 {
-    private const string LocalConnectionString =
-        "Server=127.0.0.1,1433;Database=SRNSMudApp;User Id=sa;Password=P@ssw0rd;TrustServerCertificate=True;Encrypt=False;Connect Timeout=90;MultipleActiveResultSets=true";
+    private MsSqlTestDatabase _sharedDb = null!;
 
-    private static ApplicationDbContext CreateDbContext()
+    public async Task InitializeAsync()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer(LocalConnectionString, sqlOptions =>
-            {
-                sqlOptions.UseHierarchyId();
-                sqlOptions.CommandTimeout(180);
-            })
-            .Options;
-        return new ApplicationDbContext(options);
+        _sharedDb = await SharedMsSqlTestDatabase.GetInstanceAsync();
     }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    private ApplicationDbContext CreateDbContext() => new(_sharedDb.Options);
 
     [Fact]
     public async Task SeedSystemTagsAsync_WhenAlreadySeeded_ReturnsZeroImmediately()
@@ -64,8 +61,20 @@ public class SystemTagSeedServiceTests
         }
         finally
         {
-            db.Tags.Remove(existingTag);
-            await db.SaveChangesAsync();
+            try
+            {
+                db.Tags.Remove(existingTag);
+                await db.SaveChangesAsync();
+            }
+            finally
+            {
+                var user = await db.Users.FindAsync(systemUserId);
+                if (user is not null)
+                {
+                    db.Users.Remove(user);
+                    await db.SaveChangesAsync();
+                }
+            }
         }
     }
 
@@ -116,10 +125,25 @@ public class SystemTagSeedServiceTests
         }
         finally
         {
-            // 後始末: テスト用にシードしたタグを一括削除
-            var createdTags = await db.Tags.Where(t => t.OwnerId == systemUserId).ToListAsync();
-            db.Tags.RemoveRange(createdTags);
-            await db.SaveChangesAsync();
+            // 後始末: テスト用にシードしたタグとユーザーを一括削除
+            try
+            {
+                var createdTags = await db.Tags.Where(t => t.OwnerId == systemUserId).ToListAsync();
+                if (createdTags.Count > 0)
+                {
+                    db.Tags.RemoveRange(createdTags);
+                    await db.SaveChangesAsync();
+                }
+            }
+            finally
+            {
+                var user = await db.Users.FindAsync(systemUserId);
+                if (user is not null)
+                {
+                    db.Users.Remove(user);
+                    await db.SaveChangesAsync();
+                }
+            }
         }
     }
 }

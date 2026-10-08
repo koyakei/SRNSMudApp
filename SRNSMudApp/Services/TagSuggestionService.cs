@@ -54,6 +54,7 @@ public class TagSuggestionService(
             // 埋め込みベクトルが存在するタグを取得（ルートタグ、投票タグ、リアクションタグはサジェスト候補から除外）
             List<Data.Tag> candidates = await dbContext.Tags
                 .AsNoTracking()
+                .WhereVisibleToUser()
                 .Where(t => t.Embedding != null && t.Name != Data.Tag.RootTagName)
                 .ToListAsync(cancellationToken);
 

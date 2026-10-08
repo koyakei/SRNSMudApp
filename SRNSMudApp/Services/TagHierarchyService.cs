@@ -56,6 +56,7 @@ public class TagHierarchyService(
             .Where(t => !Tag.VoteTagNames.Contains(t.Name) &&
                         !Tag.ReactionTagNames.Contains(t.Name) &&
                         t.Name != Tag.RootTagName)
+            .WhereVisibleToUser()
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

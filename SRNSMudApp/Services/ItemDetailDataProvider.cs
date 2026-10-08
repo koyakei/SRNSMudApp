@@ -184,9 +184,13 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        List<Tag> allTags = await context.Tags.AsNoTracking().ToListAsync(cancellationToken);
+        List<Tag> allTags = await context.Tags.WhereVisibleToUser().AsNoTracking().ToListAsync(cancellationToken);
         List<TagRelationToTag> allTagRelationsToTags =
-            await context.TagRelationToTags.Include(ttr => ttr.Tag).AsNoTracking().ToListAsync(cancellationToken);
+            await context.TagRelationToTags
+                .Include(ttr => ttr.Tag)
+                .Where(ttr => ttr.Tag.Owner == null || !ttr.Tag.Owner.IsBanned)
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
 
         return new ItemDetailPageData(item, allTags, allTagRelationsToTags, ledgers, ancestors, replies, siblings, quotes);
     }

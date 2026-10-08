@@ -506,4 +506,21 @@ public class TagTreeViewModelTests
         dataMock.Verify(d => d.DeleteTagsAsync(CurrentUserId, It.Is<IReadOnlyList<int>>(ids => ids.Count == 2), false), Times.Once);
         dataMock.Verify(d => d.LoadTagsAsync(), Times.Once);
     }
+
+    [Fact]
+    public void FilterTags_WhenTagOwnerIsBanned_ExcludesBannedOwnerTag()
+    {
+        var bannedUser = new SRNSMudApp.Data.ApplicationUser { Id = "banned-user", IsBanned = true };
+        var activeUser = new SRNSMudApp.Data.ApplicationUser { Id = "active-user", IsBanned = false };
+
+        var bannedTag = new TagEntity { Id = 10, Name = "BannedTag", OwnerId = bannedUser.Id, Owner = bannedUser };
+        var activeTag = new TagEntity { Id = 20, Name = "ActiveTag", OwnerId = activeUser.Id, Owner = activeUser };
+
+        List<TagEntity> tags = [bannedTag, activeTag];
+
+        var filtered = TagTreeViewModel.FilterTags(tags, null, activeUser.Id).ToList();
+
+        Assert.Contains(filtered, t => t.Id == activeTag.Id);
+        Assert.DoesNotContain(filtered, t => t.Id == bannedTag.Id);
+    }
 }

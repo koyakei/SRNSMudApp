@@ -108,7 +108,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<Tag?> GetTagWithOwnerAsync(int tagId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Tags.AsNoTracking().Include(t => t.Owner).FirstOrDefaultAsync(t => t.Id == tagId);
+        return await context.Tags.AsNoTracking().Include(t => t.Owner).WhereVisibleToUser().FirstOrDefaultAsync(t => t.Id == tagId);
     }
 
     public async Task<TagRelation?> AddFreeTagRelationAsync(int itemId, int tagId, string userId)

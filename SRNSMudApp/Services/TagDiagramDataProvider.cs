@@ -125,6 +125,7 @@ public class TagDiagramDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         return await context.Tags
             .Where(t => !Tag.VoteTagNames.Contains(t.Name) && !Tag.ReactionTagNames.Contains(t.Name))
+            .WhereVisibleToUser()
             .OrderBy(t => t.Name)
             .AsNoTracking()
             .ToListAsync();

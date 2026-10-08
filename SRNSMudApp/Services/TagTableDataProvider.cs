@@ -38,7 +38,7 @@ public class TagTableDataProvider(
     public async Task<List<Tag>> GetAllTagsAsync()
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Tags.AsNoTracking().ToListAsync();
+        return await context.Tags.WhereVisibleToUser().AsNoTracking().ToListAsync();
     }
 
     public async Task<TagCardOperationResult> AddRelationAsync(int targetTagId, int selectedTagId, string ownerId)

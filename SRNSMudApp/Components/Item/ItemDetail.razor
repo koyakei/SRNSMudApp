@@ -270,7 +270,7 @@
                         <MudText Typo="Typo.h6" Class="mb-3">タグ一覧</MudText>
                         @if (data.Item.TagRelations is not null)
                         {
-                            <SRNSMudApp.Components.Tag.ItemTagTable TagRelations="@data.Item.TagRelations" Item="@data.Item"
+                            <SRNSMudApp.Components.Tag.ItemTagTable TagRelations="@data.Item.TagRelations.Where(tr => tr.Tag == null || tr.Tag.IsTagVisibleToUser())" Item="@data.Item"
                                                                     CurrentUserId="@_currentUserId" AllTags="@_allTags"
                                                                     AllTagRelationsToTags="@_allTagRelationsToTags" SearchString="@_searchQuery"
                                                                     SearchStringChanged="OnSearchStringChanged" OnDataChanged="LoadDataAsync" />

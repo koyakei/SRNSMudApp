@@ -119,6 +119,7 @@ public class ItemListDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
         HierarchyId? ancestorNode = await context.Tags
+            .WhereVisibleToUser()
             .Where(t => t.Id == ancestorTagId)
             .Select(t => (HierarchyId?)t.Node)
             .FirstOrDefaultAsync();
@@ -149,6 +150,7 @@ public class ItemListDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
             .AsNoTracking()
+            .WhereVisibleToUser()
             .Where(t => ids.Contains(t.Id))
             .ToListAsync();
         return tags.ToDictionary(t => t.Id);
@@ -165,6 +167,7 @@ public class ItemListDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         List<Tag> tags = await context.Tags
             .AsNoTracking()
+            .WhereVisibleToUser()
             .Where(t => names.Contains(t.Name))
             .ToListAsync();
         return tags.GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
@@ -173,7 +176,7 @@ public class ItemListDataProvider(
     public async Task<Tag?> FindTagByNameAsync(string tagName)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Name == tagName);
+        return await context.Tags.AsNoTracking().WhereVisibleToUser().FirstOrDefaultAsync(t => t.Name == tagName);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -189,11 +192,13 @@ public class ItemListDataProvider(
             var queryVector = (await _tagEmbeddingService.GenerateEmbeddingAsync(searchText)).ToArray();
 
             List<Tag> textMatches = await context.Tags
+                .WhereVisibleToUser()
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
                 .AsNoTracking()
                 .ToListAsync(token);
 
             List<Tag> vectorTags = await context.Tags
+                .WhereVisibleToUser()
                 .Where(t => t.Embedding != null)
                 .AsNoTracking()
                 .ToListAsync(token);
@@ -212,6 +217,7 @@ public class ItemListDataProvider(
         catch
         {
             tagNames = [.. await context.Tags
+                .WhereVisibleToUser()
                 .Where(t => t.Name.Contains(searchText) || t.Content.Contains(searchText))
                 .AsNoTracking()
                 .Select(t => t.Name)
@@ -228,11 +234,13 @@ public class ItemListDataProvider(
         var tagUsersFromRelations = await context.TagRelations
             .AsNoTracking()
             .Where(tr => tagNames.Contains(tr.Tag.Name) && tr.Owner.UserName != null)
+            .Where(tr => tr.Tag.Owner == null || !tr.Tag.Owner.IsBanned)
             .Select(tr => new { TagId = tr.Tag.Id, TagName = tr.Tag.Name, tr.Owner.UserName })
             .ToListAsync(token);
 
         var tagUsersFromTags = await context.Tags
             .AsNoTracking()
+            .WhereVisibleToUser()
             .Where(t => tagNames.Contains(t.Name) && t.Owner.UserName != null)
             .Select(t => new { TagId = t.Id, TagName = t.Name, t.Owner.UserName })
             .ToListAsync(token);
@@ -269,12 +277,13 @@ public class ItemListDataProvider(
 
         IQueryable<string?> relationUsersQuery = context.TagRelations
             .AsNoTracking()
-            .Where(tr => tr.Tag.Name == tagName)
+            .Where(tr => tr.Tag.Name == tagName && (tr.Tag.Owner == null || !tr.Tag.Owner.IsBanned))
             .Select(tr => tr.Owner.UserName)
             .Where(u => u != null);
 
         IQueryable<string?> tagOwnersQuery = context.Tags
             .AsNoTracking()
+            .WhereVisibleToUser()
             .Where(t => t.Name == tagName)
             .Select(t => t.Owner.UserName)
             .Where(u => u != null);
@@ -337,6 +346,7 @@ public class ItemListDataProvider(
             .Include(t => t.TargetTagRelations)
             .ThenInclude(tr => tr.Tag)
             .ThenInclude(t => t.Owner)
+            .WhereVisibleToUser()
             .AsQueryable();
 
         // タグフィルタ適用（AND 検索: 選択した全タグ/ユーザーの条件を満たす Item/Tag のみ）
@@ -359,9 +369,11 @@ public class ItemListDataProvider(
             }
 
             Dictionary<int, HierarchyId?> filterNodesById = await context.Tags
+                .WhereVisibleToUser()
                 .Where(t => idFilterIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => (HierarchyId?)t.Node);
             Dictionary<string, HierarchyId?> filterNodesByName = await context.Tags
+                .WhereVisibleToUser()
                 .Where(t => nameFilterNames.Contains(t.Name))
                 .ToDictionaryAsync(t => t.Name, t => (HierarchyId?)t.Node);
 

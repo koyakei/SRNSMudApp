@@ -223,18 +223,19 @@ public class TagTreeViewModel
     // タグ階層が深くてもエラーにならないよう MaxDepth を十分に大きくする（CA1869: インスタンス生成はキャッシュ）
     private static readonly JsonSerializerOptions CachedSerializerOptions = new() { MaxDepth = 1024 };
 
-    /// <summary>検索語でタグを絞り込む。空の場合は自分のタグを優先して上位 2000 件返す。</summary>
+    /// <summary>検索語でタグを絞り込む。空の場合は自分のタグを優先して上位 2000 件返す。BAN されたユーザーのタグは除外する。</summary>
     public static IEnumerable<Data.Tag> FilterTags(IReadOnlyList<Data.Tag> tags, string? searchText, string? currentUserId)
     {
+        var visibleTags = tags.Where(t => t.IsTagVisibleToUser());
         if (string.IsNullOrWhiteSpace(searchText))
         {
-            return tags
+            return visibleTags
                 .OrderByDescending(t => t.OwnerId == currentUserId)
                 .ThenBy(t => t.Name)
                 .Take(2000);
         }
 
-        var baseTags = tags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        var baseTags = visibleTags.Where(t => t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
         HashSet<int> resultIds = [];
 
         foreach (Data.Tag tag in baseTags)
@@ -246,7 +247,7 @@ public class TagTreeViewModel
             while (current.ParentTagId != null && !stopAncestors)
             {
                 Data.Tag? parent = tags.FirstOrDefault(t => t.Id == current.ParentTagId);
-                stopAncestors = parent == null || !resultIds.Add(parent.Id);
+                stopAncestors = parent == null || !parent.IsTagVisibleToUser() || !resultIds.Add(parent.Id);
                 if (!stopAncestors)
                 {
                     current = parent!;
@@ -254,7 +255,7 @@ public class TagTreeViewModel
             }
         }
 
-        return tags.Where(t => resultIds.Contains(t.Id));
+        return visibleTags.Where(t => resultIds.Contains(t.Id));
     }
 
     /// <summary>JqTree 用のツリーデータを構築する。</summary>

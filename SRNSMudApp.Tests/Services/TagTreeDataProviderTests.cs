@@ -93,6 +93,30 @@ public class TagTreeDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LoadTagsAsync_WhenOwnerIsBanned_ExcludesTagFromResults()
+    {
+        var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
+        await using (context)
+        {
+            var bannedUserId = $"banned_{tid}";
+            await context.SeedUsersAsync(bannedUserId);
+            var bannedUser = await context.Users.FirstAsync(u => u.Id == bannedUserId);
+            bannedUser.IsBanned = true;
+            _ = await context.SaveChangesAsync();
+
+            var activeUserTag = new Tag { Name = $"ActiveUserTag_{tid}", IsSystem = false, OwnerId = testUserId };
+            var bannedUserTag = new Tag { Name = $"BannedUserTag_{tid}", IsSystem = false, OwnerId = bannedUserId };
+            context.Tags.AddRange(activeUserTag, bannedUserTag);
+            _ = await context.SaveChangesAsync();
+
+            List<Tag> tags = await provider.LoadTagsAsync();
+
+            Assert.Contains(tags, t => t.Id == activeUserTag.Id);
+            Assert.DoesNotContain(tags, t => t.Id == bannedUserTag.Id);
+        }
+    }
+
+    [Fact]
     public async Task RequestTagMoveAsync_CreatesTaggingRequestWithMoveContractAndProposedStatus()
     {
         var (context, provider, testUserId, systemUserId, tid) = await CreateScopeAsync();
