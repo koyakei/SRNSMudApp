@@ -18,7 +18,7 @@
                              Size="Size.Small"
                              Class="mr-1 small-icon"/>
                     <a class="small-chip-link"
-                       @onclick="@(() => OnNavigate.InvokeAsync(added.TagId))"
+                       href="@($"/TagDetail/{added.TagId}")"
                        @onclick:stopPropagation="true">
                         @added.Tag?.Name
                     </a>

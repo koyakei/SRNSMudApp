@@ -213,6 +213,10 @@ public class TagDetailDataProvider(
             return TagDeleteOperationResult.Unauthorized;
         }
 
+        await context.RemoveTagRestrictedDependenciesAsync([tagId]);
+        tagToDelete.ParentTagId = null;
+        _ = await context.SaveChangesAsync();
+
         _ = context.Tags.Remove(tagToDelete);
         _ = await context.SaveChangesAsync();
         return TagDeleteOperationResult.Success;

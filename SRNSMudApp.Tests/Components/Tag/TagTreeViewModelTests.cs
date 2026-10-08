@@ -1,5 +1,8 @@
+using Moq;
+
 using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Models;
+using SRNSMudApp.Services;
 
 using TagEntity = SRNSMudApp.Data.Tag;
 
@@ -450,5 +453,57 @@ public class TagTreeViewModelTests
 
         Assert.NotNull(json);
         Assert.Contains("\"id\":1,\"name\":\"NormalTag\",\"isLocked\":false", json);
+    }
+
+    [Fact]
+    public async Task DeleteTagsAsync_WhenSelectedIdsEmpty_ReturnsEmptyResultImmediately()
+    {
+        var dataMock = new Mock<ITagTreeDataProvider>();
+        var lockMock = new Mock<ITagLockService>();
+        var sut = new TagTreeViewModel(dataMock.Object, lockMock.Object);
+        sut.SetUser(CurrentUserId, false);
+
+        var result = await sut.DeleteTagsAsync([]);
+
+        Assert.False(result.HasDeleted);
+        Assert.Equal(0, result.DeletedCount);
+        dataMock.Verify(d => d.DeleteTagsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<int>>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteTagsAsync_WhenCurrentUserIdEmpty_ReturnsEmptyResultImmediately()
+    {
+        var dataMock = new Mock<ITagTreeDataProvider>();
+        var lockMock = new Mock<ITagLockService>();
+        var sut = new TagTreeViewModel(dataMock.Object, lockMock.Object);
+        sut.SetUser(null, false);
+
+        var result = await sut.DeleteTagsAsync([1, 2]);
+
+        Assert.False(result.HasDeleted);
+        Assert.Equal(0, result.DeletedCount);
+        dataMock.Verify(d => d.DeleteTagsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<int>>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteTagsAsync_WhenValid_CallsDataProviderAndReloadsData()
+    {
+        var dataMock = new Mock<ITagTreeDataProvider>();
+        var lockMock = new Mock<ITagLockService>();
+        dataMock.Setup(d => d.DeleteTagsAsync(CurrentUserId, It.IsAny<IReadOnlyList<int>>(), false))
+            .ReturnsAsync(new TagTreeDeleteResult(true, 2, [], []));
+        dataMock.Setup(d => d.LoadTagsAsync()).ReturnsAsync([]);
+        dataMock.Setup(d => d.LoadPendingTagMovesAsync()).ReturnsAsync([]);
+        lockMock.Setup(l => l.GetAllTagsWithLockStatusAsync(default)).ReturnsAsync([]);
+
+        var sut = new TagTreeViewModel(dataMock.Object, lockMock.Object);
+        sut.SetUser(CurrentUserId, false);
+
+        var result = await sut.DeleteTagsAsync([1, 2]);
+
+        Assert.True(result.HasDeleted);
+        Assert.Equal(2, result.DeletedCount);
+        dataMock.Verify(d => d.DeleteTagsAsync(CurrentUserId, It.Is<IReadOnlyList<int>>(ids => ids.Count == 2), false), Times.Once);
+        dataMock.Verify(d => d.LoadTagsAsync(), Times.Once);
     }
 }

@@ -112,6 +112,17 @@ window.jqTreeInterop = {
             window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('OnNodeSelected', selectedNodeId);
         });
 
+        $tree.off('auxclick', '.jqtree-title');
+        $tree.on('auxclick', '.jqtree-title', function (e) {
+            if (e.button === 1) {
+                e.preventDefault();
+                const node = $tree.tree('getNodeByHtmlElement', this);
+                if (node && !node.isPendingMove) {
+                    window.open('/TagDetail/' + node.id, '_blank');
+                }
+            }
+        });
+
         $tree.on('tree.click', function (event) {
             if (event.node && event.node.isPendingMove) {
                 event.preventDefault();
@@ -128,8 +139,13 @@ window.jqTreeInterop = {
                     event.preventDefault();
 
                     const nodeId = event.node.id;
-                    // noinspection JSUnresolvedReference
-                    window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('NavigateToTagDetail', nodeId);
+                    const origEvent = event.click_event;
+                    if (origEvent.metaKey || origEvent.ctrlKey || origEvent.button === 1) {
+                        window.open('/TagDetail/' + nodeId, '_blank');
+                    } else {
+                        // noinspection JSUnresolvedReference
+                        window.jqTreeInterop.dotNetHelpers[elementId].invokeMethodAsync('NavigateToTagDetail', nodeId);
+                    }
                 }
             }
         });

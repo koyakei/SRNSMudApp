@@ -16,6 +16,10 @@ public partial class ActionTagRequestChip : ComponentBase
     [Parameter]
     public string TagName { get; set; } = string.Empty;
 
+    /// <summary>リンク先URL</summary>
+    [Parameter]
+    public string? Href { get; set; }
+
     /// <summary>タグの所有者名</summary>
     [Parameter]
     public string? OwnerName { get; set; }

@@ -52,7 +52,7 @@
         <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
             <MudTooltip Text="タグ詳細へ遷移">
                 <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
-                               Class="pa-0 ml-1 tag-detail-button" Title="タグ詳細へ遷移" OnClick="NavigateToTagDetail" />
+                               Class="pa-0 ml-1 tag-detail-button" Title="タグ詳細へ遷移" Href="@($"/TagDetail/{Node.Tag.Id}")" />
             </MudTooltip>
         </span>
         <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">

@@ -44,7 +44,7 @@
             <BaseTagChip ChipId="@($"tag-table-chip-{context.Id}")" TagName="@context.Name"
                          Weight="@(OverrideWeights != null && OverrideWeights.TryGetValue(context.Id, out var w) ? w : context.CachedWeight)"
                          OwnerName="@context.Owner?.UserName" Variant="Variant.Outlined"
-                         OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{context.Id}"))">
+                         Href="@($"/TagDetail/{context.Id}")">
                 <ActionContent>
                     <div class="d-flex align-center action-container" @onclick:stopPropagation="true">
                         <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
@@ -89,7 +89,7 @@
                     <BaseTagChip TagName="@(tr.Tag?.Name ?? "不明")" Variant="Variant.Outlined"
                                  CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
                                  OnClose="@(_ => RemoveTagToTagRelationAsync(tr))"
-                                 OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{tr.Tag?.Id}"))" />
+                                 Href="@(tr.Tag != null ? $"/TagDetail/{tr.Tag.Id}" : null)" />
                 }
                 @if (attachedDisplay.HasManyTags)
                 {

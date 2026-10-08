@@ -28,9 +28,6 @@ public partial class ItemTagRequestChip : ComponentBase
     public EventCallback OnDataChanged { get; set; }
 
     [Inject]
-    private NavigationManager NavigationManager { get; set; } = null!;
-
-    [Inject]
     private IDialogLauncher DialogLauncher { get; set; } = null!;
 
     private bool _visible;

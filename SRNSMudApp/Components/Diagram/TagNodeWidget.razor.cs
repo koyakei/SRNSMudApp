@@ -17,7 +17,6 @@ using SRNSMudApp.Data;
 public partial class TagNodeWidget : ComponentBase
 {
     [Inject] private IJSRuntime JS { get; set; } = null!;
-    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
     /// <summary>
     ///     ウィジェットで描画対象となるタグノード。
@@ -63,11 +62,6 @@ public partial class TagNodeWidget : ComponentBase
         {
             await Node.RequestAddChildTag(targetTag);
         }
-    }
-
-    private void NavigateToTagDetail()
-    {
-        NavigationManager.NavigateTo($"/TagDetail/{Node.Tag.Id}");
     }
 
     private void HandleHideNode()

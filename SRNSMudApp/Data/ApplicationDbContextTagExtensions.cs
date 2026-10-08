@@ -164,4 +164,112 @@ public static class ApplicationDbContextTagExtensions
             _ = await context.SaveChangesAsync();
         });
     }
+
+    /// <summary>
+    ///     タグ削除時に、外部キー制約 (DeleteBehavior.Restrict) により手動削除が必要な関連エンティティを一括削除する。
+    ///     SQL Server の多重カスケード制限を回避するため Restrict 設定となっているテーブル群（TagWeightLedger 等）が対象。
+    /// </summary>
+    public static async Task RemoveTagRestrictedDependenciesAsync(
+        this ApplicationDbContext context,
+        IReadOnlyCollection<int> tagIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(tagIds);
+
+        if (tagIds.Count == 0)
+        {
+            return;
+        }
+
+        // 1. TagRelationToTag (タグ間の直接関係)
+        List<TagRelationToTag> relationsToDelete = await context.TagRelationToTags
+            .Where(tr => tagIds.Contains(tr.TagId) || tagIds.Contains(tr.TargetTagId))
+            .ToListAsync(cancellationToken);
+        if (relationsToDelete.Count > 0)
+        {
+            context.TagRelationToTags.RemoveRange(relationsToDelete);
+        }
+
+        // 2. TagWeightLedger (タグ重み台帳履歴)
+        List<TagWeightLedger> ledgersToDelete = await context.TagWeightLedgers
+            .Where(l => tagIds.Contains(l.TagId))
+            .ToListAsync(cancellationToken);
+        if (ledgersToDelete.Count > 0)
+        {
+            context.TagWeightLedgers.RemoveRange(ledgersToDelete);
+        }
+
+        // 3. TagEdgeTagAttachment (タグエッジへのアタッチメント)
+        List<TagEdgeTagAttachment> attachmentsToDelete = await context.TagEdgeTagAttachments
+            .Where(a => tagIds.Contains(a.TagId))
+            .ToListAsync(cancellationToken);
+        if (attachmentsToDelete.Count > 0)
+        {
+            context.TagEdgeTagAttachments.RemoveRange(attachmentsToDelete);
+        }
+
+        // 4. TagEdge (タグ間のエッジ)
+        List<TagEdge> edgesToDelete = await context.TagEdges
+            .Where(e => tagIds.Contains(e.SourceTagId) || tagIds.Contains(e.TargetTagId))
+            .ToListAsync(cancellationToken);
+        if (edgesToDelete.Count > 0)
+        {
+            context.TagEdges.RemoveRange(edgesToDelete);
+        }
+
+        // 5. TimelineEvent (タイムラインイベント)
+        List<TimelineEvent> timelineEventsToDelete = await context.TimelineEvents
+            .Where(e => tagIds.Contains(e.FollowedTagId))
+            .ToListAsync(cancellationToken);
+        if (timelineEventsToDelete.Count > 0)
+        {
+            context.TimelineEvents.RemoveRange(timelineEventsToDelete);
+        }
+
+        // 6. TagContentProposal (タグ説明変更提案)
+        List<TagContentProposal> contentProposalsToDelete = await context.TagContentProposals
+            .Where(p => tagIds.Contains(p.TagId))
+            .ToListAsync(cancellationToken);
+        if (contentProposalsToDelete.Count > 0)
+        {
+            context.TagContentProposals.RemoveRange(contentProposalsToDelete);
+        }
+
+        // 7. TagNameProposal (タグ名変更提案)
+        List<TagNameProposal> nameProposalsToDelete = await context.TagNameProposals
+            .Where(p => tagIds.Contains(p.TagId))
+            .ToListAsync(cancellationToken);
+        if (nameProposalsToDelete.Count > 0)
+        {
+            context.TagNameProposals.RemoveRange(nameProposalsToDelete);
+        }
+
+        // 8. TaggingRequestEntity (タグ付けリクエスト)
+        List<TaggingRequestEntity> requestsToDelete = await context.TaggingRequestEntities
+            .Where(r => tagIds.Contains(r.RequestedTagId))
+            .ToListAsync(cancellationToken);
+        if (requestsToDelete.Count > 0)
+        {
+            context.TaggingRequestEntities.RemoveRange(requestsToDelete);
+        }
+
+        // 9. PublicTradeOffer (パブリックトレードオファー)
+        List<PublicTradeOffer> offersToDelete = await context.PublicTradeOffers
+            .Where(o => tagIds.Contains(o.OfferedTagId))
+            .ToListAsync(cancellationToken);
+        if (offersToDelete.Count > 0)
+        {
+            context.PublicTradeOffers.RemoveRange(offersToDelete);
+        }
+
+        // 10. RightAsset (対象タグの権利アセット)
+        List<RightAsset> assetsToDelete = await context.RightAssets
+            .Where(a => tagIds.Contains(a.TargetTagId))
+            .ToListAsync(cancellationToken);
+        if (assetsToDelete.Count > 0)
+        {
+            context.RightAssets.RemoveRange(assetsToDelete);
+        }
+    }
 }

@@ -5,7 +5,7 @@
                  Icon="@(_isAdd ? Icons.Material.Filled.Add : Icons.Material.Filled.Remove)">
             <div class="d-flex align-center">
                 <a class="chip-link mr-1" style="color: inherit;"
-                   @onclick="@(() => NavigationManager.NavigateTo($"/TagDetail/{Request.RequestedTagId}"))"
+                   href="@($"/TagDetail/{Request.RequestedTagId}")"
                    @onclick:stopPropagation="true">
                     @Request.RequestedTag?.Name
                 </a>

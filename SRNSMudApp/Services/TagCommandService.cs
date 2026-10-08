@@ -296,6 +296,39 @@ public class TagCommandService(
             }
         }
 
+        // 外部キー制約 (DeleteBehavior.Restrict) により手動削除が必要な関連エンティティ（TagWeightLedger, TagRelationToTag 等）を削除
+        await context.RemoveTagRestrictedDependenciesAsync([tagId]);
+
+        // 削除対象のタグを親に持つ子タグを取得し、ルートタグ（"全て∀"）配下に変更する
+        List<Tag> orphanedChildren = await context.Tags
+            .Where(t => t.ParentTagId == tagId)
+            .ToListAsync();
+
+        if (orphanedChildren.Count > 0)
+        {
+            Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+            HierarchyId? lastChildNode = rootTag != null
+                ? await context.Tags
+                    .Where(t => t.ParentTagId == rootTag.Id)
+                    .OrderByDescending(t => t.Node)
+                    .Select(t => (HierarchyId?)t.Node)
+                    .FirstOrDefaultAsync()
+                : null;
+
+            foreach (Tag child in orphanedChildren)
+            {
+                child.ParentTagId = rootTag?.Id;
+                if (rootTag != null)
+                {
+                    child.Node = rootTag.Node.GetDescendant(lastChildNode, null);
+                    lastChildNode = child.Node;
+                }
+            }
+        }
+
+        tagToDelete.ParentTagId = null;
+        _ = await context.SaveChangesAsync();
+
         _ = context.Tags.Remove(tagToDelete);
         _ = await context.SaveChangesAsync();
         return TagDeleteOperationResult.Success;

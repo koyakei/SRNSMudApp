@@ -113,16 +113,8 @@ public class TagTreeDataProvider(
 
                 if (tagsToDelete.Count > 0)
                 {
-                    // 関連する TagRelationToTag (DeleteBehavior.Restrict) を手動で削除
-                    List<TagRelationToTag> relationsToDelete = await context.TagRelationToTags
-                        .Where(tr =>
-                            authorizedIds.Contains(tr.TagId) || authorizedIds.Contains(tr.TargetTagId))
-                        .ToListAsync();
-
-                    if (relationsToDelete.Count > 0)
-                    {
-                        context.TagRelationToTags.RemoveRange(relationsToDelete);
-                    }
+                    // 外部キー制約 (DeleteBehavior.Restrict) により手動削除が必要な関連エンティティ（TagWeightLedger, TagRelationToTag 等）を削除
+                    await context.RemoveTagRestrictedDependenciesAsync(authorizedIds);
 
                     // 削除対象のタグを親に持つ子タグを取得し、ルートタグ（"全て∀"）配下に変更する
                     List<Tag> orphanedChildren = await context.Tags

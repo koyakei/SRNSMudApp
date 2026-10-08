@@ -90,6 +90,24 @@ public sealed class TagTreePopoverContentTests : IAsyncLifetime
         Assert.Equal(1, clickedTagId);
     }
 
+    [Fact]
+    public void TagTreePopoverContent_RendersHrefWhenEnableNavigationIsTrue()
+    {
+        // Arrange
+        var rootTag = new TagEntity { Id = 10, Name = "NavRoot", OwnerId = "user-1" };
+        List<TagEntity> allTags = [rootTag];
+
+        // Act
+        IRenderedComponent<TagTreePopoverContent> cut = _ctx.Render<TagTreePopoverContent>(parameters => parameters
+            .Add(p => p.TargetTag, rootTag)
+            .Add(p => p.AllTags, allTags)
+            .Add(p => p.EnableNavigation, true));
+
+        // Assert
+        var link = cut.FindAll("a.mud-link").First(l => l.TextContent.Contains("NavRoot"));
+        Assert.Equal("/TagDetail/10", link.GetAttribute("href"));
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -7,9 +7,18 @@
                 <span class="d-flex align-center mr-1">
                     @if (!string.IsNullOrEmpty(TagName))
                     {
-                        <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
-                            @TagName
-                        </a>
+                        @if (!string.IsNullOrEmpty(Href))
+                        {
+                            <a class="chip-link mr-1" href="@Href" style="@TagStyle" @onclick:stopPropagation="true">
+                                @TagName
+                            </a>
+                        }
+                        else
+                        {
+                            <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
+                                @TagName
+                            </a>
+                        }
                     }
                     @if (OwnerName is not null)
                     {
@@ -55,6 +64,7 @@
 @code {
     [Parameter] public string ChipId { get; set; } = "";
     [Parameter] public string TagName { get; set; } = "";
+    [Parameter] public string? Href { get; set; }
     [Parameter] public int Weight { get; set; }
     [Parameter] public string? Style { get; set; }
     [Parameter] public string? TagStyle { get; set; }

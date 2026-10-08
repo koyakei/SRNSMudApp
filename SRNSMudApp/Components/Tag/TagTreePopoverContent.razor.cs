@@ -16,8 +16,6 @@ using SRNSMudApp.Services;
 /// </summary>
 public partial class TagTreePopoverContent : ComponentBase
 {
-    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
-
     [Parameter] public Tag TargetTag { get; set; } = null!;
     [Parameter] public IEnumerable<Tag> AllTags { get; set; } = [];
     [Parameter] public bool EnableSwap { get; set; }
@@ -88,18 +86,6 @@ public partial class TagTreePopoverContent : ComponentBase
             {
                 await OnAddChildTag.InvokeAsync(targetTag);
             }
-        }
-    }
-
-    private async Task NavigateToTag(int tagId)
-    {
-        if (OnTagClick.HasDelegate)
-        {
-            await OnTagClick.InvokeAsync(tagId);
-        }
-        else if (EnableNavigation)
-        {
-            NavigationManager.NavigateTo($"/TagDetail/{tagId}");
         }
     }
 }

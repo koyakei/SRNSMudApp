@@ -12,9 +12,6 @@ using SRNSMudApp.Data;
 /// </summary>
 public partial class RequestInfoAlert : ComponentBase
 {
-    [Inject]
-    private NavigationManager NavigationManager { get; set; } = null!;
-
     [Parameter]
     [EditorRequired]
     public RequestInfo RequestInfo { get; set; } = null!;

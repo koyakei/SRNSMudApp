@@ -148,6 +148,32 @@ public sealed class ItemTagChipTests : IAsyncLifetime
             Times.Once);
     }
 
+    [Fact]
+    public void ItemTagChip_RendersTagLinkWithHrefForDetailNavigation()
+    {
+        var tag = new SRNSMudApp.Data.Tag { Id = 42, Name = "HrefTag", OwnerId = "test-user-id" };
+        var tagRelation = new TagRelation
+        {
+            Id = 1,
+            TagId = 42,
+            Tag = tag,
+            ItemId = 1,
+            Weight = 5,
+            OwnerId = "test-user-id"
+        };
+        var item = new SRNSMudApp.Data.Item { Id = 1, Content = "Item", OwnerId = "test-user-id" };
+
+        IRenderedComponent<ItemTagChip> component = _ctx.Render<ItemTagChip>(parameters => parameters
+            .Add(p => p.TagRelation, tagRelation)
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, "test-user-id")
+        );
+
+        var anchor = component.Find("a.chip-link");
+        Assert.Equal("/TagDetail/42", anchor.GetAttribute("href"));
+        Assert.Contains("HrefTag", anchor.TextContent);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

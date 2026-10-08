@@ -24,9 +24,18 @@
 
             <!-- テキスト領域（タグ名・オーナー） -->
             <span class="d-flex align-center">
-                <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
-                    @TagName
-                </a>
+                @if (!string.IsNullOrEmpty(Href))
+                {
+                    <a class="chip-link mr-1" href="@Href" style="@TagStyle" @onclick:stopPropagation="true">
+                        @TagName
+                    </a>
+                }
+                else
+                {
+                    <a class="chip-link mr-1" style="@TagStyle" @onclick="HandleTagClick" @onclick:stopPropagation="true">
+                        @TagName
+                    </a>
+                }
                 @if (!string.IsNullOrEmpty(OwnerName))
                 {
                     <span class="ml-1 text-muted" @onclick:stopPropagation="true">(@OwnerName)</span>

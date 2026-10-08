@@ -15,8 +15,8 @@
                            OnClick="@(() => OnAddTagToTag.InvokeAsync())"/>
             <span class="d-flex align-center">
                 <a class="chip-link mr-1"
+                   href="@(Relation.Tag != null ? $"/TagDetail/{Relation.Tag.Id}" : null)"
                    style="@(Display.IsDeleted ? "text-decoration: line-through;" : "")"
-                   @onclick="@(() => OnNavigate.InvokeAsync())"
                    @onclick:stopPropagation="true">
                     @(Relation.Tag?.Name ?? "不明")
                 </a>

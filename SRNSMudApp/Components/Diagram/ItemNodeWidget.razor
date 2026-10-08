@@ -15,7 +15,7 @@
                 <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true">
                     <MudTooltip Text="アイテム詳細へ遷移">
                         <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
-                                       Class="ml-1 item-detail-button" Title="アイテム詳細へ遷移" OnClick="NavigateToItemDetail" />
+                                       Class="ml-1 item-detail-button" Title="アイテム詳細へ遷移" Href="@($"/ItemDetail/{Node.Item.Id}")" />
                     </MudTooltip>
                 </span>
                 <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">
@@ -54,7 +54,7 @@
                     <MudTooltip Text="アイテム詳細へ遷移">
                         <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Default"
                                        Class="ml-1 flex-shrink-0 item-detail-button" Title="アイテム詳細へ遷移"
-                                       OnClick="NavigateToItemDetail" />
+                                       Href="@($"/ItemDetail/{Node.Item.Id}")" />
                     </MudTooltip>
                 </span>
                 <span @onclick:stopPropagation="true" @onpointerdown:stopPropagation="true" @onmousedown:stopPropagation="true" @onpointerup:stopPropagation="true" @onmouseup:stopPropagation="true">

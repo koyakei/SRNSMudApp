@@ -145,6 +145,10 @@ public class TagTableDataProvider(
         switch (tagToDelete)
         {
             case not null:
+                await context.RemoveTagRestrictedDependenciesAsync([tagId]);
+                tagToDelete.ParentTagId = null;
+                _ = await context.SaveChangesAsync();
+
                 _ = context.Tags.Remove(tagToDelete);
                 _ = await context.SaveChangesAsync();
                 return true;

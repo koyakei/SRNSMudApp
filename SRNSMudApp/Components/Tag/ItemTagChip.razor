@@ -14,7 +14,7 @@
              OwnerName="@vm.OwnerName"
              CloseIcon="@Icons.Material.Filled.RemoveCircleOutline"
              OnClose="@(_ => RemoveTagRelationAsync())"
-             OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{vm.TagId}"))">
+             Href="@($"/TagDetail/{vm.TagId}")">
     <PrefixContent>
         <MudIconButton Icon="@Icons.Material.Filled.LocalOffer"
                        Size="Size.Small" Color="Color.Inherit"

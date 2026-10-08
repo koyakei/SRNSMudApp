@@ -17,12 +17,22 @@
                     </span>
                     <span class="tag-tree-icon" style="font-size: 10px; width: 14px; flex-shrink: 0;">@line.Icon</span>
 
-                    @if (OnTagClick.HasDelegate || EnableNavigation)
+                    @if (OnTagClick.HasDelegate)
                     {
                         <span @onclick:stopPropagation="true" class="tag-tree-name tag-link"
                               style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <MudLink Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;"
-                                     OnClick="@(() => NavigateToTag(line.TagId))">
+                                     OnClick="@(() => OnTagClick.InvokeAsync(line.TagId))">
+                                @line.Name
+                            </MudLink>
+                        </span>
+                    }
+                    else if (EnableNavigation)
+                    {
+                        <span @onclick:stopPropagation="true" class="tag-tree-name tag-link"
+                              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <MudLink Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 500;"
+                                     Href="@($"/TagDetail/{line.TagId}")">
                                 @line.Name
                             </MudLink>
                         </span>

@@ -211,6 +211,19 @@ public sealed class TagTreeTests : IAsyncLifetime
     }
 
     [Fact]
+    public void JqTreeInteropScript_SupportsOpeningTagDetailInNewTabOnModifierClick()
+    {
+        var scriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "SRNSMudApp", "wwwroot", "js", "jqTreeInterop.js"));
+
+        var script = File.ReadAllText(scriptPath);
+
+        // Verify metaKey (⌘), ctrlKey, or middle click opens in new tab via window.open
+        Assert.Contains("origEvent.metaKey || origEvent.ctrlKey || origEvent.button === 1", script);
+        Assert.Contains("window.open('/TagDetail/' + nodeId, '_blank')", script);
+        Assert.Contains("window.open('/TagDetail/' + node.id, '_blank')", script);
+    }
+
+    [Fact]
     public async Task CancelMoveRequest_WhenCalled_InvokesCancelTagMoveAsyncAndReloadsTree()
     {
         // Arrange

@@ -30,7 +30,6 @@ public partial class TagTable
     [Parameter] public bool ShowCreateButton { get; set; } = true;
 
     [Inject] private TagTableViewModel ViewModel { get; set; } = null!;
-    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
     [Inject] private IDialogLauncher DialogLauncher { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
 

@@ -95,7 +95,7 @@
             <span @onclick:stopPropagation="true">
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
                          Class="ma-0 cursor-pointer"
-                         OnClick="@(() => NavigationManager.NavigateTo($"/TagDetail/{RequestInfo.TargetTagId}"))">
+                         Href="@($"/TagDetail/{RequestInfo.TargetTagId}")">
                     @RequestInfo.TargetTagName
                 </MudChip>
             </span>

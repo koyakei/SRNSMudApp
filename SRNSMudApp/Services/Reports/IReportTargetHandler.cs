@@ -108,6 +108,8 @@ public class TagReportTargetHandler : IReportTargetHandler
         Tag? tag = await context.Tags.FindAsync([targetId], cancellationToken);
         if (tag is not null)
         {
+            await context.RemoveTagRestrictedDependenciesAsync([targetId], cancellationToken);
+            tag.ParentTagId = null;
             _ = context.Tags.Remove(tag);
         }
     }

@@ -16,7 +16,6 @@ using SRNSMudApp.Services;
 public partial class ItemCardContent : ComponentBase, IAsyncDisposable
 {
     [Inject] private IJSRuntime JS { get; set; } = null!;
-    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
 
     [Parameter] public int ItemId { get; set; }
     [Parameter] public string? Content { get; set; }
@@ -133,11 +132,6 @@ public partial class ItemCardContent : ComponentBase, IAsyncDisposable
         {
             _needsOverflowCheck = true; // 折りたたみ時に再チェック
         }
-    }
-
-    private void NavigateToDetail()
-    {
-        NavigationManager.NavigateTo($"/ItemDetail/{ItemId}");
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
