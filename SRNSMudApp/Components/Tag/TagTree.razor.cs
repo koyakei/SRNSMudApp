@@ -299,9 +299,42 @@ public partial class TagTree : IAsyncDisposable
             case { Canceled: false, Data: TagCreateChildDialog.Result data }:
                 TagCardActionResult actionResult = await ViewModel.AddChildTagAsync(parentId, data.Name, data.Content);
                 await ApplyResultAsync(actionResult);
+                if (actionResult.DuplicateTagId.HasValue)
+                {
+                    await ExpandAndHighlightNodeAsync(actionResult.DuplicateTagId.Value);
+                }
                 break;
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    ///     重複タグなどの指定ノードを、ルートからリーフまで展開してツリー上に表示・選択する。
+    /// </summary>
+    private async Task ExpandAndHighlightNodeAsync(int tagId)
+    {
+        if (!_isTreeInitialized)
+        {
+            return;
+        }
+
+        // 検索フィルターで該当タグが非表示になっている場合は検索をクリアして全表示する
+        var filteredTags = GetFilteredTags();
+        if (!filteredTags.Any(t => t.Id == tagId))
+        {
+            _searchText = null;
+            UpdateUrlQuery();
+            await ReloadTreeDataAsync();
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("jqTreeInterop.expandNodeRoute", TreeContainerId, tagId);
+        }
+        catch (JSException)
+        {
+            // ignored
         }
     }
 

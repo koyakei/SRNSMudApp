@@ -51,16 +51,17 @@ public enum TagCardActionResultType
 public sealed record TagCardActionResult(
     TagCardActionResultType Type,
     string? Message = null,
-    bool ShouldNotifyChanged = false)
+    bool ShouldNotifyChanged = false,
+    int? DuplicateTagId = null)
 {
     public static TagCardActionResult Success(string? message = null, bool shouldNotifyChanged = true) =>
         new(TagCardActionResultType.Success, message, shouldNotifyChanged);
 
-    public static TagCardActionResult Warning(string message) =>
-        new(TagCardActionResultType.Warning, message);
+    public static TagCardActionResult Warning(string message, int? duplicateTagId = null) =>
+        new(TagCardActionResultType.Warning, message, false, duplicateTagId);
 
-    public static TagCardActionResult Error(string message) =>
-        new(TagCardActionResultType.Error, message);
+    public static TagCardActionResult Error(string message, int? duplicateTagId = null) =>
+        new(TagCardActionResultType.Error, message, false, duplicateTagId);
 
     public static TagCardActionResult NoOp() =>
         new(TagCardActionResultType.NoOp);

@@ -66,6 +66,13 @@ public class TagTreeViewModel
             return TagCardActionResult.Warning("選択された親タグ配下（または兄弟）はロックされているため子タグを作成できません。");
         }
 
+        var trimmedName = name.Trim();
+        Data.Tag? existingTag = Tags.FirstOrDefault(t => string.Equals(t.Name.Trim(), trimmedName, StringComparison.OrdinalIgnoreCase));
+        if (existingTag != null)
+        {
+            return TagCardActionResult.Error("同じ名前のタグが既に存在します。", existingTag.Id);
+        }
+
         Data.Tag newTag = new()
         {
             Name = name,
@@ -83,9 +90,13 @@ public class TagTreeViewModel
             await LoadDataAsync();
             return TagCardActionResult.Success($"'{name}' を追加しました。");
         }
-        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.Ordinal) == true)
+        catch (DbUpdateException ex) when (
+            ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true
+            || ex.InnerException?.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true)
         {
-            return TagCardActionResult.Error("同じ名前のタグが既に存在します。");
+            await LoadDataAsync();
+            Data.Tag? dup = Tags.FirstOrDefault(t => string.Equals(t.Name.Trim(), trimmedName, StringComparison.OrdinalIgnoreCase));
+            return TagCardActionResult.Error("同じ名前のタグが既に存在します。", dup?.Id);
         }
         catch (Exception ex)
         {
