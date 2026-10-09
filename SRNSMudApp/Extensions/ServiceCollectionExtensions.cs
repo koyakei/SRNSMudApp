@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
 
         // タグ提案サービス
         services.AddScoped<ITagSuggestionService, TagSuggestionService>();
+        services.AddScoped<ITagSimilarityService, TagSimilarityService>();
 
         // 内部リンク自動変換サービス
         services.AddScoped<IInternalLinkConversionService, InternalLinkConversionService>();

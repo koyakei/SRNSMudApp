@@ -15,6 +15,7 @@ public sealed class TagAddViewModelTests
     private readonly Mock<ITagSearchQueryService> _tagSearchQueryServiceMock = new();
     private readonly Mock<ITagCommandService> _tagCommandServiceMock = new();
     private readonly Mock<ITagLockService> _tagLockServiceMock = new();
+    private readonly Mock<ITagSimilarityService> _tagSimilarityServiceMock = new();
     private readonly Mock<ISnackbar> _snackbarMock = new();
     private readonly TagAddViewModel _sut;
 
@@ -24,6 +25,7 @@ public sealed class TagAddViewModelTests
             _tagSearchQueryServiceMock.Object,
             _tagCommandServiceMock.Object,
             _tagLockServiceMock.Object,
+            _tagSimilarityServiceMock.Object,
             _snackbarMock.Object);
     }
 
@@ -274,5 +276,35 @@ public sealed class TagAddViewModelTests
 
         Assert.Null(result);
         _snackbarMock.Verify(s => s.Add(It.Is<string>(m => m.Contains("DB failed")), Severity.Error, null, null), Times.Once);
+    }
+
+    [Fact]
+    public void SettingNewTagName_UpdatesSimilarTags()
+    {
+        var existingTag = new TagEntity { Id = 1, Name = "Existing", OwnerId = "user-1" };
+        var candidate = new SRNSMudApp.Models.SimilarTagCandidate(existingTag, 0.8f);
+
+        _tagSimilarityServiceMock
+            .Setup(s => s.FindSimilarTags(It.IsAny<IEnumerable<TagEntity>>(), "Exist", 0.50f, 5))
+            .Returns([candidate]);
+
+        _sut.NewTagName = "Exist";
+
+        Assert.Single(_sut.SimilarTags);
+        Assert.Equal(candidate, _sut.SimilarTags[0]);
+    }
+
+    [Fact]
+    public void SelectSimilarTag_SetsSelectedTagAndSearchState()
+    {
+        var tag = new TagEntity { Id = 10, Name = "TargetTag", OwnerId = "user-1" };
+
+        _sut.SelectSimilarTag(tag);
+
+        Assert.Equal(tag, _sut.SelectedTag);
+        Assert.Equal("TargetTag", _sut.SearchText);
+        Assert.NotNull(_sut.SearchResults);
+        Assert.Single(_sut.SearchResults);
+        Assert.Equal(tag, _sut.SearchResults[0]);
     }
 }

@@ -3,30 +3,34 @@ using System.Diagnostics.CodeAnalysis;
 using MudBlazor;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Components.Tag;
 
 /// <summary>
 ///     タグ追加・作成ダイアログの ViewModel。
-///     既存タグの検索、親タグ候補の絞り込み、子タグ新規作成の検証および登録を担当する。
+///     既存タグの検索、親タグ候補の絞り込み、子タグ新規作成の検証および登録、類似タグ候補の算出を担当する。
 /// </summary>
 public class TagAddViewModel
 {
     private readonly ITagSearchQueryService _tagSearchQueryService;
     private readonly ITagCommandService _tagCommandService;
     private readonly ITagLockService _tagLockService;
+    private readonly ITagSimilarityService _tagSimilarityService;
     private readonly ISnackbar _snackbar;
 
     public TagAddViewModel(
         ITagSearchQueryService tagSearchQueryService,
         ITagCommandService tagCommandService,
         ITagLockService tagLockService,
+        ITagSimilarityService tagSimilarityService,
         ISnackbar snackbar)
     {
         _tagSearchQueryService = tagSearchQueryService;
         _tagCommandService = tagCommandService;
         _tagLockService = tagLockService;
+        _tagSimilarityService = tagSimilarityService;
         _snackbar = snackbar;
     }
 
@@ -37,8 +41,28 @@ public class TagAddViewModel
     public Data.Tag? SelectedTag { get; set; }
 
     public Data.Tag? ParentTag { get; set; }
-    public string NewTagName { get; set; } = string.Empty;
+
+    private string _newTagName = string.Empty;
+
+    public string NewTagName
+    {
+        get => _newTagName;
+        set
+        {
+            if (_newTagName != value)
+            {
+                _newTagName = value;
+                UpdateSimilarTags();
+            }
+        }
+    }
+
     public string? NewTagContent { get; set; }
+
+    /// <summary>
+    ///     入力中のタグ名に類似する既存タグの候補リスト。
+    /// </summary>
+    public IReadOnlyList<SimilarTagCandidate> SimilarTags { get; private set; } = [];
 
     /// <summary>
     ///     全タグリストを取得して初期化する。
@@ -46,6 +70,23 @@ public class TagAddViewModel
     public async Task InitializeAsync()
     {
         AllTags = await _tagSearchQueryService.GetAllTagsAsync();
+        UpdateSimilarTags();
+    }
+
+    /// <summary>
+    ///     類似候補タグを選択し、検索結果および選択状態を更新する。
+    /// </summary>
+    public void SelectSimilarTag(Data.Tag tag)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        SelectedTag = tag;
+        SearchText = tag.Name;
+        SearchResults = [tag];
+    }
+
+    private void UpdateSimilarTags()
+    {
+        SimilarTags = _tagSimilarityService.FindSimilarTags(AllTags, _newTagName);
     }
 
     /// <summary>

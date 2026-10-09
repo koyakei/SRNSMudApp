@@ -255,6 +255,90 @@ public sealed class TagAddDialogTests : IAsyncLifetime
         Assert.True(result.Canceled);
     }
 
+    [Fact]
+    public async Task CreateChildTab_WhenTypingSimilarName_ShowsSimilarTagAlertAndChips()
+    {
+        var existingTag = new SRNSMudApp.Data.Tag
+        {
+            Id = 5,
+            Name = "プログラミング言語",
+            Content = "言語全般",
+            OwnerId = "user-1",
+            CachedWeight = 1
+        };
+
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([existingTag]);
+
+        IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
+        IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
+
+        _ = await dialogService.ShowAsync<TagAddDialog>("タグの追加");
+
+        host.WaitForState(() => host.Markup.Contains("子タグを新規作成"));
+
+        IElement childTab = host.FindAll(".mud-tab").First(t => t.TextContent.Contains("子タグを新規作成"));
+        childTab.Click();
+
+        host.WaitForState(() => host.Markup.Contains("子タグ名"));
+
+        IRenderedComponent<MudTextField<string>> childNameField =
+            host.FindComponents<MudTextField<string>>().First(f => f.Instance.Label == "子タグ名");
+        await host.InvokeAsync(() => childNameField.Instance.ValueChanged.InvokeAsync("プログラミング"));
+
+        host.WaitForState(() => host.Markup.Contains("類似する既存タグ"));
+        Assert.Contains("類似する既存タグが見つかりました", host.Markup);
+        Assert.Contains("プログラミング言語", host.Markup);
+    }
+
+    [Fact]
+    public async Task ClickingSimilarTagChip_SwitchesToSelectTab_AndSelectsTheTag()
+    {
+        var existingTag = new SRNSMudApp.Data.Tag
+        {
+            Id = 5,
+            Name = "プログラミング言語",
+            Content = "言語全般",
+            OwnerId = "user-1",
+            CachedWeight = 1
+        };
+
+        _queryServiceMock.Setup(d => d.GetAllTagsAsync()).ReturnsAsync([existingTag]);
+
+        IRenderedComponent<DialogHost> host = _ctx.Render<DialogHost>();
+        IDialogService dialogService = _ctx.Services.GetRequiredService<IDialogService>();
+
+        IDialogReference dialog = await dialogService.ShowAsync<TagAddDialog>("タグの追加");
+
+        host.WaitForState(() => host.Markup.Contains("子タグを新規作成"));
+
+        IElement childTab = host.FindAll(".mud-tab").First(t => t.TextContent.Contains("子タグを新規作成"));
+        childTab.Click();
+
+        host.WaitForState(() => host.Markup.Contains("子タグ名"));
+
+        IRenderedComponent<MudTextField<string>> childNameField =
+            host.FindComponents<MudTextField<string>>().First(f => f.Instance.Label == "子タグ名");
+        await host.InvokeAsync(() => childNameField.Instance.ValueChanged.InvokeAsync("プログラミング"));
+
+        host.WaitForState(() => host.Markup.Contains("similar-tags-alert"));
+
+        // チップをクリック
+        IElement chip = host.Find($@"[data-testid=""similar-tag-chip-{existingTag.Id}""]");
+        chip.Click();
+
+        // 既存タグから選択タブに切り替わって、該当タグが選択状態になっている
+        host.WaitForState(() => host.Markup.Contains("選択して追加"));
+        IElement submitButton = host.FindAll("button").First(b => b.TextContent.Trim() == "選択して追加");
+        Assert.False(submitButton.HasAttribute("disabled"));
+
+        submitButton.Click();
+
+        DialogResult? result = await dialog.Result.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(result);
+        Assert.False(result.Canceled);
+        Assert.Equal(existingTag, result.Data);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

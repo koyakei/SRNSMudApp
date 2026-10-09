@@ -80,6 +80,29 @@
                     <MudTextField @bind-Value="ViewModel.NewTagName" Label="子タグ名" Required="true"
                                   RequiredError="タグ名は必須です" Immediate="true" />
 
+                    @if (ViewModel.SimilarTags.Count > 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="py-1 px-2" Variant="Variant.Outlined" data-testid="similar-tags-alert">
+                            <div class="d-flex flex-column gap-1">
+                                <MudText Typo="Typo.caption" Class="fw-bold">
+                                    類似する既存タグが見つかりました（クリックで選択）：
+                                </MudText>
+                                <div class="d-flex flex-wrap gap-1 align-center">
+                                    @foreach (var candidate in ViewModel.SimilarTags)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                                 OnClick="@(() => SelectExistingCandidate(candidate.Tag))"
+                                                 title="@($"既存タグ: {candidate.Tag.Name} (類似度: {candidate.Similarity:P0}) - クリックで選択")"
+                                                 Class="cursor-pointer" data-testid="@($"similar-tag-chip-{candidate.Tag.Id}")">
+                                            <span>@candidate.Tag.Name</span>
+                                            <span class="ml-1" style="font-size: 0.75rem; opacity: 0.85;">@($"{candidate.Similarity:P0}")</span>
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+                        </MudAlert>
+                    }
+
                     <MudTextField @bind-Value="ViewModel.NewTagContent" Label="内容" Lines="3" Immediate="true" />
                 </MudStack>
             </MudTabPanel>

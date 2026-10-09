@@ -1,7 +1,30 @@
 <MudDialog>
     <DialogContent>
-        <MudTextField T="string" @bind-Value="_name" Label="タグ名" Variant="Variant.Outlined" Class="mb-4"
-                      AutoFocus="true" Required="true" RequiredError="タグ名は必須です" />
+        <MudTextField T="string" @bind-Value="Name" Label="タグ名" Variant="Variant.Outlined" Class="mb-3"
+                      AutoFocus="true" Required="true" RequiredError="タグ名は必須です" Immediate="true" />
+
+        @if (_similarTags.Count > 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3 py-1 px-2" Variant="Variant.Outlined" data-testid="similar-tags-alert">
+                <div class="d-flex flex-column gap-1">
+                    <MudText Typo="Typo.caption" Class="fw-bold">
+                        類似する既存タグ（クリックでタグ名に反映）：
+                    </MudText>
+                    <div class="d-flex flex-wrap gap-1 align-center">
+                        @foreach (var candidate in _similarTags)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                                     OnClick="@(() => ApplyCandidate(candidate.Tag))"
+                                     title="@($"既存タグ: {candidate.Tag.Name} (類似度: {candidate.Similarity:P0}) - クリックで入力")"
+                                     Class="cursor-pointer" data-testid="@($"similar-tag-chip-{candidate.Tag.Id}")">
+                                <span>@candidate.Tag.Name</span>
+                                <span class="ml-1" style="font-size: 0.75rem; opacity: 0.85;">@($"{candidate.Similarity:P0}")</span>
+                            </MudChip>
+                        }
+                    </div>
+                </div>
+            </MudAlert>
+        }
 
         <MudTextField T="string" @bind-Value="_content" Label="内容" Variant="Variant.Outlined" Lines="3" MaxLines="5" />
     </DialogContent>

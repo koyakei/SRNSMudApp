@@ -151,6 +151,7 @@ public static class BunitTestSetup
                     .ReturnsAsync([]);
                 return mock.Object;
             })
+            .AddSingleton<ITagSimilarityService, TagSimilarityService>()
             .AddScoped(_ =>
             {
                 var mock = new Mock<IUserGroupDataProvider>();

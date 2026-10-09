@@ -59,6 +59,12 @@ public partial class TagAddDialog : ComponentBase
         _activeTabIndex = 1;
     }
 
+    private void SelectExistingCandidate(Tag tag)
+    {
+        ViewModel.SelectSimilarTag(tag);
+        _activeTabIndex = 0;
+    }
+
     private Task<IEnumerable<Tag>> SearchParentTagsAsync(string value, CancellationToken token)
     {
         return Task.FromResult(ViewModel.SearchParentTags(value));
