@@ -606,6 +606,88 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         Assert.True(diagram.Zoom > currentZoom, $"Expected zoom to increase on pinch-out (DeltaY < 0), but was {diagram.Zoom}");
     }
 
+    [Fact]
+    public void TagDiagramPage_InitializesDiagram_WithSmoothPathGenerator()
+    {
+        // Arrange
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        // Assert: Links.DefaultPathGenerator が SmoothPathGenerator に設定されていること
+        Assert.IsType<Blazor.Diagrams.Core.PathGenerators.SmoothPathGenerator>(diagram.Options.Links.DefaultPathGenerator);
+    }
+
+    [Fact]
+    public void ApplyEdgeOffset_AddsPerpendicularVertex_AlternatingSigns()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "Tag1", OwnerId = TestUserId };
+        var tag2 = new TagEntity { Id = 2, Name = "Tag2", OwnerId = TestUserId };
+        var nodeA = new TagNode(tag1, new Point(0, 0));
+        var nodeB = new TagNode(tag2, new Point(100, 0)); // 水平方向
+        var edge1 = new TagEdge { Id = 10, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId };
+        var edge2 = new TagEdge { Id = 11, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId };
+        var link1 = new TagEdgeLink(edge1, nodeA.Ports[0], nodeB.Ports[0]);
+        var link2 = new TagEdgeLink(edge2, nodeA.Ports[0], nodeB.Ports[0]);
+
+        // Act: pairIndex = 1 (+40), pairIndex = 2 (-40)
+        TagDiagramPage.ApplyEdgeOffset(link1, nodeA, nodeB, 1);
+        TagDiagramPage.ApplyEdgeOffset(link2, nodeA, nodeB, 2);
+
+        // Assert
+        Assert.Single(link1.Vertices);
+        Assert.Single(link2.Vertices);
+
+        var v1 = link1.Vertices[0].Position;
+        var v2 = link2.Vertices[0].Position;
+
+        // 中間点は X = 50
+        Assert.Equal(50, v1.X, 0.01);
+        Assert.Equal(50, v2.X, 0.01);
+
+        // 水平進行 (100, 0) に対する垂直は Y 方向。v1 と v2 は逆方向 (一方が正、一方が負)
+        Assert.True(v1.Y != 0);
+        Assert.True(v2.Y != 0);
+        Assert.Equal(-v1.Y, v2.Y, 0.01);
+    }
+
+    [Fact]
+    public void TagDiagramPage_BuildDiagramElements_AppliesOffsetToMultipleEdgesBetweenSameTags()
+    {
+        // Arrange: 同じタグ間に 2 本のエッジが存在する
+        var tag1 = new TagEntity { Id = 1, Name = "Alpha", OwnerId = TestUserId };
+        var tag2 = new TagEntity { Id = 2, Name = "Beta", OwnerId = TestUserId };
+        var edge1 = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 2, OwnerId = TestUserId };
+        var edge2 = new TagEdge { Id = 102, SourceTagId = 2, TargetTagId = 1, OwnerId = TestUserId };
+
+        _ = _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1, tag2]);
+        _ = _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge1, edge2]);
+
+        // Act
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var diagram = canvas.Instance.Diagram;
+
+        var links = diagram.Links.OfType<TagEdgeLink>().ToList();
+        Assert.Equal(2, links.Count);
+
+        // Assert: 1本目はオフセットなし(Vertices 0件)、2本目は重なり回避のため中間点 Vertex が付与されていること
+        TagEdgeLink firstLink = links[0];
+        TagEdgeLink secondLink = links[1];
+
+        Assert.Empty(firstLink.Vertices);
+        Assert.Single(secondLink.Vertices);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

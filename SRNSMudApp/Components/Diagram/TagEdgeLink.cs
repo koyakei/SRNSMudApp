@@ -32,6 +32,7 @@ public class TagEdgeLink : LinkModel
 
     /// <summary>
     ///     紐付けられているタグ一覧をもとにリンクのラベル表示を更新する。
+    ///     ラベルはエッジの中央（ノード間の中間点）に配置される。
     /// </summary>
     public void UpdateLabels()
     {
