@@ -23,6 +23,15 @@
                 Item #@QueryItemId.Value に戻る
             </MudButton>
         }
+        else if (!string.IsNullOrEmpty(QueryItemIds))
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => NavigationManager.NavigateTo("/Item/ItemList"))"
+                       data-testid="back-to-itemlist-btn">
+                アイテム一覧に戻る
+            </MudButton>
+        }
 
     </div>
 
@@ -38,7 +47,7 @@
         <MudSwitch T="bool" Value="ViewModel.OnlyConnectedTags" ValueChanged="OnOnlyConnectedTagsChanged" Color="Color.Primary"
                    Label="エッジのあるタグのみ" Dense="true" />
 
-        @if (QueryItemId.HasValue)
+        @if (QueryItemId.HasValue || !string.IsNullOrEmpty(QueryItemIds) || ViewModel.ContextItems.Count > 0)
         {
             <MudSwitch T="bool" Value="ViewModel.ContextOnly" ValueChanged="OnContextOnlyChanged" Color="Color.Secondary"
                        Label="アイテム関連タグのみ" Dense="true" />

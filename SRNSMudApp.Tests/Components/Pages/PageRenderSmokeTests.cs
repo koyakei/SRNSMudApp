@@ -282,6 +282,14 @@ public sealed class PageRenderSmokeTests : IAsyncLifetime
     }
 
     [Fact]
+    public void UserGroupMembers_Renders_WithoutException()
+    {
+        IRenderedComponent<SRNSMudApp.Components.UserGroup.UserGroupMembers> cut =
+            _ctx.Render<SRNSMudApp.Components.UserGroup.UserGroupMembers>(parameters => parameters.Add(p => p.GroupId, 1));
+        Assert.False(string.IsNullOrWhiteSpace(cut.Markup));
+    }
+
+    [Fact]
     public void AllFeaturePages_AreCoveredBySmokeTests()
     {
         var excludedPageNames = new HashSet<string>(StringComparer.Ordinal)

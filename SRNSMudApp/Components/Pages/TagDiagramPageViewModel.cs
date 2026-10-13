@@ -41,7 +41,14 @@ public class TagDiagramPageViewModel
     public TagEdge? SelectedEdge { get; set; }
     public TagEntity? FocusedTag { get; set; }
     public TagEntity? SecondFocusedTag { get; set; }
-    public int? LoadedContextItemId { get; set; }
+
+    public IReadOnlyList<int> LoadedContextItemIds { get; private set; } = [];
+
+    public int? LoadedContextItemId
+    {
+        get => LoadedContextItemIds.Count > 0 ? LoadedContextItemIds[0] : null;
+        set => LoadedContextItemIds = value.HasValue ? [value.Value] : [];
+    }
 
     // フィルタ設定
     public bool OnlyConnectedTags { get; set; } = true;
@@ -74,7 +81,13 @@ public class TagDiagramPageViewModel
     /// <summary>
     ///     ダイアグラムのデータ（タグ・エッジ・アイテム）を再読み込みする。
     /// </summary>
-    public async Task ReloadDiagramAsync(int? queryItemId, bool preserveExtraVisibleTags = false)
+    public Task ReloadDiagramAsync(int? queryItemId = null, bool preserveExtraVisibleTags = false) =>
+        ReloadDiagramForItemsAsync(queryItemId.HasValue ? [queryItemId.Value] : null, preserveExtraVisibleTags);
+
+    /// <summary>
+    ///     指定したアイテム群を含むダイアグラムのデータ（タグ・エッジ・アイテム）を再読み込みする。
+    /// </summary>
+    public async Task ReloadDiagramForItemsAsync(IReadOnlyList<int>? queryItemIds, bool preserveExtraVisibleTags = false)
     {
         var preservedExtraIds = preserveExtraVisibleTags ? PinnedTagIds.ToHashSet() : null;
         var preservedHiddenTagIds = preserveExtraVisibleTags ? HiddenTagIds.ToHashSet() : null;
@@ -115,18 +128,26 @@ public class TagDiagramPageViewModel
                 }
             }
 
-            if (queryItemId.HasValue)
+            var validItemIds = queryItemIds?.Where(id => id > 0).Distinct().ToList() ?? [];
+            if (validItemIds.Count > 0)
             {
-                LoadedContextItemId = queryItemId.Value;
-                List<int> contextTagIds = await _dataProvider.GetContextTagIdsForItemAsync(queryItemId.Value);
+                LoadedContextItemIds = validItemIds;
+                List<int> contextTagIds = validItemIds.Count == 1
+                    ? await _dataProvider.GetContextTagIdsForItemAsync(validItemIds[0]) ?? []
+                    : await _dataProvider.GetContextTagIdsForItemsAsync(validItemIds) ?? [];
+
                 foreach (int id in contextTagIds)
                 {
                     _ = PinnedTagIds.Add(id);
                 }
-                ContextItems = await _dataProvider.GetContextItemsAsync(queryItemId.Value);
+
+                ContextItems = validItemIds.Count == 1
+                    ? await _dataProvider.GetContextItemsAsync(validItemIds[0]) ?? []
+                    : await _dataProvider.GetContextItemsAsync(validItemIds) ?? [];
             }
             else
             {
+                LoadedContextItemIds = [];
                 ContextItems = [];
             }
         }
@@ -139,22 +160,35 @@ public class TagDiagramPageViewModel
     /// <summary>
     ///     コンテキストアイテム ID が変更された場合にコンテキストタグとアイテムを更新する。
     /// </summary>
-    public async Task<bool> UpdateContextItemAsync(int? queryItemId)
+    public Task<bool> UpdateContextItemAsync(int? queryItemId) =>
+        UpdateContextItemsAsync(queryItemId.HasValue ? [queryItemId.Value] : null);
+
+    /// <summary>
+    ///     コンテキストアイテム ID リストが変更された場合にコンテキストタグとアイテムを更新する。
+    /// </summary>
+    public async Task<bool> UpdateContextItemsAsync(IReadOnlyList<int>? queryItemIds)
     {
-        if (queryItemId == LoadedContextItemId)
+        var validItemIds = queryItemIds?.Where(id => id > 0).Distinct().ToList() ?? [];
+        if (LoadedContextItemIds.SequenceEqual(validItemIds))
         {
             return false;
         }
 
-        LoadedContextItemId = queryItemId;
-        if (queryItemId.HasValue)
+        LoadedContextItemIds = validItemIds;
+        if (validItemIds.Count > 0)
         {
-            List<int> contextTagIds = await _dataProvider.GetContextTagIdsForItemAsync(queryItemId.Value);
+            List<int> contextTagIds = validItemIds.Count == 1
+                ? await _dataProvider.GetContextTagIdsForItemAsync(validItemIds[0]) ?? []
+                : await _dataProvider.GetContextTagIdsForItemsAsync(validItemIds) ?? [];
+
             foreach (int id in contextTagIds)
             {
                 _ = PinnedTagIds.Add(id);
             }
-            ContextItems = await _dataProvider.GetContextItemsAsync(queryItemId.Value);
+
+            ContextItems = validItemIds.Count == 1
+                ? await _dataProvider.GetContextItemsAsync(validItemIds[0]) ?? []
+                : await _dataProvider.GetContextItemsAsync(validItemIds) ?? [];
         }
         else
         {
@@ -199,7 +233,14 @@ public class TagDiagramPageViewModel
     ///     現在のフィルタ設定（エッジ接続、周辺近傍、アイテムコンテキスト、ピン留め）に基づき
     ///     表示すべきタグ一覧を算出する。
     /// </summary>
-    public IReadOnlyList<TagEntity> GetTagsToDisplay(int? queryItemId)
+    public IReadOnlyList<TagEntity> GetTagsToDisplay(int? queryItemId) =>
+        GetTagsToDisplay(queryItemId.HasValue ? [queryItemId.Value] : null);
+
+    /// <summary>
+    ///     現在のフィルタ設定（エッジ接続、周辺近傍、アイテムコンテキスト、ピン留め）に基づき
+    ///     表示すべきタグ一覧を算出する。
+    /// </summary>
+    public IReadOnlyList<TagEntity> GetTagsToDisplay(IReadOnlyList<int>? queryItemIds = null)
     {
         List<TagEdge> activeEdges = Edges
             .Where(e => !HiddenTagIds.Contains(e.SourceTagId) && !HiddenTagIds.Contains(e.TargetTagId))
@@ -212,7 +253,8 @@ public class TagDiagramPageViewModel
 
         IEnumerable<TagEntity> tagsToDisplay;
 
-        if (queryItemId.HasValue && ContextOnly && PinnedTagIds.Count > 0)
+        bool hasContextItems = (queryItemIds != null && queryItemIds.Count > 0) || LoadedContextItemIds.Count > 0;
+        if (hasContextItems && ContextOnly && PinnedTagIds.Count > 0)
         {
             tagsToDisplay = Tags.Where(t => PinnedTagIds.Contains(t.Id)
                 || (FocusedTag != null && t.Id == FocusedTag.Id)

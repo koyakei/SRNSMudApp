@@ -226,6 +226,21 @@ public sealed class ItemListViewModel : IDisposable
         return ItemListExportService.Serialize(exportList);
     }
 
+    /// <summary>
+    ///     現在表示されているアイテム一覧を対象としたタグダイアグラムの URL を生成する。
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1055:UriReturnValuesShouldNotBeStrings", Justification = "NavigationManager URL pattern")]
+    public string GetTagDiagramUrl()
+    {
+        if (Items.Count == 0)
+        {
+            return "/tag-diagram";
+        }
+
+        string itemIds = string.Join(",", Items.Select(i => i.Id));
+        return $"/tag-diagram?itemIds={itemIds}";
+    }
+
     public void Dispose()
     {
         TagSearch.FiltersChanged -= OnFiltersChangedAsync;

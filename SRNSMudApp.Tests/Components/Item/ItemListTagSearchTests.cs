@@ -143,6 +143,37 @@ public sealed class ItemListTagSearchTests : IAsyncLifetime
         });
     }
 
+    [Fact]
+    public void TagDiagramButton_NavigatesToDiagramWithItemIds_WhenItemsExist()
+    {
+        var item1 = new SRNSMudApp.Data.Item { Id = 101, Content = "Item 1", OwnerId = UserId };
+        var item2 = new SRNSMudApp.Data.Item { Id = 202, Content = "Item 2", OwnerId = UserId };
+
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByIdsAsync(It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync(new Dictionary<int, SRNSMudApp.Data.Tag>());
+        _ = _itemListDataMock
+            .Setup(d => d.GetTagsByNamesAsync(It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(new Dictionary<string, SRNSMudApp.Data.Tag>());
+        _ = _itemListDataMock
+            .Setup(d => d.LoadItemsAndTagsAsync(
+                It.IsAny<IReadOnlyList<ItemListFilter>>(),
+                It.IsAny<IReadOnlyList<ItemListSort>>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([item1, item2], []));
+
+        IRenderedComponent<ItemList> cut = _ctx.Render<ItemList>();
+        cut.WaitForState(() => cut.FindAll("[data-testid='itemlist-tag-diagram-button']").Count > 0);
+
+        var btn = cut.Find("[data-testid='itemlist-tag-diagram-button']");
+        Assert.False(btn.HasAttribute("disabled"));
+
+        btn.Click();
+
+        var navMan = _ctx.Services.GetRequiredService<NavigationManager>();
+        Assert.Contains("/tag-diagram?itemIds=101,202", navMan.Uri);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -108,6 +108,16 @@ public sealed partial class ItemList : IDisposable
         }
     }
 
+    private void NavigateToTagDiagram()
+    {
+        if (_items.Count == 0)
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(ViewModel.GetTagDiagramUrl());
+    }
+
     public void Dispose()
     {
         ViewModel.StateChanged -= OnStateChanged;

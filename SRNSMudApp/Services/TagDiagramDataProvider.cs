@@ -20,47 +20,58 @@ public class TagDiagramDataProvider(
     /// <inheritdoc />
 
     /// <inheritdoc />
-    public async Task<List<int>> GetContextTagIdsForItemAsync(int itemId)
+    public Task<List<int>> GetContextTagIdsForItemAsync(int itemId) =>
+        GetContextTagIdsForItemsAsync([itemId]);
+
+    /// <inheritdoc />
+    public async Task<List<int>> GetContextTagIdsForItemsAsync(IEnumerable<int> itemIds)
     {
+        var idList = itemIds.Distinct().ToList();
+        if (idList.Count == 0) return [];
+
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        var item = await context.Items
+        var items = await context.Items
             .AsNoTracking()
             .Include(i => i.TagRelations)
-            .FirstOrDefaultAsync(i => i.Id == itemId);
+            .Where(i => idList.Contains(i.Id))
+            .ToListAsync();
 
-        if (item == null) return [];
+        if (items.Count == 0) return [];
 
         var tagIds = new HashSet<int>();
-
-        foreach (var tr in item.TagRelations)
-        {
-            tagIds.Add(tr.TagId);
-        }
-
-        var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(item.Content ?? "");
         var linkedItemIds = new List<int>();
-        foreach (System.Text.RegularExpressions.Match match in matches)
-        {
-            var url = match.Value;
-            if (url.StartsWith("/TagDetail/", StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(url.AsSpan("/TagDetail/".Length), out var tId))
-                {
-                    tagIds.Add(tId);
-                }
-            }
-            else if (url.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(url.AsSpan("/ItemDetail/".Length), out var iId))
-                {
-                    linkedItemIds.Add(iId);
-                }
-            }
-        }
 
-        if (item.QuotedItemId.HasValue && !linkedItemIds.Contains(item.QuotedItemId.Value))
+        foreach (var item in items)
         {
-            linkedItemIds.Add(item.QuotedItemId.Value);
+            foreach (var tr in item.TagRelations)
+            {
+                tagIds.Add(tr.TagId);
+            }
+
+            var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(item.Content ?? "");
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var url = match.Value;
+                if (url.StartsWith("/TagDetail/", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (int.TryParse(url.AsSpan("/TagDetail/".Length), out var tId))
+                    {
+                        tagIds.Add(tId);
+                    }
+                }
+                else if (url.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (int.TryParse(url.AsSpan("/ItemDetail/".Length), out var iId))
+                    {
+                        linkedItemIds.Add(iId);
+                    }
+                }
+            }
+
+            if (item.QuotedItemId.HasValue && !linkedItemIds.Contains(item.QuotedItemId.Value))
+            {
+                linkedItemIds.Add(item.QuotedItemId.Value);
+            }
         }
 
         if (linkedItemIds.Count > 0)
@@ -80,41 +91,54 @@ public class TagDiagramDataProvider(
         return tagIds.ToList();
     }
 
-    /// <summary>
-    /// 指定したアイテムに関連する内部リンク先のItemを取得する。
-    /// </summary>
-    public async Task<List<Item>> GetContextItemsAsync(int itemId)
-    {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        var item = await context.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == itemId);
-        if (item == null) return [];
+    /// <inheritdoc />
+    public Task<List<Item>> GetContextItemsAsync(int itemId) =>
+        GetContextItemsAsync([itemId]);
 
-        var linkedItemIds = new List<int> { itemId };
-        var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(item.Content ?? "");
-        foreach (System.Text.RegularExpressions.Match match in matches)
+    /// <inheritdoc />
+    public async Task<List<Item>> GetContextItemsAsync(IEnumerable<int> itemIds)
+    {
+        var idList = itemIds.Distinct().ToList();
+        if (idList.Count == 0) return [];
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        var items = await context.Items
+            .AsNoTracking()
+            .Include(i => i.TagRelations)
+            .Where(i => idList.Contains(i.Id))
+            .ToListAsync();
+
+        if (items.Count == 0) return [];
+
+        var allItemIds = new HashSet<int>(idList);
+        foreach (var item in items)
         {
-            var url = match.Value;
-            if (url.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
+            var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(item.Content ?? "");
+            foreach (System.Text.RegularExpressions.Match match in matches)
             {
-                if (int.TryParse(url.AsSpan("/ItemDetail/".Length), out var iId))
+                var url = match.Value;
+                if (url.StartsWith("/ItemDetail/", StringComparison.OrdinalIgnoreCase))
                 {
-                    linkedItemIds.Add(iId);
+                    if (int.TryParse(url.AsSpan("/ItemDetail/".Length), out var iId))
+                    {
+                        allItemIds.Add(iId);
+                    }
                 }
+            }
+
+            if (item.QuotedItemId.HasValue)
+            {
+                allItemIds.Add(item.QuotedItemId.Value);
             }
         }
 
-        if (item.QuotedItemId.HasValue && !linkedItemIds.Contains(item.QuotedItemId.Value))
-        {
-            linkedItemIds.Add(item.QuotedItemId.Value);
-        }
-
-        return linkedItemIds.Count > 0
+        return allItemIds.Count > items.Count
             ? await context.Items
                 .AsNoTracking()
                 .Include(i => i.TagRelations)
-                .Where(i => linkedItemIds.Contains(i.Id))
+                .Where(i => allItemIds.Contains(i.Id))
                 .ToListAsync()
-            : [];
+            : items;
     }
 
     /// <inheritdoc />
