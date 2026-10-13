@@ -53,40 +53,200 @@ else
         <MudStack Spacing="3">
             @foreach (var item in _items)
             {
-                <MudCard Outlined="true" Class="rounded-xl">
+                <MudCard id="@($"item-card-{item.Id}")" Outlined="true" Class="rounded-xl">
                     <MudCardContent Class="pa-4">
-                        <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@item.Content</MudText>
+                        <div class="d-flex align-start">
+                            @* 投票スコア表示 *@
+                            <div class="d-flex flex-column align-center mr-3 vote-container">
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1" />
+                                <MudText Typo="Typo.body2" Class="vote-score">@item.Score</MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1" />
+                            </div>
 
-                        @if (item.TagRelations is { Count: > 0 })
-                        {
-                            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
-                                @foreach (var rel in item.TagRelations)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info">
-                                        #@rel.TagName
-                                        @if (rel.Weight.HasValue && rel.Weight.Value != 0)
+                            <div class="flex-1">
+                                <div class="d-flex justify-space-between align-start">
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.subtitle1" Style="white-space: pre-wrap;">@item.Content</MudText>
+
+                                        @* 引用元アイテムプレビュー *@
+                                        @if (item.QuotedItemId.HasValue && !string.IsNullOrEmpty(item.QuotedItemContent))
                                         {
-                                            <span> (@rel.Weight)</span>
+                                            <MudPaper Class="pa-2 my-2 rounded-lg" Outlined="true" Style="background: var(--mud-palette-background-gray);">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
+                                                    引用元: @(item.QuotedItemOwnerUserName ?? "不明")
+                                                </MudText>
+                                                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@item.QuotedItemContent</MudText>
+                                            </MudPaper>
                                         }
-                                    </MudChip>
-                                }
-                            </MudStack>
-                        }
 
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-3 align-center">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                投稿者: @(item.OwnerUserName ?? "匿名")
-                            </MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                @item.UpdatedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
-                            </MudText>
-                        </MudStack>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
+                                            投稿者:
+                                            @if (!string.IsNullOrEmpty(item.OwnerUserId))
+                                            {
+                                                <MudLink Href="@($"/User/UserDetail/{item.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                                    @(item.OwnerUserName ?? "匿名")
+                                                </MudLink>
+                                            }
+                                            else
+                                            {
+                                                @(item.OwnerUserName ?? "匿名")
+                                            }
+                                            <span class="mx-1">|</span>
+                                            <MudLink Href="@($"/ItemDetail/{item.Id}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                                最終更新: @item.UpdatedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
+                                            </MudLink>
+                                            @if (!string.IsNullOrEmpty(item.TargetUserGroupName))
+                                            {
+                                                <span class="mx-1">|</span>
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                                                    @item.TargetUserGroupName
+                                                </MudChip>
+                                            }
+                                        </MudText>
+                                    </div>
+                                    <div>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Hub" Size="Size.Small" Color="Color.Default"
+                                                       Href="@($"/tag-diagram?itemIds={item.Id}")" title="タグダイアグラムを見る" />
+                                    </div>
+                                </div>
+
+                                @* タグチップ一覧 *@
+                                @if (item.TagRelations is { Count: > 0 })
+                                {
+                                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2 align-center">
+                                        @foreach (var rel in item.TagRelations)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
+                                                     Href="@($"/TagDetail/{rel.TagId}")">
+                                                #@rel.TagName
+                                                @if (rel.Weight.HasValue && rel.Weight.Value != 0)
+                                                {
+                                                    <span> (@rel.Weight)</span>
+                                                }
+                                            </MudChip>
+                                        }
+                                    </MudStack>
+                                }
+
+                                @* リアクションバー (真実・善・美) *@
+                                <div class="d-flex align-center flex-wrap gap-3 mt-2 mb-1">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Icon="@Icons.Material.Filled.FactCheck">
+                                        真実 @item.ShinjiScore
+                                    </MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Filled.Favorite">
+                                        善 @item.ZenScore
+                                    </MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.AutoAwesome">
+                                        美 @item.BiScore
+                                    </MudChip>
+                                </div>
+
+                                @* リプライ・引用件数 *@
+                                <div class="d-flex justify-end align-center gap-2 mt-1">
+                                    @if (item.QuoteCount > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            引用 (@item.QuoteCount)
+                                        </MudText>
+                                    }
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
+                                               Href="@($"/ItemDetail/{item.Id}")" StartIcon="@Icons.Material.Filled.Comment">
+                                        リプライ @(item.ReplyCount > 0 ? $"({item.ReplyCount})" : "")
+                                    </MudButton>
+                                </div>
+                            </div>
+                        </div>
                     </MudCardContent>
                 </MudCard>
             }
         </MudStack>
     }
-    else
+
+    @if (_tags is { Count: > 0 })
+    {
+        <MudText Typo="Typo.h6" Class="@(_items is { Count: > 0 } ? "mt-6 mb-3" : "mb-3")">
+            タグ一覧
+        </MudText>
+        <MudStack Spacing="3">
+            @foreach (var tag in _tags)
+            {
+                <MudCard id="@($"tag-card-{tag.Id}")" Outlined="true" Class="rounded-xl">
+                    <MudCardContent Class="pa-4">
+                        <div class="d-flex align-start">
+                            @* 投票スコア表示 *@
+                            <div class="d-flex flex-column align-center mr-3 vote-container">
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1" />
+                                <MudText Typo="Typo.body2" Class="vote-score">@tag.Score</MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1" />
+                            </div>
+
+                            <div class="flex-1">
+                                <div class="d-flex justify-space-between align-start">
+                                    <div>
+                                        <div class="d-flex align-center gap-2">
+                                            <MudLink Href="@($"/TagDetail/{tag.Id}")" Typo="Typo.subtitle1">
+                                                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-1" />
+                                                @tag.Name
+                                            </MudLink>
+                                            @if (tag.IsPrivate)
+                                            {
+                                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                                                    非公開
+                                                </MudChip>
+                                            }
+                                            @if (!string.IsNullOrEmpty(tag.TargetUserGroupName))
+                                            {
+                                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">
+                                                    @tag.TargetUserGroupName
+                                                </MudChip>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(tag.Content))
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mt-1 mb-2">@tag.Content</MudText>
+                                        }
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2 d-block">
+                                            作成者:
+                                            @if (!string.IsNullOrEmpty(tag.OwnerUserId))
+                                            {
+                                                <MudLink Href="@($"/User/UserDetail/{tag.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                                    @(tag.OwnerUserName ?? "不明")
+                                                </MudLink>
+                                            }
+                                            else
+                                            {
+                                                @(tag.OwnerUserName ?? "不明")
+                                            }
+                                        </MudText>
+                                    </div>
+                                </div>
+
+                                @* 関連タグ *@
+                                @if (tag.TargetTagRelations is { Count: > 0 })
+                                {
+                                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+                                        @foreach (var rel in tag.TargetTagRelations)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                     Href="@($"/TagDetail/{rel.TagId}")">
+                                                #@rel.TagName
+                                                @if (rel.Weight.HasValue && rel.Weight.Value != 0)
+                                                {
+                                                    <span> (@rel.Weight)</span>
+                                                }
+                                            </MudChip>
+                                        }
+                                    </MudStack>
+                                }
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudStack>
+    }
+
+    @if ((_items is null || _items.Count == 0) && (_tags is null || _tags.Count == 0))
     {
         <MudAlert Severity="Severity.Info" Class="mt-2">条件に一致するアイテムが見つかりませんでした。</MudAlert>
     }

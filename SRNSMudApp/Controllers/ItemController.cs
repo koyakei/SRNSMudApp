@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 
 using SRNSMudApp.Client.Models;
 using SRNSMudApp.Client.Models.Api;
+using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 /// <summary>
@@ -105,19 +107,21 @@ public sealed class ItemController(
         int skip = Math.Max(0, req.Skip);
         int take = req.Take > 0 ? req.Take : 50;
 
-        List<ItemDto> pagedItems = pageData.Items
+        List<Item> rawPagedItems = pageData.Items
             .Skip(skip)
             .Take(take)
-            .Select(MapToItemDto)
+            .ToList();
+
+        var itemIds = rawPagedItems.Select(i => i.Id).ToList();
+        var (replyCounts, quoteCounts) = await _itemListDataProvider
+            .GetReplyAndQuoteCountsAsync(itemIds, cancellationToken);
+
+        List<ItemDto> pagedItems = rawPagedItems
+            .Select(i => MapToItemDto(i, replyCounts.GetValueOrDefault(i.Id), quoteCounts.GetValueOrDefault(i.Id)))
             .ToList();
 
         List<TagDto> tagDtos = pageData.Tags
-            .Select(t => new TagDto(
-                Id: t.Id,
-                Name: t.Name,
-                Content: t.Content,
-                OwnerUserName: t.Owner?.UserName
-            ))
+            .Select(MapToTagDto)
             .ToList();
 
         var response = new ItemListQueryResponse(
@@ -129,7 +133,7 @@ public sealed class ItemController(
         return Ok(response);
     }
 
-    private static ItemDto MapToItemDto(Item item)
+    private static ItemDto MapToItemDto(Item item, int replyCount = 0, int quoteCount = 0)
     {
         var relations = item.TagRelations
             .Select(tr => new TagRelationDto(
@@ -150,7 +154,42 @@ public sealed class ItemController(
             ItemKindJson: item.ItemKindJson,
             ParentItemId: item.ParentItemId,
             RootItemId: item.RootItemId,
-            QuotedItemId: item.QuotedItemId
+            QuotedItemId: item.QuotedItemId,
+            OwnerUserId: item.OwnerId,
+            Score: ItemCardViewModel.GetItemScore(item.TagRelations),
+            ShinjiScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Shinji),
+            ZenScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Zen),
+            BiScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Bi),
+            ReplyCount: replyCount,
+            QuoteCount: quoteCount,
+            QuotedItemContent: item.QuotedItem?.Content,
+            QuotedItemOwnerUserName: item.QuotedItem?.Owner?.UserName,
+            TargetUserGroupName: item.TargetUserGroup?.Name
+        );
+    }
+
+    private static TagDto MapToTagDto(Tag tag)
+    {
+        var targetRelations = tag.TargetTagRelations?
+            .Where(tr => tr.Tag is { IsSystem: false })
+            .Select(tr => new TagRelationDto(
+                TagId: tr.TagId,
+                TagName: tr.Tag?.Name ?? string.Empty,
+                Weight: tr.Weight,
+                OwnerUserName: tr.Owner?.UserName ?? tr.Tag?.Owner?.UserName
+            ))
+            .ToList();
+
+        return new TagDto(
+            Id: tag.Id,
+            Name: tag.Name,
+            Content: tag.Content,
+            OwnerUserName: tag.Owner?.UserName,
+            OwnerUserId: tag.OwnerId,
+            Score: TagCardViewModel.GetTagScore(tag),
+            IsPrivate: tag.IsPrivate,
+            TargetUserGroupName: tag.TargetUserGroup?.Name,
+            TargetTagRelations: targetRelations
         );
     }
 }

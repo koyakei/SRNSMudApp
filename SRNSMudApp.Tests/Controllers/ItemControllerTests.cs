@@ -137,6 +137,12 @@ public class ItemControllerTests
                 false))
             .ReturnsAsync(new ItemListPageData(items, tags));
 
+        _dataProviderMock
+            .Setup(p => p.GetReplyAndQuoteCountsAsync(
+                It.IsAny<IReadOnlyList<int>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new Dictionary<int, int> { [2] = 5 }, new Dictionary<int, int> { [2] = 2 }));
+
         var request = new ItemListQueryRequest(
             Filters:
             [
@@ -162,9 +168,100 @@ public class ItemControllerTests
         Assert.Single(response.Items);
         Assert.Equal(2, response.Items[0].Id);
         Assert.Equal("Item 2", response.Items[0].Content);
+        Assert.Equal(5, response.Items[0].ReplyCount);
+        Assert.Equal(2, response.Items[0].QuoteCount);
+        Assert.Equal("user-1", response.Items[0].OwnerUserId);
 
         Assert.Single(response.Tags);
         Assert.Equal(10, response.Tags[0].Id);
         Assert.Equal("Tag 10", response.Tags[0].Name);
+        Assert.Equal("user-1", response.Tags[0].OwnerUserId);
+    }
+
+    [Fact]
+    public async Task QueryItems_CalculatesScoresAndMapsRelations()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        var goodTag = new Tag { Id = 101, Name = "good", IsSystem = true, OwnerId = "user-1" };
+        var badTag = new Tag { Id = 102, Name = "bad", IsSystem = true, OwnerId = "user-1" };
+        var shinjiTag = new Tag { Id = 103, Name = ReactionTagNames.Shinji, OwnerId = "user-1" };
+        var zenTag = new Tag { Id = 104, Name = ReactionTagNames.Zen, OwnerId = "user-1" };
+        var normalTag = new Tag { Id = 105, Name = "nature", OwnerId = "user-1" };
+
+        var item = new Item
+        {
+            Id = 42,
+            OwnerId = "author-1",
+            Content = "Test item",
+            UpdatedDate = DateTime.UtcNow,
+            QuotedItemId = 99,
+            QuotedItem = new Item { Id = 99, OwnerId = "quoted-user-id", Content = "Quoted content", Owner = new ApplicationUser { UserName = "quoted-user" } },
+            TargetUserGroup = new UserGroup { Name = "SpecialGroup", OwnerId = "author-1" },
+            TagRelations =
+            [
+                new TagRelation { TagId = 101, Tag = goodTag, Weight = 3, OwnerId = "author-1" },
+                new TagRelation { TagId = 103, Tag = shinjiTag, Weight = 2, OwnerId = "author-1" },
+                new TagRelation { TagId = 104, Tag = zenTag, Weight = 1, OwnerId = "author-1" }
+            ]
+        };
+
+        var tag = new Tag
+        {
+            Id = 200,
+            Name = "custom-tag",
+            Content = "Tag desc",
+            OwnerId = "tag-author",
+            IsPrivate = true,
+            TargetTagRelations =
+            [
+                new TagRelationToTag { TagId = 101, Tag = goodTag, OwnerId = "tag-author" },
+                new TagRelationToTag { TagId = 102, Tag = badTag, OwnerId = "tag-author" },
+                new TagRelationToTag { TagId = 105, Tag = normalTag, Weight = 7, OwnerId = "tag-author" }
+            ]
+        };
+
+        _dataProviderMock
+            .Setup(p => p.LoadItemsAndTagsAsync(
+                It.IsAny<IReadOnlyList<ItemListFilter>>(),
+                It.IsAny<IReadOnlyList<ItemListSort>>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool>()))
+            .ReturnsAsync(new ItemListPageData([item], [tag]));
+
+        _dataProviderMock
+            .Setup(p => p.GetReplyAndQuoteCountsAsync(
+                It.IsAny<IReadOnlyList<int>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new Dictionary<int, int> { [42] = 4 }, new Dictionary<int, int> { [42] = 1 }));
+
+        // Act
+        ActionResult<ItemListQueryResponse> result = await controller.QueryItems(new ItemListQueryRequest(), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ItemListQueryResponse>(okResult.Value);
+
+        ItemDto itemDto = Assert.Single(response.Items);
+        Assert.Equal(42, itemDto.Id);
+        Assert.Equal(3, itemDto.Score);
+        Assert.Equal(2, itemDto.ShinjiScore);
+        Assert.Equal(1, itemDto.ZenScore);
+        Assert.Equal(0, itemDto.BiScore);
+        Assert.Equal(4, itemDto.ReplyCount);
+        Assert.Equal(1, itemDto.QuoteCount);
+        Assert.Equal("Quoted content", itemDto.QuotedItemContent);
+        Assert.Equal("quoted-user", itemDto.QuotedItemOwnerUserName);
+        Assert.Equal("SpecialGroup", itemDto.TargetUserGroupName);
+
+        TagDto tagDto = Assert.Single(response.Tags);
+        Assert.Equal(200, tagDto.Id);
+        Assert.Equal(0, tagDto.Score); // 1 good - 1 bad = 0
+        Assert.True(tagDto.IsPrivate);
+        Assert.NotNull(tagDto.TargetTagRelations);
+        Assert.Single(tagDto.TargetTagRelations); // only non-system tag
+        Assert.Equal("nature", tagDto.TargetTagRelations[0].TagName);
+        Assert.Equal(7, tagDto.TargetTagRelations[0].Weight);
     }
 }

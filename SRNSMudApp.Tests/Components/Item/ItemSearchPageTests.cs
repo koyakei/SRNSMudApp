@@ -52,4 +52,51 @@ public sealed class ItemSearchPageTests
         IRenderedComponent<ItemSearchPage> cut = _ctx.Render<ItemSearchPage>();
         Assert.NotNull(cut);
     }
+
+    [Fact]
+    public void ItemSearchPage_RendersItemAndTagCards_WhenDataReturned()
+    {
+        // Arrange
+        var item = new ItemDto(
+            Id: 10,
+            Content: "Hello Item",
+            OwnerUserName: "alice",
+            UpdatedDate: DateTimeOffset.UtcNow,
+            IsPrivate: false,
+            TagRelations: [new TagRelationDto(1, "tag1", 3, "alice")],
+            ItemKindJson: "{}",
+            OwnerUserId: "user-1",
+            Score: 5,
+            ShinjiScore: 2,
+            ZenScore: 3,
+            BiScore: 1,
+            ReplyCount: 4,
+            QuoteCount: 1
+        );
+        var tag = new TagDto(
+            Id: 100,
+            Name: "mytag",
+            Content: "tag description",
+            OwnerUserName: "bob",
+            OwnerUserId: "user-2",
+            Score: 2,
+            TargetTagRelations: [new TagRelationDto(2, "subtag", 1, "bob")]
+        );
+
+        _apiClientMock
+            .Setup(a => a.QueryItemsAsync(It.IsAny<ItemListQueryRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ItemListQueryResponse([item], [tag], 1));
+
+        // Act
+        IRenderedComponent<ItemSearchPage> cut = _ctx.Render<ItemSearchPage>();
+
+        // Assert
+        Assert.Contains("Hello Item", cut.Markup);
+        Assert.Contains("真実 2", cut.Markup);
+        Assert.Contains("善 3", cut.Markup);
+        Assert.Contains("美 1", cut.Markup);
+        Assert.Contains("リプライ (4)", cut.Markup);
+        Assert.Contains("mytag", cut.Markup);
+        Assert.Contains("tag description", cut.Markup);
+    }
 }

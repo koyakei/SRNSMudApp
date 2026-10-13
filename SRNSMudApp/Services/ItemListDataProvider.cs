@@ -98,6 +98,16 @@ public interface IItemListDataProvider
     /// <param name="isAdmin">管理者権限フラグ。</param>
     /// <returns>表示可能なアイテム一覧。</returns>
     Task<IReadOnlyList<Item>> LoadItemsByAncestorTagAsync(int ancestorTagId, string? currentUserId, bool isAdmin);
+
+    /// <summary>
+    /// 指定されたアイテムID群に対するリプライ数および引用数を一括取得する。
+    /// </summary>
+    /// <param name="itemIds">対象のアイテムID一覧。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>アイテムIDをキーとしたリプライ数・引用数のディクショナリタプル。</returns>
+    Task<(Dictionary<int, int> ReplyCounts, Dictionary<int, int> QuoteCounts)> GetReplyAndQuoteCountsAsync(
+        IReadOnlyList<int> itemIds,
+        CancellationToken cancellationToken = default);
 }
 
 public class ItemListDataProvider(
@@ -535,5 +545,34 @@ public class ItemListDataProvider(
             : sort.Ascending
                 ? current.ThenBy(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0)
                 : current.ThenByDescending(t => t.TargetTagRelations.Where(tr => tr.TagId == targetId).Sum(tr => (int?)tr.Weight) ?? 0);
+    }
+
+    /// <inheritdoc/>
+    public async Task<(Dictionary<int, int> ReplyCounts, Dictionary<int, int> QuoteCounts)> GetReplyAndQuoteCountsAsync(
+        IReadOnlyList<int> itemIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (itemIds == null || itemIds.Count == 0)
+        {
+            return (new Dictionary<int, int>(), new Dictionary<int, int>());
+        }
+
+        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        Dictionary<int, int> replyCounts = await context.Items
+            .AsNoTracking()
+            .Where(i => i.ParentItemId.HasValue && itemIds.Contains(i.ParentItemId.Value))
+            .GroupBy(i => i.ParentItemId!.Value)
+            .Select(g => new { ItemId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ItemId, x => x.Count, cancellationToken);
+
+        Dictionary<int, int> quoteCounts = await context.Items
+            .AsNoTracking()
+            .Where(i => i.QuotedItemId.HasValue && itemIds.Contains(i.QuotedItemId.Value))
+            .GroupBy(i => i.QuotedItemId!.Value)
+            .Select(g => new { ItemId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ItemId, x => x.Count, cancellationToken);
+
+        return (replyCounts, quoteCounts);
     }
 }
