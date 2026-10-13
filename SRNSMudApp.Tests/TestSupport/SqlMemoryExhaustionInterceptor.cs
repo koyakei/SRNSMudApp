@@ -23,6 +23,7 @@ public sealed class SqlMemoryExhaustionInterceptor : DbCommandInterceptor
     ///     コマンドテキストに特定の部分文字列が含まれる場合に例外を発生させるコンストラクタ。
     ///     targetPattern が null または空の場合はすべての Reader コマンドに対して例外を発生させる。
     /// </summary>
+    /// <param name="targetPattern">捕捉対象とする SQL コマンドテキストの部分文字列（大文字小文字を区別しない）。</param>
     public SqlMemoryExhaustionInterceptor(string? targetPattern = null)
     {
         if (string.IsNullOrWhiteSpace(targetPattern))
@@ -38,11 +39,13 @@ public sealed class SqlMemoryExhaustionInterceptor : DbCommandInterceptor
     /// <summary>
     ///     カスタム述語に基づいて例外を発生させるコンストラクタ。
     /// </summary>
+    /// <param name="predicate">コマンドを検証して例外を発生させるかどうかを判定する述語デリゲート。</param>
     public SqlMemoryExhaustionInterceptor(Func<DbCommand, bool> predicate)
     {
         _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
     }
 
+    /// <inheritdoc />
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
         DbCommand command,
         CommandEventData eventData,
@@ -60,6 +63,9 @@ public sealed class SqlMemoryExhaustionInterceptor : DbCommandInterceptor
     /// <summary>
     ///     インターセプターおよび SplitQuery を構成した DbContextOptions を生成するヘルパー。
     /// </summary>
+    /// <param name="connectionString">データベース接続文字列。</param>
+    /// <param name="interceptor">登録するコマンドインターセプター。</param>
+    /// <returns>構成済みの <see cref="DbContextOptions{ApplicationDbContext}"/>。</returns>
     public static DbContextOptions<ApplicationDbContext> CreateOptions(
         string connectionString,
         DbCommandInterceptor interceptor)
@@ -79,6 +85,9 @@ public sealed class SqlMemoryExhaustionInterceptor : DbCommandInterceptor
     ///     Microsoft.Data.SqlClient.SqlException はパブリックコンストラクタを持たないため、
     ///     リフレクションを用いて指定のエラー番号とメッセージを持つ SqlException を生成する。
     /// </summary>
+    /// <param name="number">SQL エラー番号 (例: 701)。</param>
+    /// <param name="message">SQL エラーメッセージ。</param>
+    /// <returns>生成された <see cref="SqlException"/> インスタンス。</returns>
     public static SqlException CreateSqlException(int number, string message)
     {
         var errorCollectionConstructor = typeof(SqlErrorCollection)
