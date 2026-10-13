@@ -34,6 +34,7 @@ public sealed class NotificationsPageTests : IAsyncLifetime
     private readonly Mock<ITaggingContractService> _contractServiceMock = new();
     private readonly Mock<IRightAssetDataProvider> _rightAssetDataMock = new();
     private readonly Mock<IHomeDataProvider> _homeDataMock = new();
+    private readonly Mock<IItemSplitService> _splitServiceMock = new();
 
     public NotificationsPageTests()
     {
@@ -46,6 +47,7 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         _ctx.Services.AddScoped(_ => _contractServiceMock.Object);
         _ctx.Services.AddScoped(_ => _rightAssetDataMock.Object);
         _ctx.Services.AddScoped(_ => _homeDataMock.Object);
+        _ctx.Services.AddScoped(_ => _splitServiceMock.Object);
 
         _notifDataMock.Setup(d => d.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>()))
             .ReturnsAsync([]);
@@ -248,6 +250,136 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         Assert.NotNull(tagText);
         Assert.Equal("ResolvedTag", tagText.TextContent.Trim());
         Assert.Empty(host.FindAll("[data-testid='permission-request-tag-link']"));
+    }
+
+    [Fact]
+    public void ItemSplitRequest_WhenApproved_ImmediatelyShowsApprovedStatus()
+    {
+        var targetItem = new SRNSMudApp.Data.Item { Id = 10, Content = "Target Item with text to split", OwnerId = OwnerUserId };
+        var splitNote = new NotificationDto
+        {
+            SourceId = 300,
+            ActorName = "split_requester",
+            Message = "テキスト分割リクエスト",
+            CreatedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Kind = new ItemSplitRequestNotification(
+                300,
+                10,
+                "split_requester",
+                "text to split",
+                TradeStatus.Proposed),
+            TargetUrl = new RelativeUrl("/ItemDetail/10"),
+            AssociatedItemId = 10,
+            AssociatedItem = targetItem
+        };
+
+        _notifServiceMock.Setup(s => s.GetUserNotificationsAsync(OwnerUserId))
+            .ReturnsAsync([splitNote]);
+
+        _notifDataMock.Setup(d => d.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([targetItem]);
+
+        _splitServiceMock.Setup(s => s.ApproveSplitAsync(300, OwnerUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Ok(new SRNSMudApp.Data.Item { Id = 20, Content = "text to split", OwnerId = "split_requester" }));
+
+        RenderFragment page = builder =>
+        {
+            builder.OpenComponent<NotificationsPage>(0);
+            builder.CloseComponent();
+        };
+        IRenderedComponent<AuthHost> host =
+            _ctx.Render<AuthHost>(parameters => parameters.Add(p => p.ChildContent, page));
+
+        host.WaitForState(() => host.Markup.Contains("text to split"));
+
+        var approveButton = host.FindAll("button").FirstOrDefault(b => b.TextContent.Trim().Contains("承認", StringComparison.Ordinal));
+        Assert.NotNull(approveButton);
+
+        approveButton.Click();
+
+        var approvedChip = host.Find("[data-testid='item-split-approved-status']");
+        Assert.NotNull(approvedChip);
+        Assert.Contains("承認済み", approvedChip.TextContent);
+    }
+
+    [Fact]
+    public void ItemSplitRequest_WhenApprovedViaItemCard_RefreshesNotificationsAndShowsApprovedStatus()
+    {
+        var targetItem = new SRNSMudApp.Data.Item { Id = 10, Content = "Target Item with text to split", OwnerId = OwnerUserId };
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 301,
+            OriginalItemId = 10,
+            RequesterUserId = "split_requester",
+            OwnerUserId = OwnerUserId,
+            OwnerId = OwnerUserId,
+            SelectedText = "text to split",
+            Status = TradeStatus.Proposed,
+            RequesterUser = new ApplicationUser { Id = "split_requester", UserName = "split_requester" }
+        };
+
+        var pendingNote = new NotificationDto
+        {
+            SourceId = 301,
+            ActorName = "split_requester",
+            Message = "テキスト分割リクエスト",
+            CreatedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Kind = new ItemSplitRequestNotification(
+                301,
+                10,
+                "split_requester",
+                "text to split",
+                TradeStatus.Proposed),
+            TargetUrl = new RelativeUrl("/ItemDetail/10"),
+            AssociatedItemId = 10,
+            AssociatedItem = targetItem
+        };
+
+        var executedNote = pendingNote with
+        {
+            Kind = new ItemSplitRequestNotification(
+                301,
+                10,
+                "split_requester",
+                "text to split",
+                TradeStatus.Executed)
+        };
+
+        _notifServiceMock.SetupSequence(s => s.GetUserNotificationsAsync(OwnerUserId))
+            .ReturnsAsync([pendingNote])
+            .ReturnsAsync([executedNote]);
+
+        _notifDataMock.Setup(d => d.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([targetItem]);
+
+        _splitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([splitRequest]);
+
+        Mock<IItemCardSplitCoordinator> coordinatorMock = new();
+        coordinatorMock.Setup(c => c.ApproveSplitRequestAsync(It.IsAny<SRNSMudApp.Data.Item>(), splitRequest, OwnerUserId))
+            .ReturnsAsync(true);
+        _ctx.Services.AddScoped(_ => coordinatorMock.Object);
+
+        RenderFragment page = builder =>
+        {
+            builder.OpenComponent<NotificationsPage>(0);
+            builder.CloseComponent();
+        };
+        IRenderedComponent<AuthHost> host =
+            _ctx.Render<AuthHost>(parameters => parameters.Add(p => p.ChildContent, page));
+
+        host.WaitForState(() => host.FindAll($"[data-testid='approve-split-request-{splitRequest.Id}']").Count > 0);
+
+        var itemCardApproveBtn = host.Find($"[data-testid='approve-split-request-{splitRequest.Id}']");
+        itemCardApproveBtn.Click();
+
+        host.WaitForState(() => host.FindAll("[data-testid='item-split-approved-status']").Count > 0);
+
+        var approvedChip = host.Find("[data-testid='item-split-approved-status']");
+        Assert.NotNull(approvedChip);
+        Assert.Contains("承認済み", approvedChip.TextContent);
     }
 
     private static AuthenticationState CreateAuthState(string userId)

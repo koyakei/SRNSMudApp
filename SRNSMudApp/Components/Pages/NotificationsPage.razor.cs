@@ -219,4 +219,12 @@ public partial class NotificationsPage
             ApplyResult(result);
         }
     }
+
+    private async Task OnItemCardDataChangedAsync()
+    {
+        if (_userId != null)
+        {
+            await ViewModel.RefreshNotificationsAsync();
+        }
+    }
 }

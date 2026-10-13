@@ -88,6 +88,8 @@ public partial class ItemCard : IAsyncDisposable
     private IReadOnlyList<TaggingRequestEntity> _taggingRequests = [];
     private IReadOnlyList<ItemSplitRequest> _pendingSplitRequests = [];
     private int _loadedItemId;
+    private DateTime? _loadedItemUpdatedDate;
+    private string? _loadedItemContent;
     private bool _isAdmin;
 
     private int _replyCount;
@@ -114,12 +116,17 @@ public partial class ItemCard : IAsyncDisposable
             _isAdmin = authState.User.IsInRole("Admin");
         }
 
-        if (_loadedItemId == Item.Id && Item.Id > 0)
+        if (_loadedItemId == Item.Id &&
+            _loadedItemUpdatedDate == Item.UpdatedDate &&
+            _loadedItemContent == Item.Content &&
+            Item.Id > 0)
         {
             return;
         }
 
         _loadedItemId = Item.Id;
+        _loadedItemUpdatedDate = Item.UpdatedDate;
+        _loadedItemContent = Item.Content;
         _isReplyPrivate = Item.IsPrivate;
         _taggingRequests = await ActionViewModel.GetTaggingRequestsAsync(Item.Id);
         _pendingSplitRequests = await ActionViewModel.GetPendingSplitRequestsAsync(Item.Id);
