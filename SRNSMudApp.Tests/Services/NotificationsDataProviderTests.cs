@@ -1,9 +1,11 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 namespace SRNSMudApp.Tests.Services;
 
@@ -209,6 +211,81 @@ public class NotificationsDataProviderTests : IAsyncLifetime
             var payload = RightAssetDataProvider.ParsePermissionPayload(item);
             Assert.NotNull(payload);
             Assert.Equal(0, payload.RequestedTagId);
+        }
+    }
+
+    /// <summary>
+    /// クエリ実行中に SQL Server のリソースプールメモリが枯渇し、
+    /// 'There is insufficient system memory in resource pool 'default' to run this query.' (SqlException 701)
+    /// が発生するシナリオを検証する再現テスト。
+    /// DbCommandInterceptor を用いて行 116 の requestReplies クエリ ([TaggingRequestEntityId] != 0) 実行時に
+    /// エラー 701 の SqlException を発生させ、期待通り SqlException がスローされることを検証する。
+    /// </summary>
+    [Fact]
+    public async Task GetNotificationRawDataAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, itemOwnerId, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor("TaggingRequestEntityId");
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new NotificationsDataProvider(new DbContextFactoryStub(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.GetNotificationRawDataAsync(itemOwnerId));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// NotificationsDataProvider.GetAssociatedItemsAsync がアイテム・タグ階層 Include クエリを実行する際、
+    /// SQL Server のリソースプールメモリ不足 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task GetAssociatedItemsAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, _, _, itemId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new NotificationsDataProvider(new DbContextFactoryStub(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.GetAssociatedItemsAsync([itemId]));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// NotificationsDataProvider.MarkAllAsReadAsync で一括既読更新を実行する際、
+    /// SQL Server のリソースプールメモリ不足 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task MarkAllAsReadAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, itemOwnerId, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new NotificationsDataProvider(new DbContextFactoryStub(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.MarkAllAsReadAsync(itemOwnerId, [(1, "TagRequest")]));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
         }
     }
 

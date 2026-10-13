@@ -3,7 +3,7 @@
     チップ 1 個分 (+タグツリーポップオーバー) は表示専用子コンポーネント TagCardChip へ委譲し、
     ダイアログ起動・DB 操作はカード側に集約する。 *@
 @using SRNSMudApp.Components.Tag
-<MudCard id="@($"tag-card-{Tag.Id}")" @onclick="@(() => OnFocus.InvokeAsync(Tag.Id))" Outlined="true"
+<MudCard id="@($"tag-card-{Tag.Id}")" @onclick="HandleCardClickAsync" Outlined="true"
          Class="rounded-xl scroll-observe-target" Style="@GetTagCardStyle()">
     <MudCardContent Class="pa-4">
         <div class="d-flex align-start">

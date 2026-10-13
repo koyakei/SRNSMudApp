@@ -147,6 +147,34 @@ public sealed class ItemListFocusTests : IAsyncLifetime
         Assert.DoesNotContain("focus=1", navigationManager.Uri);
     }
 
+    [Fact]
+    public async Task ItemCardScrollFocus_DoesNotNavigateToItemDetail()
+    {
+        var item1 = new SRNSMudApp.Data.Item { Id = 1, Content = "First focus item", OwnerId = UserId, Owner = new ApplicationUser { Id = UserId, UserName = "focus_user" } };
+        List<SRNSMudApp.Data.Item> items = [item1];
+
+        _ = _homeDataMock.Setup(d => d.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        NavigationManager navigationManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("http://localhost/");
+
+        IRenderedComponent<ResourceList> cut =
+            _ctx.Render<ResourceList>(parameters => parameters.Add(p => p.Items, items));
+
+        cut.WaitForState(() => cut.Markup.Contains("item-card-1"));
+
+        // Assert 1: 初期表示時点で自動遷移していないこと
+        Assert.Equal("http://localhost/", navigationManager.Uri);
+
+        // Act: スクロールフォーカス (IntersectionObserver) コールバックを Dispatcher 経由で実行
+        var itemCard = cut.FindComponent<ItemCard>();
+        await cut.InvokeAsync(() => itemCard.Instance.OnElementFocusedByScroll("item-card-1"));
+
+        // Assert 2: スクロールフォーカス発生後も /ItemDetail/1 へ自動遷移していないこと
+        Assert.DoesNotContain("/ItemDetail/1", navigationManager.Uri);
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

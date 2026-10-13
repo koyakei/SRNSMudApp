@@ -60,6 +60,11 @@ public partial class NotificationsPage
         NavigationManager.NavigateTo(notification.TargetUrl.ToHref());
     }
 
+    private void NavigateToItemDetail(int itemId)
+    {
+        NavigationManager.NavigateTo($"/ItemDetail/{itemId}");
+    }
+
     private static string GetRelativeTime(DateTimeOffset dateTime) => NotificationsViewModel.GetRelativeTime(dateTime);
 
     private void ApplyResult(TagCardActionResult result)

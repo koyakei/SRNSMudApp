@@ -1,5 +1,6 @@
 #region
 
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
@@ -266,6 +267,54 @@ public class HomeDataProviderTests : IAsyncLifetime
             // 重複がないこと
             var allIds = page1.Groups.Concat(page2.Groups).Concat(page3.Groups).Select(g => g.Item?.Id).ToList();
             Assert.Equal(5, allIds.Distinct().Count());
+        }
+    }
+
+    /// <summary>
+    /// HomeDataProvider.GetTagsAndRelationsAsync (全タグおよびリレーション一括取得) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task GetTagsAndRelationsAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new HomeDataProvider(new DbContextFactoryStub(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.GetTagsAndRelationsAsync());
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// HomeDataProvider.LoadTimelineAsync (タイムラインフィードクエリ) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadTimelineAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, userId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new HomeDataProvider(new DbContextFactoryStub(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadTimelineAsync([], 0, 10, userId));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
         }
     }
 

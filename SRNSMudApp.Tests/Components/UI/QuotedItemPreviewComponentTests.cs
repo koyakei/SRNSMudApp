@@ -1,5 +1,6 @@
 using Bunit;
 
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 using MudBlazor.Services;
@@ -105,6 +106,37 @@ public sealed class QuotedItemPreviewComponentTests : IAsyncLifetime
 
         // Assert
         Assert.Contains("内容なし", cut.Markup);
+    }
+
+    [Fact]
+    public void QuotedItemPreview_WhenRendered_DoesNotNavigateUntilClicked()
+    {
+        // Arrange
+        var item = new SRNSMudApp.Data.Item
+        {
+            Id = 55,
+            OwnerId = "u1",
+            Content = "引用元の本文テキスト",
+            Owner = new ApplicationUser { Id = "u1", UserName = "TestUser" }
+        };
+
+        NavigationManager navManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navManager.NavigateTo("http://localhost/CurrentPage");
+
+        // Act - 初期レンダリング
+        IRenderedComponent<QuotedItemPreview> cut = _ctx.Render<QuotedItemPreview>(parameters => parameters
+            .Add(p => p.QuotedItemId, item.Id)
+            .Add(p => p.QuotedItem, item));
+
+        // Assert 1: 初期表示時点で自動遷移していないこと
+        Assert.Equal("http://localhost/CurrentPage", navManager.Uri);
+
+        // Act 2: プレビュー領域をクリック
+        var previewElement = cut.Find("[data-testid='quoted-item-preview-55']");
+        previewElement.Click();
+
+        // Assert 2: クリックしたときに初めて /ItemDetail/55 に遷移すること
+        Assert.EndsWith("/ItemDetail/55", navManager.Uri, StringComparison.Ordinal);
     }
 
     public async Task DisposeAsync()

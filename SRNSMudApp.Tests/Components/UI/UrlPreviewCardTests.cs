@@ -145,11 +145,14 @@ public class UrlPreviewCardTests : IAsyncDisposable
             .Add(p => p.LoadPreview, _ => Task.FromResult<LinkPreviewData?>(previewData))
         );
 
+        // Assert 1: 初期表示時点で自動遷移していないこと
+        Assert.Equal("http://localhost/", navManager.Uri);
+
         // Act
         var pill = component.Find("[data-testid='internal-link-preview-pill']");
         pill.Click();
 
-        // Assert: 外部ブラウザウィンドウ open ではなく NavigationManager で同一 SPA 内遷移されること
+        // Assert 2: 外部ブラウザウィンドウ open ではなく NavigationManager でクリック時に同一 SPA 内遷移されること
         Assert.EndsWith("/ItemDetail/789", navManager.Uri, StringComparison.Ordinal);
     }
 }

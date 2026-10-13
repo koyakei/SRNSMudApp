@@ -1,11 +1,13 @@
 #region
 
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
@@ -236,6 +238,30 @@ public class TagTreeDataProviderTests : IAsyncLifetime
 
             Result<string> cancelResult = await provider.CancelTagMoveAsync(s.Value.Id, thirdUserId);
             Assert.True(cancelResult is Failure);
+        }
+    }
+
+    /// <summary>
+    /// TagTreeDataProvider.LoadTagsAsync (タグツリー階層一括取得) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadTagsAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (context, _, _, _, _) = await CreateScopeAsync();
+        await using (context)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var sut = new TagTreeDataProvider(new SingleContextDbFactory(options));
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadTagsAsync());
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
         }
     }
 

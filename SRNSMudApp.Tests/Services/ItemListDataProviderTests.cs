@@ -1,11 +1,13 @@
 #region
 
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 using Moq;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
@@ -406,6 +408,56 @@ public class ItemListDataProviderTests : IAsyncLifetime
             var resultNoUser = await sut.LoadItemsAndTagsAsync(filterNoUser, []);
             Assert.Contains(resultNoUser.Items, i => i.Id == item1.Id);
             Assert.Contains(resultNoUser.Items, i => i.Id == item2.Id);
+        }
+    }
+
+    /// <summary>
+    /// ItemListDataProvider.LoadItemsAndTagsAsync (AsSplitQuery + 多数の階層 Include) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadItemsAndTagsAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, user1Id, _, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var tagEmbeddingMock = new Mock<ITagEmbeddingService>();
+            var sut = new ItemListDataProvider(new DbContextFactoryStub(options), tagEmbeddingMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadItemsAndTagsAsync([], [], user1Id));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// ItemListDataProvider.LoadItemsByAncestorTagAsync (AsSplitQuery + HierarchyId 階層クエリ) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadItemsByAncestorTagAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, user1Id, _, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var tagEmbeddingMock = new Mock<ITagEmbeddingService>();
+            var sut = new ItemListDataProvider(new DbContextFactoryStub(options), tagEmbeddingMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadItemsByAncestorTagAsync(1, user1Id, false));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
         }
     }
 

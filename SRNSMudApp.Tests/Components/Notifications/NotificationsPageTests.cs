@@ -382,6 +382,59 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         Assert.Contains("承認済み", approvedChip.TextContent);
     }
 
+    [Fact]
+    public void NotificationsPage_WhenRendered_DoesNotNavigateUntilCardIsClicked()
+    {
+        // Arrange
+        var targetItem = new SRNSMudApp.Data.Item { Id = 42, Content = "Associated Item Content", OwnerId = OwnerUserId };
+        var note = new NotificationDto
+        {
+            SourceId = 301,
+            ActorName = "commenter_user",
+            Message = "コメント通知",
+            CreatedAt = DateTimeOffset.UtcNow,
+            IsRead = false,
+            Kind = new TagRelationCommentNotification(301, 42, "TestTag", "コメント内容", "commenter_user"),
+            TargetUrl = new RelativeUrl("/item-detail/42"),
+            AssociatedItem = targetItem
+        };
+
+        _notifServiceMock.Setup(s => s.GetUserNotificationsAsync(OwnerUserId))
+            .ReturnsAsync([note]);
+        _notifDataMock.Setup(d => d.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([targetItem]);
+
+        NavigationManager navManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navManager.NavigateTo("http://localhost/notifications");
+
+        RenderFragment page = builder =>
+        {
+            builder.OpenComponent<NotificationsPage>(0);
+            builder.CloseComponent();
+        };
+
+        // Act - ページ初期表示
+        IRenderedComponent<AuthHost> host =
+            _ctx.Render<AuthHost>(parameters => parameters.Add(p => p.ChildContent, page));
+
+        host.WaitForState(() => host.FindAll("#item-card-42").Count > 0);
+
+        // Assert 1: 初期表示時点で自動遷移していないこと
+        Assert.Equal("http://localhost/notifications", navManager.Uri);
+
+        // Act & Assert 2: スクロール監視 (IntersectionObserver) によるフォーカスイベントが発火しても遷移しないこと
+        var itemCard = host.FindComponent<ItemCard>();
+        itemCard.Instance.OnElementFocusedByScroll("item-card-42");
+        Assert.Equal("http://localhost/notifications", navManager.Uri);
+
+        // Act 3: カード本体をクリック
+        var card = host.Find("#item-card-42");
+        card.Click();
+
+        // Assert 3: クリックしたときに初めて /ItemDetail/42 に遷移すること
+        Assert.EndsWith("/ItemDetail/42", navManager.Uri, StringComparison.Ordinal);
+    }
+
     private static AuthenticationState CreateAuthState(string userId)
     {
         Claim[] claims = [new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, userId)];
