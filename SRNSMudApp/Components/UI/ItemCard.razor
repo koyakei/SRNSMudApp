@@ -40,7 +40,8 @@
                         @if (Item.QuotedItemId.HasValue)
                         {
                             <div @onclick:stopPropagation="true">
-                                <QuotedItemPreview QuotedItemId="Item.QuotedItemId.Value" QuotedItem="Item.QuotedItem" />
+                                <QuotedItemPreview QuotedItemId="Item.QuotedItemId.Value" QuotedItem="Item.QuotedItem"
+                                                   LoadPreview="@(url => PreviewService.GetPreviewAsync(url, CurrentUserId, IsAdmin))" />
                             </div>
                         }
                     </div>

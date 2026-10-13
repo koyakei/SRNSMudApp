@@ -28,7 +28,8 @@
             @* 引用元のアイテムプレビュー *@
             <div class="mt-1">
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1 d-block">引用元:</MudText>
-                <QuotedItemPreview QuotedItemId="QuotedItem.Id" QuotedItem="QuotedItem" />
+                <QuotedItemPreview QuotedItemId="QuotedItem.Id" QuotedItem="QuotedItem"
+                                   LoadPreview="@ViewModel.GetPreviewAsync" />
             </div>
         </MudStack>
     </DialogContent>

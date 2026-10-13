@@ -1,9 +1,11 @@
 namespace SRNSMudApp.Components.UI;
 
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
 /// <summary>
@@ -26,6 +28,11 @@ public sealed class QuotedItemPreviewViewModel
     public int QuotedItemId { get; private set; }
 
     /// <summary>
+    ///     本文をテキストおよび URL セグメントに分割したコレクション。
+    /// </summary>
+    public IReadOnlyList<ContentSegment> Segments { get; private set; } = [];
+
+    /// <summary>
     ///     詳細画面への遷移先相対URL。
     /// </summary>
     [SuppressMessage("Design", "CA1056:UriPropertiesShouldNotBeStrings", Justification = "NavigationManager relative URI path string")]
@@ -45,6 +52,7 @@ public sealed class QuotedItemPreviewViewModel
         _loadedQuotedItemId = quotedItemId;
         QuotedItemId = quotedItemId;
         TargetItem = quotedItem;
+        UpdateSegments();
 
         if (TargetItem is null && quotedItemId > 0)
         {
@@ -52,11 +60,20 @@ public sealed class QuotedItemPreviewViewModel
             try
             {
                 TargetItem = await _itemQuoteService.GetQuotedItemAsync(quotedItemId);
+                UpdateSegments();
             }
             finally
             {
                 IsLoading = false;
             }
         }
+    }
+
+    private void UpdateSegments()
+    {
+        var content = TargetItem?.Content;
+        Segments = string.IsNullOrWhiteSpace(content)
+            ? []
+            : ItemCardViewModel.GetContentSegments(content);
     }
 }

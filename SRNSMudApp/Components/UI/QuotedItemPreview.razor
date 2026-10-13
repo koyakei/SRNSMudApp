@@ -20,9 +20,30 @@
                     @ViewModel.TargetItem.CreatedDate.ToLocalTime().ToString("g")
                 </MudText>
             </div>
-            <MudText Typo="Typo.body2" Class="text-truncate line-clamp-2" Style="white-space: pre-wrap;">
-                @(string.IsNullOrWhiteSpace(ViewModel.TargetItem.Content) ? "内容なし" : ViewModel.TargetItem.Content)
-            </MudText>
+            @if (ViewModel.Segments.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="text-truncate line-clamp-2" Style="white-space: pre-wrap;" Color="Color.Secondary">
+                    内容なし
+                </MudText>
+            }
+            else
+            {
+                <div class="text-truncate line-clamp-2" style="white-space: pre-wrap;">
+                    @foreach (var segment in ViewModel.Segments)
+                    {
+                        @if (segment.IsUrl)
+                        {
+                            <span @onclick:stopPropagation="true">
+                                <UrlPreviewCard Url="@segment.Text" LoadPreview="@(LoadPreview ?? DefaultLoadPreview)" />
+                            </span>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="font-inherit d-inline" Style="white-space: pre-wrap;">@segment.Text</MudText>
+                        }
+                    }
+                </div>
+            }
         </div>
     }
     else
