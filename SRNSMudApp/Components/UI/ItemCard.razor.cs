@@ -674,22 +674,30 @@ public partial class ItemCard : IAsyncDisposable
     }
 
     // --- Tag Operations (Delegated to TagCoordinator) ---
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "データベース一時切断時にUIがクラッシュするのを防ぐため")]
     private async Task OnAddTagClicked()
     {
-        TagAddOutcome outcome = await TagCoordinator.PromptAndAddTagAsync(Item, CurrentUserId);
-        switch (outcome)
+        try
         {
-            case TagAddOutcome.AddedDirectly:
-                await NotifyDataChangedAsync();
-                break;
-            case TagAddOutcome.ContractProposed:
-                _taggingRequests = await ActionViewModel.GetTaggingRequestsAsync(Item.Id);
-                StateHasChanged();
-                await NotifyDataChangedAsync();
-                break;
-            case TagAddOutcome.None:
-            default:
-                break;
+            TagAddOutcome outcome = await TagCoordinator.PromptAndAddTagAsync(Item, CurrentUserId);
+            switch (outcome)
+            {
+                case TagAddOutcome.AddedDirectly:
+                    await NotifyDataChangedAsync();
+                    break;
+                case TagAddOutcome.ContractProposed:
+                    _taggingRequests = await ActionViewModel.GetTaggingRequestsAsync(Item.Id);
+                    StateHasChanged();
+                    await NotifyDataChangedAsync();
+                    break;
+                case TagAddOutcome.None:
+                default:
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = Snackbar.Add("タグ追加処理中にエラーが発生しました: " + ex.Message, Severity.Error);
         }
     }
 

@@ -88,7 +88,14 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             }
         }
 
-        _ = await context.SaveChangesAsync();
+        try
+        {
+            _ = await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+        }
     }
 
     public async Task<TagCardOperationResult> AddTagToTagAsync(
@@ -135,7 +142,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 TagNameSnapshot = tagFromDb.Name,
                 TargetTagId = targetTagId,
                 SourceType = "TagRelationToTagInsert",
-                SourceId = newRelation.Id,
+                SourceId = null,
                 PreviousWeight = prevWeight,
                 NewWeight = tagFromDb.CachedWeight,
                 Delta = 1,
@@ -168,7 +175,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                         TagNameSnapshot = tag.Name,
                         TargetTagId = entity.TargetTagId,
                         SourceType = "TagRelationToTagDelete",
-                        SourceId = entity.Id,
+                        SourceId = null,
                         PreviousWeight = prevWeight,
                         NewWeight = tag.CachedWeight,
                         Delta = -entity.Weight,
@@ -178,17 +185,25 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     });
                 }
 
-                _ = context.Remove(entity);
-                _ = context.TimelineEvents!.Add(new TimelineEvent
+                try
                 {
-                    OwnerId = ownerId,
-                    Target = new TagTarget(entity.TargetTagId),
-                    FollowedTagId = entity.TagId,
-                    ParsedEventType = Models.TimelineEventType.Delete,
-                    PreviousWeight = entity.Weight
-                });
-                _ = await context.SaveChangesAsync();
-                return TagCardOperationResult.Success;
+                    _ = context.Remove(entity);
+                    _ = context.TimelineEvents!.Add(new TimelineEvent
+                    {
+                        OwnerId = ownerId,
+                        Target = new TagTarget(entity.TargetTagId),
+                        FollowedTagId = entity.TagId,
+                        ParsedEventType = Models.TimelineEventType.Delete,
+                        PreviousWeight = entity.Weight
+                    });
+                    _ = await context.SaveChangesAsync();
+                    return TagCardOperationResult.Success;
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    context.ChangeTracker.Clear();
+                    return TagCardOperationResult.NotFound;
+                }
             default:
                 return TagCardOperationResult.NotFound;
         }
@@ -206,12 +221,20 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             return TagCardOperationResult.NotFound;
         }
 
-        entity.Weight += delta;
-        entity.UpdatedDate = DateTime.UtcNow;
+        try
+        {
+            entity.Weight += delta;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによる直接ウェイト変更");
-        _ = await context.SaveChangesAsync();
-        return TagCardOperationResult.Success;
+            await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによる直接ウェイト変更");
+            _ = await context.SaveChangesAsync();
+            return TagCardOperationResult.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return TagCardOperationResult.NotFound;
+        }
     }
 
     public async Task<TagCardOperationResult> SetRelationWeightAsync(
@@ -226,13 +249,21 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
             return TagCardOperationResult.NotFound;
         }
 
-        var delta = newWeight - entity.Weight;
-        entity.Weight = newWeight;
-        entity.UpdatedDate = DateTime.UtcNow;
+        try
+        {
+            var delta = newWeight - entity.Weight;
+            entity.Weight = newWeight;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによるWeightの一括変更");
-        _ = await context.SaveChangesAsync();
-        return TagCardOperationResult.Success;
+            await AddWeightLedgerAndTimelineAsync(context, entity, delta, ownerId, "ユーザーによるWeightの一括変更");
+            _ = await context.SaveChangesAsync();
+            return TagCardOperationResult.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return TagCardOperationResult.NotFound;
+        }
     }
 
     public async Task<TagCardOperationResult> ChangeRelationTagAsync(
@@ -254,10 +285,18 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         switch (entity)
         {
             case not null:
-                entity.TagId = newTagId;
-                entity.UpdatedDate = DateTime.UtcNow;
-                _ = await context.SaveChangesAsync();
-                return TagCardOperationResult.Success;
+                try
+                {
+                    entity.TagId = newTagId;
+                    entity.UpdatedDate = DateTime.UtcNow;
+                    _ = await context.SaveChangesAsync();
+                    return TagCardOperationResult.Success;
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    context.ChangeTracker.Clear();
+                    return TagCardOperationResult.NotFound;
+                }
             default:
                 return TagCardOperationResult.NotFound;
         }
@@ -278,10 +317,18 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                     return TagCardOperationResult.NotOwner;
                 }
 
-                entity.ParentTagId = parentTagId;
-                entity.UpdatedDate = DateTime.UtcNow;
-                _ = await context.SaveChangesAsync();
-                return TagCardOperationResult.Success;
+                try
+                {
+                    entity.ParentTagId = parentTagId;
+                    entity.UpdatedDate = DateTime.UtcNow;
+                    _ = await context.SaveChangesAsync();
+                    return TagCardOperationResult.Success;
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    context.ChangeTracker.Clear();
+                    return TagCardOperationResult.NotFound;
+                }
             default:
                 return TagCardOperationResult.NotFound;
         }
@@ -305,7 +352,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 TagNameSnapshot = tag.Name,
                 TargetTagId = entity.TargetTagId,
                 SourceType = "TagRelationToTagUpdate",
-                SourceId = entity.Id,
+                SourceId = null,
                 PreviousWeight = prevWeight,
                 NewWeight = tag.CachedWeight,
                 Delta = delta,

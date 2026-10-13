@@ -78,9 +78,17 @@ public class TagEdgeService(
             return new Failure("Edge の作成者ではないため、削除する権限がありません。");
         }
 
-        _ = context.TagEdges.Remove(edge);
-        _ = await context.SaveChangesAsync();
-        return new Success<bool>(true);
+        try
+        {
+            _ = context.TagEdges.Remove(edge);
+            _ = await context.SaveChangesAsync();
+            return new Success<bool>(true);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return new Failure("データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。");
+        }
     }
 
     /// <summary>RightAsset を消費してタグをエッジに付与します。</summary>
@@ -188,6 +196,7 @@ public class TagEdgeService(
         }
         catch (DbUpdateConcurrencyException)
         {
+            context.ChangeTracker.Clear();
             return new Failure("データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。");
         }
     }
@@ -235,10 +244,18 @@ public class TagEdgeService(
             });
         }
 
-        _ = context.TagEdgeTagAttachments.Remove(attachment);
-        _ = await context.SaveChangesAsync();
+        try
+        {
+            _ = context.TagEdgeTagAttachments.Remove(attachment);
+            _ = await context.SaveChangesAsync();
 
-        return new Success<bool>(true);
+            return new Success<bool>(true);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return new Failure("データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。");
+        }
     }
 
     /// <summary>指定タグに接続されたエッジを取得します。</summary>

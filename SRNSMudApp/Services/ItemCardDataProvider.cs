@@ -108,25 +108,30 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<Tag?> GetTagWithOwnerAsync(int tagId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Tags.AsNoTracking().Include(t => t.Owner).WhereVisibleToUser().FirstOrDefaultAsync(t => t.Id == tagId);
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+            await context.Tags.AsNoTracking().Include(t => t.Owner).WhereVisibleToUser().FirstOrDefaultAsync(t => t.Id == tagId));
     }
 
     public async Task<TagRelation?> AddFreeTagRelationAsync(int itemId, int tagId, string userId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // DbContext の CreateFreeTagRelationAsync を使用:
+            // - RightAsset の自動発行・消費
+            // - TagRelation の作成
+            // - TagWeightLedger への記帳 (ConsumedRightAssetId を含む)
+            // - TimelineEvent の追加
+            // をトランザクション内で一括処理する
+            await context.CreateFreeTagRelationAsync(itemId, tagId, userId);
 
-        // DbContext の CreateFreeTagRelationAsync を使用:
-        // - RightAsset の自動発行・消費
-        // - TagRelation の作成
-        // - TagWeightLedger への記帳 (ConsumedRightAssetId を含む)
-        // - TimelineEvent の追加
-        // をトランザクション内で一括処理する
-        await context.CreateFreeTagRelationAsync(itemId, tagId, userId);
-
-        return await context.Set<TagRelation>()
-            .Include(tr => tr.Tag)
-            .OrderByDescending(tr => tr.Id)
-            .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.TagId == tagId && tr.OwnerId == userId);
+            return await context.Set<TagRelation>()
+                .Include(tr => tr.Tag)
+                .OrderByDescending(tr => tr.Id)
+                .FirstOrDefaultAsync(tr => tr.ItemId == itemId && tr.TagId == tagId && tr.OwnerId == userId);
+        });
     }
 
     public async Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds)
@@ -173,7 +178,11 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<bool> CanUserAttachTagDirectlyAsync(int tagId, string userId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        Tag? tag = await context.Tags.FindAsync(tagId);
-        return tag is null ? false : await context.CanUserAttachTagDirectlyAsync(tag, userId);
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            Tag? tag = await context.Tags.FindAsync(tagId);
+            return tag is not null && await context.CanUserAttachTagDirectlyAsync(tag, userId);
+        });
     }
 }

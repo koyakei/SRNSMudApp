@@ -145,7 +145,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
                 sqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
+                    errorNumbersToAdd: [2, -2, 10053, 10054, 10060]);
             });
             // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
             var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
@@ -167,7 +167,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
             sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorNumbersToAdd: null);
+                errorNumbersToAdd: [2, -2, 10053, 10054, 10060]);
         });
         // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
         var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
@@ -205,6 +205,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+builder.Services.AddHttpContextAccessor();
 
 // Register LinkPreview providers and services (Strategy Pattern)
 builder.Services.AddHttpClient();

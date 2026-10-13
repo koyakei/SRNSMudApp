@@ -133,23 +133,45 @@ public class ItemTagService(
 
     private async Task<string?> ExecuteRemoveTagRelationAsync(ApplicationDbContext context, TagRelation relation, string currentUserId)
     {
-        await context.Database.ExecuteWithStrategyAsync(async () =>
+        try
         {
-            _timelineRecorder.RecordTagRelationDeleted(context, currentUserId, relation.ItemId, relation.TagId, relation.Weight);
-
-            Tag? tag = await context.Tags.FindAsync(relation.TagId);
-            var tagOption = Option<Tag>.Create(tag);
-
-            if (tagOption is Some<Tag> someTag)
+            await context.Database.ExecuteWithStrategyAsync(async () =>
             {
-                _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, relation.ItemId, "TagRelationDelete", relation.Id, -relation.Weight, "タグの削除", currentUserId);
-            }
+                // リトライ時に前回試行で追跡されたエンティティ状態をリセット
+                context.ChangeTracker.Clear();
 
-            _ = context.Remove(relation);
-            _ = await context.SaveChangesAsync();
-        });
+                await using var transaction = await context.Database.BeginTransactionAsync();
 
-        return null;
+                TagRelation? currentRelation = await context.TagRelations.FindAsync(relation.Id);
+                if (currentRelation is null)
+                {
+                    // 並行リクエストやリトライで既に削除済みの場合は何もしない
+                    return;
+                }
+
+                _timelineRecorder.RecordTagRelationDeleted(context, currentUserId, currentRelation.ItemId, currentRelation.TagId, currentRelation.Weight);
+
+                Tag? tag = await context.Tags.FindAsync(currentRelation.TagId);
+                var tagOption = Option<Tag>.Create(tag);
+
+                if (tagOption is Some<Tag> someTag)
+                {
+                    _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, currentRelation.ItemId, "TagRelationDelete", currentRelation.Id, -currentRelation.Weight, "タグの削除", currentUserId);
+                }
+
+                _ = context.Remove(currentRelation);
+                _ = await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
+
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // 並行実行等で既に削除されていた場合は、目的（削除された状態）が達成されているため正常終了とする
+            context.ChangeTracker.Clear();
+            return null;
+        }
     }
 
     public async Task<UpdateWeightResult> UpdateTagWeightAsync(int relationId, int delta, string currentUserId)
@@ -171,19 +193,27 @@ public class ItemTagService(
 
     private async Task<UpdateWeightResult> ExecuteUpdateTagWeightAsync(ApplicationDbContext context, TagRelation entity, int delta, string currentUserId)
     {
-        entity.Weight += delta;
-        entity.UpdatedDate = DateTime.UtcNow;
-
-        Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        var tagOption = Option<Tag>.Create(tag);
-
-        if (tagOption is Some<Tag> someTag)
+        try
         {
-            ProcessTagWeightUpdate(context, someTag.Value, entity, delta, currentUserId);
-        }
+            entity.Weight += delta;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        _ = await context.SaveChangesAsync();
-        return UpdateWeightResult.Success;
+            Tag? tag = await context.Tags.FindAsync(entity.TagId);
+            var tagOption = Option<Tag>.Create(tag);
+
+            if (tagOption is Some<Tag> someTag)
+            {
+                ProcessTagWeightUpdate(context, someTag.Value, entity, delta, currentUserId);
+            }
+
+            _ = await context.SaveChangesAsync();
+            return UpdateWeightResult.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return UpdateWeightResult.NotFound;
+        }
     }
 
     private void ProcessTagWeightUpdate(ApplicationDbContext context, Tag tag, TagRelation entity, int delta, string currentUserId)
@@ -218,20 +248,28 @@ public class ItemTagService(
 
     private async Task<string?> ExecuteSetTagWeightAsync(ApplicationDbContext context, TagRelation entity, int newWeight, string currentUserId)
     {
-        var delta = newWeight - entity.Weight;
-        entity.Weight = newWeight;
-        entity.UpdatedDate = DateTime.UtcNow;
-
-        Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        var tagOption = Option<Tag>.Create(tag);
-
-        if (tagOption is Some<Tag> someTag)
+        try
         {
-            _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, entity.ItemId, "TagRelationUpdate", entity.Id, delta, "ユーザーによる直接ウェイト一括変更", currentUserId);
-        }
+            var delta = newWeight - entity.Weight;
+            entity.Weight = newWeight;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        _ = await context.SaveChangesAsync();
-        return null;
+            Tag? tag = await context.Tags.FindAsync(entity.TagId);
+            var tagOption = Option<Tag>.Create(tag);
+
+            if (tagOption is Some<Tag> someTag)
+            {
+                _tagWeightLedgerService.RecordItemTagWeightChange(context, someTag.Value, entity.ItemId, "TagRelationUpdate", entity.Id, delta, "ユーザーによる直接ウェイト一括変更", currentUserId);
+            }
+
+            _ = await context.SaveChangesAsync();
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return "データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。";
+        }
     }
 
     public async Task<string?> ChangeItemTagAsync(int relationId, int newTagId, int itemId, string currentUserId)
@@ -265,11 +303,19 @@ public class ItemTagService(
 
     private static async Task<string?> ExecuteChangeItemTagAsync(ApplicationDbContext context, TagRelation entity, int newTagId)
     {
-        entity.TagId = newTagId;
-        entity.UpdatedDate = DateTime.UtcNow;
+        try
+        {
+            entity.TagId = newTagId;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        _ = await context.SaveChangesAsync();
-        return null;
+            _ = await context.SaveChangesAsync();
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return "データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。";
+        }
     }
 
     public async Task<string?> AddTagToTagAsync(int targetTagId, int tagId, string currentUserId)
@@ -330,17 +376,40 @@ public class ItemTagService(
 
     private async Task<string?> ExecuteRemoveTagToTagRelationAsync(ApplicationDbContext context, TagRelationToTag entity, string currentUserId)
     {
-        Tag? tag = await context.Tags.FindAsync(entity.TagId);
-        var tagOption = Option<Tag>.Create(tag);
-
-        if (tagOption is Some<Tag> someTag)
+        try
         {
-            _tagWeightLedgerService.RecordTagToTagWeightChange(context, someTag.Value, entity.TargetTagId, "TagRelationToTagDelete", null, -entity.Weight, "タグの関連付け解除", currentUserId);
-        }
+            await context.Database.ExecuteWithStrategyAsync(async () =>
+            {
+                context.ChangeTracker.Clear();
 
-        _ = context.Remove(entity);
-        _ = await context.SaveChangesAsync();
-        return null;
+                await using var transaction = await context.Database.BeginTransactionAsync();
+
+                TagRelationToTag? currentEntity = await context.TagRelationToTags.FindAsync(entity.Id);
+                if (currentEntity is null)
+                {
+                    return;
+                }
+
+                Tag? tag = await context.Tags.FindAsync(currentEntity.TagId);
+                var tagOption = Option<Tag>.Create(tag);
+
+                if (tagOption is Some<Tag> someTag)
+                {
+                    _tagWeightLedgerService.RecordTagToTagWeightChange(context, someTag.Value, currentEntity.TargetTagId, "TagRelationToTagDelete", null, -currentEntity.Weight, "タグの関連付け解除", currentUserId);
+                }
+
+                _ = context.Remove(currentEntity);
+                _ = await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
+
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return null;
+        }
     }
 
     public async Task<string?> SetParentTagAsync(int parentTagId, int childTagId, string currentUserId, IReadOnlyList<Tag> allTagsForCycleCheck)
@@ -388,11 +457,19 @@ public class ItemTagService(
 
     private static async Task<string?> ProcessSaveParentTag(ApplicationDbContext context, Tag entity, int parentTagId)
     {
-        entity.ParentTagId = parentTagId;
-        entity.UpdatedDate = DateTime.UtcNow;
+        try
+        {
+            entity.ParentTagId = parentTagId;
+            entity.UpdatedDate = DateTime.UtcNow;
 
-        _ = await context.SaveChangesAsync();
-        return null;
+            _ = await context.SaveChangesAsync();
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return "データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。";
+        }
     }
 
     public async Task<IReadOnlyList<TaggingRequestEntity>> GetTaggingRequestsForItemAsync(int itemId)

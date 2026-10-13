@@ -1,9 +1,14 @@
 @page "/Item/WasmList"
 @using SRNSMudApp.Client.Components
 
-@rendermode InteractiveWebAssembly
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
 <PageTitle>アイテム一覧 (WASM)</PageTitle>
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
     <div class="d-flex align-center justify-space-between mb-4">
