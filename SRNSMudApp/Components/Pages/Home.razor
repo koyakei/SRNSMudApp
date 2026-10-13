@@ -28,43 +28,41 @@
 
         @if (ViewModel.FollowedTagIds is not null)
         {
-            <div style="height: 80vh; overflow-y: auto;">
-                <Virtualize @ref="TimelineVirtualize" ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
-                    <ItemContent>
-                        <div class="mb-4">
-                            @{
-                                var target =
-                    System.Text.Json.JsonSerializer.Deserialize<SRNSMudApp.Models.Unions.TimelineTarget>(group.TimelineTargetJson);
-                            }
-                            @if (target is SRNSMudApp.Models.Unions.ItemTarget && group.Item is not null)
-                            {
-                                <SRNSMudApp.Components.UI.ItemCard Item="@group.Item" AllTags="@ViewModel.AllTags"
-                                                                   AllTagRelationsToTags="@ViewModel.AllTagRelationsToTags" CurrentUserId="@ViewModel.CurrentUserId"
-                                                                   CurrentUserGoodTagId="@ViewModel.CurrentUserGoodTagId" CurrentUserBadTagId="@ViewModel.CurrentUserBadTagId"
-                                                                   CurrentUserShinjiTagId="@ViewModel.CurrentUserShinjiTagId" CurrentUserZenTagId="@ViewModel.CurrentUserZenTagId"
-                                                                   CurrentUserBiTagId="@ViewModel.CurrentUserBiTagId" OnEnsureSystemTags="ViewModel.EnsureSystemTagsExistAsync"
-                                                                   HighlightEvents="@group.Events" IsFocused="false" />
-                            }
-                            else if (target is SRNSMudApp.Models.Unions.TagTarget && group.Tag is not null)
-                            {
-                                <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag" AllTags="@ViewModel.AllTags"
-                                                                  CurrentUserId="@ViewModel.CurrentUserId" CurrentUserGoodTagId="@ViewModel.CurrentUserGoodTagId"
-                                                                  CurrentUserBadTagId="@ViewModel.CurrentUserBadTagId" OnEnsureSystemTags="ViewModel.EnsureSystemTagsExistAsync"
-                                                                  HighlightEvents="@group.Events" IsFocused="false" />
-                            }
-                        </div>
-                    </ItemContent>
-                    <Placeholder>
-                        <MudCard Class="mb-4" Elevation="0" Outlined="true">
-                            <MudCardContent>
-                                <div class="d-flex justify-center align-center py-4">
-                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-                                </div>
-                            </MudCardContent>
-                        </MudCard>
-                    </Placeholder>
-                </Virtualize>
-            </div>
+            <Virtualize @ref="TimelineVirtualize" ItemsProvider="LoadTimeline" Context="group" ItemComparer="new TimelineFeedGroupComparer()">
+                <ItemContent>
+                    <div class="mb-4">
+                        @{
+                            var target =
+                System.Text.Json.JsonSerializer.Deserialize<SRNSMudApp.Models.Unions.TimelineTarget>(group.TimelineTargetJson);
+                        }
+                        @if (target is SRNSMudApp.Models.Unions.ItemTarget && group.Item is not null)
+                        {
+                            <SRNSMudApp.Components.UI.ItemCard Item="@group.Item" AllTags="@ViewModel.AllTags"
+                                                               AllTagRelationsToTags="@ViewModel.AllTagRelationsToTags" CurrentUserId="@ViewModel.CurrentUserId"
+                                                               CurrentUserGoodTagId="@ViewModel.CurrentUserGoodTagId" CurrentUserBadTagId="@ViewModel.CurrentUserBadTagId"
+                                                               CurrentUserShinjiTagId="@ViewModel.CurrentUserShinjiTagId" CurrentUserZenTagId="@ViewModel.CurrentUserZenTagId"
+                                                               CurrentUserBiTagId="@ViewModel.CurrentUserBiTagId" OnEnsureSystemTags="ViewModel.EnsureSystemTagsExistAsync"
+                                                               HighlightEvents="@group.Events" IsFocused="false" />
+                        }
+                        else if (target is SRNSMudApp.Models.Unions.TagTarget && group.Tag is not null)
+                        {
+                            <SRNSMudApp.Components.UI.TagCard Tag="@group.Tag" AllTags="@ViewModel.AllTags"
+                                                              CurrentUserId="@ViewModel.CurrentUserId" CurrentUserGoodTagId="@ViewModel.CurrentUserGoodTagId"
+                                                              CurrentUserBadTagId="@ViewModel.CurrentUserBadTagId" OnEnsureSystemTags="ViewModel.EnsureSystemTagsExistAsync"
+                                                              HighlightEvents="@group.Events" IsFocused="false" />
+                        }
+                    </div>
+                </ItemContent>
+                <Placeholder>
+                    <MudCard Class="mb-4" Elevation="0" Outlined="true">
+                        <MudCardContent>
+                            <div class="d-flex justify-center align-center py-4">
+                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </Placeholder>
+            </Virtualize>
         }
 
         @* モバイル表示時の右下フローティング丸型鉛筆アイコン (Twitter風FAB) *@

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Bunit;
 
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -105,5 +106,26 @@ public sealed class HomeDesktopTests : IAsyncLifetime
 
         // Assert: FetchTagsAsync が呼ばれること
         _homeDataMock.Verify(d => d.GetTagsAndRelationsAsync(), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public void Home_WhenLoggedIn_TimelineDoesNotHaveFixedScrollContainer()
+    {
+        // Arrange
+        Claim[] claims = [new(ClaimTypes.NameIdentifier, CurrentUserId), new(ClaimTypes.Name, "testuser")];
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
+        var authState = new AuthenticationState(new ClaimsPrincipal(identity));
+        _ = _ctx.Services.AddCascadingValue(_ => Task.FromResult(authState));
+        _ = _ctx.Services.AddCascadingValue(_ => Breakpoint.Lg);
+        _ = _ctx.Services.AddAuthorizationCore();
+
+        // Act
+        var cut = _ctx.Render<Home>();
+
+        // Assert: タイムラインの Virtualize が独立したスクロール領域（overflow-y: auto や固定高さ 80vh）で囲まれておらず、
+        // 画面全体でスクロールダウン（Twitterライク）できるようになっていることを確認
+        Assert.DoesNotContain("overflow-y: auto", cut.Markup);
+        Assert.DoesNotContain("80vh", cut.Markup);
+        Assert.NotNull(cut.FindComponent<Virtualize<TimelineFeedGroup>>());
     }
 }
