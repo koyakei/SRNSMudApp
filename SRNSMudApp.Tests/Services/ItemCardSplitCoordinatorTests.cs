@@ -279,4 +279,48 @@ public class ItemCardSplitCoordinatorTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.RejectSplitRequestAsync(item, null!, OwnerId));
         await Assert.ThrowsAsync<ArgumentNullException>(() => _coordinator.CancelSplitRequestAsync(null!, RequesterId));
     }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WithCrlfInItemAndLfInSelection_Succeeds()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello\r\nWorld\r\nTest" };
+        var createdRequest = new ItemSplitRequest { Id = 15, OwnerId = OwnerId, RequesterUserId = RequesterId, SelectedText = "World\nTest" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World\nTest"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(true));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestConfirmDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World\nTest", RequesterId, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(15, result.Id);
+        _snackbarMock.Verify(s => s.Add("アイテム分割リクエストを送信しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveSplitRequestAsync_WithCrlfInItemAndLfInSelectedText_ReplacesContentCorrectly()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello\r\nWorld\r\nEnd" };
+        var request = new ItemSplitRequest { Id = 10, OwnerId = OwnerId, SelectedText = "World\nEnd" };
+        var newItem = new Item { Id = 99, Content = "World\nEnd", OwnerId = OwnerId };
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.ApproveSplitAsync(10, OwnerId, default))
+            .ReturnsAsync(new Success<Item>(newItem));
+
+        var result = await _coordinator.ApproveSplitRequestAsync(item, request, OwnerId);
+
+        Assert.True(result);
+        Assert.Equal("Hello\r\n/ItemDetail/99", item.Content);
+        _snackbarMock.Verify(s => s.Add("分割リクエストを承認しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
 }

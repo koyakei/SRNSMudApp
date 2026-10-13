@@ -62,7 +62,10 @@ public class ItemCardSplitCoordinator(
             return false;
         }
 
-        if (item.Content == null || !item.Content.Contains(selectedText, StringComparison.Ordinal))
+        string normalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+        string normalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (item.Content == null || !normalizedContent.Contains(normalizedSelected, StringComparison.Ordinal))
         {
             _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
             return false;
@@ -76,8 +79,32 @@ public class ItemCardSplitCoordinator(
                 case Success<Item> success:
                     var linkUrl = $"/ItemDetail/{success.Value.Id}";
                     int index = item.Content.IndexOf(selectedText, StringComparison.Ordinal);
-                    item.Content = item.Content.Remove(index, selectedText.Length).Insert(index, linkUrl);
+                    int lengthToReplace = selectedText.Length;
+                    if (index < 0)
+                    {
+                        string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+                        int crlfIndex = item.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
+                        if (crlfIndex >= 0)
+                        {
+                            index = crlfIndex;
+                            lengthToReplace = crlfSelected.Length;
+                        }
+                    }
+
+                    if (index >= 0)
+                    {
+                        item.Content = item.Content.Remove(index, lengthToReplace).Insert(index, linkUrl);
+                    }
+
                     _ = _snackbar.Add("アイテムを分割しました。", Severity.Success);
+                    try
+                    {
+                        await _js.InvokeVoidAsync("selectionHelper.clearSelection");
+                    }
+                    catch (JSException)
+                    {
+                    }
+
                     return true;
                 case Failure fail:
                     _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
@@ -120,7 +147,10 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
-        if (item.Content == null || !item.Content.Contains(selectedText, StringComparison.Ordinal))
+        string reqNormalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+        string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (item.Content == null || !reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
         {
             _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
             return null;
@@ -141,6 +171,14 @@ public class ItemCardSplitCoordinator(
             {
                 case Success<ItemSplitRequest> success:
                     _ = _snackbar.Add("アイテム分割リクエストを送信しました。", Severity.Success);
+                    try
+                    {
+                        await _js.InvokeVoidAsync("selectionHelper.clearSelection");
+                    }
+                    catch (JSException)
+                    {
+                    }
+
                     return success.Value;
                 case Failure fail:
                     _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
@@ -172,9 +210,21 @@ public class ItemCardSplitCoordinator(
                 _ = _snackbar.Add("分割リクエストを承認しました。", Severity.Success);
                 var linkUrl = $"/ItemDetail/{success.Value.Id}";
                 int index = item.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
+                int lengthToReplace = request.SelectedText.Length;
+                if (index < 0)
+                {
+                    string crlfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+                    int crlfIndex = item.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
+                    if (crlfIndex >= 0)
+                    {
+                        index = crlfIndex;
+                        lengthToReplace = crlfSelected.Length;
+                    }
+                }
+
                 if (index >= 0)
                 {
-                    item.Content = item.Content.Remove(index, request.SelectedText.Length).Insert(index, linkUrl);
+                    item.Content = item.Content.Remove(index, lengthToReplace).Insert(index, linkUrl);
                 }
                 return true;
             case Failure fail:

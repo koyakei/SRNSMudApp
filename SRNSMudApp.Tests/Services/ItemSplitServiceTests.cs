@@ -567,4 +567,75 @@ public class ItemSplitServiceTests : IAsyncLifetime
             }
         }
     }
+
+    [Fact]
+    public async Task RequestSplitAsync_WithCrlfInItemAndLfInSelectedText_Succeeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = $"1行目_{tid}\r\n2行目_{tid}\r\n3行目_{tid}"
+            };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // Act: selectedText has \n instead of \r\n
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(
+                originalItem.Id,
+                $"2行目_{tid}\n3行目_{tid}",
+                requesterId);
+
+            // Assert
+            Assert.True(result is Success<ItemSplitRequest>);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithCrlfInItemAndLfInSelectedText_ReplacesTextCorrectly()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = $"先頭_{tid}\r\n分割対象_{tid}\r\n末尾_{tid}"
+            };
+            dbContext.Items.Add(originalItem);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItem = originalItem,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = $"分割対象_{tid}\n末尾_{tid}", // LF only
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            Assert.True(result is Success<Item>);
+            dbContext.ChangeTracker.Clear();
+            var updatedOriginal = await dbContext.Items.FindAsync(originalItem.Id);
+            Assert.NotNull(updatedOriginal);
+            Assert.Contains($"/ItemDetail/", updatedOriginal.Content);
+            Assert.DoesNotContain($"分割対象_{tid}", updatedOriginal.Content);
+        }
+    }
 }

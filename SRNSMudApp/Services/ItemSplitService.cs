@@ -52,7 +52,10 @@ public class ItemSplitService(
             return Result.Fail<ItemSplitRequest>("自分自身のアイテムに対しては分割リクエストではなく直接分割を行ってください。");
         }
 
-        if (string.IsNullOrEmpty(originalItem.Content) || !originalItem.Content.Contains(selectedText, StringComparison.Ordinal))
+        string normalizedContent = (originalItem.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+        string normalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (string.IsNullOrEmpty(originalItem.Content) || !normalizedContent.Contains(normalizedSelected, StringComparison.Ordinal))
         {
             return Result.Fail<ItemSplitRequest>("選択されたテキストが元アイテムの本文に含まれていません。");
         }
@@ -137,12 +140,34 @@ public class ItemSplitService(
         }
 
         int index = originalItem.Content.IndexOf(selectedText, StringComparison.Ordinal);
+        string textToReplace = selectedText;
+        if (index < 0)
+        {
+            string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            int crlfIndex = originalItem.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
+            if (crlfIndex >= 0)
+            {
+                index = crlfIndex;
+                textToReplace = crlfSelected;
+            }
+            else
+            {
+                string lfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+                int lfIndex = originalItem.Content.IndexOf(lfSelected, StringComparison.Ordinal);
+                if (lfIndex >= 0)
+                {
+                    index = lfIndex;
+                    textToReplace = lfSelected;
+                }
+            }
+        }
+
         if (index < 0)
         {
             return Result.Fail<Item>("選択されたテキストが元アイテムの本文に含まれていません。");
         }
 
-        Item newItem = await CreateSplitItemAsync(context, originalItem, selectedText, index, cancellationToken);
+        Item newItem = await CreateSplitItemAsync(context, originalItem, textToReplace, index, cancellationToken);
         originalItem.UpdatedDate = DateTime.UtcNow;
         _ = await context.SaveChangesAsync(cancellationToken);
 
@@ -185,12 +210,34 @@ public class ItemSplitService(
         }
 
         int index = originalItem.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
+        string requestTextToReplace = request.SelectedText;
+        if (index < 0)
+        {
+            string crlfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            int crlfIndex = originalItem.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
+            if (crlfIndex >= 0)
+            {
+                index = crlfIndex;
+                requestTextToReplace = crlfSelected;
+            }
+            else
+            {
+                string lfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+                int lfIndex = originalItem.Content.IndexOf(lfSelected, StringComparison.Ordinal);
+                if (lfIndex >= 0)
+                {
+                    index = lfIndex;
+                    requestTextToReplace = lfSelected;
+                }
+            }
+        }
+
         if (index < 0)
         {
             return Result.Fail<Item>("元アイテムの本文が更新されたため、指定されたテキストが見つかりません。");
         }
 
-        Item newItem = await CreateSplitItemAsync(context, originalItem, request.SelectedText, index, cancellationToken);
+        Item newItem = await CreateSplitItemAsync(context, originalItem, requestTextToReplace, index, cancellationToken);
 
         // 元アイテム本文の該当テキストを /ItemDetail/{newItem.Id} リンクに置換
         originalItem.UpdatedDate = DateTime.UtcNow;
