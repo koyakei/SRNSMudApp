@@ -1891,4 +1891,209 @@ public class ItemListApiClientTests
         // Assert
         Assert.True(result);
     }
+
+    [Fact]
+    public async Task GetTagLockLevelAsync_ReturnsLevel()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/admin/tag-lock/level", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("3", System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        int result = await apiClient.GetTagLockLevelAsync();
+
+        // Assert
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public async Task SetTagLockLevelAsync_ReturnsTrueOnSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Put, req.Method);
+            Assert.Equal("https://example.com/api/admin/tag-lock/level", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("2", System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.SetTagLockLevelAsync(2);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task GetTagLockItemsAsync_ReturnsTagList()
+    {
+        // Arrange
+        var tags = new List<TagLockItemDto>
+        {
+            new(1, "ルート", 0, null, null, "sys", false, false, false, false),
+            new(2, "開発", 1, 1, "ルート", "alice", true, false, false, true)
+        };
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/admin/tag-lock/tags", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(tags), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<TagLockItemDto> result = await apiClient.GetTagLockItemsAsync();
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Equal("ルート", result[0].Name);
+        Assert.Equal("開発", result[1].Name);
+        Assert.True(result[1].IsDirectlyLocked);
+    }
+
+    [Fact]
+    public async Task ToggleTagLockAsync_ReturnsIsLocked()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/admin/tag-lock/42/toggle", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("true", System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.ToggleTagLockAsync(42);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task ImportTagCsvAsync_ReturnsResponseOnSuccess()
+    {
+        // Arrange
+        var request = new ImportTagCsvRequest("全て∀", "A,B,C", false);
+        var expected = new ImportTagCsvResponse(3, 1, "3個のタグを新規作成、1個のタグを更新しました。");
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag/import/csv", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(expected), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ImportTagCsvResponse? result = await apiClient.ImportTagCsvAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(3, result.CreatedCount);
+        Assert.Equal(1, result.UpdatedCount);
+        Assert.Contains("3個のタグを新規作成", result.Message);
+    }
+
+    [Fact]
+    public async Task ImportTagCsvAsync_ReturnsNullOnError()
+    {
+        // Arrange
+        var request = new ImportTagCsvRequest("全て∀", "invalid", false);
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            return new HttpResponseMessage(HttpStatusCode.BadRequest);
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ImportTagCsvResponse? result = await apiClient.ImportTagCsvAsync(request);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ImportTaggingJsonAsync_ReturnsResponseOnSuccess()
+    {
+        // Arrange
+        var request = new ImportTaggingJsonRequest("{\"TaggingRequestEntity\":{}}");
+        var expected = new ImportTaggingResponse(2, 3, 2, 1, 1, ["成功"]);
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag/import/tagging", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(expected), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ImportTaggingResponse? result = await apiClient.ImportTaggingJsonAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(2, result.CreatedItemsCount);
+        Assert.Equal(3, result.CreatedTagsCount);
+        Assert.Equal(2, result.CreatedRelationsCount);
+    }
+
+    [Fact]
+    public async Task ImportTaggingJsonAsync_ReturnsNullOnError()
+    {
+        // Arrange
+        var request = new ImportTaggingJsonRequest("invalid");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            return new HttpResponseMessage(HttpStatusCode.BadRequest);
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ImportTaggingResponse? result = await apiClient.ImportTaggingJsonAsync(request);
+
+        // Assert
+        Assert.Null(result);
+    }
 }

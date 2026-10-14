@@ -374,3 +374,40 @@ public sealed record InvitationDto(
     string InvitedByAdminId,
     DateTime CreatedDate
 );
+
+/// <summary>
+/// タグ管理・ロック情報 DTO。
+/// </summary>
+public sealed record TagLockItemDto(
+    int Id,
+    string Name,
+    int Level,
+    int? ParentTagId,
+    string? ParentTagName,
+    string? OwnerUserName,
+    bool IsDirectlyLocked,
+    bool IsLevelLocked,
+    bool IsSiblingLocked,
+    bool IsLockedEffective
+);
+
+/// <summary>
+/// タグ CSV インポート API のレスポンス DTO。
+/// </summary>
+public sealed record ImportTagCsvResponse(
+    int CreatedCount,
+    int UpdatedCount,
+    string Message
+);
+
+/// <summary>
+/// タグ付け構造 JSON インポート API のレスポンス DTO。
+/// </summary>
+public sealed record ImportTaggingResponse(
+    int CreatedItemsCount,
+    int CreatedTagsCount,
+    int CreatedRelationsCount,
+    int CreatedEdgesCount,
+    int CreatedAttachmentsCount,
+    IReadOnlyList<string> Messages
+);

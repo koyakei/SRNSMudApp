@@ -217,3 +217,22 @@ public sealed record SetUserBanRequest(bool IsBanned);
 /// 招待作成 API のリクエスト DTO。
 /// </summary>
 public sealed record CreateInvitationRequest(string Email);
+
+/// <summary>
+/// 階層ロックレベル設定 API のリクエスト DTO。
+/// </summary>
+public sealed record SetHierarchyLockLevelRequest(int Level);
+
+/// <summary>
+/// タグ CSV インポート API のリクエスト DTO。
+/// </summary>
+public sealed record ImportTagCsvRequest(
+    string ParentTagName,
+    string CsvContent,
+    bool AsSystem = false
+);
+
+/// <summary>
+/// タグ付け構造 JSON インポート API のリクエスト DTO。
+/// </summary>
+public sealed record ImportTaggingJsonRequest(string JsonText);

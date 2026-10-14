@@ -161,7 +161,10 @@ Pages/
  RightAssetOverviewPage.razor
  TagDetailPage.razor
  TagDiagramPage.razor
+ TaggingImportPage.razor
+ TagImportPage.razor
  TagListPage.razor
+ TagManagementPage.razor
  TagTreePage.razor
  UserDetailPage.razor
  UserGroupMembersPage.razor

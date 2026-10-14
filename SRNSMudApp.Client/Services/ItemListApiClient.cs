@@ -375,6 +375,36 @@ public interface IItemListApiClient
     /// 招待を削除します（管理者専用）。
     /// </summary>
     Task<bool> DeleteInvitationAsync(int invitationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 階層ロックレベルを取得します（管理者専用）。
+    /// </summary>
+    Task<int> GetTagLockLevelAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 階層ロックレベルを設定します（管理者専用）。
+    /// </summary>
+    Task<bool> SetTagLockLevelAsync(int level, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 全タグのロック状態一覧を取得します（管理者専用）。
+    /// </summary>
+    Task<IReadOnlyList<TagLockItemDto>> GetTagLockItemsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定タグの個別ロックを反転します（管理者専用）。
+    /// </summary>
+    Task<bool> ToggleTagLockAsync(int tagId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// CSV 形式のタグ階層データを親タグ配下にインポートします。
+    /// </summary>
+    Task<ImportTagCsvResponse?> ImportTagCsvAsync(ImportTagCsvRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// JSON 形式のタグ付け構造データ（Item, TagRelation, TagEdge）を一括インポートします。
+    /// </summary>
+    Task<ImportTaggingResponse?> ImportTaggingJsonAsync(ImportTaggingJsonRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1010,5 +1040,60 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     {
         using HttpResponseMessage response = await _httpClient.DeleteAsync(new Uri($"api/admin/invitation/{invitationId}", UriKind.Relative), cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<int> GetTagLockLevelAsync(CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<int>("api/admin/tag-lock/level", cancellationToken);
+    }
+
+    public async Task<bool> SetTagLockLevelAsync(int level, CancellationToken cancellationToken = default)
+    {
+        var request = new SetHierarchyLockLevelRequest(level);
+        using HttpResponseMessage response = await _httpClient.PutAsJsonAsync("api/admin/tag-lock/level", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<TagLockItemDto>> GetTagLockItemsAsync(CancellationToken cancellationToken = default)
+    {
+        List<TagLockItemDto>? result = await _httpClient.GetFromJsonAsync<List<TagLockItemDto>>("api/admin/tag-lock/tags", cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<bool> ToggleTagLockAsync(int tagId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/admin/tag-lock/{tagId}/toggle", UriKind.Relative), null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        return await response.Content.ReadFromJsonAsync<bool>(cancellationToken);
+    }
+
+    public async Task<ImportTagCsvResponse?> ImportTagCsvAsync(ImportTagCsvRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag/import/csv", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ImportTagCsvResponse>(cancellationToken);
+    }
+
+    public async Task<ImportTaggingResponse?> ImportTaggingJsonAsync(ImportTaggingJsonRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag/import/tagging", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ImportTaggingResponse>(cancellationToken);
     }
 }
