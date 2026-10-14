@@ -1,7 +1,9 @@
 @page "/Tag/WasmDetail/{TagId:int}"
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @using MudBlazor
+@using SRNSMudApp.Client.Components.Tag
 @using SRNSMudApp.Client.Models.Api
 @using SRNSMudApp.Client.Services
 @implements IDisposable
@@ -83,22 +85,15 @@
                         </div>
                     </div>
                 }
-                else if (_isProposing)
+                else if (_isProposing && _currentProposalStrategy != null)
                 {
                     <div class="d-flex flex-column gap-3" data-testid="tag-proposal-form">
                         <MudText Typo="Typo.h6" Class="font-weight-bold">
-                            @(_proposalType == "name" ? "タグ名の変更を提案" : "説明文の変更を提案")
+                            @_currentProposalStrategy.Title
                         </MudText>
-                        @if (_proposalType == "name")
-                        {
-                            <MudTextField @bind-Value="_proposedName" Label="新しいタグ名 *" Variant="Variant.Outlined" Required="true"
-                                          data-testid="proposal-name-input" />
-                        }
-                        else
-                        {
-                            <MudTextField @bind-Value="_proposedContent" Label="新しい説明文 *" Variant="Variant.Outlined" Lines="3" Required="true"
-                                          data-testid="proposal-content-input" />
-                        }
+                        <MudTextField @bind-Value="_proposedValue" Label="@_currentProposalStrategy.ValueLabel" Variant="Variant.Outlined"
+                                      Lines="@_currentProposalStrategy.Lines" Required="true"
+                                      data-testid="@_currentProposalStrategy.TestId" />
                         <MudTextField @bind-Value="_proposalReason" Label="提案理由や補足（任意）" Variant="Variant.Outlined" Lines="2"
                                       data-testid="proposal-reason-input" />
                         <div class="d-flex justify-end gap-2 mt-2">
@@ -213,13 +208,13 @@
                             {
                                 <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
                                            StartIcon="@Icons.Material.Filled.DriveFileRenameOutline"
-                                           OnClick="@(() => StartProposal("name"))"
+                                           OnClick="@(() => StartProposal(new TagNameProposalStrategy()))"
                                            data-testid="propose-name-btn">
                                     名前を提案
                                 </MudButton>
                                 <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
                                            StartIcon="@Icons.Material.Filled.EditNote"
-                                           OnClick="@(() => StartProposal("content"))"
+                                           OnClick="@(() => StartProposal(new TagContentProposalStrategy()))"
                                            data-testid="propose-content-btn">
                                     説明を提案
                                 </MudButton>
@@ -274,78 +269,11 @@
 
         <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" KeepPanelsAlive="true">
             <MudTabPanel Text="@($"関連アイテム ({Tag.RelatedItems.Count})")" Icon="@Icons.Material.Filled.Article">
-                @if (Tag.RelatedItems.Count == 0)
-                {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        このタグに関連付けられたアイテムはありません。
-                    </MudText>
-                }
-                else
-                {
-                    <MudStack Spacing="3">
-                        @foreach (var item in Tag.RelatedItems)
-                        {
-                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
-                                <div class="d-flex justify-space-between align-center mb-1">
-                                    <MudLink Href="@($"/Item/WasmDetail/{item.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
-                                        #@item.Id - @(item.OwnerUserName ?? "匿名")
-                                    </MudLink>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @item.UpdatedDate.ToLocalTime().ToString("g")
-                                    </MudText>
-                                </div>
-                                <MudText Typo="Typo.body2" Class="mb-2" Style="white-space: pre-wrap;">@item.Content</MudText>
-                                <div class="d-flex align-center justify-space-between">
-                                    <div class="d-flex gap-1 flex-wrap">
-                                        @foreach (var tr in item.TagRelations)
-                                        {
-                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
-                                                @tr.TagName (+@tr.Weight)
-                                            </MudChip>
-                                        }
-                                    </div>
-                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                               Href="@($"/Item/WasmDetail/{item.Id}")" EndIcon="@Icons.Material.Filled.ArrowForward">
-                                        詳細を見る
-                                    </MudButton>
-                                </div>
-                            </MudPaper>
-                        }
-                    </MudStack>
-                }
+                <TagRelatedItemsList Items="Tag.RelatedItems" />
             </MudTabPanel>
 
             <MudTabPanel Text="@($"関連タグ ({Tag.RelatedTags.Count})")" Icon="@Icons.Material.Filled.Tag">
-                @if (Tag.RelatedTags.Count == 0)
-                {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        関連するタグはありません。
-                    </MudText>
-                }
-                else
-                {
-                    <MudGrid Spacing="2">
-                        @foreach (var relTag in Tag.RelatedTags)
-                        {
-                            <MudItem xs="12" sm="6" md="4">
-                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
-                                    <div class="d-flex align-center justify-space-between mb-1">
-                                        <MudLink Href="@($"/Tag/WasmDetail/{relTag.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
-                                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-1" />
-                                            @relTag.Name
-                                        </MudLink>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">スコア: @relTag.Score</MudText>
-                                    </div>
-                                    @if (!string.IsNullOrEmpty(relTag.Content))
-                                    {
-                                        <MudText Typo="Typo.caption" Class="d-block text-truncate mb-1">@relTag.Content</MudText>
-                                    }
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">作成者: @(relTag.OwnerUserName ?? "不明")</MudText>
-                                </MudPaper>
-                            </MudItem>
-                        }
-                    </MudGrid>
-                }
+                <TagRelatedTagsGrid Tags="Tag.RelatedTags" />
             </MudTabPanel>
 
             <MudTabPanel Text="@($"タグ付け提案 ({Tag.PendingRequests.Count})")" Icon="@Icons.Material.Filled.PendingActions">
@@ -388,142 +316,20 @@
 
             <MudTabPanel Text="@($"変更提案 ({TotalPendingProposals})")" Icon="@Icons.Material.Filled.Feedback"
                          data-testid="proposals-tab">
-                @if (_pendingProposals == null || TotalPendingProposals == 0)
-                {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        保留中の変更提案はありません。
-                    </MudText>
-                }
-                else
-                {
-                    <MudStack Spacing="3">
-                        @if (_pendingProposals.NameProposals.Count > 0)
-                        {
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">タグ名変更の提案</MudText>
-                            @foreach (var prop in _pendingProposals.NameProposals)
-                            {
-                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"name-proposal-{prop.Id}")">
-                                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-                                        <div>
-                                            <MudText Typo="Typo.body1" Class="font-weight-bold">
-                                                新名称案: 「@prop.ProposedName」
-                                            </MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
-                                            </MudText>
-                                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
-                                            {
-                                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
-                                            }
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            @if (CanEditOrDelete)
-                                            {
-                                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                           OnClick="@(() => ApproveNameProposalAsync(prop.Id))"
-                                                           data-testid="@($"approve-name-prop-{prop.Id}")">承認</MudButton>
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                           OnClick="@(() => RejectNameProposalAsync(prop.Id))"
-                                                           data-testid="@($"reject-name-prop-{prop.Id}")">却下</MudButton>
-                                            }
-                                            else if (prop.RequesterUserId == _currentUserId)
-                                            {
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                                                           OnClick="@(() => CancelNameProposalAsync(prop.Id))"
-                                                           data-testid="@($"cancel-name-prop-{prop.Id}")">取り下げ</MudButton>
-                                            }
-                                        </div>
-                                    </div>
-                                </MudPaper>
-                            }
-                        }
-
-                        @if (_pendingProposals.ContentProposals.Count > 0)
-                        {
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">説明文変更の提案</MudText>
-                            @foreach (var prop in _pendingProposals.ContentProposals)
-                            {
-                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"content-proposal-{prop.Id}")">
-                                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-                                        <div>
-                                            <MudText Typo="Typo.body2" Class="font-weight-bold" Style="white-space: pre-wrap;">
-                                                新説明案: @prop.ProposedContent
-                                            </MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
-                                            </MudText>
-                                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
-                                            {
-                                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
-                                            }
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            @if (CanEditOrDelete)
-                                            {
-                                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                           OnClick="@(() => ApproveContentProposalAsync(prop.Id))"
-                                                           data-testid="@($"approve-content-prop-{prop.Id}")">承認</MudButton>
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                           OnClick="@(() => RejectContentProposalAsync(prop.Id))"
-                                                           data-testid="@($"reject-content-prop-{prop.Id}")">却下</MudButton>
-                                            }
-                                            else if (prop.RequesterUserId == _currentUserId)
-                                            {
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                                                           OnClick="@(() => CancelContentProposalAsync(prop.Id))"
-                                                           data-testid="@($"cancel-content-prop-{prop.Id}")">取り下げ</MudButton>
-                                            }
-                                        </div>
-                                    </div>
-                                </MudPaper>
-                            }
-                        }
-                    </MudStack>
-                }
+                <TagProposalsTab PendingProposals="_pendingProposals"
+                                 CanEditOrDelete="CanEditOrDelete"
+                                 CurrentUserId="_currentUserId"
+                                 OnApproveName="ApproveNameProposalAsync"
+                                 OnRejectName="RejectNameProposalAsync"
+                                 OnCancelName="CancelNameProposalAsync"
+                                 OnApproveContent="ApproveContentProposalAsync"
+                                 OnRejectContent="RejectContentProposalAsync"
+                                 OnCancelContent="CancelContentProposalAsync" />
             </MudTabPanel>
 
-            <MudTabPanel Text="@($"台帳履歴 ({(_weightLedgers?.Count ?? 0)})")" Icon="@Icons.Material.Filled.History"
+            <MudTabPanel Text="@($"台帳履歴 ({_weightLedgers.Count})")" Icon="@Icons.Material.Filled.History"
                          data-testid="ledger-tab">
-                @if ((_weightLedgers?.Count ?? 0) == 0)
-                {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        重み変動履歴はありません。
-                    </MudText>
-                }
-                else
-                {
-                    <MudTable Items="@(_weightLedgers ?? [])" Elevation="0" Outlined="true" Dense="true" Hover="true" Class="rounded-lg">
-                        <HeaderContent>
-                            <MudTh>日時</MudTh>
-                            <MudTh>操作者</MudTh>
-                            <MudTh>理由</MudTh>
-                            <MudTh>種別</MudTh>
-                            <MudTh Style="text-align: right;">変動量</MudTh>
-                            <MudTh Style="text-align: right;">更新後重み</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
-                            <MudTd DataLabel="操作者">@(context.OwnerUserName ?? "システム")</MudTd>
-                            <MudTd DataLabel="理由">@context.Reason</MudTd>
-                            <MudTd DataLabel="種別">@context.SourceType</MudTd>
-                            <MudTd DataLabel="変動量" Style="text-align: right;">
-                                @if (context.Delta > 0)
-                                {
-                                    <MudText Typo="Typo.body2" Color="Color.Success" Class="font-weight-bold">+@context.Delta</MudText>
-                                }
-                                else if (context.Delta < 0)
-                                {
-                                    <MudText Typo="Typo.body2" Color="Color.Error" Class="font-weight-bold">@context.Delta</MudText>
-                                }
-                                else
-                                {
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary">0</MudText>
-                                }
-                            </MudTd>
-                            <MudTd DataLabel="更新後重み" Style="text-align: right;">@context.NewWeight</MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
+                <TagWeightLedgerTable Items="_weightLedgers" />
             </MudTabPanel>
         </MudTabs>
     }
@@ -560,6 +366,12 @@
     public required NavigationManager NavigationManager { get; set; }
 
     /// <summary>
+    /// ロガー。
+    /// </summary>
+    [Inject]
+    public ILogger<TagDetailPage>? Logger { get; set; }
+
+    /// <summary>
     /// 現在読み込まれているタグ詳細 DTO。
     /// </summary>
     public TagDetailDto? Tag { get; private set; }
@@ -593,9 +405,8 @@
     private IReadOnlyList<TagWeightLedgerDto> _weightLedgers = [];
 
     private bool _isProposing;
-    private string _proposalType = "name";
-    private string _proposedName = string.Empty;
-    private string _proposedContent = string.Empty;
+    private ITagProposalStrategy? _currentProposalStrategy;
+    private string _proposedValue = string.Empty;
     private string? _proposalReason;
     private bool _isSubmittingProposal;
 
@@ -617,9 +428,16 @@
         IsLoading = true;
         try
         {
-            Tag = await ApiClient.GetTagDetailAsync(TagId, _cts.Token);
-            _pendingProposals = await ApiClient.GetPendingProposalsForTagAsync(TagId, _cts.Token);
-            _weightLedgers = await ApiClient.GetTagWeightLedgersAsync(TagId, _cts.Token) ?? [];
+            // 並列 I/O 実行によるレスポンス遅延短縮 (Task.WhenAll)
+            var tagTask = ApiClient.GetTagDetailAsync(TagId, _cts.Token);
+            var proposalsTask = ApiClient.GetPendingProposalsForTagAsync(TagId, _cts.Token);
+            var ledgersTask = ApiClient.GetTagWeightLedgersAsync(TagId, _cts.Token);
+
+            await Task.WhenAll(tagTask, proposalsTask, ledgersTask);
+
+            Tag = await tagTask;
+            _pendingProposals = await proposalsTask;
+            _weightLedgers = await ledgersTask;
         }
         catch (OperationCanceledException)
         {
@@ -627,6 +445,7 @@
         }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ情報 (TagId: {TagId}) の読み込み中にエラーが発生しました。", TagId);
             Snackbar.Add($"タグ情報の取得に失敗しました: {ex.Message}", Severity.Error);
         }
         finally
@@ -674,8 +493,13 @@
                 Snackbar.Add("タグの更新に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ更新 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
             Snackbar.Add($"更新エラー: {ex.Message}", Severity.Error);
         }
         finally
@@ -706,8 +530,13 @@
                 Snackbar.Add("タグの削除に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ削除 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
             Snackbar.Add($"削除エラー: {ex.Message}", Severity.Error);
         }
         finally
@@ -717,11 +546,12 @@
         }
     }
 
-    private void StartProposal(string type)
+    private void StartProposal(ITagProposalStrategy strategy)
     {
-        _proposalType = type;
-        _proposedName = Tag?.Name ?? string.Empty;
-        _proposedContent = Tag?.Content ?? string.Empty;
+        _currentProposalStrategy = strategy;
+        _proposedValue = strategy is TagNameProposalStrategy
+            ? (Tag?.Name ?? string.Empty)
+            : (Tag?.Content ?? string.Empty);
         _proposalReason = string.Empty;
         _isProposing = true;
     }
@@ -729,54 +559,39 @@
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
     private async Task SubmitProposalAsync()
     {
+        if (_currentProposalStrategy == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_proposedValue))
+        {
+            Snackbar.Add(_currentProposalStrategy.ValidationErrorMessage, Severity.Warning);
+            return;
+        }
+
         _isSubmittingProposal = true;
         try
         {
-            if (_proposalType == "name")
+            bool ok = await _currentProposalStrategy.SubmitAsync(ApiClient, TagId, _proposedValue.Trim(), _proposalReason?.Trim(), _cts.Token);
+            if (ok)
             {
-                if (string.IsNullOrWhiteSpace(_proposedName))
-                {
-                    Snackbar.Add("提案するタグ名を入力してください。", Severity.Warning);
-                    return;
-                }
-
-                var req = new ProposeTagNameRequest(TagId, _proposedName.Trim(), _proposalReason?.Trim());
-                var res = await ApiClient.ProposeTagNameAsync(req, _cts.Token);
-                if (res != null)
-                {
-                    Snackbar.Add("タグ名変更の提案を送信しました。", Severity.Success);
-                    _isProposing = false;
-                    await LoadTagAsync();
-                }
-                else
-                {
-                    Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
-                }
+                Snackbar.Add(_currentProposalStrategy.SuccessMessage, Severity.Success);
+                _isProposing = false;
+                await LoadTagAsync();
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(_proposedContent))
-                {
-                    Snackbar.Add("提案する説明文を入力してください。", Severity.Warning);
-                    return;
-                }
-
-                var req = new ProposeTagContentRequest(TagId, _proposedContent.Trim(), _proposalReason?.Trim());
-                var res = await ApiClient.ProposeTagContentAsync(req, _cts.Token);
-                if (res != null)
-                {
-                    Snackbar.Add("説明文変更の提案を送信しました。", Severity.Success);
-                    _isProposing = false;
-                    await LoadTagAsync();
-                }
-                else
-                {
-                    Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
-                }
+                Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
         }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "提案送信中にエラーが発生しました。");
             Snackbar.Add($"提案送信エラー: {ex.Message}", Severity.Error);
         }
         finally
@@ -801,8 +616,13 @@
                 Snackbar.Add("承認に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 承認中にエラーが発生しました。", proposalId);
             Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -823,8 +643,13 @@
                 Snackbar.Add("却下に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 却下中にエラーが発生しました。", proposalId);
             Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -841,8 +666,13 @@
                 await LoadTagAsync();
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 取り下げ中にエラーが発生しました。", proposalId);
             Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
         }
     }
@@ -863,8 +693,13 @@
                 Snackbar.Add("承認に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 承認中にエラーが発生しました。", proposalId);
             Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -885,8 +720,13 @@
                 Snackbar.Add("却下に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 却下中にエラーが発生しました。", proposalId);
             Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -903,8 +743,13 @@
                 await LoadTagAsync();
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 取り下げ中にエラーが発生しました。", proposalId);
             Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
         }
     }
@@ -925,8 +770,13 @@
                 Snackbar.Add("ロック状態の変更に失敗しました。", Severity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグロック状態切替 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
             Snackbar.Add($"ロックエラー: {ex.Message}", Severity.Error);
         }
     }
@@ -946,8 +796,13 @@
             Tag = Tag with { IsFollowing = isFollowing };
             Snackbar.Add(isFollowing ? "タグをフォローしました。" : "フォローを解除しました。", Severity.Success);
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグフォロー切替 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
             Snackbar.Add($"フォロー状態の変更に失敗しました: {ex.Message}", Severity.Error);
         }
         finally
@@ -976,8 +831,13 @@
                 Snackbar.Add("投票に失敗しました。", Severity.Warning);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ投票 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
             Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -998,8 +858,13 @@
                 Snackbar.Add("リクエストの承認に失敗しました。", Severity.Warning);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ付けリクエスト (Id: {RequestId}) 承認中にエラーが発生しました。", requestId);
             Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
         }
     }
@@ -1020,8 +885,13 @@
                 Snackbar.Add("リクエストの却下に失敗しました。", Severity.Warning);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
         catch (Exception ex)
         {
+            Logger?.LogError(ex, "タグ付けリクエスト (Id: {RequestId}) 却下中にエラーが発生しました。", requestId);
             Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
         }
     }

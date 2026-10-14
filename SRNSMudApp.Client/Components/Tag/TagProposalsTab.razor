@@ -1,0 +1,154 @@
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+
+@if (PendingProposals == null || TotalPendingProposals == 0)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+        保留中の変更提案はありません。
+    </MudText>
+}
+else
+{
+    <MudStack Spacing="3">
+        @if (PendingProposals.NameProposals.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">タグ名変更の提案</MudText>
+            @foreach (var prop in PendingProposals.NameProposals)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"name-proposal-{prop.Id}")">
+                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                        <div>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                新名称案: 「@prop.ProposedName」
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
+                            </MudText>
+                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
+                            }
+                        </div>
+                        <div class="d-flex gap-2">
+                            @if (CanEditOrDelete)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                           OnClick="@(() => OnApproveName.InvokeAsync(prop.Id))"
+                                           data-testid="@($"approve-name-prop-{prop.Id}")">承認</MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                           OnClick="@(() => OnRejectName.InvokeAsync(prop.Id))"
+                                           data-testid="@($"reject-name-prop-{prop.Id}")">却下</MudButton>
+                            }
+                            else if (prop.RequesterUserId == CurrentUserId)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                                           OnClick="@(() => OnCancelName.InvokeAsync(prop.Id))"
+                                           data-testid="@($"cancel-name-prop-{prop.Id}")">取り下げ</MudButton>
+                            }
+                        </div>
+                    </div>
+                </MudPaper>
+            }
+        }
+
+        @if (PendingProposals.ContentProposals.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">説明文変更の提案</MudText>
+            @foreach (var prop in PendingProposals.ContentProposals)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"content-proposal-{prop.Id}")">
+                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="font-weight-bold" Style="white-space: pre-wrap;">
+                                新説明案: @prop.ProposedContent
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
+                            </MudText>
+                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
+                            }
+                        </div>
+                        <div class="d-flex gap-2">
+                            @if (CanEditOrDelete)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                           OnClick="@(() => OnApproveContent.InvokeAsync(prop.Id))"
+                                           data-testid="@($"approve-content-prop-{prop.Id}")">承認</MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                           OnClick="@(() => OnRejectContent.InvokeAsync(prop.Id))"
+                                           data-testid="@($"reject-content-prop-{prop.Id}")">却下</MudButton>
+                            }
+                            else if (prop.RequesterUserId == CurrentUserId)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                                           OnClick="@(() => OnCancelContent.InvokeAsync(prop.Id))"
+                                           data-testid="@($"cancel-content-prop-{prop.Id}")">取り下げ</MudButton>
+                            }
+                        </div>
+                    </div>
+                </MudPaper>
+            }
+        }
+    </MudStack>
+}
+
+@code {
+    /// <summary>
+    /// 保留中の変更提案一覧。
+    /// </summary>
+    [Parameter]
+    public TagPendingProposalsDto? PendingProposals { get; set; }
+
+    /// <summary>
+    /// 編集・削除・承認権限を持つかどうか。
+    /// </summary>
+    [Parameter]
+    public bool CanEditOrDelete { get; set; }
+
+    /// <summary>
+    /// 現在ログイン中のユーザー ID。
+    /// </summary>
+    [Parameter]
+    public string? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// タグ名変更承認コールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnApproveName { get; set; }
+
+    /// <summary>
+    /// タグ名変更却下コールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnRejectName { get; set; }
+
+    /// <summary>
+    /// タグ名変更取り下げコールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnCancelName { get; set; }
+
+    /// <summary>
+    /// 説明文変更承認コールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnApproveContent { get; set; }
+
+    /// <summary>
+    /// 説明文変更却下コールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnRejectContent { get; set; }
+
+    /// <summary>
+    /// 説明文変更取り下げコールバック。
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnCancelContent { get; set; }
+
+    private int TotalPendingProposals => (PendingProposals?.NameProposals.Count ?? 0) + (PendingProposals?.ContentProposals.Count ?? 0);
+}
+

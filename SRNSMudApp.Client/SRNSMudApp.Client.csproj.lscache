@@ -72,7 +72,13 @@ obj/Debug/net11.0/
  .NETCoreApp,Version=v11.0.AssemblyAttributes.cs
  SRNSMudApp.Client.AssemblyInfo.cs
  SRNSMudApp.Client.GlobalUsings.g.cs
-Services/ItemListApiClient.cs
+Services/
+ ITagApiClient.cs
+ ITaggingRequestApiClient.cs
+ ITagLedgerApiClient.cs
+ ITagProposalApiClient.cs
+ ItemListApiClient.cs
+ TagProposalStrategy.cs
 Program.cs
 
 [frameworkPacks]
@@ -144,6 +150,11 @@ obj/Debug/net11.0/SRNSMudApp.Client.GeneratedMSBuildEditorConfig.editorconfig
 
 [additionalFiles]
 Components/
+ Tag/
+  TagProposalsTab.razor
+  TagRelatedItemsList.razor
+  TagRelatedTagsGrid.razor
+  TagWeightLedgerTable.razor
  ItemSearchView.razor
  TagDiagramView.razor
  TagTreeView.razor

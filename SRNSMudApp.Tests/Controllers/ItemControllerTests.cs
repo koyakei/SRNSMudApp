@@ -15,7 +15,9 @@ using SRNSMudApp.Client.Models;
 using SRNSMudApp.Client.Models.Api;
 using SRNSMudApp.Controllers;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
 
 using Xunit;
 
@@ -31,7 +33,7 @@ public class ItemControllerTests
     private readonly Mock<IItemTagService> _itemTagMock = new();
     private readonly Mock<IUserGroupDataProvider> _userGroupMock = new();
     private readonly Mock<IAdminDataProvider> _adminDataMock = new();
-    private readonly Mock<ITaggingRequestActions> _taggingRequestActionsMock = new();
+    private readonly Mock<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>> _approveCommandHandlerMock = new();
     private readonly Mock<ITagRequestRejectionService> _tagRequestRejectionMock = new();
     private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
 
@@ -48,7 +50,7 @@ public class ItemControllerTests
             _itemTagMock.Object,
             _userGroupMock.Object,
             _adminDataMock.Object,
-            _taggingRequestActionsMock.Object,
+            _approveCommandHandlerMock.Object,
             _tagRequestRejectionMock.Object,
             _itemDetailDataMock.Object);
         if (user != null)
@@ -834,14 +836,37 @@ public class ItemControllerTests
         // Arrange
         var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
         var controller = CreateController(user);
-        _taggingRequestActionsMock.Setup(m => m.ApproveAsync(10, "user-abc"))
-            .ReturnsAsync(true);
+        _approveCommandHandlerMock
+            .Setup(m => m.HandleAsync(
+                It.Is<ApproveTaggingRequestCommand>(c => c.RequestId == 10 && c.CurrentUserId == "user-abc"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<string>("Approved"));
 
         // Act
         var result = await controller.ApproveTaggingRequest(10, CancellationToken.None);
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task ApproveTaggingRequest_WhenCommandFails_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _approveCommandHandlerMock
+            .Setup(m => m.HandleAsync(
+                It.Is<ApproveTaggingRequestCommand>(c => c.RequestId == 10 && c.CurrentUserId == "user-abc"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Failure("承認権限がありません。"));
+
+        // Act
+        var result = await controller.ApproveTaggingRequest(10, CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("承認権限がありません。", badRequestResult.Value);
     }
 
     [Fact]

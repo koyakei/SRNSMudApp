@@ -1,0 +1,52 @@
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+
+@if (Items.Count == 0)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+        重み変動履歴はありません。
+    </MudText>
+}
+else
+{
+    <MudTable Items="Items" Elevation="0" Outlined="true" Dense="true" Hover="true" Class="rounded-lg">
+        <HeaderContent>
+            <MudTh>日時</MudTh>
+            <MudTh>操作者</MudTh>
+            <MudTh>理由</MudTh>
+            <MudTh>種別</MudTh>
+            <MudTh Style="text-align: right;">変動量</MudTh>
+            <MudTh Style="text-align: right;">更新後重み</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="操作者">@(context.OwnerUserName ?? "システム")</MudTd>
+            <MudTd DataLabel="理由">@context.Reason</MudTd>
+            <MudTd DataLabel="種別">@context.SourceType</MudTd>
+            <MudTd DataLabel="変動量" Style="text-align: right;">
+                @if (context.Delta > 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Success" Class="font-weight-bold">+@context.Delta</MudText>
+                }
+                else if (context.Delta < 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Error" Class="font-weight-bold">@context.Delta</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">0</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="更新後重み" Style="text-align: right;">@context.NewWeight</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    /// <summary>
+    /// 表示対象の重み変動履歴一覧。
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<TagWeightLedgerDto> Items { get; set; } = [];
+}
+

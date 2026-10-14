@@ -17,7 +17,11 @@ using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
+using SRNSMudApp.Services.Commands;
+
+using ReactionTagNames = SRNSMudApp.Models.ReactionTagNames;
 
 /// <summary>
 /// ItemList の一覧表示やタグ検索に関する API を提供するコントローラー。
@@ -35,7 +39,7 @@ public sealed class ItemController(
     IItemTagService itemTagService,
     IUserGroupDataProvider userGroupDataProvider,
     IAdminDataProvider adminDataProvider,
-    ITaggingRequestActions? taggingRequestActions = null,
+    ICommandHandler<ApproveTaggingRequestCommand, Result<string>>? approveCommandHandler = null,
     ITagRequestRejectionService? tagRequestRejectionService = null,
     IItemDetailDataProvider? itemDetailDataProvider = null) : ControllerBase
 {
@@ -59,7 +63,7 @@ public sealed class ItemController(
         userGroupDataProvider ?? throw new ArgumentNullException(nameof(userGroupDataProvider));
     private readonly IAdminDataProvider _adminDataProvider =
         adminDataProvider ?? throw new ArgumentNullException(nameof(adminDataProvider));
-    private readonly ITaggingRequestActions? _taggingRequestActions = taggingRequestActions;
+    private readonly ICommandHandler<ApproveTaggingRequestCommand, Result<string>>? _approveCommandHandler = approveCommandHandler;
     private readonly ITagRequestRejectionService? _tagRequestRejectionService = tagRequestRejectionService;
     private readonly IItemDetailDataProvider? _itemDetailDataProvider = itemDetailDataProvider;
 
@@ -718,6 +722,8 @@ public sealed class ItemController(
     /// タグ付けリクエストを承認します。
     /// </summary>
     [HttpPost("tag-requests/{requestId:int}/approve")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Quality", "CA1508:Avoid dead code", Justification = "Result<string> pattern matching false positive")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<string> pattern matching false positive")]
     public async Task<ActionResult> ApproveTaggingRequest(
         int requestId,
         CancellationToken cancellationToken)
@@ -728,18 +734,23 @@ public sealed class ItemController(
             return Unauthorized("リクエストを承認するにはログインが必要です。");
         }
 
-        if (_taggingRequestActions == null)
+        if (_approveCommandHandler == null)
         {
             return StatusCode(StatusCodes.Status501NotImplemented);
         }
 
-        bool success = await _taggingRequestActions.ApproveAsync(requestId, currentUserId);
-        if (!success)
-        {
-            return BadRequest("リクエストの承認に失敗しました。");
-        }
+        Result<string> result = await _approveCommandHandler.HandleAsync(
+            new ApproveTaggingRequestCommand(requestId, currentUserId), cancellationToken);
 
-        return Ok();
+        switch (result)
+        {
+            case Success<string>:
+                return Ok();
+            case Failure failure:
+                return BadRequest(failure.ErrorMessage);
+            default:
+                return BadRequest("リクエストの承認に失敗しました。");
+        }
     }
 
     /// <summary>

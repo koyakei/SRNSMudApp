@@ -15,7 +15,7 @@ using SRNSMudApp.Client.Models.Api;
 /// <summary>
 /// ItemList 向け Web API クライアントインターフェース。
 /// </summary>
-public interface IItemListApiClient
+public interface IItemListApiClient : ITagApiClient, ITagProposalApiClient, ITagLedgerApiClient, ITaggingRequestApiClient
 {
     /// <summary>
     /// タグ名のサジェスト候補を検索します。
@@ -108,24 +108,9 @@ public interface IItemListApiClient
     Task<IReadOnlyList<UserGroupDto>> GetUserGroupsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// タグへの投票（アップボート / ダウンボート）を行います。
-    /// </summary>
-    Task<bool> VoteTagAsync(int tagId, bool isUpvote, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// 新規タグを作成します。
     /// </summary>
     Task<TagDto?> CreateTagAsync(CreateTagRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ情報を更新します。
-    /// </summary>
-    Task<bool> UpdateTagAsync(int tagId, UpdateTagRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグを削除します。
-    /// </summary>
-    Task<bool> DeleteTagAsync(int tagId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 親タグとの関連付けを追加します。
@@ -198,31 +183,6 @@ public interface IItemListApiClient
     Task<ImportCsvResponse?> ImportCsvAsync(ImportCsvRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// アイテムに紐づく保留中のタグ付けリクエスト一覧を取得します。
-    /// </summary>
-    Task<IReadOnlyList<TaggingRequestDto>> GetTaggingRequestsAsync(int itemId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ付けリクエストを承認します。
-    /// </summary>
-    Task<bool> ApproveTaggingRequestAsync(int requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ付けリクエストを却下します。
-    /// </summary>
-    Task<bool> RejectTaggingRequestAsync(int requestId, RejectTaggingRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグの詳細情報を取得します。
-    /// </summary>
-    Task<TagDetailDto?> GetTagDetailAsync(int tagId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグのフォロー状態を切り替えます。
-    /// </summary>
-    Task<bool> ToggleTagFollowAsync(int tagId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// ログインユーザーの通知一覧を取得します。
     /// </summary>
     Task<IReadOnlyList<NotificationItemDto>> GetNotificationsAsync(CancellationToken cancellationToken = default);
@@ -241,11 +201,6 @@ public interface IItemListApiClient
     /// 全ての通知を一括で既読化します。
     /// </summary>
     Task<bool> MarkAllNotificationsAsReadAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ一覧（検索クエリによる絞り込み可）を取得します。
-    /// </summary>
-    Task<IReadOnlyList<TagDto>> GetTagListAsync(string? query = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// ユーザーの詳細情報を取得します。
@@ -428,11 +383,6 @@ public interface IItemListApiClient
     Task<IReadOnlyList<TagLockItemDto>> GetTagLockItemsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 指定タグの個別ロックを反転します（管理者専用）。
-    /// </summary>
-    Task<bool> ToggleTagLockAsync(int tagId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// CSV 形式のタグ階層データを親タグ配下にインポートします。
     /// </summary>
     Task<ImportTagCsvResponse?> ImportTagCsvAsync(ImportTagCsvRequest request, CancellationToken cancellationToken = default);
@@ -451,51 +401,6 @@ public interface IItemListApiClient
     /// 指定したユーザーのメール確認状態を反転します（管理者専用）。
     /// </summary>
     Task<bool> ToggleUserConfirmationAsync(string userId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ名変更提案を申請します。
-    /// </summary>
-    Task<TagNameProposalDto?> ProposeTagNameAsync(ProposeTagNameRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ内容変更提案を申請します。
-    /// </summary>
-    Task<TagContentProposalDto?> ProposeTagContentAsync(ProposeTagContentRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 指定されたタグに対する保留中提案一覧を取得します。
-    /// </summary>
-    Task<TagPendingProposalsDto?> GetPendingProposalsForTagAsync(int tagId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ名変更提案を承認します（タグ所有者のみ）。
-    /// </summary>
-    Task<bool> ApproveTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ名変更提案を却下します（タグ所有者のみ）。
-    /// </summary>
-    Task<bool> RejectTagNameProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ内容変更提案を承認します（タグ所有者のみ）。
-    /// </summary>
-    Task<bool> ApproveTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// タグ内容変更提案を却下します（タグ所有者のみ）。
-    /// </summary>
-    Task<bool> RejectTagContentProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 申請したタグ名変更提案を取り下げます（申請者本人のみ）。
-    /// </summary>
-    Task<bool> CancelTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 申請したタグ内容変更提案を取り下げます（申請者本人のみ）。
-    /// </summary>
-    Task<bool> CancelTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 入力テキストから関連タグを推論・提案します。
@@ -531,11 +436,6 @@ public interface IItemListApiClient
     /// 申請した分割リクエストを取り下げます（申請者本人のみ）。
     /// </summary>
     Task<bool> CancelItemSplitAsync(int requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 指定されたタグの重み変動台帳（TagWeightLedger）履歴を取得します。
-    /// </summary>
-    Task<IReadOnlyList<TagWeightLedgerDto>> GetTagWeightLedgersAsync(int tagId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 指定されたアイテムのタグ重み変動台帳（TagWeightLedger）履歴を取得します。

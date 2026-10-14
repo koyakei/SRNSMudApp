@@ -223,6 +223,10 @@ builder.Services.AddHttpClient<SRNSMudApp.Client.Services.IItemListApiClient, SR
         client.BaseAddress = new Uri($"{request.Scheme}://{request.Host}");
     }
 });
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagProposalApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagLedgerApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITaggingRequestApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
 builder.Services.AddSingleton<ILinkPreviewProvider, ItemLinkPreviewProvider>();
 builder.Services.AddSingleton<ILinkPreviewProvider, TagLinkPreviewProvider>();
 builder.Services.AddSingleton<ILinkPreviewProvider, UserLinkPreviewProvider>();
