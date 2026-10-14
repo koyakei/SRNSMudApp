@@ -232,7 +232,19 @@ public sealed record ImportTagCsvRequest(
     bool AsSystem = false
 );
 
-/// <summary>
-/// タグ付け構造 JSON インポート API のリクエスト DTO。
-/// </summary>
 public sealed record ImportTaggingJsonRequest(string JsonText);
+
+/// <summary>
+/// タグ名変更提案 API のリクエスト DTO。
+/// </summary>
+public sealed record ProposeTagNameRequest(int TagId, string ProposedName, string? Reason = null);
+
+/// <summary>
+/// タグ内容変更提案 API のリクエスト DTO。
+/// </summary>
+public sealed record ProposeTagContentRequest(int TagId, string ProposedContent, string? Reason = null);
+
+/// <summary>
+/// 提案却下 API のリクエスト DTO。
+/// </summary>
+public sealed record RejectProposalRequest(string? RejectReason = null);

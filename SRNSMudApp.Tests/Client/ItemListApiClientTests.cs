@@ -2153,4 +2153,83 @@ public class ItemListApiClientTests
         // Assert
         Assert.True(result);
     }
+
+    [Fact]
+    public async Task ProposeTagNameAsync_ReturnsDtoOnSuccess()
+    {
+        // Arrange
+        var request = new ProposeTagNameRequest(1, "新提案名", "理由");
+        var expected = new TagNameProposalDto(1, 1, "タグ", "新提案名", "u1", "user1", "o1", "理由", "Proposed", null, DateTimeOffset.UtcNow);
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag-proposal/name", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(expected), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        TagNameProposalDto? result = await apiClient.ProposeTagNameAsync(request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("新提案名", result.ProposedName);
+    }
+
+    [Fact]
+    public async Task GetPendingProposalsForTagAsync_ReturnsProposals()
+    {
+        // Arrange
+        var expected = new TagPendingProposalsDto([], []);
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/tag-proposal/tag/10/pending", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(expected), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        TagPendingProposalsDto? result = await apiClient.GetPendingProposalsForTagAsync(10);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Empty(result.NameProposals);
+    }
+
+    [Fact]
+    public async Task ApproveTagNameProposalAsync_ReturnsTrueOnSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag-proposal/name/5/approve", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(true), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.ApproveTagNameProposalAsync(5);
+
+        // Assert
+        Assert.True(result);
+    }
 }

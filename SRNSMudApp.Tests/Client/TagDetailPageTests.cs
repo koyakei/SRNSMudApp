@@ -241,6 +241,75 @@ public class TagDetailPageTests : IAsyncDisposable
         _apiClientMock.Verify(c => c.ToggleTagLockAsync(1, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task WhenNonOwner_CanSubmitNameProposal()
+    {
+        // Arrange: 非オーナーの一般ユーザー
+        SetCurrentUser("bob-id");
+
+        var detail = CreateSampleDetail(1, "テスト用タグ", "alice-id", isLocked: false);
+        _apiClientMock
+            .Setup(c => c.GetTagDetailAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+        _apiClientMock
+            .Setup(c => c.GetPendingProposalsForTagAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TagPendingProposalsDto([], []));
+
+        var createdProp = new TagNameProposalDto(1, 1, "テスト用タグ", "新タグ名案", "bob-id", "bob", "alice-id", "理由", "Proposed", null, DateTimeOffset.UtcNow);
+        _apiClientMock
+            .Setup(c => c.ProposeTagNameAsync(It.IsAny<ProposeTagNameRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createdProp);
+
+        IRenderedComponent<TagDetailPage> cut = _ctx.Render<TagDetailPage>(p => p.Add(x => x.TagId, 1));
+
+        // Act: 「名前を提案」ボタンをクリック
+        var proposeBtn = cut.Find("[data-testid='propose-name-btn']");
+        await cut.InvokeAsync(() => proposeBtn.Click());
+
+        // フォームが表示される
+        Assert.NotNull(cut.Find("[data-testid='tag-proposal-form']"));
+
+        // 送信ボタンをクリック
+        var submitBtn = cut.Find("[data-testid='submit-proposal-btn']");
+        await cut.InvokeAsync(() => submitBtn.Click());
+
+        // Assert
+        _apiClientMock.Verify(c => c.ProposeTagNameAsync(It.Is<ProposeTagNameRequest>(r => r.TagId == 1 && r.ProposedName == "テスト用タグ"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task WhenOwner_CanApproveNameProposal()
+    {
+        // Arrange: オーナー
+        SetCurrentUser("alice-id");
+
+        var detail = CreateSampleDetail(1, "テスト用タグ", "alice-id", isLocked: false);
+        var proposals = new TagPendingProposalsDto(
+            [new TagNameProposalDto(55, 1, "テスト用タグ", "新提案名", "bob-id", "bob", "alice-id", "理由", "Proposed", null, DateTimeOffset.UtcNow)],
+            []
+        );
+
+        _apiClientMock
+            .Setup(c => c.GetTagDetailAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+        _apiClientMock
+            .Setup(c => c.GetPendingProposalsForTagAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(proposals);
+
+        _apiClientMock
+            .Setup(c => c.ApproveTagNameProposalAsync(55, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        IRenderedComponent<TagDetailPage> cut = _ctx.Render<TagDetailPage>(p => p.Add(x => x.TagId, 1));
+
+        // Act: 承認ボタンをクリック
+        var approveBtn = cut.Find("[data-testid='approve-name-prop-55']");
+        await cut.InvokeAsync(() => approveBtn.Click());
+
+        // Assert
+        _apiClientMock.Verify(c => c.ApproveTagNameProposalAsync(55, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

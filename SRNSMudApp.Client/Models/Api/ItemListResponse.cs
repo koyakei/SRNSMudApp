@@ -421,3 +421,45 @@ public sealed record UserConfirmationDto(
     string? Email,
     bool EmailConfirmed
 );
+
+/// <summary>
+/// タグ名変更提案 DTO。
+/// </summary>
+public sealed record TagNameProposalDto(
+    int Id,
+    int TagId,
+    string TargetTagName,
+    string ProposedName,
+    string RequesterUserId,
+    string? RequesterUserName,
+    string OwnerUserId,
+    string? Reason,
+    string Status,
+    string? RejectReason,
+    DateTimeOffset CreatedDate
+);
+
+/// <summary>
+/// タグ内容変更提案 DTO。
+/// </summary>
+public sealed record TagContentProposalDto(
+    int Id,
+    int TagId,
+    string TargetTagName,
+    string ProposedContent,
+    string RequesterUserId,
+    string? RequesterUserName,
+    string OwnerUserId,
+    string? Reason,
+    string Status,
+    string? RejectReason,
+    DateTimeOffset CreatedDate
+);
+
+/// <summary>
+/// タグに対する保留中提案一覧 DTO。
+/// </summary>
+public sealed record TagPendingProposalsDto(
+    IReadOnlyList<TagNameProposalDto> NameProposals,
+    IReadOnlyList<TagContentProposalDto> ContentProposals
+);

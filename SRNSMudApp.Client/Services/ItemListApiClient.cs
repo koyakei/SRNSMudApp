@@ -415,6 +415,51 @@ public interface IItemListApiClient
     /// 指定したユーザーのメール確認状態を反転します（管理者専用）。
     /// </summary>
     Task<bool> ToggleUserConfirmationAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ名変更提案を申請します。
+    /// </summary>
+    Task<TagNameProposalDto?> ProposeTagNameAsync(ProposeTagNameRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ内容変更提案を申請します。
+    /// </summary>
+    Task<TagContentProposalDto?> ProposeTagContentAsync(ProposeTagContentRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたタグに対する保留中提案一覧を取得します。
+    /// </summary>
+    Task<TagPendingProposalsDto?> GetPendingProposalsForTagAsync(int tagId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ名変更提案を承認します（タグ所有者のみ）。
+    /// </summary>
+    Task<bool> ApproveTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ名変更提案を却下します（タグ所有者のみ）。
+    /// </summary>
+    Task<bool> RejectTagNameProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ内容変更提案を承認します（タグ所有者のみ）。
+    /// </summary>
+    Task<bool> ApproveTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグ内容変更提案を却下します（タグ所有者のみ）。
+    /// </summary>
+    Task<bool> RejectTagContentProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 申請したタグ名変更提案を取り下げます（申請者本人のみ）。
+    /// </summary>
+    Task<bool> CancelTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 申請したタグ内容変更提案を取り下げます（申請者本人のみ）。
+    /// </summary>
+    Task<bool> CancelTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1121,5 +1166,70 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         }
 
         return await response.Content.ReadFromJsonAsync<bool>(cancellationToken);
+    }
+
+    public async Task<TagNameProposalDto?> ProposeTagNameAsync(ProposeTagNameRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag-proposal/name", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<TagNameProposalDto>(cancellationToken);
+    }
+
+    public async Task<TagContentProposalDto?> ProposeTagContentAsync(ProposeTagContentRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag-proposal/content", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<TagContentProposalDto>(cancellationToken);
+    }
+
+    public async Task<TagPendingProposalsDto?> GetPendingProposalsForTagAsync(int tagId, CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<TagPendingProposalsDto>($"api/tag-proposal/tag/{tagId}/pending", cancellationToken);
+    }
+
+    public async Task<bool> ApproveTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/tag-proposal/name/{proposalId}/approve", UriKind.Relative), null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> RejectTagNameProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/tag-proposal/name/{proposalId}/reject", request ?? new RejectProposalRequest(), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ApproveTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/tag-proposal/content/{proposalId}/approve", UriKind.Relative), null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> RejectTagContentProposalAsync(int proposalId, RejectProposalRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/tag-proposal/content/{proposalId}/reject", request ?? new RejectProposalRequest(), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> CancelTagNameProposalAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/tag-proposal/name/{proposalId}/cancel", UriKind.Relative), null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> CancelTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/tag-proposal/content/{proposalId}/cancel", UriKind.Relative), null, cancellationToken);
+        return response.IsSuccessStatusCode;
     }
 }

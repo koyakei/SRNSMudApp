@@ -77,6 +77,44 @@
                         </div>
                     </div>
                 }
+                else if (_isProposing)
+                {
+                    <div class="d-flex flex-column gap-3" data-testid="tag-proposal-form">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @(_proposalType == "name" ? "タグ名の変更を提案" : "説明文の変更を提案")
+                        </MudText>
+                        @if (_proposalType == "name")
+                        {
+                            <MudTextField @bind-Value="_proposedName" Label="新しいタグ名 *" Variant="Variant.Outlined" Required="true"
+                                          data-testid="proposal-name-input" />
+                        }
+                        else
+                        {
+                            <MudTextField @bind-Value="_proposedContent" Label="新しい説明文 *" Variant="Variant.Outlined" Lines="3" Required="true"
+                                          data-testid="proposal-content-input" />
+                        }
+                        <MudTextField @bind-Value="_proposalReason" Label="提案理由や補足（任意）" Variant="Variant.Outlined" Lines="2"
+                                      data-testid="proposal-reason-input" />
+                        <div class="d-flex justify-end gap-2 mt-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => _isProposing = false)"
+                                       data-testid="cancel-proposal-btn">
+                                キャンセル
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitProposalAsync"
+                                       Disabled="_isSubmittingProposal" data-testid="submit-proposal-btn">
+                                @if (_isSubmittingProposal)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                    <span class="ms-2">送信中...</span>
+                                }
+                                else
+                                {
+                                    <span>提案を送信</span>
+                                }
+                            </MudButton>
+                        </div>
+                    </div>
+                }
                 else
                 {
                     <div class="d-flex align-start justify-space-between flex-wrap gap-3">
@@ -163,6 +201,21 @@
                                            OnClick="StartDelete"
                                            data-testid="delete-tag-btn">
                                     削除
+                                </MudButton>
+                            }
+                            else if (!string.IsNullOrEmpty(_currentUserId) && !Tag.IsLocked)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.DriveFileRenameOutline"
+                                           OnClick="@(() => StartProposal("name"))"
+                                           data-testid="propose-name-btn">
+                                    名前を提案
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.EditNote"
+                                           OnClick="@(() => StartProposal("content"))"
+                                           data-testid="propose-content-btn">
+                                    説明を提案
                                 </MudButton>
                             }
 
@@ -289,11 +342,11 @@
                 }
             </MudTabPanel>
 
-            <MudTabPanel Text="@($"リクエスト ({Tag.PendingRequests.Count})")" Icon="@Icons.Material.Filled.PendingActions">
+            <MudTabPanel Text="@($"タグ付け提案 ({Tag.PendingRequests.Count})")" Icon="@Icons.Material.Filled.PendingActions">
                 @if (Tag.PendingRequests.Count == 0)
                 {
                     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        保留中のリクエストはありません。
+                        保留中のタグ付け提案はありません。
                     </MudText>
                 }
                 else
@@ -311,14 +364,113 @@
                                             提案者: @(req.RequesterUserName ?? req.RequesterUserId) | 提案ウェイト: @req.ProposedWeight
                                         </MudText>
                                     </div>
-                                    <div class="d-flex gap-2">
-                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                   OnClick="@(() => ApproveRequestAsync(req.Id))">承認</MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                   OnClick="@(() => RejectRequestAsync(req.Id))">却下</MudButton>
-                                    </div>
+                                    @if (CanEditOrDelete)
+                                    {
+                                        <div class="d-flex gap-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       OnClick="@(() => ApproveRequestAsync(req.Id))">承認</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                       OnClick="@(() => RejectRequestAsync(req.Id))">却下</MudButton>
+                                        </div>
+                                    }
                                 </div>
                             </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"変更提案 ({TotalPendingProposals})")" Icon="@Icons.Material.Filled.Feedback"
+                         data-testid="proposals-tab">
+                @if (_pendingProposals == null || TotalPendingProposals == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        保留中の変更提案はありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        @if (_pendingProposals.NameProposals.Count > 0)
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">タグ名変更の提案</MudText>
+                            @foreach (var prop in _pendingProposals.NameProposals)
+                            {
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"name-proposal-{prop.Id}")">
+                                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                        <div>
+                                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                                新名称案: 「@prop.ProposedName」
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
+                                            </MudText>
+                                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
+                                            {
+                                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
+                                            }
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            @if (CanEditOrDelete)
+                                            {
+                                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                           OnClick="@(() => ApproveNameProposalAsync(prop.Id))"
+                                                           data-testid="@($"approve-name-prop-{prop.Id}")">承認</MudButton>
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                           OnClick="@(() => RejectNameProposalAsync(prop.Id))"
+                                                           data-testid="@($"reject-name-prop-{prop.Id}")">却下</MudButton>
+                                            }
+                                            else if (prop.RequesterUserId == _currentUserId)
+                                            {
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                                                           OnClick="@(() => CancelNameProposalAsync(prop.Id))"
+                                                           data-testid="@($"cancel-name-prop-{prop.Id}")">取り下げ</MudButton>
+                                            }
+                                        </div>
+                                    </div>
+                                </MudPaper>
+                            }
+                        }
+
+                        @if (_pendingProposals.ContentProposals.Count > 0)
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">説明文変更の提案</MudText>
+                            @foreach (var prop in _pendingProposals.ContentProposals)
+                            {
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" data-testid="@($"content-proposal-{prop.Id}")">
+                                    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                        <div>
+                                            <MudText Typo="Typo.body2" Class="font-weight-bold" Style="white-space: pre-wrap;">
+                                                新説明案: @prop.ProposedContent
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                提案者: @(prop.RequesterUserName ?? prop.RequesterUserId) | @prop.CreatedDate.ToLocalTime().ToString("g")
+                                            </MudText>
+                                            @if (!string.IsNullOrWhiteSpace(prop.Reason))
+                                            {
+                                                <MudText Typo="Typo.body2" Class="mt-1">理由: @prop.Reason</MudText>
+                                            }
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            @if (CanEditOrDelete)
+                                            {
+                                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                           OnClick="@(() => ApproveContentProposalAsync(prop.Id))"
+                                                           data-testid="@($"approve-content-prop-{prop.Id}")">承認</MudButton>
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                           OnClick="@(() => RejectContentProposalAsync(prop.Id))"
+                                                           data-testid="@($"reject-content-prop-{prop.Id}")">却下</MudButton>
+                                            }
+                                            else if (prop.RequesterUserId == _currentUserId)
+                                            {
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                                                           OnClick="@(() => CancelContentProposalAsync(prop.Id))"
+                                                           data-testid="@($"cancel-content-prop-{prop.Id}")">取り下げ</MudButton>
+                                            }
+                                        </div>
+                                    </div>
+                                </MudPaper>
+                            }
                         }
                     </MudStack>
                 }
@@ -364,6 +516,16 @@
     private bool _showDeleteConfirm;
     private bool _isDeleting;
 
+    private TagPendingProposalsDto? _pendingProposals;
+    private int TotalPendingProposals => (_pendingProposals?.NameProposals.Count ?? 0) + (_pendingProposals?.ContentProposals.Count ?? 0);
+
+    private bool _isProposing;
+    private string _proposalType = "name";
+    private string _proposedName = string.Empty;
+    private string _proposedContent = string.Empty;
+    private string? _proposalReason;
+    private bool _isSubmittingProposal;
+
     protected override async Task OnInitializedAsync()
     {
         if (AuthStateTask != null)
@@ -383,6 +545,7 @@
         try
         {
             Tag = await ApiClient.GetTagDetailAsync(TagId, _cts.Token);
+            _pendingProposals = await ApiClient.GetPendingProposalsForTagAsync(TagId, _cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -477,6 +640,198 @@
         {
             _isDeleting = false;
             _showDeleteConfirm = false;
+        }
+    }
+
+    private void StartProposal(string type)
+    {
+        _proposalType = type;
+        _proposedName = Tag?.Name ?? string.Empty;
+        _proposedContent = Tag?.Content ?? string.Empty;
+        _proposalReason = string.Empty;
+        _isProposing = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task SubmitProposalAsync()
+    {
+        _isSubmittingProposal = true;
+        try
+        {
+            if (_proposalType == "name")
+            {
+                if (string.IsNullOrWhiteSpace(_proposedName))
+                {
+                    Snackbar.Add("提案するタグ名を入力してください。", Severity.Warning);
+                    return;
+                }
+
+                var req = new ProposeTagNameRequest(TagId, _proposedName.Trim(), _proposalReason?.Trim());
+                var res = await ApiClient.ProposeTagNameAsync(req, _cts.Token);
+                if (res != null)
+                {
+                    Snackbar.Add("タグ名変更の提案を送信しました。", Severity.Success);
+                    _isProposing = false;
+                    await LoadTagAsync();
+                }
+                else
+                {
+                    Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
+                }
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(_proposedContent))
+                {
+                    Snackbar.Add("提案する説明文を入力してください。", Severity.Warning);
+                    return;
+                }
+
+                var req = new ProposeTagContentRequest(TagId, _proposedContent.Trim(), _proposalReason?.Trim());
+                var res = await ApiClient.ProposeTagContentAsync(req, _cts.Token);
+                if (res != null)
+                {
+                    Snackbar.Add("説明文変更の提案を送信しました。", Severity.Success);
+                    _isProposing = false;
+                    await LoadTagAsync();
+                }
+                else
+                {
+                    Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"提案送信エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingProposal = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTagNameProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグ名変更提案を承認しました。", Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("承認に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTagNameProposalAsync(proposalId, cancellationToken: _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグ名変更提案を却下しました。", Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("却下に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CancelNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.CancelTagNameProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("提案を取り下げました。", Severity.Info);
+                await LoadTagAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTagContentProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("説明文変更提案を承認しました。", Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("承認に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTagContentProposalAsync(proposalId, cancellationToken: _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("説明文変更提案を却下しました。", Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("却下に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CancelContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.CancelTagContentProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("提案を取り下げました。", Severity.Info);
+                await LoadTagAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
         }
     }
 
