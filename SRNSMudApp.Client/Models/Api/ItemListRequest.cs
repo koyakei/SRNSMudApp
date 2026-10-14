@@ -248,3 +248,23 @@ public sealed record ProposeTagContentRequest(int TagId, string ProposedContent,
 /// 提案却下 API のリクエスト DTO。
 /// </summary>
 public sealed record RejectProposalRequest(string? RejectReason = null);
+
+/// <summary>
+/// タグ提案・推論 API のリクエスト DTO。
+/// </summary>
+public sealed record TagSuggestionRequest(string Content, float? MinScore = null);
+
+/// <summary>
+/// アイテム直接分割 API のリクエスト DTO。
+/// </summary>
+public sealed record DirectSplitItemRequest(int OriginalItemId, string SelectedText);
+
+/// <summary>
+/// アイテム分割リクエスト申請 API のリクエスト DTO。
+/// </summary>
+public sealed record RequestItemSplitRequest(int OriginalItemId, string SelectedText);
+
+/// <summary>
+/// アイテム分割リクエスト却下 API のリクエスト DTO。
+/// </summary>
+public sealed record RejectSplitRequest(string? RejectReason = null);

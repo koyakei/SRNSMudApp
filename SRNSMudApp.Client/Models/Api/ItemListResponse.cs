@@ -463,3 +463,23 @@ public sealed record TagPendingProposalsDto(
     IReadOnlyList<TagNameProposalDto> NameProposals,
     IReadOnlyList<TagContentProposalDto> ContentProposals
 );
+
+/// <summary>
+/// タグ提案・推論結果 DTO。
+/// </summary>
+public sealed record SuggestedTagDto(int TagId, string TagName, float Score);
+
+/// <summary>
+/// アイテム分割リクエスト DTO。
+/// </summary>
+public sealed record ItemSplitRequestDto(
+    int Id,
+    int OriginalItemId,
+    string SelectedText,
+    string RequesterUserId,
+    string? RequesterUserName,
+    string OwnerUserId,
+    string Status,
+    string? RejectReason,
+    DateTimeOffset CreatedDate
+);

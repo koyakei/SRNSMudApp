@@ -2232,4 +2232,190 @@ public class ItemListApiClientTests
         // Assert
         Assert.True(result);
     }
+
+    [Fact]
+    public async Task GetTagSuggestionsAsync_ReturnsSuggestions()
+    {
+        // Arrange
+        var suggestions = new List<SuggestedTagDto>
+        {
+            new(1, "推論タグ", 0.9f)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag/suggestions", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(suggestions), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<SuggestedTagDto>? result = await apiClient.GetTagSuggestionsAsync(new TagSuggestionRequest("テキスト"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal("推論タグ", result[0].TagName);
+    }
+
+    [Fact]
+    public async Task SplitItemDirectlyAsync_ReturnsItemDto()
+    {
+        // Arrange
+        var itemDto = new ItemDto(200, "分割テキスト", "owner", DateTimeOffset.UtcNow, false, [], "{}");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/item-split/direct", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(itemDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ItemDto? result = await apiClient.SplitItemDirectlyAsync(new DirectSplitItemRequest(10, "分割テキスト"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(200, result.Id);
+    }
+
+    [Fact]
+    public async Task RequestItemSplitAsync_ReturnsRequestDto()
+    {
+        // Arrange
+        var requestDto = new ItemSplitRequestDto(5, 10, "テキスト", "u2", "user2", "u1", "Pending", null, DateTime.UtcNow);
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/item-split/request", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(requestDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ItemSplitRequestDto? result = await apiClient.RequestItemSplitAsync(new RequestItemSplitRequest(10, "テキスト"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(5, result.Id);
+    }
+
+    [Fact]
+    public async Task GetPendingSplitRequestsAsync_ReturnsList()
+    {
+        // Arrange
+        var list = new List<ItemSplitRequestDto>
+        {
+            new(5, 10, "テキスト", "u2", "user2", "u1", "Pending", null, DateTime.UtcNow)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/item-split/item/10/pending", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(list), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<ItemSplitRequestDto>? result = await apiClient.GetPendingSplitRequestsAsync(10);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(5, result[0].Id);
+    }
+
+    [Fact]
+    public async Task ApproveItemSplitAsync_ReturnsItemDto()
+    {
+        // Arrange
+        var itemDto = new ItemDto(201, "承認テキスト", "owner", DateTimeOffset.UtcNow, false, [], "{}");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/item-split/5/approve", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(itemDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ItemDto? result = await apiClient.ApproveItemSplitAsync(5);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(201, result.Id);
+    }
+
+    [Fact]
+    public async Task RejectItemSplitAsync_ReturnsTrueOnSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/item-split/5/reject", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(true), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.RejectItemSplitAsync(5, new RejectSplitRequest("不要"));
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task CancelItemSplitAsync_ReturnsTrueOnSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/item-split/5/cancel", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(true), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.CancelItemSplitAsync(5);
+
+        // Assert
+        Assert.True(result);
+    }
 }

@@ -26,7 +26,8 @@ public sealed class TagController(
     IHomeDataProvider homeDataProvider,
     ITagTreeDataProvider? tagTreeDataProvider = null,
     ITagDetailDataProvider? tagDetailDataProvider = null,
-    ITagSearchQueryService? tagSearchQueryService = null) : ControllerBase
+    ITagSearchQueryService? tagSearchQueryService = null,
+    ITagSuggestionService? tagSuggestionService = null) : ControllerBase
 {
     private readonly ITagCommandService _tagCommandService =
         tagCommandService ?? throw new ArgumentNullException(nameof(tagCommandService));
@@ -37,6 +38,7 @@ public sealed class TagController(
     private readonly ITagTreeDataProvider? _tagTreeDataProvider = tagTreeDataProvider;
     private readonly ITagDetailDataProvider? _tagDetailDataProvider = tagDetailDataProvider;
     private readonly ITagSearchQueryService? _tagSearchQueryService = tagSearchQueryService;
+    private readonly ITagSuggestionService? _tagSuggestionService = tagSuggestionService;
 
     /// <summary>
     /// 新規タグを作成します。
@@ -405,6 +407,34 @@ public sealed class TagController(
             : await _tagSearchQueryService.SearchTagsAsync(q.Trim(), currentUserId, isAdmin);
 
         var dtos = tags.Select(MapToTagDto).ToList();
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// 入力テキストから関連タグを推論・提案します。
+    /// </summary>
+    [HttpPost("suggestions")]
+    public async Task<ActionResult<IReadOnlyList<SuggestedTagDto>>> SuggestTags(
+        [FromBody] TagSuggestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (_tagSuggestionService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            return Ok(Array.Empty<SuggestedTagDto>());
+        }
+
+        float minScore = request.MinScore ?? SRNSMudApp.Models.SuggestedTag.DefaultCandidateThreshold;
+        IReadOnlyList<SRNSMudApp.Models.SuggestedTag> suggestions =
+            await _tagSuggestionService.SuggestTagsAsync(request.Content.Trim(), minScore, cancellationToken);
+
+        var dtos = suggestions.Select(s => new SuggestedTagDto(s.TagId, s.TagName, s.Score)).ToList();
         return Ok(dtos);
     }
 }

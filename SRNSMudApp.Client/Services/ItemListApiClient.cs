@@ -460,6 +460,41 @@ public interface IItemListApiClient
     /// 申請したタグ内容変更提案を取り下げます（申請者本人のみ）。
     /// </summary>
     Task<bool> CancelTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 入力テキストから関連タグを推論・提案します。
+    /// </summary>
+    Task<IReadOnlyList<SuggestedTagDto>?> GetTagSuggestionsAsync(TagSuggestionRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// アイテム所有者として、選択テキストを新規アイテムへ直接分割します。
+    /// </summary>
+    Task<ItemDto?> SplitItemDirectlyAsync(DirectSplitItemRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 他ユーザーのアイテムに対し、テキスト分割リクエストを申請します。
+    /// </summary>
+    Task<ItemSplitRequestDto?> RequestItemSplitAsync(RequestItemSplitRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたアイテムに対する保留中の分割リクエスト一覧を取得します。
+    /// </summary>
+    Task<IReadOnlyList<ItemSplitRequestDto>?> GetPendingSplitRequestsAsync(int itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// アイテム所有者として分割リクエストを承認します。
+    /// </summary>
+    Task<ItemDto?> ApproveItemSplitAsync(int requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// アイテム所有者として分割リクエストを却下します。
+    /// </summary>
+    Task<bool> RejectItemSplitAsync(int requestId, RejectSplitRequest? request = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 申請した分割リクエストを取り下げます（申請者本人のみ）。
+    /// </summary>
+    Task<bool> CancelItemSplitAsync(int requestId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1230,6 +1265,70 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     public async Task<bool> CancelTagContentProposalAsync(int proposalId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/tag-proposal/content/{proposalId}/cancel", UriKind.Relative), null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<SuggestedTagDto>?> GetTagSuggestionsAsync(TagSuggestionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag/suggestions", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<SuggestedTagDto>>(cancellationToken);
+    }
+
+    public async Task<ItemDto?> SplitItemDirectlyAsync(DirectSplitItemRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/item-split/direct", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+    }
+
+    public async Task<ItemSplitRequestDto?> RequestItemSplitAsync(RequestItemSplitRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/item-split/request", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ItemSplitRequestDto>(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ItemSplitRequestDto>?> GetPendingSplitRequestsAsync(int itemId, CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<List<ItemSplitRequestDto>>($"api/item-split/item/{itemId}/pending", cancellationToken);
+    }
+
+    public async Task<ItemDto?> ApproveItemSplitAsync(int requestId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/item-split/{requestId}/approve", UriKind.Relative), null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+    }
+
+    public async Task<bool> RejectItemSplitAsync(int requestId, RejectSplitRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/item-split/{requestId}/reject", request ?? new RejectSplitRequest(), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> CancelItemSplitAsync(int requestId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/item-split/{requestId}/cancel", UriKind.Relative), null, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 }

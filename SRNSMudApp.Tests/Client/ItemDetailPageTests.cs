@@ -170,6 +170,60 @@ public class ItemDetailPageTests : IAsyncDisposable
         Assert.Contains("却下", cut.Markup);
     }
 
+    [Fact]
+    public void WhenPendingSplitRequestsExist_RendersSplitRequestCards()
+    {
+        // Arrange
+        var item = new ItemDto(
+            Id: 42,
+            Content: "分割リクエストテスト",
+            OwnerUserName: "alice",
+            UpdatedDate: DateTimeOffset.UtcNow,
+            IsPrivate: false,
+            TagRelations: [],
+            ItemKindJson: "{}",
+            Score: 10
+        );
+        var splitRequest = new ItemSplitRequestDto(
+            Id: 88,
+            OriginalItemId: 42,
+            SelectedText: "分割したい抜粋文",
+            RequesterUserId: "req-user",
+            RequesterUserName: "requester_bob",
+            OwnerUserId: "alice",
+            Status: "Proposed",
+            RejectReason: null,
+            CreatedDate: DateTime.UtcNow
+        );
+
+        _apiClientMock
+            .Setup(c => c.GetItemByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+        _apiClientMock
+            .Setup(c => c.GetRepliesAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetQuotedByItemsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetTaggingRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetPendingSplitRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([splitRequest]);
+
+        // Act
+        IRenderedComponent<ItemDetailPage> cut = _ctx.Render<ItemDetailPage>(p => p.Add(x => x.ItemId, 42));
+
+        // Assert
+        Assert.Contains("保留中の分割リクエスト (1)", cut.Markup);
+        Assert.Contains("分割したい抜粋文", cut.Markup);
+        Assert.Contains("requester_bob", cut.Markup);
+        Assert.Contains("テキストを新規アイテムに分割", cut.Markup);
+        Assert.Contains("直接分割（所有者）", cut.Markup);
+        Assert.Contains("分割リクエスト", cut.Markup);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

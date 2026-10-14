@@ -26,6 +26,7 @@ public class TagControllerTests
     private readonly Mock<IHomeDataProvider> _homeDataMock = new();
     private readonly Mock<ITagDetailDataProvider> _tagDetailDataMock = new();
     private readonly Mock<ITagSearchQueryService> _tagSearchQueryMock = new();
+    private readonly Mock<ITagSuggestionService> _tagSuggestionMock = new();
 
     private TagController CreateController(ClaimsPrincipal? user = null)
     {
@@ -35,7 +36,8 @@ public class TagControllerTests
             _homeDataMock.Object,
             null,
             _tagDetailDataMock.Object,
-            _tagSearchQueryMock.Object);
+            _tagSearchQueryMock.Object,
+            _tagSuggestionMock.Object);
 
         if (user != null)
         {
@@ -319,5 +321,47 @@ public class TagControllerTests
         var dtos = Assert.IsAssignableFrom<IReadOnlyList<TagDto>>(okResult.Value);
         Assert.Single(dtos);
         Assert.Equal("SearchedTag", dtos[0].Name);
+    }
+
+    [Fact]
+    public async Task SuggestTags_WhenEmptyContent_ReturnsEmptyList()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        // Act
+        ActionResult<IReadOnlyList<SuggestedTagDto>> result =
+            await controller.SuggestTags(new TagSuggestionRequest("   "), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<SuggestedTagDto>>(okResult.Value);
+        Assert.Empty(dtos);
+    }
+
+    [Fact]
+    public async Task SuggestTags_WhenValidContent_ReturnsSuggestions()
+    {
+        // Arrange
+        var controller = CreateController();
+        var suggestions = new List<SuggestedTag>
+        {
+            new(1, "推論タグ1", 0.85f)
+        };
+
+        _tagSuggestionMock
+            .Setup(s => s.SuggestTagsAsync("本文テキスト", 0.5f, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(suggestions);
+
+        // Act
+        ActionResult<IReadOnlyList<SuggestedTagDto>> result =
+            await controller.SuggestTags(new TagSuggestionRequest("本文テキスト", 0.5f), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<SuggestedTagDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal("推論タグ1", dtos[0].TagName);
+        Assert.Equal(0.85f, dtos[0].Score);
     }
 }
