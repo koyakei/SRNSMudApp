@@ -26,6 +26,13 @@
         </div>
 
         <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@(_showProposePanel ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                       OnClick="@(() => _showProposePanel = !_showProposePanel)"
+                       data-testid="toggle-propose-contract-btn">
+                @(_showProposePanel ? "閉じる" : "契約を提案する")
+            </MudButton>
             <MudIconButton Icon="@Icons.Material.Filled.Refresh"
                            OnClick="@LoadContractsAsync"
                            aria-label="再読み込み"
@@ -33,6 +40,113 @@
                            data-testid="refresh-contracts-btn" />
         </div>
     </div>
+
+    @* 新規コントラクト提案パネル *@
+    @if (_showProposePanel)
+    {
+        <MudCard Class="pa-4 mb-6" Elevation="2" data-testid="propose-contract-panel">
+            <MudText Typo="Typo.h6" Class="mb-3 font-weight-bold">新しいタグ付け契約を提案</MudText>
+            <MudRadioGroup @bind-Value="_proposeContractType" Class="mb-3">
+                <MudRadio Value="@("Gratis")" Color="Color.Primary" Dense="true">無償提案 (Gratis)</MudRadio>
+                <MudRadio Value="@("Mutual")" Color="Color.Secondary" Dense="true">相互タグ付け (Mutual)</MudRadio>
+            </MudRadioGroup>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeTargetItemId"
+                                     Label="対象アイテム ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="タグを付けたい相手のアイテムID"
+                                     data-testid="propose-item-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeRequestedTagId"
+                                     Label="申請タグ ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="付与を提案するタグのID"
+                                     data-testid="propose-tag-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeWeight"
+                                     Label="提案ウェイト (重み)"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     Max="100"
+                                     data-testid="propose-weight-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_proposeMessage"
+                                  Label="メッセージ (任意)"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="提案理由や依頼メッセージ"
+                                  data-testid="propose-message-input" />
+                </MudItem>
+
+                @if (_proposeContractType == "Mutual")
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">相互提供条件</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeOfferedItemId"
+                                         Label="見返りアイテム ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="相手にタグ付けを許可する自分のアイテムID"
+                                         data-testid="propose-offered-item-id-input" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeOfferedTagId"
+                                         Label="見返りタグ ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="相手が付けるタグのID"
+                                         data-testid="propose-offered-tag-id-input" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeConsumedAssetId"
+                                         Label="消費ライトアセット ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="消費する権利アセットのID"
+                                         data-testid="propose-consumed-asset-id-input" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12" Class="d-flex justify-end gap-2 mt-2">
+                    <MudButton Variant="Variant.Outlined"
+                               OnClick="@(() => _showProposePanel = false)">
+                        キャンセル
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="@SubmitProposalAsync"
+                               Disabled="@(_isProposing || _proposeTargetItemId <= 0 || _proposeRequestedTagId <= 0 || (_proposeContractType == "Mutual" && (_proposeOfferedItemId <= 0 || _proposeOfferedTagId <= 0 || _proposeConsumedAssetId <= 0)))"
+                               data-testid="submit-propose-contract-btn">
+                        @if (_isProposing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>送信中...</span>
+                        }
+                        else
+                        {
+                            <span>提案を送信</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCard>
+    }
 
     @if (_isLoading)
     {
@@ -202,9 +316,74 @@
     private bool _isLoading = true;
     private CancellationTokenSource? _cts;
 
+    private bool _showProposePanel;
+    private string _proposeContractType = "Gratis";
+    private int _proposeTargetItemId;
+    private int _proposeRequestedTagId;
+    private int _proposeWeight = 1;
+    private string? _proposeMessage;
+    private int _proposeOfferedItemId;
+    private int _proposeOfferedTagId;
+    private int _proposeConsumedAssetId;
+    private bool _isProposing;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadContractsAsync();
+    }
+
+    private async Task SubmitProposalAsync()
+    {
+        _isProposing = true;
+        try
+        {
+            ContractDto? result;
+            if (_proposeContractType == "Mutual")
+            {
+                var req = new ProposeMutualContractRequest(
+                    TargetItemId: _proposeTargetItemId,
+                    RequestedTagId: _proposeRequestedTagId,
+                    OfferedTargetItemId: _proposeOfferedItemId,
+                    OfferedTagId: _proposeOfferedTagId,
+                    ConsumedRightAssetId: _proposeConsumedAssetId,
+                    ProposedWeight: _proposeWeight);
+                result = await ApiClient.ProposeMutualContractAsync(req, _cts?.Token ?? default);
+            }
+            else
+            {
+                var req = new ProposeGratisContractRequest(
+                    TargetItemId: _proposeTargetItemId,
+                    RequestedTagId: _proposeRequestedTagId,
+                    ProposedWeight: _proposeWeight,
+                    Message: _proposeMessage);
+                result = await ApiClient.ProposeGratisContractAsync(req, _cts?.Token ?? default);
+            }
+
+            if (result != null)
+            {
+                Snackbar.Add("契約提案を送信しました。", Severity.Success);
+                _showProposePanel = false;
+                _proposeTargetItemId = 0;
+                _proposeRequestedTagId = 0;
+                _proposeMessage = null;
+                _proposeOfferedItemId = 0;
+                _proposeOfferedTagId = 0;
+                _proposeConsumedAssetId = 0;
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("契約提案の送信に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProposing = false;
+        }
     }
 
     private async Task LoadContractsAsync()

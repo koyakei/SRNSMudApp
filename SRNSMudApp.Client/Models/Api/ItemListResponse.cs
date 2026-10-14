@@ -483,3 +483,14 @@ public sealed record ItemSplitRequestDto(
     string? RejectReason,
     DateTimeOffset CreatedDate
 );
+
+/// <summary>
+/// ライトアセット（タグ権利アセット）情報 DTO。
+/// </summary>
+public sealed record RightAssetDto(
+    int Id,
+    int TargetTagId,
+    string TargetTagName,
+    int Amount,
+    bool IsBurned
+);

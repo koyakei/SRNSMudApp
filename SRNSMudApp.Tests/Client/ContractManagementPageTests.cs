@@ -132,6 +132,28 @@ public class ContractManagementPageTests : IAsyncDisposable
         _apiClientMock.Verify(c => c.AcceptContractAsync(1, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task WhenToggleProposeClicked_ShowsProposePanel()
+    {
+        // Arrange
+        var response = new ContractPageResponse([], []);
+        _apiClientMock
+            .Setup(c => c.GetContractsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response);
+
+        IRenderedComponent<ContractManagementPage> cut = _ctx.Render<ContractManagementPage>();
+
+        // Act
+        var toggleBtn = cut.Find("button[data-testid='toggle-propose-contract-btn']");
+        await cut.InvokeAsync(() => toggleBtn.Click());
+
+        // Assert
+        Assert.Contains("新しいタグ付け契約を提案", cut.Markup);
+        Assert.Contains("対象アイテム ID", cut.Markup);
+        Assert.Contains("申請タグ ID", cut.Markup);
+        Assert.Contains("提案を送信", cut.Markup);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

@@ -23,12 +23,16 @@ public class ContractControllerTests
 {
     private readonly Mock<IContractManagementDataProvider> _contractDataProviderMock = new();
     private readonly Mock<ITaggingContractService> _taggingContractServiceMock = new();
+    private readonly Mock<IContractLookupDataProvider> _contractLookupDataProviderMock = new();
+    private readonly Mock<ITagDetailDataProvider> _tagDetailDataProviderMock = new();
 
     private ContractController CreateController(ClaimsPrincipal? user = null)
     {
         var controller = new ContractController(
             _contractDataProviderMock.Object,
-            _taggingContractServiceMock.Object);
+            _taggingContractServiceMock.Object,
+            _contractLookupDataProviderMock.Object,
+            _tagDetailDataProviderMock.Object);
 
         var httpContext = new DefaultHttpContext();
         if (user != null)
@@ -155,5 +159,168 @@ public class ContractControllerTests
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task GetAvailableAssets_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        // Act
+        ActionResult<IReadOnlyList<RightAssetDto>> result = await controller.GetAvailableAssets(CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetAvailableAssets_Authorized_ReturnsMappedAssets()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-1")], "test"));
+        var controller = CreateController(user);
+
+        var asset = new RightAsset
+        {
+            Id = 1,
+            OwnerId = "user-1",
+            TargetTagId = 10,
+            TargetTag = new Tag { Id = 10, Name = "TagName", OwnerId = "user-1" },
+            Amount = 5,
+            IsBurned = false
+        };
+
+        _contractLookupDataProviderMock
+            .Setup(p => p.GetAvailableRightAssetsAsync("user-1"))
+            .ReturnsAsync([asset]);
+
+        // Act
+        ActionResult<IReadOnlyList<RightAssetDto>> result = await controller.GetAvailableAssets(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<RightAssetDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(1, dtos[0].Id);
+        Assert.Equal("TagName", dtos[0].TargetTagName);
+        Assert.Equal(5, dtos[0].Amount);
+    }
+
+    [Fact]
+    public async Task ProposeGratis_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.ProposeGratis(new ProposeGratisContractRequest(10, 20), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ProposeGratis_Success_ReturnsContractDto()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-1")], "test"));
+        var controller = CreateController(user);
+
+        var tag = new Tag { Id = 20, Name = "TagName", OwnerId = "owner-2" };
+        var tagDetail = new TagDetailPageData(
+            Tag: tag,
+            IsFollowing: false,
+            RelatedItems: [],
+            RelatedTags: [],
+            WeightLedgers: [],
+            PublicOffers: [],
+            PendingRequests: []
+        );
+
+        _tagDetailDataProviderMock
+            .Setup(p => p.GetTagDetailAsync(20, "user-1", It.IsAny<bool>()))
+            .ReturnsAsync(tagDetail);
+
+        var createdContract = new TaggingRequestEntity
+        {
+            Id = 99,
+            ContractType = "Gratis",
+            OwnerId = "user-1",
+            RequesterUserId = "user-1",
+            TagOwnerUserId = "owner-2",
+            RequestedTagId = 20,
+            RequestedTag = tag,
+            TargetItemId = 10,
+            TargetItem = new Item { Id = 10, Content = "Content", OwnerId = "user-1" }
+        };
+
+        _taggingContractServiceMock
+            .Setup(s => s.ProposeGratisContractAsync(
+                "user-1", "owner-2", 10, 20, TaggingRequestType.Add, 1, "よろしく"))
+            .ReturnsAsync(new Success<TaggingRequestEntity>(createdContract));
+
+        // Act
+        var result = await controller.ProposeGratis(
+            new ProposeGratisContractRequest(10, 20, 1, "よろしく"),
+            CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ContractDto>(okResult.Value);
+        Assert.Equal(99, dto.Id);
+        Assert.Equal("Gratis", dto.ContractType);
+    }
+
+    [Fact]
+    public async Task ProposeMutual_Success_ReturnsContractDto()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-1")], "test"));
+        var controller = CreateController(user);
+
+        var tag = new Tag { Id = 20, Name = "TagName", OwnerId = "owner-2" };
+        var tagDetail = new TagDetailPageData(
+            Tag: tag,
+            IsFollowing: false,
+            RelatedItems: [],
+            RelatedTags: [],
+            WeightLedgers: [],
+            PublicOffers: [],
+            PendingRequests: []
+        );
+
+        _tagDetailDataProviderMock
+            .Setup(p => p.GetTagDetailAsync(20, "user-1", It.IsAny<bool>()))
+            .ReturnsAsync(tagDetail);
+
+        var createdContract = new TaggingRequestEntity
+        {
+            Id = 100,
+            ContractType = "Mutual",
+            OwnerId = "user-1",
+            RequesterUserId = "user-1",
+            TagOwnerUserId = "owner-2",
+            RequestedTagId = 20,
+            RequestedTag = tag,
+            TargetItemId = 10,
+            TargetItem = new Item { Id = 10, Content = "Content", OwnerId = "user-1" }
+        };
+
+        _taggingContractServiceMock
+            .Setup(s => s.ProposeMutualContractAsync(
+                "user-1", "owner-2", 10, 20, 11, 21, 5, TaggingRequestType.Add, 1))
+            .ReturnsAsync(new Success<TaggingRequestEntity>(createdContract));
+
+        // Act
+        var result = await controller.ProposeMutual(
+            new ProposeMutualContractRequest(10, 20, 11, 21, 5),
+            CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ContractDto>(okResult.Value);
+        Assert.Equal(100, dto.Id);
+        Assert.Equal("Mutual", dto.ContractType);
     }
 }

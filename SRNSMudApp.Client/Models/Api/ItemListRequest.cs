@@ -268,3 +268,27 @@ public sealed record RequestItemSplitRequest(int OriginalItemId, string Selected
 /// アイテム分割リクエスト却下 API のリクエスト DTO。
 /// </summary>
 public sealed record RejectSplitRequest(string? RejectReason = null);
+
+/// <summary>
+/// Gratis（無償）コントラクト提案 API のリクエスト DTO。
+/// </summary>
+public sealed record ProposeGratisContractRequest(
+    int TargetItemId,
+    int RequestedTagId,
+    int ProposedWeight = 1,
+    string? Message = null,
+    string RequestType = "Add"
+);
+
+/// <summary>
+/// Mutual（相互）コントラクト提案 API のリクエスト DTO。
+/// </summary>
+public sealed record ProposeMutualContractRequest(
+    int TargetItemId,
+    int RequestedTagId,
+    int OfferedTargetItemId,
+    int OfferedTagId,
+    int ConsumedRightAssetId,
+    int ProposedWeight = 1,
+    string RequestType = "Add"
+);

@@ -312,6 +312,21 @@ public interface IItemListApiClient
     Task<bool> CancelContractAsync(int contractId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// ログインユーザーの利用可能ライトアセット一覧を取得します。
+    /// </summary>
+    Task<IReadOnlyList<RightAssetDto>?> GetAvailableRightAssetsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gratis（無償）コントラクト提案を送信します。
+    /// </summary>
+    Task<ContractDto?> ProposeGratisContractAsync(ProposeGratisContractRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mutual（相互）コントラクト提案を送信します。
+    /// </summary>
+    Task<ContractDto?> ProposeMutualContractAsync(ProposeMutualContractRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// RightAsset が発行されている代表的なタグ一覧を取得します。
     /// </summary>
     Task<IReadOnlyList<TagRightAssetSummaryDto>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default);
@@ -1007,6 +1022,44 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/contract/{contractId}/cancel", UriKind.Relative), null, cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<RightAssetDto>?> GetAvailableRightAssetsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<List<RightAssetDto>>("api/contract/available-assets", cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<ContractDto?> ProposeGratisContractAsync(ProposeGratisContractRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/contract/gratis", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ContractDto>(cancellationToken);
+    }
+
+    public async Task<ContractDto?> ProposeMutualContractAsync(ProposeMutualContractRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/contract/mutual", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<ContractDto>(cancellationToken);
     }
 
     public async Task<IReadOnlyList<TagRightAssetSummaryDto>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default)

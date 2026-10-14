@@ -2418,4 +2418,116 @@ public class ItemListApiClientTests
         // Assert
         Assert.True(result);
     }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsAsync_ReturnsAssets()
+    {
+        // Arrange
+        var assets = new List<RightAssetDto>
+        {
+            new(1, 10, "TagName", 5, false)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/contract/available-assets", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(assets), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<RightAssetDto>? result = await apiClient.GetAvailableRightAssetsAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(1, result[0].Id);
+    }
+
+    [Fact]
+    public async Task ProposeGratisContractAsync_ReturnsContractDto()
+    {
+        // Arrange
+        var contractDto = new ContractDto(
+            Id: 99,
+            ContractType: "Gratis",
+            Status: "Proposed",
+            RequestedTagId: 20,
+            RequestedTagName: "TagName",
+            TargetItemId: 10,
+            TargetItemContent: "Content",
+            RequesterUserId: "u1",
+            RequesterUserName: "user1",
+            TagOwnerUserId: "u2",
+            TagOwnerUserName: "user2",
+            CreatedDate: DateTimeOffset.UtcNow,
+            CanCancel: true
+        );
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/contract/gratis", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(contractDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ContractDto? result = await apiClient.ProposeGratisContractAsync(new ProposeGratisContractRequest(10, 20));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(99, result.Id);
+        Assert.Equal("Gratis", result.ContractType);
+    }
+
+    [Fact]
+    public async Task ProposeMutualContractAsync_ReturnsContractDto()
+    {
+        // Arrange
+        var contractDto = new ContractDto(
+            Id: 100,
+            ContractType: "Mutual",
+            Status: "Proposed",
+            RequestedTagId: 20,
+            RequestedTagName: "TagName",
+            TargetItemId: 10,
+            TargetItemContent: "Content",
+            RequesterUserId: "u1",
+            RequesterUserName: "user1",
+            TagOwnerUserId: "u2",
+            TagOwnerUserName: "user2",
+            CreatedDate: DateTimeOffset.UtcNow,
+            CanCancel: true
+        );
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/contract/mutual", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(contractDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        ContractDto? result = await apiClient.ProposeMutualContractAsync(new ProposeMutualContractRequest(10, 20, 11, 21, 5));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(100, result.Id);
+        Assert.Equal("Mutual", result.ContractType);
+    }
 }
