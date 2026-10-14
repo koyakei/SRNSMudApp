@@ -33,6 +33,7 @@ public class ItemControllerTests
     private readonly Mock<IAdminDataProvider> _adminDataMock = new();
     private readonly Mock<ITaggingRequestActions> _taggingRequestActionsMock = new();
     private readonly Mock<ITagRequestRejectionService> _tagRequestRejectionMock = new();
+    private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
 
     private ItemController CreateController(ClaimsPrincipal? user = null)
     {
@@ -48,7 +49,8 @@ public class ItemControllerTests
             _userGroupMock.Object,
             _adminDataMock.Object,
             _taggingRequestActionsMock.Object,
-            _tagRequestRejectionMock.Object);
+            _tagRequestRejectionMock.Object,
+            _itemDetailDataMock.Object);
         if (user != null)
         {
             controller.ControllerContext = new ControllerContext
@@ -869,5 +871,73 @@ public class ItemControllerTests
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task GetItemTagLedger_WhenItemExists_ReturnsLedgers()
+    {
+        // Arrange
+        var controller = CreateController();
+        var item = new Item { Id = 20, Content = "Test item content", OwnerId = "user-1" };
+        var tag = new Tag { Id = 5, Name = "TagName", OwnerId = "user-1" };
+        var ledgers = new List<TagWeightLedger>
+        {
+            new()
+            {
+                Id = 1,
+                TagId = 5,
+                Tag = tag,
+                ItemId = 20,
+                OwnerId = "user-1",
+                Owner = new ApplicationUser { Id = "user-1", UserName = "Alice" },
+                Reason = "ItemTagged",
+                SourceType = "Item",
+                PreviousWeight = 0,
+                Delta = 2,
+                NewWeight = 2,
+                CreatedDate = DateTime.UtcNow
+            }
+        };
+
+        var pageData = new ItemDetailPageData(
+            Item: item,
+            AllTags: [],
+            AllTagRelationsToTags: [],
+            Ledgers: ledgers
+        );
+
+        _itemDetailDataMock
+            .Setup(d => d.GetItemDetailAsync(20, It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pageData);
+
+        // Act
+        ActionResult<IReadOnlyList<TagWeightLedgerDto>> result =
+            await controller.GetItemTagLedger(20, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<TagWeightLedgerDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(5, dtos[0].TagId);
+        Assert.Equal(20, dtos[0].ItemId);
+        Assert.Equal(2, dtos[0].Delta);
+        Assert.Equal("Alice", dtos[0].OwnerUserName);
+    }
+
+    [Fact]
+    public async Task GetItemTagLedger_WhenItemNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var controller = CreateController();
+        _itemDetailDataMock
+            .Setup(d => d.GetItemDetailAsync(999, It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ItemDetailPageData?)null);
+
+        // Act
+        ActionResult<IReadOnlyList<TagWeightLedgerDto>> result =
+            await controller.GetItemTagLedger(999, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 }

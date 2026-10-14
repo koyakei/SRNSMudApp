@@ -1,5 +1,7 @@
 namespace SRNSMudApp.Client.Models.Api;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// タグフィルタ条件 DTO (TagId または TagName 指定)。
 /// </summary>
@@ -308,4 +310,27 @@ public sealed record PurchaseRightAssetRequest(
     string NetworkName,
     string? TransactionHash = null,
     string? SenderWalletAddress = null
+);
+
+/// <summary>
+/// リンクプレビュー取得 API のリクエスト DTO。
+/// </summary>
+[SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Internal and external URLs are passed as strings for preview extraction")]
+[SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "Internal and external URLs are passed as strings for preview extraction")]
+public sealed record LinkPreviewRequest(string Url);
+
+/// <summary>
+/// 内部タグリンク候補検出 API のリクエスト DTO。
+/// </summary>
+public sealed record DetectLinkCandidatesRequest(
+    string Content,
+    float AutoReplaceThreshold = 0.85f
+);
+
+/// <summary>
+/// 内部タグリンク置換適用 API のリクエスト DTO。
+/// </summary>
+public sealed record ApplyLinkReplacementsRequest(
+    string Content,
+    IReadOnlyList<LinkConversionCandidateDto> Candidates
 );

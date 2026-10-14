@@ -36,7 +36,8 @@ public sealed class ItemController(
     IUserGroupDataProvider userGroupDataProvider,
     IAdminDataProvider adminDataProvider,
     ITaggingRequestActions? taggingRequestActions = null,
-    ITagRequestRejectionService? tagRequestRejectionService = null) : ControllerBase
+    ITagRequestRejectionService? tagRequestRejectionService = null,
+    IItemDetailDataProvider? itemDetailDataProvider = null) : ControllerBase
 {
     private readonly IItemListDataProvider _itemListDataProvider =
         itemListDataProvider ?? throw new ArgumentNullException(nameof(itemListDataProvider));
@@ -60,6 +61,7 @@ public sealed class ItemController(
         adminDataProvider ?? throw new ArgumentNullException(nameof(adminDataProvider));
     private readonly ITaggingRequestActions? _taggingRequestActions = taggingRequestActions;
     private readonly ITagRequestRejectionService? _tagRequestRejectionService = tagRequestRejectionService;
+    private readonly IItemDetailDataProvider? _itemDetailDataProvider = itemDetailDataProvider;
 
     /// <summary>
     /// タグ名のサジェスト候補を検索します。
@@ -762,5 +764,45 @@ public sealed class ItemController(
 
         await _tagRequestRejectionService.RejectRequestAsync(requestId, currentUserId, request.Reason);
         return Ok();
+    }
+
+    /// <summary>
+    /// 指定されたアイテムのタグ重み変動台帳（TagWeightLedger）履歴を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/tag-ledger")]
+    public async Task<ActionResult<IReadOnlyList<TagWeightLedgerDto>>> GetItemTagLedger(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        if (_itemDetailDataProvider == null)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented);
+        }
+
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
+        ItemDetailPageData? pageData = await _itemDetailDataProvider.GetItemDetailAsync(id, currentUserId, isAdmin, cancellationToken);
+        if (pageData?.Item == null)
+        {
+            return NotFound("アイテムが見つかりません。");
+        }
+
+        var dtos = pageData.Ledgers.Select(l => new TagWeightLedgerDto(
+            Id: l.Id,
+            TagId: l.TagId,
+            TagName: l.Tag?.Name ?? (!string.IsNullOrEmpty(l.TagNameSnapshot) ? l.TagNameSnapshot : string.Empty),
+            ItemId: l.ItemId,
+            OwnerUserId: l.OwnerId,
+            OwnerUserName: l.Owner?.UserName,
+            Reason: l.Reason,
+            SourceType: l.SourceType,
+            PreviousWeight: l.PreviousWeight,
+            Delta: l.Delta,
+            NewWeight: l.NewWeight,
+            CreatedDate: l.CreatedDate
+        )).ToList();
+
+        return Ok(dtos);
     }
 }

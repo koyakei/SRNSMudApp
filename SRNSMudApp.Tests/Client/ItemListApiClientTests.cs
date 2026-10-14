@@ -2649,4 +2649,160 @@ public class ItemListApiClientTests
         Assert.Equal(10, result.TagId);
         Assert.Equal(500, result.TotalJpycAmount);
     }
+
+    [Fact]
+    public async Task GetTagWeightLedgersAsync_ReturnsLedgers()
+    {
+        // Arrange
+        var ledgers = new List<TagWeightLedgerDto>
+        {
+            new(1, 10, "TagAlpha", null, "u1", "Alice", "Reason", "Item", 0, 3, 3, DateTime.UtcNow)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/tag/10/ledger", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(ledgers), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<TagWeightLedgerDto> result = await apiClient.GetTagWeightLedgersAsync(10);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(10, result[0].TagId);
+        Assert.Equal("TagAlpha", result[0].TagName);
+    }
+
+    [Fact]
+    public async Task GetItemTagWeightLedgersAsync_ReturnsLedgers()
+    {
+        // Arrange
+        var ledgers = new List<TagWeightLedgerDto>
+        {
+            new(1, 10, "TagAlpha", 5, "u1", "Alice", "Reason", "Item", 0, 3, 3, DateTime.UtcNow)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/item/5/tag-ledger", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(ledgers), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<TagWeightLedgerDto> result = await apiClient.GetItemTagWeightLedgersAsync(5);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(5, result[0].ItemId);
+        Assert.Equal("TagAlpha", result[0].TagName);
+    }
+
+    [Fact]
+    public async Task GetLinkPreviewAsync_ReturnsPreviewDto()
+    {
+        // Arrange
+        var preview = new LinkPreviewDto(
+            Url: "https://example.com/page",
+            Title: "Page Title",
+            Description: "Page Desc",
+            ImageUrl: "https://example.com/image.png",
+            SiteName: "Site",
+            IsSuccess: true,
+            DisplayText: null,
+            Tags: [new TagPreviewItemDto(1, "Tag", "User", 3)]
+        );
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/link/preview", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(preview), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        LinkPreviewDto? result = await apiClient.GetLinkPreviewAsync("https://example.com/page");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Page Title", result.Title);
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Tags);
+    }
+
+    [Fact]
+    public async Task DetectLinkCandidatesAsync_ReturnsResultDto()
+    {
+        // Arrange
+        var conversionResult = new InternalLinkConversionResultDto(
+            AutoReplaceCandidates: [new LinkConversionCandidateDto("C#", 1, "C#", 1.0f, 0, 2, true)],
+            ManualCandidates: []
+        );
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/link/convert-candidates", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(conversionResult), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        InternalLinkConversionResultDto? result =
+            await apiClient.DetectLinkCandidatesAsync(new DetectLinkCandidatesRequest("C# text"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Single(result.AutoReplaceCandidates);
+        Assert.Equal("C#", result.AutoReplaceCandidates[0].TagName);
+    }
+
+    [Fact]
+    public async Task ApplyLinkReplacementsAsync_ReturnsConvertedString()
+    {
+        // Arrange
+        var response = new ApplyLinkReplacementsResponse("[C#](/TagDetail/1) text");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/link/apply-replacements", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(response), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        string? result = await apiClient.ApplyLinkReplacementsAsync(new ApplyLinkReplacementsRequest(
+            "C# text",
+            [new LinkConversionCandidateDto("C#", 1, "C#", 1.0f, 0, 2, true)]
+        ));
+
+        // Assert
+        Assert.Equal("[C#](/TagDetail/1) text", result);
+    }
 }

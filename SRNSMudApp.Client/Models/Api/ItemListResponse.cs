@@ -537,3 +537,73 @@ public sealed record PurchaseRightAssetResultDto(
     string DepositAddress,
     DateTime PurchasedAt
 );
+
+/// <summary>
+/// タグ重み台帳（WeightLedger）レコード DTO。
+/// </summary>
+public sealed record TagWeightLedgerDto(
+    int Id,
+    int TagId,
+    string TagName,
+    int? ItemId,
+    string? OwnerUserId,
+    string? OwnerUserName,
+    string Reason,
+    string SourceType,
+    int PreviousWeight,
+    int Delta,
+    int NewWeight,
+    DateTime CreatedDate
+);
+
+/// <summary>
+/// リンクプレビュー表示用タグアイテム DTO。
+/// </summary>
+public sealed record TagPreviewItemDto(
+    int Id,
+    string Name,
+    string? OwnerName,
+    int Weight
+);
+
+/// <summary>
+/// リンクプレビュー（OGP / 内部リソースメタデータ）DTO。
+/// </summary>
+[SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "URL strings are used directly for UI binding and links")]
+[SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "URL strings are used directly for UI binding and links")]
+public sealed record LinkPreviewDto(
+    string Url,
+    string Title,
+    string Description,
+    string ImageUrl,
+    string SiteName,
+    bool IsSuccess,
+    string? DisplayText,
+    IReadOnlyList<TagPreviewItemDto> Tags
+);
+
+/// <summary>
+/// 内部タグリンク変換候補 DTO。
+/// </summary>
+public sealed record LinkConversionCandidateDto(
+    string OriginalText,
+    int TagId,
+    string TagName,
+    float Similarity,
+    int StartIndex,
+    int Length,
+    bool IsAutoReplace
+);
+
+/// <summary>
+/// 内部タグリンク検出結果 DTO。
+/// </summary>
+public sealed record InternalLinkConversionResultDto(
+    IReadOnlyList<LinkConversionCandidateDto> AutoReplaceCandidates,
+    IReadOnlyList<LinkConversionCandidateDto> ManualCandidates
+);
+
+/// <summary>
+/// 内部タグリンク置換結果 DTO。
+/// </summary>
+public sealed record ApplyLinkReplacementsResponse(string ConvertedContent);

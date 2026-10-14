@@ -364,4 +364,73 @@ public class TagControllerTests
         Assert.Equal("推論タグ1", dtos[0].TagName);
         Assert.Equal(0.85f, dtos[0].Score);
     }
+
+    [Fact]
+    public async Task GetTagLedger_WhenTagExists_ReturnsLedgers()
+    {
+        // Arrange
+        var controller = CreateController();
+        var tag = new Tag { Id = 10, Name = "TagName", OwnerId = "u1" };
+        var ledgers = new List<TagWeightLedger>
+        {
+            new()
+            {
+                Id = 1,
+                TagId = 10,
+                Tag = tag,
+                OwnerId = "u1",
+                Owner = new ApplicationUser { Id = "u1", UserName = "Alice" },
+                Reason = "ItemTagged",
+                SourceType = "Item",
+                PreviousWeight = 0,
+                Delta = 5,
+                NewWeight = 5,
+                CreatedDate = DateTime.UtcNow
+            }
+        };
+
+        var pageData = new TagDetailPageData(
+            Tag: tag,
+            IsFollowing: false,
+            RelatedItems: [],
+            RelatedTags: [],
+            WeightLedgers: ledgers,
+            PublicOffers: [],
+            PendingRequests: []
+        );
+
+        _tagDetailDataMock
+            .Setup(d => d.GetTagDetailAsync(10, It.IsAny<string?>(), It.IsAny<bool>()))
+            .ReturnsAsync(pageData);
+
+        // Act
+        ActionResult<IReadOnlyList<TagWeightLedgerDto>> result =
+            await controller.GetTagLedger(10, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<TagWeightLedgerDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(10, dtos[0].TagId);
+        Assert.Equal("TagName", dtos[0].TagName);
+        Assert.Equal(5, dtos[0].Delta);
+        Assert.Equal("Alice", dtos[0].OwnerUserName);
+    }
+
+    [Fact]
+    public async Task GetTagLedger_WhenTagNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var controller = CreateController();
+        _tagDetailDataMock
+            .Setup(d => d.GetTagDetailAsync(999, It.IsAny<string?>(), It.IsAny<bool>()))
+            .ReturnsAsync((TagDetailPageData?)null);
+
+        // Act
+        ActionResult<IReadOnlyList<TagWeightLedgerDto>> result =
+            await controller.GetTagLedger(999, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
 }

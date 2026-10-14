@@ -437,4 +437,44 @@ public sealed class TagController(
         var dtos = suggestions.Select(s => new SuggestedTagDto(s.TagId, s.TagName, s.Score)).ToList();
         return Ok(dtos);
     }
+
+    /// <summary>
+    /// 指定されたタグの重み変動台帳（TagWeightLedger）履歴を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/ledger")]
+    public async Task<ActionResult<IReadOnlyList<TagWeightLedgerDto>>> GetTagLedger(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        if (_tagDetailDataProvider == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
+        TagDetailPageData? pageData = await _tagDetailDataProvider.GetTagDetailAsync(id, currentUserId, isAdmin);
+        if (pageData?.Tag == null)
+        {
+            return NotFound("タグが見つかりません。");
+        }
+
+        var dtos = pageData.WeightLedgers.Select(l => new TagWeightLedgerDto(
+            Id: l.Id,
+            TagId: l.TagId,
+            TagName: l.Tag?.Name ?? (!string.IsNullOrEmpty(l.TagNameSnapshot) ? l.TagNameSnapshot : pageData.Tag.Name),
+            ItemId: l.ItemId,
+            OwnerUserId: l.OwnerId,
+            OwnerUserName: l.Owner?.UserName,
+            Reason: l.Reason,
+            SourceType: l.SourceType,
+            PreviousWeight: l.PreviousWeight,
+            Delta: l.Delta,
+            NewWeight: l.NewWeight,
+            CreatedDate: l.CreatedDate
+        )).ToList();
+
+        return Ok(dtos);
+    }
 }

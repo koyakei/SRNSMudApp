@@ -2,6 +2,7 @@ namespace SRNSMudApp.Client.Services;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -530,6 +531,32 @@ public interface IItemListApiClient
     /// 申請した分割リクエストを取り下げます（申請者本人のみ）。
     /// </summary>
     Task<bool> CancelItemSplitAsync(int requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたタグの重み変動台帳（TagWeightLedger）履歴を取得します。
+    /// </summary>
+    Task<IReadOnlyList<TagWeightLedgerDto>> GetTagWeightLedgersAsync(int tagId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたアイテムのタグ重み変動台帳（TagWeightLedger）履歴を取得します。
+    /// </summary>
+    Task<IReadOnlyList<TagWeightLedgerDto>> GetItemTagWeightLedgersAsync(int itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定された URL のメタデータ・OGP プレビューを取得します。
+    /// </summary>
+    [SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "Relative and absolute URLs are accepted as strings")]
+    Task<LinkPreviewDto?> GetLinkPreviewAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 入力テキストからタグ候補を検出し、内部リンク置換候補を返却します。
+    /// </summary>
+    Task<InternalLinkConversionResultDto?> DetectLinkCandidatesAsync(DetectLinkCandidatesRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 選択された変換候補をテキストに適用し、内部タグリンクに置換した文字列を返却します。
+    /// </summary>
+    Task<string?> ApplyLinkReplacementsAsync(ApplyLinkReplacementsRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1454,5 +1481,58 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/item-split/{requestId}/cancel", UriKind.Relative), null, cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<TagWeightLedgerDto>> GetTagWeightLedgersAsync(int tagId, CancellationToken cancellationToken = default)
+    {
+        List<TagWeightLedgerDto>? result = await _httpClient.GetFromJsonAsync<List<TagWeightLedgerDto>>($"api/tag/{tagId}/ledger", cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<IReadOnlyList<TagWeightLedgerDto>> GetItemTagWeightLedgersAsync(int itemId, CancellationToken cancellationToken = default)
+    {
+        List<TagWeightLedgerDto>? result = await _httpClient.GetFromJsonAsync<List<TagWeightLedgerDto>>($"api/item/{itemId}/tag-ledger", cancellationToken);
+        return result ?? [];
+    }
+
+    [SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "Relative and absolute URLs are accepted as strings")]
+    public async Task<LinkPreviewDto?> GetLinkPreviewAsync(string url, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/link/preview", new LinkPreviewRequest(url), cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<LinkPreviewDto>(cancellationToken);
+    }
+
+    public async Task<InternalLinkConversionResultDto?> DetectLinkCandidatesAsync(DetectLinkCandidatesRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/link/convert-candidates", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<InternalLinkConversionResultDto>(cancellationToken);
+    }
+
+    public async Task<string?> ApplyLinkReplacementsAsync(ApplyLinkReplacementsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/link/apply-replacements", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        ApplyLinkReplacementsResponse? result = await response.Content.ReadFromJsonAsync<ApplyLinkReplacementsResponse>(cancellationToken);
+        return result?.ConvertedContent;
     }
 }
