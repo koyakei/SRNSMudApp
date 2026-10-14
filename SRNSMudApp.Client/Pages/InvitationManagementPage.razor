@@ -1,0 +1,210 @@
+@page "/Admin/WasmInvitations"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+<PageTitle>招待コード管理 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-10">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.MailOutline" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">招待コード管理 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    新規ユーザー招待コードの発行、招待リンクの取得、および有効期限の管理を行います。
+                </MudText>
+            </div>
+        </div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadInvitationsAsync" Disabled="_isLoading" data-testid="refresh-invitations-btn">
+            再読み込み
+        </MudButton>
+    </div>
+
+    <!-- 新規招待作成カード -->
+    <MudPaper Class="pa-4 mb-6" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">新規招待コード発行</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_newEmail" Label="招待先メールアドレス" Variant="Variant.Outlined"
+                              Placeholder="user@example.com" Immediate="true"
+                              Disabled="_isProcessing" data-testid="invite-email-input" />
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateInvitationAsync"
+                           Disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_newEmail))"
+                           data-testid="create-invite-btn">
+                    @if (_isProcessing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <span class="ms-2">発行中...</span>
+                    }
+                    else
+                    {
+                        <span>招待リンクを発行</span>
+                    }
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- 招待一覧テーブル -->
+    <MudTable Items="@_invitations" Hover="true" Dense="true" Elevation="1" Loading="@_isLoading"
+              LoadingProgressColor="Color.Primary" data-testid="wasm-invitations-table">
+        <HeaderContent>
+            <MudTh>メールアドレス</MudTh>
+            <MudTh>招待コード</MudTh>
+            <MudTh>有効期限</MudTh>
+            <MudTh>ステータス</MudTh>
+            <MudTh Style="text-align: center;">操作</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="メールアドレス">@context.Email</MudTd>
+            <MudTd DataLabel="招待コード">
+                <div class="d-flex align-center gap-1">
+                    <span class="font-monospace">@context.InvitationCode</span>
+                    <MudTooltip Text="招待リンクをコピー">
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                       OnClick="@(() => CopyInviteLinkAsync(context.InvitationCode))"
+                                       aria-label="招待リンクをコピー"
+                                       data-testid="@($"copy-invite-{context.Id}")" />
+                    </MudTooltip>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="有効期限">@context.ExpirationDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</MudTd>
+            <MudTd DataLabel="ステータス">
+                @switch (context.Status)
+                {
+                    case "Used":
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">使用済み</MudChip>
+                        break;
+                    case "Expired":
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">期限切れ</MudChip>
+                        break;
+                    default:
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">有効 (保留中)</MudChip>
+                        break;
+                }
+            </MudTd>
+            <MudTd DataLabel="操作" Style="text-align: center;">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => DeleteInvitationAsync(context))"
+                               Disabled="_isProcessing"
+                               aria-label="招待を削除"
+                               data-testid="@($"delete-invite-{context.Id}")" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Normal" Class="my-4">
+                招待コードはまだ登録されていません。
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private string _newEmail = string.Empty;
+    private List<InvitationDto> _invitations = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvitationsAsync();
+    }
+
+    private async Task LoadInvitationsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await ApiClient.GetInvitationsAsync();
+            _invitations = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"招待一覧の読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateInvitationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newEmail)) return;
+
+        _isProcessing = true;
+        try
+        {
+            var request = new CreateInvitationRequest(_newEmail);
+            var created = await ApiClient.CreateInvitationAsync(request);
+            if (created != null)
+            {
+                _newEmail = string.Empty;
+                Snackbar.Add($"招待コードを発行しました: {created.InvitationCode}", Severity.Success);
+                await LoadInvitationsAsync();
+            }
+            else
+            {
+                Snackbar.Add("招待コードの発行に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"発行エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task DeleteInvitationAsync(InvitationDto invitation)
+    {
+        _isProcessing = true;
+        try
+        {
+            bool success = await ApiClient.DeleteInvitationAsync(invitation.Id);
+            if (success)
+            {
+                _invitations.RemoveAll(i => i.Id == invitation.Id);
+                Snackbar.Add("招待を削除しました。", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("招待の削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"削除エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task CopyInviteLinkAsync(string code)
+    {
+        string link = $"{NavigationManager.BaseUri}Account/Login?inviteCode={code}";
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", link);
+            Snackbar.Add("招待リンクをクリップボードにコピーしました。", Severity.Info);
+        }
+        catch
+        {
+            Snackbar.Add($"リンク: {link}", Severity.Info);
+        }
+    }
+}
+

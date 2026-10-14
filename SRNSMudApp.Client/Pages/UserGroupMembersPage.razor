@@ -1,0 +1,250 @@
+@page "/UserGroup/WasmMembers/{GroupId:int}"
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<PageTitle>グループメンバー管理 (WASM)</PageTitle>
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <div class="mb-4">
+        <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Href="/UserGroup/WasmList">
+            ユーザーグループ一覧 (WASM) に戻る
+        </MudButton>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (GroupDetail == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">
+            指定されたユーザーグループが見つかりませんでした。
+        </MudAlert>
+    }
+    else
+    {
+        <div class="d-flex align-center justify-space-between mb-4">
+            <div>
+                <MudText Typo="Typo.h5" Class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Group" Color="Color.Primary" />
+                    @GroupDetail.Name
+                </MudText>
+                @if (!string.IsNullOrEmpty(GroupDetail.Description))
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                        @GroupDetail.Description
+                    </MudText>
+                }
+            </div>
+            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                オーナー: @(GroupDetail.OwnerUserName ?? GroupDetail.OwnerUserId)
+            </MudChip>
+        </div>
+
+        @* 新規メンバー追加パネル *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-6 rounded-lg">
+            <MudText Typo="Typo.subtitle2" Class="mb-2 font-weight-bold">新規メンバー追加</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudAutocomplete T="UserDto" @bind-Value="SelectedUserToAdd" SearchFunc="SearchUsersAsync"
+                                 ToStringFunc="@(u => u?.UserName ?? u?.Id ?? string.Empty)"
+                                 Label="ユーザーを検索" Variant="Variant.Outlined"
+                                 Dense="true" Margin="Margin.Dense" Class="flex-grow-1"
+                                 Placeholder="ユーザー名で検索して選択..." />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddMemberAsync"
+                           Disabled="@(SelectedUserToAdd == null || IsAddingMember)">
+                    @if (IsAddingMember)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        <span>追加中...</span>
+                    }
+                    else
+                    {
+                        <span>追加</span>
+                    }
+                </MudButton>
+            </div>
+        </MudPaper>
+
+        @* メンバー一覧 *@
+        <MudPaper Elevation="1" Class="pa-4 rounded-xl">
+            <MudText Typo="Typo.h6" Class="mb-3">
+                メンバー一覧 (@GroupDetail.Members.Count 人)
+            </MudText>
+            <MudList T="string" Dense="true">
+                @foreach (var member in GroupDetail.Members)
+                {
+                    <MudListItem T="string">
+                        <div class="d-flex align-center justify-space-between w-100">
+                            <div class="d-flex align-center gap-3">
+                                <MudAvatar Color="Color.Secondary" Size="Size.Medium">
+                                    @(member.UserName?.FirstOrDefault().ToString().ToUpperInvariant() ?? "U")
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body1">
+                                        @(string.IsNullOrEmpty(member.UserName) ? member.UserId : member.UserName)
+                                        @if (member.UserId == GroupDetail.OwnerUserId)
+                                        {
+                                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Class="ml-2">オーナー</MudChip>
+                                        }
+                                    </MudText>
+                                    @if (member.JoinedDate.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            参加: @member.JoinedDate.Value.ToLocalTime().ToString("g")
+                                        </MudText>
+                                    }
+                                </div>
+                            </div>
+                            @if (member.UserId != GroupDetail.OwnerUserId)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => RemoveMemberAsync(member.UserId))" aria-label="メンバー削除" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Parameter]
+    public int GroupId { get; set; }
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    public UserGroupDetailDto? GroupDetail { get; private set; }
+
+    public bool IsLoading { get; private set; } = true;
+
+    public UserDto? SelectedUserToAdd { get; set; }
+
+    public bool IsAddingMember { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDetailAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadDetailAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            GroupDetail = await ApiClient.GetUserGroupDetailAsync(GroupId, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // 無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"グループ情報の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task<IEnumerable<UserDto>> SearchUsersAsync(string value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        try
+        {
+            return await ApiClient.SearchUsersAsync(value, token);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task AddMemberAsync()
+    {
+        if (SelectedUserToAdd == null)
+        {
+            return;
+        }
+
+        IsAddingMember = true;
+        try
+        {
+            var request = new AddGroupMemberRequest(SelectedUserToAdd.Id);
+            bool success = await ApiClient.AddUserGroupMemberAsync(GroupId, request, _cts.Token);
+            if (success)
+            {
+                Snackbar.Add($"「{SelectedUserToAdd.UserName ?? SelectedUserToAdd.Id}」をメンバーに追加しました。", Severity.Success);
+                SelectedUserToAdd = null;
+                await LoadDetailAsync();
+            }
+            else
+            {
+                Snackbar.Add("メンバー追加に失敗しました。オーナー権限が必要です。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"メンバー追加エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsAddingMember = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RemoveMemberAsync(string userId)
+    {
+        try
+        {
+            bool success = await ApiClient.RemoveUserGroupMemberAsync(GroupId, userId, _cts.Token);
+            if (success)
+            {
+                Snackbar.Add("メンバーを削除しました。", Severity.Info);
+                await LoadDetailAsync();
+            }
+            else
+            {
+                Snackbar.Add("メンバー削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"メンバー削除エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}

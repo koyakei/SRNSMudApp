@@ -104,9 +104,52 @@
             </MudNavLink>
         </NotAuthorized>
     </AuthorizeView>
-    <MudNavLink Href="Item/WasmList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Bolt">
-        Item List (WASM)
-    </MudNavLink>
+    <MudNavGroup Title="WebAssembly (WASM)" Icon="@Icons.Material.Filled.Bolt" Expanded="true">
+        <MudNavLink Href="Item/WasmList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">
+            Item List (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Tag/WasmDiagram" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Hub">
+            Tag Diagram (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Tag/WasmTree" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountTree">
+            Tag Tree (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Tag/WasmList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tag">
+            Tag List (WASM)
+        </MudNavLink>
+        <MudNavLink Href="UserGroup/WasmList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Group">
+            User Groups (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Notification/WasmList" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Notifications">
+            Notifications (WASM)
+        </MudNavLink>
+        <MudNavLink Href="User/WasmSearch" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PersonSearch">
+            Users (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Bounty/WasmBoard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AssignmentTurnedIn">
+            Bounty Board (WASM)
+        </MudNavLink>
+        <MudNavLink Href="PublicOffer/WasmBoard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Store">
+            Public Offers (WASM)
+        </MudNavLink>
+        <MudNavLink Href="Contract/WasmManagement" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Mail">
+            Contracts (WASM)
+        </MudNavLink>
+        <MudNavLink Href="RightAsset/WasmOverview" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            Right Assets (WASM)
+        </MudNavLink>
+        <AuthorizeView Roles="Admin">
+            <MudNavLink Href="User/WasmManagement" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ManageAccounts">
+                User Management (WASM)
+            </MudNavLink>
+            <MudNavLink Href="Admin/WasmReports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Report">
+                Reports (WASM)
+            </MudNavLink>
+            <MudNavLink Href="Admin/WasmInvitations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MailOutline">
+                Invitations (WASM)
+            </MudNavLink>
+        </AuthorizeView>
+    </MudNavGroup>
     @if (Env.IsDevelopment())
     {
         <MudNavLink Href="User/MakeMeAdmin" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">

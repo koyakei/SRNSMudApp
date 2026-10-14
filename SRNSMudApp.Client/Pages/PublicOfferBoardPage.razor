@@ -1,0 +1,353 @@
+@page "/PublicOffer/WasmBoard"
+@attribute [AllowAnonymous]
+
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+
+@inject IItemListApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Public Offers (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Store" Size="Size.Large" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">Public Offers (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    ユーザーが公開しているタグ利用オファーの一覧です。オファーを承諾して、自分のアイテムにタグを付与することができます。
+                </MudText>
+            </div>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@(_showCreatePanel ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                       OnClick="@(() => _showCreatePanel = !_showCreatePanel)"
+                       data-testid="toggle-create-offer-btn">
+                @(_showCreatePanel ? "閉じる" : "オファーを出品する")
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           OnClick="@LoadOffersAsync"
+                           aria-label="再読み込み"
+                           Disabled="@_isLoading"
+                           data-testid="refresh-offers-btn" />
+        </div>
+    </div>
+
+    @* 新規オファー出品パネル *@
+    @if (_showCreatePanel)
+    {
+        <MudCard Class="pa-4 mb-6" Elevation="2" data-testid="create-offer-panel">
+            <MudText Typo="Typo.h6" Class="mb-3 font-weight-bold">新しい公開オファーを出品</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_createOfferedTagId"
+                                     Label="提供するタグ ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="他のユーザーに利用を許可するタグのID"
+                                     data-testid="offer-tag-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_createRequiredAssetAmount"
+                                     Label="要求アセット量"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="0"
+                                     HelperText="0 の場合は無償で誰でも利用可能"
+                                     data-testid="offer-asset-amount-input" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex justify-end gap-2 mt-2">
+                    <MudButton Variant="Variant.Outlined"
+                               OnClick="@(() => _showCreatePanel = false)">
+                        キャンセル
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="@CreateOfferAsync"
+                               Disabled="@(_isCreating || _createOfferedTagId <= 0 || _createRequiredAssetAmount < 0)"
+                               data-testid="submit-offer-btn">
+                        @if (_isCreating)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>出品中...</span>
+                        }
+                        else
+                        {
+                            <span>オファーを出品</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCard>
+    }
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8" data-testid="offer-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_offers.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="my-4" data-testid="offer-empty-alert">
+            現在、公開されているオファーはありません。
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Spacing="3" data-testid="offer-list">
+            @foreach (var offer in _offers)
+            {
+                <MudItem xs="12" sm="6" md="4" @key="@offer.Id">
+                    <MudCard Outlined="true" Class="h-100 d-flex flex-column hover-elevation transition-elevation" data-testid="@($"offer-card-{offer.Id}")">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <div class="d-flex align-center justify-space-between">
+                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                                             Href="@($"/Tag/WasmDetail/{offer.OfferedTagId}")">
+                                        #@offer.OfferedTagName
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        オファー #@offer.Id
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                    出品者: 
+                                    <MudLink Href="@($"/User/WasmDetail/{offer.OwnerUserId}")" Typo="Typo.body2">
+                                        @(offer.OwnerUserName ?? offer.OwnerUserId)
+                                    </MudLink>
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+
+                        <MudCardContent Class="flex-grow-1">
+                            <div class="mb-3">
+                                @if (offer.RequiredAssetAmount == 0)
+                                {
+                                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="py-1 px-2">
+                                        無償提供（誰でも利用可能）
+                                    </MudAlert>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="py-1 px-2">
+                                        要求: @offer.RequiredAssetAmount アセット
+                                    </MudAlert>
+                                }
+                            </div>
+
+                            @if (_activeTriggerOfferId == offer.Id)
+                            {
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded bg-surface" data-testid="@($"trigger-panel-{offer.Id}")">
+                                    <MudText Typo="Typo.caption" Class="font-weight-bold d-block mb-1">タグ付け対象のアイテム ID</MudText>
+                                    <div class="d-flex gap-2 align-center">
+                                        <MudNumericField @bind-Value="_triggerTargetItemId"
+                                                         Variant="Variant.Outlined"
+                                                         Margin="Margin.Dense"
+                                                         Min="1"
+                                                         Placeholder="Item ID"
+                                                         Class="flex-grow-1"
+                                                         data-testid="@($"trigger-item-input-{offer.Id}")" />
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ExecuteTriggerAsync(offer.Id))"
+                                                   Disabled="@(_isTriggering || _triggerTargetItemId <= 0)"
+                                                   data-testid="@($"trigger-confirm-btn-{offer.Id}")">
+                                            実行
+                                        </MudButton>
+                                    </div>
+                                    <div class="mt-2 text-right">
+                                        <MudButton Variant="Variant.Text"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => _activeTriggerOfferId = null)">
+                                            キャンセル
+                                        </MudButton>
+                                    </div>
+                                </MudPaper>
+                            }
+                        </MudCardContent>
+
+                        <MudCardActions Class="mt-auto pt-0 justify-end">
+                            @if (offer.IsOwner)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Delete"
+                                           OnClick="@(() => DeactivateOfferAsync(offer.Id))"
+                                           data-testid="@($"deactivate-offer-btn-{offer.Id}")">
+                                    取り下げる
+                                </MudButton>
+                            }
+                            else if (_activeTriggerOfferId != offer.Id)
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Secondary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                           OnClick="@(() => OpenTriggerPanel(offer.Id))"
+                                           data-testid="@($"trigger-offer-btn-{offer.Id}")">
+                                    オファーを承諾
+                                </MudButton>
+                            }
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private IReadOnlyList<PublicOfferDto> _offers = [];
+    private bool _isLoading = true;
+    private bool _showCreatePanel;
+    private bool _isCreating;
+    private int _createOfferedTagId;
+    private int _createRequiredAssetAmount;
+
+    private int? _activeTriggerOfferId;
+    private int _triggerTargetItemId;
+    private bool _isTriggering;
+
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOffersAsync();
+    }
+
+    private async Task LoadOffersAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+
+        _isLoading = true;
+        try
+        {
+            _offers = await ApiClient.GetPublicOffersAsync(_cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"公開オファーの取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateOfferAsync()
+    {
+        if (_createOfferedTagId <= 0 || _createRequiredAssetAmount < 0)
+        {
+            Snackbar.Add("タグ ID と要求アセット量を正しく入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isCreating = true;
+        try
+        {
+            var request = new CreatePublicOfferRequest(_createOfferedTagId, _createRequiredAssetAmount);
+            bool success = await ApiClient.CreatePublicOfferAsync(request, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("オファーを出品しました。", Severity.Success);
+                _showCreatePanel = false;
+                _createOfferedTagId = 0;
+                _createRequiredAssetAmount = 0;
+                await LoadOffersAsync();
+            }
+            else
+            {
+                Snackbar.Add("オファーの出品に失敗しました。ログイン状態やタグIDを確認してください。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    private async Task DeactivateOfferAsync(int offerId)
+    {
+        try
+        {
+            bool success = await ApiClient.DeactivatePublicOfferAsync(offerId, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("オファーを取り下げました。", Severity.Info);
+                await LoadOffersAsync();
+            }
+            else
+            {
+                Snackbar.Add("オファーの取り下げに失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OpenTriggerPanel(int offerId)
+    {
+        _activeTriggerOfferId = offerId;
+        _triggerTargetItemId = 0;
+    }
+
+    private async Task ExecuteTriggerAsync(int offerId)
+    {
+        if (_triggerTargetItemId <= 0)
+        {
+            Snackbar.Add("タグ付け対象のアイテム ID を入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isTriggering = true;
+        try
+        {
+            var request = new TriggerPublicOfferRequest(_triggerTargetItemId);
+            bool success = await ApiClient.TriggerPublicOfferAsync(offerId, request, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("オファーを承諾し、タグ付けを実行しました！", Severity.Success);
+                _activeTriggerOfferId = null;
+                _triggerTargetItemId = 0;
+                await LoadOffersAsync();
+            }
+            else
+            {
+                Snackbar.Add("オファーの承諾に失敗しました。アイテムIDやアセット保有状況を確認してください。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isTriggering = false;
+        }
+    }
+}
+

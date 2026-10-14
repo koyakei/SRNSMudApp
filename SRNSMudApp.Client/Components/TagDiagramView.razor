@@ -1,0 +1,253 @@
+@namespace SRNSMudApp.Client.Components
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+
+<MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Hub" Color="Color.Primary" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.h6">タグダイアグラム &amp; 関係性エクスプローラー (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    API (/api/tag-diagram/data) からタグノードと接続エッジ、コンテキストアイテムを取得して可視化します。
+                </MudText>
+            </div>
+        </div>
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadDiagramDataAsync" Disabled="IsLoading">
+                再読み込み
+            </MudButton>
+        </div>
+    </div>
+
+    @* 検索・フィルターバー *@
+    <div class="d-flex align-center flex-wrap gap-4 mt-4">
+        <div style="min-width: 250px; flex-grow: 1;">
+            <MudTextField @bind-Value="SearchTerm" Label="タグを検索" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="タグ名や説明で絞り込み..." Immediate="true" />
+        </div>
+        <MudSwitch T="bool" @bind-Value="OnlyConnected" Color="Color.Primary" Label="関連（Edge）のあるタグのみ" />
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+            ノード: @FilteredTags.Count / @(DiagramData?.Nodes.Count ?? 0)
+        </MudChip>
+        <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">
+            エッジ: @(DiagramData?.Edges.Count ?? 0)
+        </MudChip>
+        <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
+            アイテム: @(DiagramData?.ContextItems.Count ?? 0)
+        </MudChip>
+    </div>
+</MudPaper>
+
+@if (IsLoading)
+{
+    <div class="d-flex justify-center align-center pa-8">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Class="ml-3">ダイアグラムデータを読み込み中...</MudText>
+    </div>
+}
+else if (DiagramData == null || DiagramData.Nodes.Count == 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+        <MudIcon Icon="@Icons.Material.Filled.Hub" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+        <MudText Typo="Typo.h6">タグデータがありません</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            まだタグが登録されていないか、条件に一致するデータが見つかりませんでした。
+        </MudText>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        @* 左ペイン: タグノード一覧（ネットワークリスト） *@
+        <MudItem xs="12" md="6" lg="5">
+            <MudPaper Elevation="2" Class="pa-3 rounded-lg" Style="max-height: 75vh; overflow-y: auto;">
+                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">タグ一覧</MudText>
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var tag in FilteredTags)
+                    {
+                        var isSelected = SelectedTag?.Id == tag.Id;
+                        var edgeCount = GetTagEdgeCount(tag.Id);
+
+                        <MudCard Elevation="@(isSelected ? 4 : 1)"
+                                 Class="@($"rounded-lg cursor-pointer tag-node-card {(isSelected ? "selected-node" : "")}")"
+                                 @onclick="@(() => SelectTag(tag))">
+                            <MudCardContent Class="pa-3">
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudAvatar Color="@(isSelected ? Color.Primary : Color.Default)" Size="Size.Small">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" />
+                                        </MudAvatar>
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">@tag.Name</MudText>
+                                            @if (!string.IsNullOrEmpty(tag.Content))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @(tag.Content.Length > 40 ? tag.Content[..40] + "..." : tag.Content)
+                                                </MudText>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-center gap-1">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text" Icon="@Icons.Material.Filled.Share">
+                                            Edge: @edgeCount
+                                        </MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                                            スコア: @tag.Score
+                                        </MudChip>
+                                    </div>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        @* 右ペイン: 選択中ノードの詳細 & 関連グラフ情報 *@
+        <MudItem xs="12" md="6" lg="7">
+            @if (SelectedTag != null)
+            {
+                <MudCard Elevation="2" Class="pa-4 rounded-lg">
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <div class="d-flex align-center gap-2">
+                            <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" />
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.h6">@SelectedTag.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    ID: @SelectedTag.Id | オーナー: @(SelectedTag.OwnerUserName ?? "不明")
+                                </MudText>
+                            </div>
+                        </div>
+                        <div class="d-flex align-center gap-1">
+                            <MudIconButton Icon="@Icons.Material.Filled.ThumbUp" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => VoteTagAsync(SelectedTag.Id, true))" aria-label="アップボート" />
+                            <MudText Typo="Typo.subtitle2">@SelectedTag.Score</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.ThumbDown" Color="Color.Secondary" Size="Size.Small"
+                                           OnClick="@(() => VoteTagAsync(SelectedTag.Id, false))" aria-label="ダウンボート" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(SelectedTag.Content))
+                    {
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-3 rounded-lg bg-surface">
+                            <MudText Typo="Typo.body2">@SelectedTag.Content</MudText>
+                        </MudPaper>
+                    }
+
+                    <MudDivider Class="my-3" />
+
+                    @* 親タグ (Parent Tags) *@
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold d-flex align-center gap-1 mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Primary" />
+                        親タグ (@ConnectedParents.Count)
+                    </MudText>
+                    @if (ConnectedParents.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">親タグはありません</MudText>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @foreach (var parent in ConnectedParents)
+                            {
+                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined"
+                                         OnClick="@(() => SelectTagById(parent.Id))"
+                                         Class="cursor-pointer parent-chip">
+                                    @parent.Name
+                                </MudChip>
+                            }
+                        </div>
+                    }
+
+                    @* 子タグ (Child Tags) *@
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold d-flex align-center gap-1 mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Secondary" />
+                        子タグ (@ConnectedChildren.Count)
+                    </MudText>
+                    @if (ConnectedChildren.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">子タグはありません</MudText>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @foreach (var child in ConnectedChildren)
+                            {
+                                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined"
+                                         OnClick="@(() => SelectTagById(child.Id))"
+                                         Class="cursor-pointer child-chip">
+                                    @child.Name
+                                </MudChip>
+                            }
+                        </div>
+                    }
+
+                    @* 親タグの追加 *@
+                    <div class="d-flex align-center gap-2 mb-3">
+                        <MudSelect T="int?" @bind-Value="SelectedParentTagIdToAdd" Label="親タグを追加" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Dense="true" Class="flex-grow-1">
+                            <MudSelectItem T="int?" Value="@((int?)null)">-- 選択してください --</MudSelectItem>
+                            @foreach (var potentialParent in AvailableParents)
+                            {
+                                <MudSelectItem T="int?" Value="@((int?)potentialParent.Id)">@potentialParent.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="AddParentTagAsync" Disabled="@(!SelectedParentTagIdToAdd.HasValue || IsAddingParent)">
+                            追加
+                        </MudButton>
+                    </div>
+
+                    <MudDivider Class="my-3" />
+
+                    @* 関連アイテム一覧 *@
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold d-flex align-center gap-1 mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" Color="Color.Info" />
+                        関連アイテム (@RelatedItems.Count)
+                    </MudText>
+                    @if (RelatedItems.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">このタグが付与されているアイテムはありません</MudText>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2" style="max-height: 35vh; overflow-y: auto;">
+                            @foreach (var item in RelatedItems)
+                            {
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-2 rounded-lg">
+                                    <div class="d-flex align-center justify-space-between mb-1">
+                                        <MudLink Href="@($"/Item/WasmDetail/{item.Id}")" Color="Color.Primary" Typo="Typo.caption" Class="font-weight-bold">
+                                            #@item.Id - @(item.OwnerUserName ?? "匿名")
+                                        </MudLink>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                                            Score: @item.Score
+                                        </MudChip>
+                                    </div>
+                                    <MudText Typo="Typo.body2">
+                                        @(item.Content.Length > 100 ? item.Content[..100] + "..." : item.Content)
+                                    </MudText>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudCard>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+                    <MudIcon Icon="@Icons.Material.Filled.TouchApp" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+                    <MudText Typo="Typo.subtitle1">左側のリストからタグを選択してください</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        選択したタグの親子関係、エッジ、および関連アイテムがここに表示されます。
+                    </MudText>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+

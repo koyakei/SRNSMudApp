@@ -1,0 +1,536 @@
+@page "/Item/WasmDetail/{ItemId:int}"
+@using MudBlazor
+@using SRNSMudApp.Client.Models
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<PageTitle>アイテム詳細 (WASM) - #@ItemId</PageTitle>
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <div class="mb-4">
+        <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Href="/Item/WasmList">
+            アイテム一覧 (WASM) に戻る
+        </MudButton>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (Item == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">
+            指定されたアイテムが見つかりませんでした。
+        </MudAlert>
+    }
+    else
+    {
+        <MudCard Elevation="2" Class="pa-4 mb-4 rounded-xl">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                        @(Item.OwnerUserName?.FirstOrDefault().ToString().ToUpperInvariant() ?? "U")
+                    </MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                        @(Item.OwnerUserName ?? "匿名ユーザー")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        #@Item.Id | 更新: @Item.UpdatedDate.ToLocalTime().ToString("g")
+                        @if (Item.IsPrivate)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">非公開</MudChip>
+                        }
+                        @if (!string.IsNullOrEmpty(Item.TargetUserGroupName))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@Item.TargetUserGroupName</MudChip>
+                        }
+                    </MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton Icon="@Icons.Material.Filled.ThumbUp" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="VoteUpAsync" aria-label="アップボート" />
+                    <MudText Typo="Typo.subtitle2" Class="d-inline mx-1">@Item.Score</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.ThumbDown" Color="Color.Secondary" Size="Size.Small"
+                                   OnClick="VoteDownAsync" aria-label="ダウンボート" />
+                </CardHeaderActions>
+            </MudCardHeader>
+
+            <MudCardContent>
+                @if (Item.QuotedItemId.HasValue)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        <b>引用 (#@Item.QuotedItemId):</b>
+                        @(Item.QuotedItemContent?.Length > 100 ? $"{Item.QuotedItemContent[..100]}..." : Item.QuotedItemContent)
+                    </MudAlert>
+                }
+
+                <MudText Typo="Typo.body1" Style="white-space: pre-wrap;" Class="mb-4">
+                    @Item.Content
+                </MudText>
+
+                @* リアクションボタン *@
+                <div class="d-flex align-center gap-2 mb-4">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                               OnClick="@(() => ReactAsync("Shinji"))">
+                        真実 (@Item.ShinjiScore)
+                    </MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                               OnClick="@(() => ReactAsync("Zen"))">
+                        善 (@Item.ZenScore)
+                    </MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                               OnClick="@(() => ReactAsync("Bi"))">
+                        美 (@Item.BiScore)
+                    </MudButton>
+                </div>
+
+                <MudDivider Class="my-3" />
+
+                @* タグ一覧 & ウェイト変更 *@
+                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">タグ一覧 &amp; 重み</MudText>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    @foreach (var tr in Item.TagRelations)
+                    {
+                        <MudPaper Elevation="0" Outlined="true" Class="d-flex align-center gap-1 px-2 py-1 rounded-pill">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Color="Color.Primary" />
+                            <MudLink Href="@($"/Tag/WasmDetail/{tr.TagId}")" Color="Color.Primary" Typo="Typo.body2" Class="font-weight-medium">
+                                @tr.TagName
+                            </MudLink>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                                W: @(tr.Weight ?? 1)
+                            </MudChip>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                           OnClick="@(() => ChangeWeightAsync(tr.TagId, 1))" aria-label="ウェイト加算" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                           OnClick="@(() => ChangeWeightAsync(tr.TagId, -1))" aria-label="ウェイト減算" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => RemoveTagAsync(tr.TagId))" aria-label="タグ削除" />
+                        </MudPaper>
+                    }
+                </div>
+
+                @* 新規タグ追加オートコンプリート *@
+                <div class="d-flex align-center gap-2 mb-4">
+                    <MudAutocomplete T="TagSuggestion" @bind-Value="SelectedTagToAdd" SearchFunc="SearchTagsAsync"
+                                     ToStringFunc="@(t => t?.TagName ?? string.Empty)" Label="タグを追加"
+                                     Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Class="flex-grow-1"
+                                     Placeholder="タグ名で検索..." />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               OnClick="AddTagAsync" Disabled="@(SelectedTagToAdd == null || IsAddingTag)">
+                        追加
+                    </MudButton>
+                </div>
+
+                @if (TaggingRequests.Count > 0)
+                {
+                    <MudDivider Class="my-3" />
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2 d-flex align-center gap-1">
+                        <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" Color="Color.Warning" />
+                        保留中のタグ付けリクエスト (@TaggingRequests.Count)
+                    </MudText>
+                    <div class="d-flex flex-column gap-2 mb-3">
+                        @foreach (var req in TaggingRequests)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg bg-surface d-flex align-center justify-space-between flex-wrap gap-2">
+                                <div>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                        #@req.RequestedTagName
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-2">
+                                        提案者: @(req.RequesterUserName ?? req.RequesterUserId) | 重み: @req.ProposedWeight
+                                    </MudText>
+                                </div>
+                                <div class="d-flex align-center gap-2">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                               OnClick="@(() => ApproveRequestAsync(req.Id))">
+                                        承認
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => RejectRequestAsync(req.Id))">
+                                        却下
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+                    </div>
+                }
+
+                <MudDivider Class="my-3" />
+
+                @* リプライスレッド *@
+                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
+                    リプライ (@Replies.Count)
+                </MudText>
+                @if (Replies.Count > 0)
+                {
+                    <div class="d-flex flex-column gap-2 mb-3">
+                        @foreach (var rep in Replies)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg bg-surface">
+                                <div class="d-flex align-center justify-space-between mb-1">
+                                    <MudText Typo="Typo.caption" Class="font-weight-bold">
+                                        @(rep.OwnerUserName ?? "匿名")
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @rep.UpdatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2">@rep.Content</MudText>
+                            </MudPaper>
+                        }
+                    </div>
+                }
+
+                @* リプライ投稿フォーム *@
+                <div class="d-flex flex-column gap-2">
+                    <MudTextField @bind-Value="NewReplyContent" Label="リプライを投稿..." Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Lines="2" />
+                    <div class="d-flex justify-end">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="SubmitReplyAsync" Disabled="@(string.IsNullOrWhiteSpace(NewReplyContent) || IsPostingReply)">
+                            返信
+                        </MudButton>
+                    </div>
+                </div>
+
+                <MudDivider Class="my-4" />
+
+                @* 引用された投稿スレッド *@
+                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
+                    引用された投稿 (@QuotedByItems.Count)
+                </MudText>
+                @if (QuotedByItems.Count > 0)
+                {
+                    <div class="d-flex flex-column gap-2 mb-2">
+                        @foreach (var quote in QuotedByItems)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg bg-surface">
+                                <div class="d-flex align-center justify-space-between mb-1">
+                                    <MudLink Href="@($"/Item/WasmDetail/{quote.Id}")" Color="Color.Primary" Typo="Typo.caption" Class="font-weight-bold">
+                                        #@quote.Id - @(quote.OwnerUserName ?? "匿名")
+                                    </MudLink>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @quote.UpdatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2">@quote.Content</MudText>
+                            </MudPaper>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                        このアイテムを引用した投稿はまだありません。
+                    </MudText>
+                }
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Parameter]
+    public int ItemId { get; set; }
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    public ItemDto? Item { get; private set; }
+
+    public IReadOnlyList<ItemDto> Replies { get; private set; } = [];
+
+    public IReadOnlyList<ItemDto> QuotedByItems { get; private set; } = [];
+
+    public IReadOnlyList<TaggingRequestDto> TaggingRequests { get; private set; } = [];
+
+    public bool IsLoading { get; private set; } = true;
+
+    public TagSuggestion? SelectedTagToAdd { get; set; }
+
+    public bool IsAddingTag { get; private set; }
+
+    public string NewReplyContent { get; set; } = string.Empty;
+
+    public bool IsPostingReply { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItemAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadItemAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            Item = await ApiClient.GetItemByIdAsync(ItemId, _cts.Token);
+            Replies = await ApiClient.GetRepliesAsync(ItemId, _cts.Token);
+            QuotedByItems = await ApiClient.GetQuotedByItemsAsync(ItemId, _cts.Token);
+            TaggingRequests = await ApiClient.GetTaggingRequestsAsync(ItemId, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // 無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"アイテム情報の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task VoteUpAsync()
+    {
+        try
+        {
+            bool ok = await ApiClient.VoteItemAsync(ItemId, true, _cts.Token);
+            if (ok)
+            {
+                await LoadItemAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task VoteDownAsync()
+    {
+        try
+        {
+            bool ok = await ApiClient.VoteItemAsync(ItemId, false, _cts.Token);
+            if (ok)
+            {
+                await LoadItemAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ReactAsync(string reaction)
+    {
+        try
+        {
+            bool ok = await ApiClient.ReactItemAsync(ItemId, reaction, 1, _cts.Token);
+            if (ok)
+            {
+                await LoadItemAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"リアクションエラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ChangeWeightAsync(int tagId, int delta)
+    {
+        try
+        {
+            bool ok = await ApiClient.UpdateTagWeightAsync(ItemId, tagId, delta, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("ウェイトを更新しました。", Severity.Success);
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("ウェイトの更新に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ウェイト変更エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RemoveTagAsync(int tagId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RemoveTagFromItemAsync(ItemId, tagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグを削除しました。", Severity.Info);
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("タグの削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"タグ削除エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task<IEnumerable<TagSuggestion>> SearchTagsAsync(string query, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        try
+        {
+            return await ApiClient.SearchTagsAsync(query, token);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task AddTagAsync()
+    {
+        if (SelectedTagToAdd?.TagId is not { } tagId)
+        {
+            return;
+        }
+
+        IsAddingTag = true;
+        try
+        {
+            var req = new AddTagRelationRequest(tagId);
+            bool ok = await ApiClient.AddTagToItemAsync(ItemId, req, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add($"タグ「{SelectedTagToAdd.TagName}」を追加しました。", Severity.Success);
+                SelectedTagToAdd = null;
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("タグの追加に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"タグ追加エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsAddingTag = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task SubmitReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewReplyContent))
+        {
+            return;
+        }
+
+        IsPostingReply = true;
+        try
+        {
+            var req = new CreateReplyRequest(NewReplyContent.Trim());
+            ItemDto? res = await ApiClient.AddReplyAsync(ItemId, req, _cts.Token);
+            if (res != null)
+            {
+                Snackbar.Add("リプライを送信しました。", Severity.Success);
+                NewReplyContent = string.Empty;
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("リプライ送信に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"リプライエラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsPostingReply = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTaggingRequestAsync(requestId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグ付けリクエストを承認しました。", Severity.Success);
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("タグ付けリクエストの承認に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTaggingRequestAsync(requestId, new RejectTaggingRequest(), _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグ付けリクエストを却下しました。", Severity.Info);
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("タグ付けリクエストの却下に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}

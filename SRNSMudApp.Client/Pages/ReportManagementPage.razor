@@ -1,0 +1,314 @@
+@page "/Admin/WasmReports"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>通報管理 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-10">
+    <div class="d-flex align-center mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Report" Size="Size.Large" Color="Color.Error" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h5" Class="font-weight-bold">通報管理 (WASM)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                ユーザーから送信された不適切なアイテム・タグの通報一覧です。内容を確認し、処置や却下を行ってください。
+            </MudText>
+        </div>
+    </div>
+
+    <!-- フィルターカード -->
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="ステータス絞り込み" Value="@_selectedStatus"
+                           ValueChanged="OnStatusFilterChangedAsync" Variant="Variant.Outlined" Dense="true">
+                    <MudSelectItem Value="@string.Empty">すべてのステータス</MudSelectItem>
+                    <MudSelectItem Value="@("Pending")">未対応 (Pending)</MudSelectItem>
+                    <MudSelectItem Value="@("ActionTaken")">処置済み (ActionTaken)</MudSelectItem>
+                    <MudSelectItem Value="@("Reviewed")">確認済み (Reviewed)</MudSelectItem>
+                    <MudSelectItem Value="@("Dismissed")">却下 (Dismissed)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="対象種別絞り込み" Value="@_selectedTargetType"
+                           ValueChanged="OnTargetTypeFilterChangedAsync" Variant="Variant.Outlined" Dense="true">
+                    <MudSelectItem Value="@string.Empty">すべての対象種別</MudSelectItem>
+                    <MudSelectItem Value="@("Item")">アイテムのみ</MudSelectItem>
+                    <MudSelectItem Value="@("Tag")">タグのみ</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="LoadReportsAsync" Disabled="_isLoading">
+                    再読み込み
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- 一覧テーブル -->
+    <MudTable Items="@_reports" Hover="true" Dense="true" Elevation="1" Loading="@_isLoading"
+              LoadingProgressColor="Color.Primary" data-testid="wasm-reports-table">
+        <HeaderContent>
+            <MudTh>ID</MudTh>
+            <MudTh>通報日時</MudTh>
+            <MudTh>種別</MudTh>
+            <MudTh>通報対象 (スナップショット)</MudTh>
+            <MudTh>通報理由</MudTh>
+            <MudTh>通報者</MudTh>
+            <MudTh>ステータス</MudTh>
+            <MudTh Style="text-align: center;">操作</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ID">#@context.Id</MudTd>
+            <MudTd DataLabel="通報日時">@context.CreatedDate.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</MudTd>
+            <MudTd DataLabel="種別">
+                @if (context.TargetType == "Item")
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">アイテム</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">タグ</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="通報対象">
+                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-width: 250px;">
+                    @context.TargetContentSnapshot
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="通報理由">
+                <MudText Typo="Typo.body2" Color="Color.Error">@context.Reason</MudText>
+            </MudTd>
+            <MudTd DataLabel="通報者">
+                <MudText Typo="Typo.body2">@(context.ReporterUserName ?? context.ReporterUserId)</MudText>
+            </MudTd>
+            <MudTd DataLabel="ステータス">
+                @switch (context.Status)
+                {
+                    case "Pending":
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">未対応</MudChip>
+                        break;
+                    case "Reviewed":
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">確認済み</MudChip>
+                        break;
+                    case "ActionTaken":
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">処置済み</MudChip>
+                        break;
+                    case "Dismissed":
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled">却下</MudChip>
+                        break;
+                    default:
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small">@context.Status</MudChip>
+                        break;
+                }
+            </MudTd>
+            <MudTd DataLabel="操作" Style="text-align: center;">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           OnClick="@(() => OpenDetail(context))" data-testid="@($"report-detail-btn-{context.Id}")">
+                    詳細・対応
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Normal" Class="my-4">
+                通報データが見つかりませんでした。
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+
+    <!-- 詳細・対応パネル -->
+    @if (_selectedReport != null)
+    {
+        <MudCard Class="mt-6" Elevation="2" data-testid="report-action-card">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <div class="d-flex align-center justify-space-between">
+                        <MudText Typo="Typo.h6">通報 #@_selectedReport.Id の詳細・対応</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseDetail" aria-label="閉じる" />
+                    </div>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">スナップショット</MudText>
+                        <MudPaper Class="pa-3 rounded border" Style="background-color: var(--mud-palette-background-grey); white-space: pre-wrap; max-height: 150px; overflow-y: auto;">
+                            @_selectedReport.TargetContentSnapshot
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">詳細情報</MudText>
+                        <MudPaper Class="pa-3 rounded border">
+                            <MudText Typo="Typo.body2"><strong>通報理由:</strong> @_selectedReport.Reason</MudText>
+                            @if (!string.IsNullOrEmpty(_selectedReport.Detail))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-1"><strong>コメント:</strong> @_selectedReport.Detail</MudText>
+                            }
+                            <MudText Typo="Typo.body2" Class="mt-1"><strong>通報者:</strong> @(_selectedReport.ReporterUserName ?? _selectedReport.ReporterUserId)</MudText>
+                            @if (_selectedReport.TargetType == "Item" && _selectedReport.ItemId.HasValue)
+                            {
+                                <MudLink Href="@($"/Item/WasmDetail/{_selectedReport.ItemId.Value}")" Target="_blank" Typo="Typo.caption" Class="d-block mt-2">
+                                    対象アイテムを開く ↗
+                                </MudLink>
+                            }
+                            else if (_selectedReport.TargetType == "Tag" && _selectedReport.TagId.HasValue)
+                            {
+                                <MudLink Href="@($"/Tag/WasmDetail/{_selectedReport.TagId.Value}")" Target="_blank" Typo="Typo.caption" Class="d-block mt-2">
+                                    対象タグを開く ↗
+                                </MudLink>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_resolutionNote" Label="管理者対応メモ" Variant="Variant.Outlined" Lines="2"
+                                      MaxLength="1000" Placeholder="処置理由や確認結果のメモを入力してください" />
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+            <MudCardActions Class="pa-4 d-flex justify-end gap-2 flex-wrap">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => UpdateStatusAsync("Dismissed"))"
+                           Disabled="_isProcessing" data-testid="dismiss-report-btn">
+                    却下 (問題なし)
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="@(() => UpdateStatusAsync("Reviewed"))"
+                           Disabled="_isProcessing" data-testid="review-report-btn">
+                    確認済みにする
+                </MudButton>
+                @if (_selectedReport.TargetType == "Item" && _selectedReport.ItemId.HasValue)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => ResolveAsync(delete: false, hide: true))"
+                               Disabled="_isProcessing" data-testid="hide-report-btn">
+                        対象を非公開にして処置完了
+                    </MudButton>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => ResolveAsync(delete: true, hide: false))"
+                           Disabled="_isProcessing" data-testid="delete-report-btn">
+                    対象を削除して処置完了
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private bool _isLoading;
+    private bool _isProcessing;
+    private string _selectedStatus = "Pending";
+    private string _selectedTargetType = string.Empty;
+    private IReadOnlyList<ContentReportDto> _reports = [];
+    private ContentReportDto? _selectedReport;
+    private string _resolutionNote = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportsAsync();
+    }
+
+    private async Task LoadReportsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            string? status = string.IsNullOrEmpty(_selectedStatus) ? null : _selectedStatus;
+            string? target = string.IsNullOrEmpty(_selectedTargetType) ? null : _selectedTargetType;
+            _reports = await ApiClient.GetReportsAsync(status, target);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"通報一覧の読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnStatusFilterChangedAsync(string status)
+    {
+        _selectedStatus = status;
+        await LoadReportsAsync();
+    }
+
+    private async Task OnTargetTypeFilterChangedAsync(string targetType)
+    {
+        _selectedTargetType = targetType;
+        await LoadReportsAsync();
+    }
+
+    private void OpenDetail(ContentReportDto report)
+    {
+        _selectedReport = report;
+        _resolutionNote = report.ResolutionNote ?? string.Empty;
+    }
+
+    private void CloseDetail()
+    {
+        _selectedReport = null;
+        _resolutionNote = string.Empty;
+    }
+
+    private async Task UpdateStatusAsync(string status)
+    {
+        if (_selectedReport == null) return;
+
+        _isProcessing = true;
+        try
+        {
+            var request = new UpdateReportStatusRequest(status, _resolutionNote);
+            bool success = await ApiClient.UpdateReportStatusAsync(_selectedReport.Id, request);
+            if (success)
+            {
+                Snackbar.Add($"通報 #{_selectedReport.Id} のステータスを更新しました。", Severity.Success);
+                CloseDetail();
+                await LoadReportsAsync();
+            }
+            else
+            {
+                Snackbar.Add("通報ステータスの更新に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"更新エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ResolveAsync(bool delete, bool hide)
+    {
+        if (_selectedReport == null) return;
+
+        _isProcessing = true;
+        try
+        {
+            var request = new ResolveReportRequest(delete, hide, _resolutionNote);
+            bool success = await ApiClient.ResolveReportAsync(_selectedReport.Id, request);
+            if (success)
+            {
+                Snackbar.Add($"通報 #{_selectedReport.Id} の処置が完了しました。", Severity.Success);
+                CloseDetail();
+                await LoadReportsAsync();
+            }
+            else
+            {
+                Snackbar.Add("通報の処置に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"処置エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}
+

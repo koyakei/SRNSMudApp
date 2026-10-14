@@ -1,0 +1,220 @@
+@page "/Notification/WasmList"
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-5">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                           OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="一覧に戻る" />
+            <MudBadge Content="@UnreadCount" Color="Color.Error" Overlap="true" Visible="@(UnreadCount > 0)">
+                <MudText Typo="Typo.h5" Class="font-weight-bold">通知 (WASM)</MudText>
+            </MudBadge>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.DoneAll"
+                       OnClick="MarkAllAsReadAsync" Disabled="@(UnreadCount == 0 || IsMarkingAllRead)">
+                すべて既読にする
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Color="Color.Default"
+                           OnClick="LoadNotificationsAsync" title="再読み込み" />
+        </div>
+    </div>
+
+    @* フィルタチップ *@
+    <div class="d-flex gap-2 mb-3">
+        <MudChip T="string" Color="@(ShowOnlyUnread ? Color.Default : Color.Primary)" Variant="Variant.Filled"
+                 Size="Size.Small" OnClick="@(() => ShowOnlyUnread = false)">
+            すべて (@Notifications.Count)
+        </MudChip>
+        <MudChip T="string" Color="@(ShowOnlyUnread ? Color.Primary : Color.Default)" Variant="Variant.Filled"
+                 Size="Size.Small" OnClick="@(() => ShowOnlyUnread = true)">
+            未読のみ (@UnreadCount)
+        </MudChip>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (FilteredNotifications.Count == 0)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+            <MudIcon Icon="@Icons.Material.Filled.NotificationsNone" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary">
+                @(ShowOnlyUnread ? "未読の通知はありません。" : "通知はありません。")
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Spacing="2">
+            @foreach (var n in FilteredNotifications)
+            {
+                <MudPaper Elevation="0" Outlined="true"
+                          Class="@($"pa-4 rounded-xl d-flex align-start justify-space-between gap-3 {(n.IsRead ? "bg-surface" : "bg-primary-subtle border-primary")}")"
+                          Style="@(!n.IsRead ? "border-left: 4px solid var(--mud-palette-primary);" : "")">
+                    <div class="d-flex align-start gap-3 flex-grow-1">
+                        <MudIcon Icon="@GetNotificationIcon(n.SourceType)" Color="@(n.IsRead ? Color.Default : Color.Primary)" Class="mt-1" />
+                        <div>
+                            <div class="d-flex align-center gap-2 flex-wrap mb-1">
+                                @if (!string.IsNullOrEmpty(n.ActorName))
+                                {
+                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">@n.ActorName</MudText>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @n.CreatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")
+                                </MudText>
+                                @if (!n.IsRead)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">未読</MudChip>
+                                }
+                            </div>
+                            <MudText Typo="Typo.body2" Class="mb-2">@n.Message</MudText>
+                            <div class="d-flex align-center gap-2 flex-wrap">
+                                @if (n.AssociatedItemId > 0)
+                                {
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Article"
+                                               Href="@($"/Item/WasmDetail/{n.AssociatedItemId}")">
+                                        アイテム #@n.AssociatedItemId を開く
+                                    </MudButton>
+                                }
+                                @if (n.HighlightTagId.HasValue && n.HighlightTagId.Value > 0)
+                                {
+                                    <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.LocalOffer"
+                                               Href="@($"/Tag/WasmDetail/{n.HighlightTagId.Value}")">
+                                        タグ詳細を開く
+                                    </MudButton>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!n.IsRead)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Primary"
+                                       OnClick="@(() => MarkAsReadAsync(n))" title="既読にする" />
+                    }
+                </MudPaper>
+            }
+        </MudStack>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; set; }
+
+    public IReadOnlyList<NotificationItemDto> Notifications { get; private set; } = [];
+
+    public int UnreadCount { get; private set; }
+
+    public bool IsLoading { get; private set; } = true;
+
+    public bool IsMarkingAllRead { get; private set; }
+
+    public bool ShowOnlyUnread { get; set; }
+
+    public IReadOnlyList<NotificationItemDto> FilteredNotifications =>
+        ShowOnlyUnread ? Notifications.Where(n => !n.IsRead).ToList() : Notifications;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotificationsAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadNotificationsAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            Notifications = await ApiClient.GetNotificationsAsync(_cts.Token);
+            UnreadCount = await ApiClient.GetUnreadNotificationCountAsync(_cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"通知の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task MarkAsReadAsync(NotificationItemDto notification)
+    {
+        try
+        {
+            bool ok = await ApiClient.MarkNotificationAsReadAsync(notification.SourceId, notification.SourceType, _cts.Token);
+            if (ok)
+            {
+                await LoadNotificationsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"既読化エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task MarkAllAsReadAsync()
+    {
+        IsMarkingAllRead = true;
+        try
+        {
+            bool ok = await ApiClient.MarkAllNotificationsAsReadAsync(_cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("すべての通知を既読にしました。", Severity.Success);
+                await LoadNotificationsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"一括既読化エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsMarkingAllRead = false;
+        }
+    }
+
+    private static string GetNotificationIcon(string sourceType) => sourceType switch
+    {
+        "TagRequest" => Icons.Material.Filled.PendingActions,
+        "TagRequestApproved" => Icons.Material.Filled.CheckCircle,
+        "TagRequestRejected" => Icons.Material.Filled.Cancel,
+        "ItemReply" => Icons.Material.Filled.Reply,
+        "RequestReply" => Icons.Material.Filled.QuestionAnswer,
+        _ => Icons.Material.Filled.Notifications
+    };
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
+

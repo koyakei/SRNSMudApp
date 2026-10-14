@@ -2,15 +2,18 @@ namespace SRNSMudApp.Controllers;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 using SRNSMudApp.Client.Models;
 using SRNSMudApp.Client.Models.Api;
+using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
@@ -22,10 +25,41 @@ using SRNSMudApp.Services;
 [ApiController]
 [Route("api/[controller]")]
 public sealed class ItemController(
-    IItemListDataProvider itemListDataProvider) : ControllerBase
+    IItemListDataProvider itemListDataProvider,
+    IItemListExportService itemListExportService,
+    IHomeDataProvider homeDataProvider,
+    IItemReactionService itemReactionService,
+    IItemCardDataProvider itemCardDataProvider,
+    IItemReplyService itemReplyService,
+    IItemQuoteService itemQuoteService,
+    IItemTagService itemTagService,
+    IUserGroupDataProvider userGroupDataProvider,
+    IAdminDataProvider adminDataProvider,
+    ITaggingRequestActions? taggingRequestActions = null,
+    ITagRequestRejectionService? tagRequestRejectionService = null) : ControllerBase
 {
     private readonly IItemListDataProvider _itemListDataProvider =
         itemListDataProvider ?? throw new ArgumentNullException(nameof(itemListDataProvider));
+    private readonly IItemListExportService _itemListExportService =
+        itemListExportService ?? throw new ArgumentNullException(nameof(itemListExportService));
+    private readonly IHomeDataProvider _homeDataProvider =
+        homeDataProvider ?? throw new ArgumentNullException(nameof(homeDataProvider));
+    private readonly IItemReactionService _itemReactionService =
+        itemReactionService ?? throw new ArgumentNullException(nameof(itemReactionService));
+    private readonly IItemCardDataProvider _itemCardDataProvider =
+        itemCardDataProvider ?? throw new ArgumentNullException(nameof(itemCardDataProvider));
+    private readonly IItemReplyService _itemReplyService =
+        itemReplyService ?? throw new ArgumentNullException(nameof(itemReplyService));
+    private readonly IItemQuoteService _itemQuoteService =
+        itemQuoteService ?? throw new ArgumentNullException(nameof(itemQuoteService));
+    private readonly IItemTagService _itemTagService =
+        itemTagService ?? throw new ArgumentNullException(nameof(itemTagService));
+    private readonly IUserGroupDataProvider _userGroupDataProvider =
+        userGroupDataProvider ?? throw new ArgumentNullException(nameof(userGroupDataProvider));
+    private readonly IAdminDataProvider _adminDataProvider =
+        adminDataProvider ?? throw new ArgumentNullException(nameof(adminDataProvider));
+    private readonly ITaggingRequestActions? _taggingRequestActions = taggingRequestActions;
+    private readonly ITagRequestRejectionService? _tagRequestRejectionService = tagRequestRejectionService;
 
     /// <summary>
     /// タグ名のサジェスト候補を検索します。
@@ -133,6 +167,32 @@ public sealed class ItemController(
         return Ok(response);
     }
 
+    /// <summary>
+    /// アイテムの詳細情報を取得します。
+    /// </summary>
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<ItemDto>> GetItemById(int id, CancellationToken cancellationToken)
+    {
+        Item? item = await _itemCardDataProvider.GetItemByIdAsync(id);
+        if (item == null)
+        {
+            return NotFound("アイテムが見つかりません。");
+        }
+
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+
+        if (item.IsPrivate && item.OwnerId != currentUserId && !isAdmin)
+        {
+            return Forbid();
+        }
+
+        int replyCount = await _itemReplyService.GetItemReplyCountAsync(id);
+        int quoteCount = await _itemQuoteService.GetQuoteCountAsync(id, cancellationToken);
+
+        return Ok(MapToItemDto(item, replyCount, quoteCount));
+    }
+
     private static ItemDto MapToItemDto(Item item, int replyCount = 0, int quoteCount = 0)
     {
         var relations = item.TagRelations
@@ -191,5 +251,516 @@ public sealed class ItemController(
             TargetUserGroupName: tag.TargetUserGroup?.Name,
             TargetTagRelations: targetRelations
         );
+    }
+
+    /// <summary>
+    /// 指定されたアイテム一覧を JSON 形式でエクスポートします。
+    /// </summary>
+    [HttpPost("export")]
+    public async Task<ActionResult<string>> ExportItems(
+        [FromBody] ItemListExportRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request?.ItemIds is null || request.ItemIds.Count == 0)
+        {
+            return Ok("[]");
+        }
+
+        ItemListExportData exportData = await _itemListDataProvider
+            .LoadExportDataAsync(request.ItemIds);
+
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        ItemListPageData pageData = await _itemListDataProvider
+            .LoadItemsAndTagsAsync([], [], currentUserId, isAdmin);
+
+        var targetItems = pageData.Items.Where(i => request.ItemIds.Contains(i.Id)).ToList();
+        IReadOnlyList<ExportItemDto> exportList = await _itemListExportService
+            .BuildExportAsync(exportData, targetItems);
+
+        string json = ItemListExportService.Serialize(exportList);
+        return Ok(json);
+    }
+
+    /// <summary>
+    /// アイテムへの投票（アップボート / ダウンボート）を切り替えます。
+    /// </summary>
+    [HttpPost("{id:int}/vote")]
+    public async Task<ActionResult<ItemVoteResult>> VoteItem(
+        int id,
+        [FromBody] ItemVoteRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("投票を行うにはログインが必要です。");
+        }
+
+        SystemTagsResult systemTags = await _homeDataProvider
+            .EnsureSystemTagsAsync(currentUserId, cancellationToken);
+
+        if (!systemTags.GoodTagId.HasValue)
+        {
+            return BadRequest("システムタグの取得に失敗しました。");
+        }
+
+        var targetWeight = request.IsUpvote ? 1 : -1;
+        ItemVoteResult result = await _itemReactionService
+            .ToggleItemVoteAsync(id, currentUserId, systemTags.GoodTagId.Value, targetWeight);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// アイテムへのリアクション（真実・善・美）を切り替えます。
+    /// </summary>
+    [HttpPost("{id:int}/reaction")]
+    public async Task<ActionResult<ItemVoteResult>> ReactItem(
+        int id,
+        [FromBody] ItemReactionRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("リアクションを行うにはログインが必要です。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ReactionTagName))
+        {
+            return BadRequest("ReactionTagName は必須です。");
+        }
+
+        Tag reactionTag = await _itemReactionService
+            .EnsureReactionTagAsync(currentUserId, request.ReactionTagName);
+
+        var targetWeight = request.Weight != 0 ? request.Weight : 1;
+        ItemVoteResult result = await _itemReactionService
+            .ToggleItemReactionAsync(id, currentUserId, reactionTag.Id, targetWeight);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 新規アイテムを作成します。
+    /// </summary>
+    [HttpPost("create")]
+    public async Task<ActionResult<ItemDto>> CreateItem(
+        [FromBody] CreateItemRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("アイテムを作成するにはログインが必要です。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            return BadRequest("Content は必須です。");
+        }
+
+        var item = new Item
+        {
+            Content = request.Content.Trim(),
+            OwnerId = currentUserId,
+            IsPrivate = request.IsPrivate,
+            QuotedItemId = request.QuotedItemId,
+            TargetUserGroupId = request.TargetUserGroupId,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+
+        await _itemCardDataProvider.CreateItemAsync(item, request.InitialTagIds);
+
+        Item? createdItem = await _itemCardDataProvider.GetItemByIdAsync(item.Id);
+        return Ok(MapToItemDto(createdItem ?? item, 0, 0));
+    }
+
+    /// <summary>
+    /// アイテムのリプライ一覧を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/replies")]
+    public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetReplies(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Item> replies = await _itemReplyService.GetItemRepliesAsync(id);
+        var replyDtos = replies.Select(r => MapToItemDto(r, 0, 0)).ToList();
+        return Ok(replyDtos);
+    }
+
+    /// <summary>
+    /// アイテムにリプライを投稿します。
+    /// </summary>
+    [HttpPost("{id:int}/replies")]
+    public async Task<ActionResult<ItemDto>> AddReply(
+        int id,
+        [FromBody] CreateReplyRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("リプライを投稿するにはログインが必要です。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            return BadRequest("Content は必須です。");
+        }
+
+        Item? parentItem = await _itemCardDataProvider.GetItemByIdAsync(id);
+        if (parentItem == null)
+        {
+            return NotFound("親アイテムが見つかりません。");
+        }
+
+        bool isPrivate = request.IsPrivate;
+        int? targetGroupId = isPrivate ? parentItem.TargetUserGroupId : null;
+
+        Item? reply = await _itemReplyService.AddItemReplyAsync(
+            id,
+            request.Content.Trim(),
+            currentUserId,
+            request.TargetUserIds,
+            isPrivate,
+            targetGroupId);
+
+        if (reply == null)
+        {
+            return BadRequest("リプライの作成に失敗しました。");
+        }
+
+        return Ok(MapToItemDto(reply, 0, 0));
+    }
+
+    /// <summary>
+    /// アイテムを引用しているアイテム一覧を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/quotes")]
+    public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetQuotes(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Item> quotes = await _itemQuoteService.GetQuotedByItemsAsync(id, cancellationToken);
+        var quoteDtos = quotes.Select(q => MapToItemDto(q, 0, 0)).ToList();
+        return Ok(quoteDtos);
+    }
+
+    /// <summary>
+    /// アイテム本文を更新します。
+    /// </summary>
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult> UpdateItem(
+        int id,
+        [FromBody] UpdateItemRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("アイテムを更新するにはログインが必要です。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            return BadRequest("Content は必須です。");
+        }
+
+        Item? item = await _itemCardDataProvider.GetItemByIdAsync(id);
+        if (item == null)
+        {
+            return NotFound("アイテムが見つかりません。");
+        }
+
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        if (item.OwnerId != currentUserId && !isAdmin)
+        {
+            return Forbid();
+        }
+
+        bool success = await _itemCardDataProvider.UpdateItemContentAsync(id, request.Content.Trim());
+        if (!success)
+        {
+            return BadRequest("アイテムの更新に失敗しました。");
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// アイテムを削除します。
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult> DeleteItem(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("アイテムを削除するにはログインが必要です。");
+        }
+
+        Item? item = await _itemCardDataProvider.GetItemByIdAsync(id);
+        if (item == null)
+        {
+            return NotFound("アイテムが見つかりません。");
+        }
+
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        if (item.OwnerId != currentUserId && !isAdmin)
+        {
+            return Forbid();
+        }
+
+        if (isAdmin && item.OwnerId != currentUserId)
+        {
+            await _itemCardDataProvider.DeleteItemByAdminAsync(id, currentUserId);
+        }
+        else
+        {
+            await _itemCardDataProvider.DeleteItemAsync(id);
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// アイテムにタグを追加します。
+    /// </summary>
+    [HttpPost("{id:int}/tags")]
+    public async Task<ActionResult> AddTag(
+        int id,
+        [FromBody] AddTagRelationRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("タグを追加するにはログインが必要です。");
+        }
+
+        string? error = await _itemTagService.AddTagToItemAsync(id, request.TagId, currentUserId, request.Comment);
+        if (error != null)
+        {
+            return BadRequest(error);
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// アイテムからタグ関連付けを削除します。
+    /// </summary>
+    [HttpDelete("{id:int}/tags/{relationId:int}")]
+    public async Task<ActionResult> RemoveTag(
+        int id,
+        int relationId,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("タグを削除するにはログインが必要です。");
+        }
+
+        string? error = await _itemTagService.RemoveTagRelationAsync(relationId, currentUserId);
+        if (error != null)
+        {
+            return BadRequest(error);
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// アイテムに紐づくタグ関連付けのタグを変更します。
+    /// </summary>
+    [HttpPut("{id:int}/tags/{relationId:int}/change")]
+    public async Task<ActionResult> ChangeItemTag(
+        int id,
+        int relationId,
+        [FromBody] ChangeItemTagRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("タグを変更するにはログインが必要です。");
+        }
+
+        string? error = await _itemTagService.ChangeItemTagAsync(relationId, request.NewTagId, id, currentUserId);
+        if (error != null)
+        {
+            return BadRequest(error);
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// ログインユーザーが所属・管理するグループ一覧を取得します。
+    /// </summary>
+    [HttpGet("user-groups")]
+    public async Task<ActionResult<IReadOnlyList<UserGroupDto>>> GetUserGroups(
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Ok(Array.Empty<UserGroupDto>());
+        }
+
+        IReadOnlyList<UserGroup> groups = await _userGroupDataProvider.GetUserGroupsForUserAsync(currentUserId, cancellationToken);
+        var dtos = groups.Select(g => new UserGroupDto(g.Id, g.Name, g.Description)).ToList();
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// アイテムに紐づくタグのウェイト（重み）を変更します。
+    /// </summary>
+    [HttpPut("{id:int}/tags/{relationId:int}/weight")]
+    public async Task<ActionResult> UpdateTagWeight(
+        int id,
+        int relationId,
+        [FromBody] UpdateTagWeightRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("ウェイトを変更するにはログインが必要です。");
+        }
+
+        UpdateWeightResult result = await _itemTagService.UpdateTagWeightAsync(relationId, request.Delta, currentUserId);
+        return result switch
+        {
+            UpdateWeightResult.Success => Ok(),
+            UpdateWeightResult.NotFound => NotFound("タグ関連付けが見つかりません。"),
+            UpdateWeightResult.NoPermission => Forbid(),
+            _ => BadRequest("ウェイトの変更に失敗しました。")
+        };
+    }
+
+    /// <summary>
+    /// 指定アイテムを引用しているアイテム一覧を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/quoted-by")]
+    public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetQuotedByItems(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Item> items = await _itemQuoteService.GetQuotedByItemsAsync(id, cancellationToken);
+        var dtos = items.Select(i => MapToItemDto(i)).ToList();
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// CSV 形式のアイテムおよびタグデータをインポートします。
+    /// </summary>
+    [HttpPost("import")]
+    public async Task<ActionResult<ImportCsvResponse>> ImportCsv(
+        [FromBody] ImportCsvRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("インポートを行うにはログインが必要です。");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CsvContent))
+        {
+            return BadRequest("インポートするデータが空です。");
+        }
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(request.CsvContent));
+        var linesToProcess = await ItemImportViewModel.ParseCsvStreamAsync(stream, cancellationToken);
+        if (linesToProcess.Count == 0)
+        {
+            return Ok(new ImportCsvResponse(0, "処理するデータがありませんでした。"));
+        }
+
+        int importedCount = await _adminDataProvider.ImportItemsWithTagsAsync(currentUserId, linesToProcess);
+        return Ok(new ImportCsvResponse(importedCount, $"{importedCount}件のアイテムをインポートしました。"));
+    }
+
+    /// <summary>
+    /// アイテムに紐づく保留中のタグ付けリクエスト一覧を取得します。
+    /// </summary>
+    [HttpGet("{id:int}/tag-requests")]
+    public async Task<ActionResult<IReadOnlyList<TaggingRequestDto>>> GetTaggingRequests(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<TaggingRequestEntity> requests = await _itemTagService.GetTaggingRequestsForItemAsync(id);
+        var dtos = requests.Select(r => new TaggingRequestDto(
+            r.Id,
+            r.TargetItemId,
+            r.RequestedTagId,
+            r.RequestedTag?.Name ?? string.Empty,
+            r.RequesterUserId,
+            r.Owner?.UserName,
+            r.TagOwnerUserId,
+            r.ProposedWeight,
+            r.Status.ToString(),
+            r.RequestType.ToString()
+        )).ToList();
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// タグ付けリクエストを承認します。
+    /// </summary>
+    [HttpPost("tag-requests/{requestId:int}/approve")]
+    public async Task<ActionResult> ApproveTaggingRequest(
+        int requestId,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("リクエストを承認するにはログインが必要です。");
+        }
+
+        if (_taggingRequestActions == null)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented);
+        }
+
+        bool success = await _taggingRequestActions.ApproveAsync(requestId, currentUserId);
+        if (!success)
+        {
+            return BadRequest("リクエストの承認に失敗しました。");
+        }
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// タグ付けリクエストを却下します。
+    /// </summary>
+    [HttpPost("tag-requests/{requestId:int}/reject")]
+    public async Task<ActionResult> RejectTaggingRequest(
+        int requestId,
+        [FromBody] RejectTaggingRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("リクエストを却下するにはログインが必要です。");
+        }
+
+        if (_tagRequestRejectionService == null)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented);
+        }
+
+        await _tagRequestRejectionService.RejectRequestAsync(requestId, currentUserId, request.Reason);
+        return Ok();
     }
 }

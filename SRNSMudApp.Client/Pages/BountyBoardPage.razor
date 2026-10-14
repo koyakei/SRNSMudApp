@@ -1,0 +1,278 @@
+@page "/Bounty/WasmBoard"
+@attribute [AllowAnonymous]
+
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+
+@inject IItemListApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Bounty Board (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.AssignmentTurnedIn" Size="Size.Large" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">Bounty Board (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    他のユーザーが「このアイテムにタグをつけてほしい！」と依頼しているリストです。条件を満たせば依頼を完了して報酬を受け取ることができます。
+                </MudText>
+            </div>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@(_showCreatePanel ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                       OnClick="@(() => _showCreatePanel = !_showCreatePanel)"
+                       data-testid="toggle-create-bounty-btn">
+                @(_showCreatePanel ? "閉じる" : "タグ付けを依頼する")
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           OnClick="@LoadBountiesAsync"
+                           aria-label="再読み込み"
+                           Disabled="@_isLoading"
+                           data-testid="refresh-bounties-btn" />
+        </div>
+    </div>
+
+    @* 新規バウンティ作成パネル *@
+    @if (_showCreatePanel)
+    {
+        <MudCard Class="pa-4 mb-6" Elevation="2" data-testid="create-bounty-panel">
+            <MudText Typo="Typo.h6" Class="mb-3 font-weight-bold">新しいタグ付け依頼（バウンティ）を作成</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_createTargetItemId"
+                                     Label="対象アイテム ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="タグ付けを依頼したいアイテムのID"
+                                     data-testid="bounty-item-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_createRequestedTagId"
+                                     Label="依頼タグ ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="付与してほしいタグのID"
+                                     data-testid="bounty-tag-id-input" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex justify-end gap-2 mt-2">
+                    <MudButton Variant="Variant.Outlined"
+                               OnClick="@(() => _showCreatePanel = false)">
+                        キャンセル
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="@CreateBountyAsync"
+                               Disabled="@(_isCreating || _createTargetItemId <= 0 || _createRequestedTagId <= 0)"
+                               data-testid="submit-bounty-btn">
+                        @if (_isCreating)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>作成中...</span>
+                        }
+                        else
+                        {
+                            <span>依頼を投稿</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCard>
+    }
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8" data-testid="bounty-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_bounties.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="my-4" data-testid="bounty-empty-alert">
+            現在、募集中のバウンティはありません。
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Spacing="3" data-testid="bounty-list">
+            @foreach (var bounty in _bounties)
+            {
+                <MudItem xs="12" sm="6" md="4" @key="@bounty.Id">
+                    <MudCard Outlined="true" Class="h-100 d-flex flex-column hover-elevation transition-elevation" data-testid="@($"bounty-card-{bounty.Id}")">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <div class="d-flex align-center justify-space-between">
+                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small">
+                                        #@bounty.RequestedTagName
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        ID: #@bounty.Id
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                    依頼者: @(bounty.RequesterUserName ?? bounty.RequesterUserId)
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+
+                        <MudCardContent Class="flex-grow-1">
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">対象アイテム #@bounty.TargetItemId</MudText>
+                            <MudPaper Elevation="0" Class="pa-2 rounded bg-surface mb-3" Outlined="true">
+                                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-height: 4.5em; overflow: hidden;">
+                                    @(string.IsNullOrWhiteSpace(bounty.TargetItemContent) ? "(本文なし)" : bounty.TargetItemContent)
+                                </MudText>
+                                <div class="mt-1">
+                                    <MudLink Href="@($"/Item/WasmDetail/{bounty.TargetItemId}")" Typo="Typo.caption">
+                                        アイテム詳細を見る &rarr;
+                                    </MudLink>
+                                </div>
+                            </MudPaper>
+
+                            @if (!string.IsNullOrEmpty(bounty.RewardTagName))
+                            {
+                                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="py-1 px-2" Dense="true">
+                                    報酬: @bounty.RewardTagName の権利
+                                </MudAlert>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    （無償のウィッシュリスト）
+                                </MudText>
+                            }
+                        </MudCardContent>
+
+                        <MudCardActions Class="mt-auto pt-0 justify-end">
+                            @if (bounty.IsMyBounty)
+                            {
+                                <MudButton Disabled="true" Variant="Variant.Text" Size="Size.Small">
+                                    自分の依頼
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Secondary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                           OnClick="@(() => FulfillBountyAsync(bounty.Id))"
+                                           data-testid="@($"fulfill-bounty-btn-{bounty.Id}")">
+                                    依頼を完了する
+                                </MudButton>
+                            }
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private IReadOnlyList<BountyDto> _bounties = [];
+    private bool _isLoading = true;
+    private bool _showCreatePanel;
+    private bool _isCreating;
+    private int _createTargetItemId;
+    private int _createRequestedTagId;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBountiesAsync();
+    }
+
+    private async Task LoadBountiesAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+
+        _isLoading = true;
+        try
+        {
+            BountyBoardResponse? response = await ApiClient.GetBountiesAsync(_cts.Token);
+            _bounties = response?.Bounties ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"バウンティ一覧の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateBountyAsync()
+    {
+        if (_createTargetItemId <= 0 || _createRequestedTagId <= 0)
+        {
+            Snackbar.Add("対象アイテム ID と依頼タグ ID を入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isCreating = true;
+        try
+        {
+            var request = new CreateBountyRequest(_createTargetItemId, _createRequestedTagId);
+            bool success = await ApiClient.CreateBountyAsync(request, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("バウンティを作成しました。", Severity.Success);
+                _showCreatePanel = false;
+                _createTargetItemId = 0;
+                _createRequestedTagId = 0;
+                await LoadBountiesAsync();
+            }
+            else
+            {
+                Snackbar.Add("バウンティの作成に失敗しました。ログイン状態やIDを確認してください。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    private async Task FulfillBountyAsync(int bountyId)
+    {
+        try
+        {
+            bool success = await ApiClient.FulfillBountyAsync(bountyId, null, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("依頼を完了・受諾しました！", Severity.Success);
+                await LoadBountiesAsync();
+            }
+            else
+            {
+                Snackbar.Add("依頼の完了に失敗しました。権利の保有状況やログイン状態を確認してください。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+}
+

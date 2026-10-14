@@ -57,7 +57,11 @@ TemporaryDependencyNodeTargetIdentifier=net11.0
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
-Components/ItemSearchView.razor.cs
+Components/
+ ItemSearchView.razor.cs
+ TagDiagramView.razor.cs
+ TagTreeView.razor.cs
+ UserGroupView.razor.cs
 Models/
  Api/
   ItemListRequest.cs
@@ -139,10 +143,31 @@ Microsoft.NET.Sdk/codestyle/cs|AnalysisLevelSuffix=All
 obj/Debug/net11.0/SRNSMudApp.Client.GeneratedMSBuildEditorConfig.editorconfig
 
 [additionalFiles]
-Components/ItemSearchView.razor
+Components/
+ ItemSearchView.razor
+ TagDiagramView.razor
+ TagTreeView.razor
+ UserGroupView.razor
 Pages/
  Auth.razor
+ BountyBoardPage.razor
+ ContractManagementPage.razor
+ InvitationManagementPage.razor
+ ItemDetailPage.razor
  ItemSearchPage.razor
+ NotificationPage.razor
+ PublicOfferBoardPage.razor
+ ReportManagementPage.razor
+ RightAssetOverviewPage.razor
+ TagDetailPage.razor
+ TagDiagramPage.razor
+ TagListPage.razor
+ TagTreePage.razor
+ UserDetailPage.razor
+ UserGroupMembersPage.razor
+ UserGroupPage.razor
+ UserManagementPage.razor
+ UserSearchPage.razor
 RedirectToLogin.razor
 _Imports.razor
 

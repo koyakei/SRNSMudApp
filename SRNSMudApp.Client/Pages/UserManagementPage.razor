@@ -1,0 +1,202 @@
+@page "/User/WasmManagement"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>ユーザー管理 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-10">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.ManageAccounts" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">ユーザー管理 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    管理者（Admin）権限の付与・剥奪およびアカウントの利用停止（BAN）管理を行います。
+                </MudText>
+            </div>
+        </div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadUsersAsync" Disabled="_isLoading" data-testid="refresh-users-btn">
+            再読み込み
+        </MudButton>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else
+    {
+        <MudTable Items="@_users" Hover="true" Dense="true" Elevation="3" data-testid="wasm-user-management-table">
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Email (Username)</MudTh>
+                <MudTh>Admin権限</MudTh>
+                <MudTh>BAN（利用停止）</MudTh>
+                <MudTh Style="text-align: center;">詳細</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="ID">
+                    <span class="font-monospace">@context.UserId</span>
+                    @if (context.IsProtected)
+                    {
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined" Class="ml-2">
+                            保護アカウント
+                        </MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Email">@context.UserName</MudTd>
+                <MudTd DataLabel="Admin権限">
+                    <MudSwitch T="bool" Value="@context.IsAdmin"
+                               ValueChanged="@(val => OnToggleAdminAsync(context, val))"
+                               Color="Color.Primary"
+                               Disabled="@(context.IsProtected || _isProcessing)"
+                               data-testid="@($"admin-switch-{context.UserId}")" />
+                </MudTd>
+                <MudTd DataLabel="BAN（利用停止）">
+                    <div class="d-flex align-center">
+                        <MudSwitch T="bool" Value="@context.IsBanned"
+                                   ValueChanged="@(val => OnToggleBanAsync(context, val))"
+                                   Color="Color.Error"
+                                   Disabled="@(context.IsProtected || _isProcessing)"
+                                   data-testid="@($"ban-switch-{context.UserId}")" />
+                        @if (context.IsBanned)
+                        {
+                            <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="ml-2">利用停止中</MudChip>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="詳細" Style="text-align: center;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary"
+                                   Href="@($"/User/WasmDetail/{context.UserId}")" aria-label="ユーザー詳細へ" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudAlert Severity="Severity.Normal" Class="my-4">
+                    ユーザーが存在しません。
+                </MudAlert>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private List<ManagedUserDto> _users = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await ApiClient.GetManagementUsersAsync();
+            _users = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ユーザー一覧の読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnToggleAdminAsync(ManagedUserDto item, bool newIsAdmin)
+    {
+        if (item.IsAdmin == newIsAdmin) return;
+
+        if (item.IsProtected && !newIsAdmin)
+        {
+            Snackbar.Add("保護されたユーザーの管理者権限は剥奪できません。", Severity.Warning);
+            return;
+        }
+
+        _isProcessing = true;
+        try
+        {
+            var request = new SetUserAdminRequest(newIsAdmin);
+            bool success = await ApiClient.SetUserAdminAsync(item.UserId, request);
+            if (success)
+            {
+                int index = _users.FindIndex(u => u.UserId == item.UserId);
+                if (index >= 0)
+                {
+                    _users[index] = item with { IsAdmin = newIsAdmin };
+                }
+                Snackbar.Add(
+                    newIsAdmin ? $"{item.UserName} にAdmin権限を付与しました。" : $"{item.UserName} のAdmin権限を剥奪しました。",
+                    Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("管理者権限の変更に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"権限の変更エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task OnToggleBanAsync(ManagedUserDto item, bool newIsBanned)
+    {
+        if (item.IsBanned == newIsBanned) return;
+
+        if (item.IsProtected && newIsBanned)
+        {
+            Snackbar.Add("保護されたユーザーを利用停止にすることはできません。", Severity.Warning);
+            return;
+        }
+
+        _isProcessing = true;
+        try
+        {
+            var request = new SetUserBanRequest(newIsBanned);
+            bool success = await ApiClient.SetUserBanAsync(item.UserId, request);
+            if (success)
+            {
+                int index = _users.FindIndex(u => u.UserId == item.UserId);
+                if (index >= 0)
+                {
+                    _users[index] = item with { IsBanned = newIsBanned };
+                }
+                Snackbar.Add(
+                    newIsBanned ? $"{item.UserName} を利用停止（BAN）にしました。" : $"{item.UserName} の利用停止（BAN）を解除しました。",
+                    newIsBanned ? Severity.Warning : Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("利用停止状態の変更に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"利用停止変更エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}
+

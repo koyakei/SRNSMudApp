@@ -1,0 +1,371 @@
+@page "/Tag/WasmDetail/{TagId:int}"
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    <div class="d-flex align-center gap-2 mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                       OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="一覧に戻る" />
+        <MudText Typo="Typo.h5" Class="font-weight-bold">タグ詳細 (WASM)</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.AccountTree"
+                   OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmTree"))">
+            タグツリー
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Hub"
+                   OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmDiagram"))">
+            ダイアグラム
+        </MudButton>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (Tag == null)
+    {
+        <MudAlert Severity="Severity.Warning">タグが見つかりませんでした。</MudAlert>
+    }
+    else
+    {
+        <MudCard Outlined="true" Class="rounded-xl mb-4">
+            <MudCardContent Class="pa-5">
+                <div class="d-flex align-start justify-space-between flex-wrap gap-3">
+                    <div class="d-flex align-start gap-3">
+                        @* 投票スコア *@
+                        <div class="d-flex flex-column align-center vote-container">
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                           OnClick="@(() => VoteTagAsync(true))" title="Upvote" />
+                            <MudText Typo="Typo.body2" Class="vote-score font-weight-bold">@Tag.Score</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                           OnClick="@(() => VoteTagAsync(false))" title="Downvote" />
+                        </div>
+
+                        <div>
+                            <div class="d-flex align-center gap-2 flex-wrap">
+                                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
+                                <MudText Typo="Typo.h5" Class="font-weight-bold">@Tag.Name</MudText>
+                                @if (Tag.IsPrivate)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">非公開</MudChip>
+                                }
+                                @if (!string.IsNullOrEmpty(Tag.TargetUserGroupName))
+                                {
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">@Tag.TargetUserGroupName</MudChip>
+                                }
+                                @if (Tag.IsLocked)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />ロック中
+                                    </MudChip>
+                                }
+                                @if (Tag.AutoAcceptIncomingTaggingRequests)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">自動承認</MudChip>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(Tag.Content))
+                            {
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="white-space: pre-wrap;">@Tag.Content</MudText>
+                            }
+
+                            <div class="d-flex align-center gap-3 mt-2">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    作成者:
+                                    @if (!string.IsNullOrEmpty(Tag.OwnerUserId))
+                                    {
+                                        <MudLink Href="@($"/User/WasmDetail/{Tag.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                            @(Tag.OwnerUserName ?? "不明")
+                                        </MudLink>
+                                    }
+                                    else
+                                    {
+                                        @(Tag.OwnerUserName ?? "不明")
+                                    }
+                                </MudText>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-center gap-2">
+                        <MudButton Variant="@(Tag.IsFollowing ? Variant.Outlined : Variant.Filled)"
+                                   Color="@(Tag.IsFollowing ? Color.Default : Color.Primary)"
+                                   StartIcon="@(Tag.IsFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
+                                   OnClick="ToggleFollowAsync" Disabled="IsTogglingFollow">
+                            @(Tag.IsFollowing ? "フォロー解除" : "フォロー")
+                        </MudButton>
+                    </div>
+                </div>
+            </MudCardContent>
+        </MudCard>
+
+        <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" KeepPanelsAlive="true">
+            <MudTabPanel Text="@($"関連アイテム ({Tag.RelatedItems.Count})")" Icon="@Icons.Material.Filled.Article">
+                @if (Tag.RelatedItems.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        このタグに関連付けられたアイテムはありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        @foreach (var item in Tag.RelatedItems)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                <div class="d-flex justify-space-between align-center mb-1">
+                                    <MudLink Href="@($"/Item/WasmDetail/{item.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
+                                        #@item.Id - @(item.OwnerUserName ?? "匿名")
+                                    </MudLink>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @item.UpdatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="mb-2" Style="white-space: pre-wrap;">@item.Content</MudText>
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        @foreach (var tr in item.TagRelations)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
+                                                @tr.TagName (+@tr.Weight)
+                                            </MudChip>
+                                        }
+                                    </div>
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                               Href="@($"/Item/WasmDetail/{item.Id}")" EndIcon="@Icons.Material.Filled.ArrowForward">
+                                        詳細を見る
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"関連タグ ({Tag.RelatedTags.Count})")" Icon="@Icons.Material.Filled.Tag">
+                @if (Tag.RelatedTags.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        関連するタグはありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudGrid Spacing="2">
+                        @foreach (var relTag in Tag.RelatedTags)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                    <div class="d-flex align-center justify-space-between mb-1">
+                                        <MudLink Href="@($"/Tag/WasmDetail/{relTag.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-1" />
+                                            @relTag.Name
+                                        </MudLink>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">スコア: @relTag.Score</MudText>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(relTag.Content))
+                                    {
+                                        <MudText Typo="Typo.caption" Class="d-block text-truncate mb-1">@relTag.Content</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">作成者: @(relTag.OwnerUserName ?? "不明")</MudText>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"リクエスト ({Tag.PendingRequests.Count})")" Icon="@Icons.Material.Filled.PendingActions">
+                @if (Tag.PendingRequests.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        保留中のリクエストはありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var req in Tag.PendingRequests)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                                            アイテム #@req.TargetItemId へのタグ付け提案 (@req.RequestedTagName)
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            提案者: @(req.RequesterUserName ?? req.RequesterUserId) | 提案ウェイト: @req.ProposedWeight
+                                        </MudText>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                   OnClick="@(() => ApproveRequestAsync(req.Id))">承認</MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                   OnClick="@(() => RejectRequestAsync(req.Id))">却下</MudButton>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Parameter]
+    public int TagId { get; set; }
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; set; }
+
+    public TagDetailDto? Tag { get; private set; }
+
+    public bool IsLoading { get; private set; } = true;
+
+    public bool IsTogglingFollow { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTagAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadTagAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            Tag = await ApiClient.GetTagDetailAsync(TagId, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"タグ情報の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ToggleFollowAsync()
+    {
+        if (Tag == null || IsTogglingFollow)
+        {
+            return;
+        }
+
+        IsTogglingFollow = true;
+        try
+        {
+            bool isFollowing = await ApiClient.ToggleTagFollowAsync(TagId, _cts.Token);
+            Tag = Tag with { IsFollowing = isFollowing };
+            Snackbar.Add(isFollowing ? "タグをフォローしました。" : "フォローを解除しました。", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"フォロー状態の変更に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsTogglingFollow = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task VoteTagAsync(bool isUpvote)
+    {
+        if (Tag == null)
+        {
+            return;
+        }
+
+        try
+        {
+            bool ok = await ApiClient.VoteTagAsync(TagId, isUpvote, _cts.Token);
+            if (ok)
+            {
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("投票に失敗しました。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTaggingRequestAsync(requestId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("リクエストを承認しました。", Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("リクエストの承認に失敗しました。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTaggingRequestAsync(requestId, new RejectTaggingRequest("タグオーナーによる却下"), _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("リクエストを却下しました。", Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("リクエストの却下に失敗しました。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
+

@@ -1,0 +1,280 @@
+@page "/Tag/WasmList"
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                           OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="アイテム一覧に戻る" />
+            <MudText Typo="Typo.h5" Class="font-weight-bold">タグ一覧・検索 (WASM)</MudText>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.AccountTree"
+                       OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmTree"))">
+                タグツリー
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Hub"
+                       OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmDiagram"))">
+                ダイアグラム
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => _showCreateSection = !_showCreateSection)">
+                新規タグ作成
+            </MudButton>
+        </div>
+    </div>
+
+    @* 新規タグ作成パネル *@
+    @if (_showCreateSection)
+    {
+        <MudCard Outlined="true" Class="rounded-xl pa-4 mb-4 bg-surface">
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-3">新しいタグを作成</MudText>
+            <div class="d-flex flex-column gap-3">
+                <MudTextField @bind-Value="_newTagName" Label="タグ名" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Required="true" />
+                <MudTextField @bind-Value="_newTagContent" Label="説明・内容" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="2" />
+                <div class="d-flex align-center justify-space-between">
+                    <MudCheckBox @bind-Value="_newTagIsPrivate" Label="非公開タグにする" Color="Color.Warning" Dense="true" />
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="CreateTagAsync" Disabled="@(string.IsNullOrWhiteSpace(_newTagName) || _isCreating)">
+                            作成
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                                   OnClick="@(() => _showCreateSection = false)">
+                            キャンセル
+                        </MudButton>
+                    </div>
+                </div>
+            </div>
+        </MudCard>
+    }
+
+    @* 検索バー *@
+    <MudTextField T="string" Value="@_searchQuery" ValueChanged="OnSearchQueryChanged"
+                  Placeholder="タグ名や説明で検索..." Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  DebounceInterval="300" Clearable="true" Class="mb-4" />
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (Tags.Count == 0)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary">該当するタグが見つかりませんでした。</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+            @(Tags.Count) 件のタグ
+        </MudText>
+
+        <MudTable Items="@Tags" Hover="true" Dense="true" Elevation="0" Outlined="true" Class="rounded-xl">
+            <HeaderContent>
+                <MudTh Style="width: 80px;">スコア</MudTh>
+                <MudTh>タグ名</MudTh>
+                <MudTh>説明・内容</MudTh>
+                <MudTh>作成者</MudTh>
+                <MudTh Style="width: 120px;">操作</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="スコア">
+                    <div class="d-flex align-center gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Class="pa-0"
+                                       OnClick="@(() => VoteTagAsync(context.Id, true))" title="Upvote" />
+                        <span class="font-weight-bold">@context.Score</span>
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Class="pa-0"
+                                       OnClick="@(() => VoteTagAsync(context.Id, false))" title="Downvote" />
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="タグ名">
+                    <div class="d-flex align-center gap-1">
+                        <MudLink Href="@($"/Tag/WasmDetail/{context.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-1" />
+                            @context.Name
+                        </MudLink>
+                        @if (context.IsPrivate)
+                        {
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">非公開</MudChip>
+                        }
+                        @if (!string.IsNullOrEmpty(context.TargetUserGroupName))
+                        {
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">@context.TargetUserGroupName</MudChip>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="説明・内容">
+                    <MudText Typo="Typo.body2" Class="text-truncate" Style="max-width: 350px;">
+                        @(string.IsNullOrEmpty(context.Content) ? "-" : context.Content)
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="作成者">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @(context.OwnerUserName ?? "不明")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="操作">
+                    <div class="d-flex align-center gap-1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary"
+                                       Href="@($"/Tag/WasmDetail/{context.Id}")" title="詳細を表示" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteTagAsync(context.Id))" title="削除" />
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; set; }
+
+    public IReadOnlyList<TagDto> Tags { get; private set; } = [];
+
+    public bool IsLoading { get; private set; } = true;
+
+    private string _searchQuery = string.Empty;
+    private bool _showCreateSection;
+    private string _newTagName = string.Empty;
+    private string _newTagContent = string.Empty;
+    private bool _newTagIsPrivate;
+    private bool _isCreating;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTagsAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadTagsAsync(string? query = null)
+    {
+        IsLoading = true;
+        try
+        {
+            Tags = await ApiClient.GetTagListAsync(query, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"タグ一覧の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task OnSearchQueryChanged(string newQuery)
+    {
+        _searchQuery = newQuery;
+        await LoadTagsAsync(newQuery);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CreateTagAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTagName))
+        {
+            return;
+        }
+
+        _isCreating = true;
+        try
+        {
+            var req = new CreateTagRequest(_newTagName.Trim(), _newTagContent.Trim(), _newTagIsPrivate);
+            TagDto? created = await ApiClient.CreateTagAsync(req, _cts.Token);
+            if (created != null)
+            {
+                Snackbar.Add($"タグ「{created.Name}」を作成しました。", Severity.Success);
+                _newTagName = string.Empty;
+                _newTagContent = string.Empty;
+                _newTagIsPrivate = false;
+                _showCreateSection = false;
+                await LoadTagsAsync(_searchQuery);
+            }
+            else
+            {
+                Snackbar.Add("タグの作成に失敗しました。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"タグ作成エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task VoteTagAsync(int tagId, bool isUpvote)
+    {
+        try
+        {
+            bool ok = await ApiClient.VoteTagAsync(tagId, isUpvote, _cts.Token);
+            if (ok)
+            {
+                await LoadTagsAsync(_searchQuery);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task DeleteTagAsync(int tagId)
+    {
+        try
+        {
+            bool ok = await ApiClient.DeleteTagAsync(tagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグを削除しました。", Severity.Success);
+                await LoadTagsAsync(_searchQuery);
+            }
+            else
+            {
+                Snackbar.Add("タグの削除に失敗しました。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"削除エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
+

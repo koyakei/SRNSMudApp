@@ -1,0 +1,35 @@
+@page "/UserGroup/WasmList"
+@using SRNSMudApp.Client.Components
+
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<PageTitle>ユーザーグループ管理 (WASM)</PageTitle>
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div>
+            <MudText Typo="Typo.h5">ユーザーグループ管理 (WebAssembly)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                ブラウザ側 WebAssembly (WASM) から API (/api/usergroup) を直接呼び出して動作します。
+            </MudText>
+        </div>
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Href="/Item/WasmList"
+                       StartIcon="@Icons.Material.Filled.List">
+                アイテム一覧 (WASM)
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small" Href="/UserGroup/List"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">
+                サーバー版 UserGroup へ戻る
+            </MudButton>
+        </div>
+    </div>
+
+    <UserGroupView />
+</MudContainer>
+

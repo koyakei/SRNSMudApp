@@ -33,6 +33,10 @@ public sealed class ItemSearchPageTests
         _ = _apiClientMock
             .Setup(a => a.QueryItemsAsync(It.IsAny<ItemListQueryRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ItemListQueryResponse([], [], 0));
+
+        _ = _apiClientMock
+            .Setup(a => a.GetUserGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
     }
 
     [Fact]

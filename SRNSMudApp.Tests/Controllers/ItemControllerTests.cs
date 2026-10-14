@@ -22,10 +22,33 @@ using Xunit;
 public class ItemControllerTests
 {
     private readonly Mock<IItemListDataProvider> _dataProviderMock = new();
+    private readonly Mock<IItemListExportService> _exportServiceMock = new();
+    private readonly Mock<IHomeDataProvider> _homeDataMock = new();
+    private readonly Mock<IItemReactionService> _itemReactionMock = new();
+    private readonly Mock<IItemCardDataProvider> _itemCardDataMock = new();
+    private readonly Mock<IItemReplyService> _itemReplyMock = new();
+    private readonly Mock<IItemQuoteService> _itemQuoteMock = new();
+    private readonly Mock<IItemTagService> _itemTagMock = new();
+    private readonly Mock<IUserGroupDataProvider> _userGroupMock = new();
+    private readonly Mock<IAdminDataProvider> _adminDataMock = new();
+    private readonly Mock<ITaggingRequestActions> _taggingRequestActionsMock = new();
+    private readonly Mock<ITagRequestRejectionService> _tagRequestRejectionMock = new();
 
     private ItemController CreateController(ClaimsPrincipal? user = null)
     {
-        var controller = new ItemController(_dataProviderMock.Object);
+        var controller = new ItemController(
+            _dataProviderMock.Object,
+            _exportServiceMock.Object,
+            _homeDataMock.Object,
+            _itemReactionMock.Object,
+            _itemCardDataMock.Object,
+            _itemReplyMock.Object,
+            _itemQuoteMock.Object,
+            _itemTagMock.Object,
+            _userGroupMock.Object,
+            _adminDataMock.Object,
+            _taggingRequestActionsMock.Object,
+            _tagRequestRejectionMock.Object);
         if (user != null)
         {
             controller.ControllerContext = new ControllerContext
@@ -263,5 +286,588 @@ public class ItemControllerTests
         Assert.Single(tagDto.TargetTagRelations); // only non-system tag
         Assert.Equal("nature", tagDto.TargetTagRelations[0].TagName);
         Assert.Equal(7, tagDto.TargetTagRelations[0].Weight);
+    }
+
+    [Fact]
+    public async Task ExportItems_ValidRequest_ReturnsSerializedJson()
+    {
+        // Arrange
+        var controller = CreateController();
+        var item = new Item { Id = 1, Content = "Content 1", OwnerId = "u1" };
+        var exportData = new ItemListExportData(new Dictionary<int, Tag>(), [], []);
+
+        _dataProviderMock
+            .Setup(p => p.LoadExportDataAsync(It.IsAny<IReadOnlyList<int>>()))
+            .ReturnsAsync(exportData);
+        _dataProviderMock
+            .Setup(p => p.LoadItemsAndTagsAsync(It.IsAny<IReadOnlyList<ItemListFilter>>(), It.IsAny<IReadOnlyList<ItemListSort>>(), It.IsAny<string?>(), It.IsAny<bool>()))
+            .ReturnsAsync(new ItemListPageData([item], []));
+        _exportServiceMock
+            .Setup(s => s.BuildExportAsync(exportData, It.IsAny<IEnumerable<Item>>()))
+            .ReturnsAsync([new ExportItemDto { Content = "Content 1", Owner = new ExportOwnerDto { Name = "u1" } }]);
+
+        // Act
+        ActionResult<string> result = await controller.ExportItems(new ItemListExportRequest([1]), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var json = Assert.IsType<string>(okResult.Value);
+        Assert.Contains("Content 1", json);
+    }
+
+    [Fact]
+    public async Task VoteItem_UnauthorizedWhenNoUser_ReturnsUnauthorized()
+    {
+        // Arrange (no user)
+        var controller = CreateController();
+
+        // Act
+        ActionResult<ItemVoteResult> result = await controller.VoteItem(1, new ItemVoteRequest(true), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task VoteItem_AuthorizedUser_ExecutesToggleVote()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        _homeDataMock
+            .Setup(h => h.EnsureSystemTagsAsync("user-abc", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SystemTagsResult(GoodTagId: 10, BadTagId: 11, ShinjiTagId: 12, ZenTagId: 13, BiTagId: 14, Created: false));
+
+        _itemReactionMock
+            .Setup(r => r.ToggleItemVoteAsync(1, "user-abc", 10, 1, null))
+            .ReturnsAsync(new ItemVoteResult(ItemVoteAction.Added, 100, 1));
+
+        // Act
+        ActionResult<ItemVoteResult> result = await controller.VoteItem(1, new ItemVoteRequest(true), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var voteResult = Assert.IsType<ItemVoteResult>(okResult.Value);
+        Assert.Equal(ItemVoteAction.Added, voteResult.Action);
+        Assert.Equal(100, voteResult.RelationId);
+    }
+
+    [Fact]
+    public async Task ReactItem_AuthorizedUser_ExecutesToggleReaction()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        var reactionTag = new Tag { Id = 50, Name = "真実", OwnerId = "user-abc" };
+        _itemReactionMock
+            .Setup(r => r.EnsureReactionTagAsync("user-abc", "真実"))
+            .ReturnsAsync(reactionTag);
+
+        _itemReactionMock
+            .Setup(r => r.ToggleItemReactionAsync(1, "user-abc", 50, 1, null))
+            .ReturnsAsync(new ItemVoteResult(ItemVoteAction.Added, 101, 1));
+
+        // Act
+        ActionResult<ItemVoteResult> result = await controller.ReactItem(1, new ItemReactionRequest("真実"), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var reactionResult = Assert.IsType<ItemVoteResult>(okResult.Value);
+        Assert.Equal(ItemVoteAction.Added, reactionResult.Action);
+    }
+
+    [Fact]
+    public async Task CreateItem_AuthorizedUser_CreatesAndReturnsItem()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        Item? capturedItem = null;
+        _itemCardDataMock
+            .Setup(d => d.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Callback<Item, IReadOnlyCollection<int>?>((item, _) =>
+            {
+                capturedItem = item;
+                item.Id = 999;
+            })
+            .Returns(Task.CompletedTask);
+
+        _itemCardDataMock
+            .Setup(d => d.GetItemByIdAsync(999))
+            .ReturnsAsync(() => capturedItem);
+
+        // Act
+        ActionResult<ItemDto> result = await controller.CreateItem(new CreateItemRequest("New item content", false, [1, 2]), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var itemDto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal(999, itemDto.Id);
+        Assert.Equal("New item content", itemDto.Content);
+        Assert.Equal("user-abc", itemDto.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task GetReplies_ReturnsReplies()
+    {
+        // Arrange
+        var controller = CreateController();
+        var replyItem = new Item { Id = 101, Content = "Reply 1", ParentItemId = 1, OwnerId = "user-abc" };
+        _itemReplyMock.Setup(r => r.GetItemRepliesAsync(1)).ReturnsAsync([replyItem]);
+
+        // Act
+        ActionResult<IReadOnlyList<ItemDto>> result = await controller.GetReplies(1, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var replies = Assert.IsAssignableFrom<IReadOnlyList<ItemDto>>(okResult.Value);
+        Assert.Single(replies);
+        Assert.Equal(101, replies[0].Id);
+    }
+
+    [Fact]
+    public async Task AddReply_AuthorizedUser_CreatesAndReturnsReply()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var parent = new Item { Id = 1, Content = "Parent", OwnerId = "user-abc" };
+        var createdReply = new Item { Id = 102, Content = "New Reply", ParentItemId = 1, OwnerId = "user-abc" };
+
+        _itemCardDataMock.Setup(d => d.GetItemByIdAsync(1)).ReturnsAsync(parent);
+        _itemReplyMock
+            .Setup(r => r.AddItemReplyAsync(1, "New Reply", "user-abc", null, false, null))
+            .ReturnsAsync(createdReply);
+
+        // Act
+        ActionResult<ItemDto> result = await controller.AddReply(1, new CreateReplyRequest("New Reply"), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var replyDto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal(102, replyDto.Id);
+        Assert.Equal("New Reply", replyDto.Content);
+    }
+
+    [Fact]
+    public async Task GetQuotes_ReturnsQuotes()
+    {
+        // Arrange
+        var controller = CreateController();
+        var quoteItem = new Item { Id = 201, Content = "Quote 1", QuotedItemId = 1, OwnerId = "user-abc" };
+        _itemQuoteMock.Setup(q => q.GetQuotedByItemsAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync([quoteItem]);
+
+        // Act
+        ActionResult<IReadOnlyList<ItemDto>> result = await controller.GetQuotes(1, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var quotes = Assert.IsAssignableFrom<IReadOnlyList<ItemDto>>(okResult.Value);
+        Assert.Single(quotes);
+        Assert.Equal(201, quotes[0].Id);
+    }
+
+    [Fact]
+    public async Task UpdateItem_Owner_UpdatesContent()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var existing = new Item { Id = 1, Content = "Old", OwnerId = "user-abc" };
+
+        _itemCardDataMock.Setup(d => d.GetItemByIdAsync(1)).ReturnsAsync(existing);
+        _itemCardDataMock.Setup(d => d.UpdateItemContentAsync(1, "Updated")).ReturnsAsync(true);
+
+        // Act
+        ActionResult result = await controller.UpdateItem(1, new UpdateItemRequest("Updated"), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteItem_Owner_DeletesItem()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var existing = new Item { Id = 1, OwnerId = "user-abc" };
+
+        _itemCardDataMock.Setup(d => d.GetItemByIdAsync(1)).ReturnsAsync(existing);
+        _itemCardDataMock.Setup(d => d.DeleteItemAsync(1)).Returns(Task.CompletedTask);
+
+        // Act
+        ActionResult result = await controller.DeleteItem(1, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task AddTag_Valid_AddsTag()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        _itemTagMock.Setup(t => t.AddTagToItemAsync(1, 10, "user-abc", null)).ReturnsAsync((string?)null);
+
+        // Act
+        ActionResult result = await controller.AddTag(1, new AddTagRelationRequest(10), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task RemoveTag_Valid_RemovesTag()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        _itemTagMock.Setup(t => t.RemoveTagRelationAsync(5, "user-abc")).ReturnsAsync((string?)null);
+
+        // Act
+        ActionResult result = await controller.RemoveTag(1, 5, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangeItemTag_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(); // 未認証
+
+        // Act
+        var result = await controller.ChangeItemTag(1, 5, new ChangeItemTagRequest(20), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangeItemTag_Success_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _itemTagMock.Setup(t => t.ChangeItemTagAsync(5, 20, 1, "user-abc")).ReturnsAsync((string?)null);
+
+        // Act
+        var result = await controller.ChangeItemTag(1, 5, new ChangeItemTagRequest(20), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangeItemTag_Error_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _itemTagMock.Setup(t => t.ChangeItemTagAsync(5, 20, 1, "user-abc")).ReturnsAsync("エラーが発生しました");
+
+        // Act
+        var result = await controller.ChangeItemTag(1, 5, new ChangeItemTagRequest(20), CancellationToken.None);
+
+        // Assert
+        var badResult = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("エラーが発生しました", badResult.Value);
+    }
+
+    [Fact]
+    public async Task GetUserGroups_Authorized_ReturnsGroups()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var group = new UserGroup { Id = 1, Name = "Test Group", OwnerId = "user-abc" };
+
+        _userGroupMock.Setup(g => g.GetUserGroupsForUserAsync("user-abc", It.IsAny<CancellationToken>())).ReturnsAsync([group]);
+
+        // Act
+        ActionResult<IReadOnlyList<UserGroupDto>> result = await controller.GetUserGroups(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<UserGroupDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal("Test Group", dtos[0].Name);
+    }
+
+    [Fact]
+    public async Task GetItemById_NotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var controller = CreateController();
+        _itemCardDataMock.Setup(m => m.GetItemByIdAsync(999)).ReturnsAsync((Item?)null);
+
+        // Act
+        var result = await controller.GetItemById(999, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetItemById_PrivateOtherUser_ReturnsForbid()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var item = new Item { Id = 1, Content = "Secret", IsPrivate = true, OwnerId = "other-user", ItemKindJson = "{}" };
+        _itemCardDataMock.Setup(m => m.GetItemByIdAsync(1)).ReturnsAsync(item);
+
+        // Act
+        var result = await controller.GetItemById(1, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetItemById_Existing_ReturnsItemDto()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var item = new Item
+        {
+            Id = 1,
+            Content = "Hello",
+            IsPrivate = false,
+            OwnerId = "user-abc",
+            ItemKindJson = "{}",
+            TagRelations = [new TagRelation { TagId = 10, Weight = 2, OwnerId = "user-abc", Tag = new Tag { Id = 10, Name = "C#", OwnerId = "user-abc" } }]
+        };
+        _itemCardDataMock.Setup(m => m.GetItemByIdAsync(1)).ReturnsAsync(item);
+        _itemReplyMock.Setup(m => m.GetItemReplyCountAsync(1)).ReturnsAsync(3);
+        _itemQuoteMock.Setup(m => m.GetQuoteCountAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(2);
+
+        // Act
+        var result = await controller.GetItemById(1, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal(1, dto.Id);
+        Assert.Equal("Hello", dto.Content);
+        Assert.Equal(3, dto.ReplyCount);
+        Assert.Equal(2, dto.QuoteCount);
+        Assert.Single(dto.TagRelations);
+    }
+
+    [Fact]
+    public async Task UpdateTagWeight_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(); // 未認証
+
+        // Act
+        var result = await controller.UpdateTagWeight(1, 10, new UpdateTagWeightRequest(1), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateTagWeight_Success_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _itemTagMock.Setup(m => m.UpdateTagWeightAsync(10, 1, "user-abc")).ReturnsAsync(UpdateWeightResult.Success);
+
+        // Act
+        var result = await controller.UpdateTagWeight(1, 10, new UpdateTagWeightRequest(1), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateTagWeight_NotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _itemTagMock.Setup(m => m.UpdateTagWeightAsync(10, 1, "user-abc")).ReturnsAsync(UpdateWeightResult.NotFound);
+
+        // Act
+        var result = await controller.UpdateTagWeight(1, 10, new UpdateTagWeightRequest(1), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateTagWeight_NoPermission_ReturnsForbid()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _itemTagMock.Setup(m => m.UpdateTagWeightAsync(10, 1, "user-abc")).ReturnsAsync(UpdateWeightResult.NoPermission);
+
+        // Act
+        var result = await controller.UpdateTagWeight(1, 10, new UpdateTagWeightRequest(1), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task GetQuotedByItems_ReturnsQuotedItems()
+    {
+        // Arrange
+        var controller = CreateController();
+        var item = new Item
+        {
+            Id = 101,
+            Content = "Quoting item",
+            OwnerId = "user-abc",
+            ItemKindJson = "{}",
+            QuotedItemId = 1
+        };
+        _itemQuoteMock.Setup(m => m.GetQuotedByItemsAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([item]);
+
+        // Act
+        var result = await controller.GetQuotedByItems(1, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<ItemDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(101, dtos[0].Id);
+    }
+
+    [Fact]
+    public async Task ImportCsv_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(); // 未認証
+
+        // Act
+        var result = await controller.ImportCsv(new ImportCsvRequest("content,tag"), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ImportCsv_Valid_ReturnsImportedCount()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _adminDataMock.Setup(m => m.ImportItemsWithTagsAsync("user-abc", It.IsAny<IReadOnlyList<string[]>>()))
+            .ReturnsAsync(2);
+
+        // Act
+        var result = await controller.ImportCsv(new ImportCsvRequest("item1,tag1\nitem2,tag2"), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var res = Assert.IsType<ImportCsvResponse>(okResult.Value);
+        Assert.Equal(2, res.ImportedCount);
+    }
+
+    [Fact]
+    public async Task GetTaggingRequests_ReturnsMappedDtos()
+    {
+        // Arrange
+        var controller = CreateController();
+        var requests = new List<TaggingRequestEntity>
+        {
+            new()
+            {
+                Id = 10,
+                OwnerId = "user-1",
+                TargetItemId = 1,
+                RequestedTagId = 2,
+                RequestedTag = new Tag { Name = "test-tag", OwnerId = "user-2" },
+                RequesterUserId = "user-1",
+                TagOwnerUserId = "user-2",
+                ProposedWeight = 1,
+                RequestType = TaggingRequestType.Add
+            }
+        };
+        _itemTagMock.Setup(m => m.GetTaggingRequestsForItemAsync(1))
+            .ReturnsAsync(requests);
+
+        // Act
+        var result = await controller.GetTaggingRequests(1, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<TaggingRequestDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(10, dtos[0].Id);
+        Assert.Equal("test-tag", dtos[0].RequestedTagName);
+    }
+
+    [Fact]
+    public async Task ApproveTaggingRequest_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(); // 未認証
+
+        // Act
+        var result = await controller.ApproveTaggingRequest(10, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ApproveTaggingRequest_Authorized_CallsService_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _taggingRequestActionsMock.Setup(m => m.ApproveAsync(10, "user-abc"))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await controller.ApproveTaggingRequest(10, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectTaggingRequest_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(); // 未認証
+
+        // Act
+        var result = await controller.RejectTaggingRequest(10, new RejectTaggingRequest("Not suitable"), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectTaggingRequest_Authorized_CallsService_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        _tagRequestRejectionMock.Setup(m => m.RejectRequestAsync(10, "user-abc", "Not suitable"))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await controller.RejectTaggingRequest(10, new RejectTaggingRequest("Not suitable"), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
     }
 }
