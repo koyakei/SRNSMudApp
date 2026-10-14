@@ -24,6 +24,12 @@
                    OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmDiagram"))">
             ダイアグラム
         </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Tertiary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.AccountBalanceWallet"
+                   OnClick="@(() => NavigationManager.NavigateTo($"/RightAsset/WasmOverview/{TagId}"))"
+                   data-testid="right-asset-overview-btn">
+            RightAsset
+        </MudButton>
     </div>
 
     @if (IsLoading)
@@ -475,6 +481,50 @@
                     </MudStack>
                 }
             </MudTabPanel>
+
+            <MudTabPanel Text="@($"台帳履歴 ({(_weightLedgers?.Count ?? 0)})")" Icon="@Icons.Material.Filled.History"
+                         data-testid="ledger-tab">
+                @if ((_weightLedgers?.Count ?? 0) == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        重み変動履歴はありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudTable Items="@(_weightLedgers ?? [])" Elevation="0" Outlined="true" Dense="true" Hover="true" Class="rounded-lg">
+                        <HeaderContent>
+                            <MudTh>日時</MudTh>
+                            <MudTh>操作者</MudTh>
+                            <MudTh>理由</MudTh>
+                            <MudTh>種別</MudTh>
+                            <MudTh Style="text-align: right;">変動量</MudTh>
+                            <MudTh Style="text-align: right;">更新後重み</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
+                            <MudTd DataLabel="操作者">@(context.OwnerUserName ?? "システム")</MudTd>
+                            <MudTd DataLabel="理由">@context.Reason</MudTd>
+                            <MudTd DataLabel="種別">@context.SourceType</MudTd>
+                            <MudTd DataLabel="変動量" Style="text-align: right;">
+                                @if (context.Delta > 0)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Success" Class="font-weight-bold">+@context.Delta</MudText>
+                                }
+                                else if (context.Delta < 0)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Error" Class="font-weight-bold">@context.Delta</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">0</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="更新後重み" Style="text-align: right;">@context.NewWeight</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
         </MudTabs>
     }
 </MudContainer>
@@ -482,25 +532,46 @@
 @code {
     private readonly CancellationTokenSource _cts = new();
 
+    /// <summary>
+    /// 表示対象のタグ ID。
+    /// </summary>
     [Parameter]
     public int TagId { get; set; }
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
+    /// <summary>
+    /// Web API クライアント。
+    /// </summary>
     [Inject]
     public required IItemListApiClient ApiClient { get; set; }
 
+    /// <summary>
+    /// 通知スナックバーサービス。
+    /// </summary>
     [Inject]
     public required ISnackbar Snackbar { get; set; }
 
+    /// <summary>
+    /// ナビゲーションマネージャー。
+    /// </summary>
     [Inject]
     public required NavigationManager NavigationManager { get; set; }
 
+    /// <summary>
+    /// 現在読み込まれているタグ詳細 DTO。
+    /// </summary>
     public TagDetailDto? Tag { get; private set; }
 
+    /// <summary>
+    /// 読み込み中フラグ。
+    /// </summary>
     public bool IsLoading { get; private set; } = true;
 
+    /// <summary>
+    /// フォロー切替処理中フラグ。
+    /// </summary>
     public bool IsTogglingFollow { get; private set; }
 
     private string? _currentUserId;
@@ -518,6 +589,8 @@
 
     private TagPendingProposalsDto? _pendingProposals;
     private int TotalPendingProposals => (_pendingProposals?.NameProposals.Count ?? 0) + (_pendingProposals?.ContentProposals.Count ?? 0);
+
+    private IReadOnlyList<TagWeightLedgerDto> _weightLedgers = [];
 
     private bool _isProposing;
     private string _proposalType = "name";
@@ -546,6 +619,7 @@
         {
             Tag = await ApiClient.GetTagDetailAsync(TagId, _cts.Token);
             _pendingProposals = await ApiClient.GetPendingProposalsForTagAsync(TagId, _cts.Token);
+            _weightLedgers = await ApiClient.GetTagWeightLedgersAsync(TagId, _cts.Token) ?? [];
         }
         catch (OperationCanceledException)
         {

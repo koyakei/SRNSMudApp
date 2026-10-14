@@ -41,6 +41,10 @@ public class TagDetailPageTests : IAsyncDisposable
         var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
         _authMock.Setup(p => p.GetAuthenticationStateAsync())
             .ReturnsAsync(new AuthenticationState(anonymous));
+
+        _apiClientMock
+            .Setup(c => c.GetTagWeightLedgersAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
     }
 
     private void SetCurrentUser(string userId, params string[] roles)
@@ -308,6 +312,68 @@ public class TagDetailPageTests : IAsyncDisposable
 
         // Assert
         _apiClientMock.Verify(c => c.ApproveTagNameProposalAsync(55, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void WhenTagExists_RendersRightAssetButton_AndNavigatesToOverview()
+    {
+        // Arrange
+        var detail = CreateSampleDetail(1, "テスト用タグ", "alice-id");
+        _apiClientMock
+            .Setup(c => c.GetTagDetailAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+        _apiClientMock
+            .Setup(c => c.GetTagWeightLedgersAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // Act
+        IRenderedComponent<TagDetailPage> cut = _ctx.Render<TagDetailPage>(p => p.Add(x => x.TagId, 1));
+        var rightAssetBtn = cut.Find("[data-testid='right-asset-overview-btn']");
+
+        // Assert
+        Assert.NotNull(rightAssetBtn);
+        Assert.Contains("RightAsset", rightAssetBtn.TextContent);
+    }
+
+    [Fact]
+    public void WhenWeightLedgersExist_RendersLedgerRecords()
+    {
+        // Arrange
+        var detail = CreateSampleDetail(1, "テスト用タグ", "alice-id");
+        var ledgers = new List<TagWeightLedgerDto>
+        {
+            new(
+                Id: 10,
+                TagId: 1,
+                TagName: "テスト用タグ",
+                ItemId: 100,
+                OwnerUserId: "alice-id",
+                OwnerUserName: "alice",
+                Reason: "ItemTagged",
+                SourceType: "Item",
+                PreviousWeight: 0,
+                Delta: 5,
+                NewWeight: 5,
+                CreatedDate: DateTime.UtcNow
+            )
+        };
+
+        _apiClientMock
+            .Setup(c => c.GetTagDetailAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+        _apiClientMock
+            .Setup(c => c.GetTagWeightLedgersAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ledgers);
+
+        // Act
+        IRenderedComponent<TagDetailPage> cut = _ctx.Render<TagDetailPage>(p => p.Add(x => x.TagId, 1));
+
+        // Assert
+        var ledgerTab = cut.Find("[data-testid='ledger-tab']");
+        Assert.NotNull(ledgerTab);
+        Assert.Contains("台帳履歴 (1)", cut.Markup);
+        Assert.Contains("ItemTagged", cut.Markup);
+        Assert.Contains("+5", cut.Markup);
     }
 
     public async ValueTask DisposeAsync()
