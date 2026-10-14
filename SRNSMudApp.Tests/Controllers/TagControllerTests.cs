@@ -28,7 +28,10 @@ public class TagControllerTests
     private readonly Mock<ITagSearchQueryService> _tagSearchQueryMock = new();
     private readonly Mock<ITagSuggestionService> _tagSuggestionMock = new();
 
-    private TagController CreateController(ClaimsPrincipal? user = null)
+    private TagController CreateController(
+        ClaimsPrincipal? user = null,
+        ITagSimilarityService? tagSimilarityService = null,
+        ITagHierarchyService? tagHierarchyService = null)
     {
         var controller = new TagController(
             _tagCommandMock.Object,
@@ -37,7 +40,9 @@ public class TagControllerTests
             null,
             _tagDetailDataMock.Object,
             _tagSearchQueryMock.Object,
-            _tagSuggestionMock.Object);
+            _tagSuggestionMock.Object,
+            tagSimilarityService,
+            tagHierarchyService);
 
         if (user != null)
         {
@@ -432,5 +437,87 @@ public class TagControllerTests
 
         // Assert
         Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task FindSimilarTags_WhenServiceNotConfigured_ReturnsNotImplemented()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        // Act
+        ActionResult<IReadOnlyList<SimilarTagCandidateDto>> result =
+            await controller.FindSimilarTags("test", 0.5f, 5, CancellationToken.None);
+
+        // Assert
+        var statusResult = Assert.IsType<StatusCodeResult>(result.Result);
+        Assert.Equal(StatusCodes.Status501NotImplemented, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task FindSimilarTags_WhenServiceReturnsCandidates_ReturnsCandidates()
+    {
+        // Arrange
+        var mockSimilarity = new Mock<ITagSimilarityService>();
+        var candidateTag = new Tag { Id = 1, Name = "C#", OwnerId = "u1" };
+        mockSimilarity
+            .Setup(s => s.FindSimilarTags(It.IsAny<IEnumerable<Tag>>(), "CSharp", 0.6f, 3))
+            .Returns([new SimilarTagCandidate(candidateTag, 0.95f)]);
+
+        _tagSearchQueryMock
+            .Setup(s => s.GetAllTagsAsync(It.IsAny<string?>(), It.IsAny<bool>()))
+            .ReturnsAsync([candidateTag]);
+
+        var controller = CreateController(tagSimilarityService: mockSimilarity.Object);
+
+        // Act
+        ActionResult<IReadOnlyList<SimilarTagCandidateDto>> result =
+            await controller.FindSimilarTags("CSharp", 0.6f, 3, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<SimilarTagCandidateDto>>(okResult.Value);
+        Assert.Single(dtos);
+        Assert.Equal(1, dtos[0].TagId);
+        Assert.Equal("C#", dtos[0].TagName);
+        Assert.Equal(0.95f, dtos[0].Similarity);
+    }
+
+    [Fact]
+    public async Task SuggestParentTag_WhenServiceNotConfigured_ReturnsNotImplemented()
+    {
+        // Arrange
+        var controller = CreateController();
+
+        // Act
+        ActionResult<TagDto?> result =
+            await controller.SuggestParentTag(new SuggestParentTagRequest("Test"), CancellationToken.None);
+
+        // Assert
+        var statusResult = Assert.IsType<StatusCodeResult>(result.Result);
+        Assert.Equal(StatusCodes.Status501NotImplemented, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task SuggestParentTag_WhenServiceConfigured_ReturnsHierarchyCandidate()
+    {
+        // Arrange
+        var mockService = new Mock<ITagHierarchyService>();
+        var sampleTag = new Tag { Id = 10, Name = "Backend", Content = "Backend desc", OwnerId = "u1" };
+        mockService
+            .Setup(s => s.SuggestParentTagAsync("ASP.NET", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sampleTag);
+
+        var controller = CreateController(tagHierarchyService: mockService.Object);
+
+        // Act
+        ActionResult<TagDto?> result =
+            await controller.SuggestParentTag(new SuggestParentTagRequest("ASP.NET"), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<TagDto>(okResult.Value);
+        Assert.Equal(10, dto.Id);
+        Assert.Equal("Backend", dto.Name);
     }
 }

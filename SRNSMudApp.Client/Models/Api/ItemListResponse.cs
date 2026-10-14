@@ -607,3 +607,25 @@ public sealed record InternalLinkConversionResultDto(
 /// 内部タグリンク置換結果 DTO。
 /// </summary>
 public sealed record ApplyLinkReplacementsResponse(string ConvertedContent);
+
+/// <summary>
+/// 類似タグ候補 DTO。
+/// </summary>
+public sealed record SimilarTagCandidateDto(
+    int TagId,
+    string TagName,
+    float Similarity
+);
+
+/// <summary>
+/// タグダイアグラムのエッジ紐付けタグ（Attachment）DTO。
+/// </summary>
+public sealed record TagEdgeAttachmentDto(
+    int Id,
+    int EdgeId,
+    int TagId,
+    string TagName,
+    string? OwnerUserName,
+    int Weight,
+    DateTime CreatedDate
+);

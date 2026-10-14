@@ -2805,4 +2805,189 @@ public class ItemListApiClientTests
         // Assert
         Assert.Equal("[C#](/TagDetail/1) text", result);
     }
+
+    [Fact]
+    public async Task FindSimilarTagsAsync_ReturnsCandidates()
+    {
+        // Arrange
+        var candidates = new List<SimilarTagCandidateDto>
+        {
+            new(1, "Tag1", 0.85f)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Contains("api/tag/similar?name=Tag1", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(candidates), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<SimilarTagCandidateDto> result = await apiClient.FindSimilarTagsAsync("Tag1", 0.5f, 5);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(1, result[0].TagId);
+        Assert.Equal("Tag1", result[0].TagName);
+        Assert.Equal(0.85f, result[0].Similarity);
+    }
+
+    [Fact]
+    public async Task SuggestParentTagAsync_ReturnsTagDto()
+    {
+        // Arrange
+        var tagDto = new TagDto(10, "ParentTag", "Content", "alice");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag/suggest-parent", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(tagDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        TagDto? result = await apiClient.SuggestParentTagAsync(new SuggestParentTagRequest("ChildTag"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(10, result.Id);
+        Assert.Equal("ParentTag", result.Name);
+    }
+
+    [Fact]
+    public async Task CreateTagEdgeAsync_ReturnsEdgeDto()
+    {
+        // Arrange
+        var edgeDto = new TagDiagramEdgeDto(100, 1, 2, "alice");
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag-diagram/edges", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(edgeDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        TagDiagramEdgeDto? result = await apiClient.CreateTagEdgeAsync(new CreateTagEdgeRequest(1, 2));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(100, result.Id);
+        Assert.Equal(1, result.SourceTagId);
+        Assert.Equal(2, result.TargetTagId);
+    }
+
+    [Fact]
+    public async Task DeleteTagEdgeAsync_ReturnsSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Delete, req.Method);
+            Assert.Equal("https://example.com/api/tag-diagram/edges/100", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.DeleteTagEdgeAsync(100);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task GetAttachmentsForEdgeAsync_ReturnsAttachments()
+    {
+        // Arrange
+        var attachments = new List<TagEdgeAttachmentDto>
+        {
+            new(50, 100, 5, "RelationTag", "bob", 1, DateTime.UtcNow)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/tag-diagram/edges/100/attachments", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(attachments), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<TagEdgeAttachmentDto> result = await apiClient.GetAttachmentsForEdgeAsync(100);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(50, result[0].Id);
+        Assert.Equal("RelationTag", result[0].TagName);
+    }
+
+    [Fact]
+    public async Task AttachTagToEdgeAsync_ReturnsAttachmentDto()
+    {
+        // Arrange
+        var attachmentDto = new TagEdgeAttachmentDto(51, 100, 5, "RelationTag", "bob", 1, DateTime.UtcNow);
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/tag-diagram/edges/100/attachments", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(attachmentDto), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        TagEdgeAttachmentDto? result = await apiClient.AttachTagToEdgeAsync(100, new AttachTagToEdgeRequest(5, 10, 1));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(51, result.Id);
+        Assert.Equal("RelationTag", result.TagName);
+    }
+
+    [Fact]
+    public async Task DetachTagFromEdgeAsync_ReturnsSuccess()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Delete, req.Method);
+            Assert.Equal("https://example.com/api/tag-diagram/attachments/51", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.DetachTagFromEdgeAsync(51);
+
+        // Assert
+        Assert.True(result);
+    }
 }

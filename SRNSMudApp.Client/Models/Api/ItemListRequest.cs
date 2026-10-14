@@ -334,3 +334,18 @@ public sealed record ApplyLinkReplacementsRequest(
     string Content,
     IReadOnlyList<LinkConversionCandidateDto> Candidates
 );
+
+/// <summary>
+/// タグダイアグラムのエッジ作成 API のリクエスト DTO。
+/// </summary>
+public sealed record CreateTagEdgeRequest(int SourceTagId, int TargetTagId);
+
+/// <summary>
+/// タグダイアグラムのエッジへの意味付けタグ紐付け API のリクエスト DTO。
+/// </summary>
+public sealed record AttachTagToEdgeRequest(int TagId, int RightAssetId, int Weight = 1);
+
+/// <summary>
+/// AI による親タグ階層判定・提案 API のリクエスト DTO。
+/// </summary>
+public sealed record SuggestParentTagRequest(string TagName);

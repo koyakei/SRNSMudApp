@@ -27,7 +27,9 @@ public sealed class TagController(
     ITagTreeDataProvider? tagTreeDataProvider = null,
     ITagDetailDataProvider? tagDetailDataProvider = null,
     ITagSearchQueryService? tagSearchQueryService = null,
-    ITagSuggestionService? tagSuggestionService = null) : ControllerBase
+    ITagSuggestionService? tagSuggestionService = null,
+    ITagSimilarityService? tagSimilarityService = null,
+    ITagHierarchyService? tagHierarchyService = null) : ControllerBase
 {
     private readonly ITagCommandService _tagCommandService =
         tagCommandService ?? throw new ArgumentNullException(nameof(tagCommandService));
@@ -39,6 +41,8 @@ public sealed class TagController(
     private readonly ITagDetailDataProvider? _tagDetailDataProvider = tagDetailDataProvider;
     private readonly ITagSearchQueryService? _tagSearchQueryService = tagSearchQueryService;
     private readonly ITagSuggestionService? _tagSuggestionService = tagSuggestionService;
+    private readonly ITagSimilarityService? _tagSimilarityService = tagSimilarityService;
+    private readonly ITagHierarchyService? _tagHierarchyService = tagHierarchyService;
 
     /// <summary>
     /// 新規タグを作成します。
@@ -476,5 +480,70 @@ public sealed class TagController(
         )).ToList();
 
         return Ok(dtos);
+    }
+
+    /// <summary>
+    /// 入力されたタグ名に類似する既存タグの候補リストを検索します（重複・表記揺れ防止用）。
+    /// </summary>
+    [HttpGet("similar")]
+    public async Task<ActionResult<IReadOnlyList<SimilarTagCandidateDto>>> FindSimilarTags(
+        [FromQuery] string name,
+        [FromQuery] float minSimilarity = 0.50f,
+        [FromQuery] int maxResults = 5,
+        CancellationToken cancellationToken = default)
+    {
+        if (_tagSimilarityService == null || _tagSearchQueryService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Ok(Array.Empty<SimilarTagCandidateDto>());
+        }
+
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
+        List<Tag> allTags = await _tagSearchQueryService.GetAllTagsAsync(currentUserId, isAdmin);
+        IReadOnlyList<SimilarTagCandidate> candidates =
+            _tagSimilarityService.FindSimilarTags(allTags, name.Trim(), minSimilarity, maxResults);
+
+        var dtos = candidates
+            .Select(c => new SimilarTagCandidateDto(c.Tag.Id, c.Tag.Name, c.Similarity))
+            .ToList();
+
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// 新規タグ名から適切な親タグ階層を AI / ベクトル類似度で判定・提案します。
+    /// </summary>
+    [HttpPost("suggest-parent")]
+    public async Task<ActionResult<TagDto?>> SuggestParentTag(
+        [FromBody] SuggestParentTagRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (_tagHierarchyService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TagName))
+        {
+            return BadRequest("タグ名は必須です。");
+        }
+
+        Tag? parentTag = await _tagHierarchyService.SuggestParentTagAsync(
+            request.TagName.Trim(), null, cancellationToken);
+
+        if (parentTag == null)
+        {
+            return Ok(null);
+        }
+
+        return Ok(MapToTagDto(parentTag));
     }
 }

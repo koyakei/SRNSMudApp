@@ -557,6 +557,41 @@ public interface IItemListApiClient
     /// 選択された変換候補をテキストに適用し、内部タグリンクに置換した文字列を返却します。
     /// </summary>
     Task<string?> ApplyLinkReplacementsAsync(ApplyLinkReplacementsRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたタグ名に類似した既存タグ候補を取得します（表記揺れ検出・重複防止用）。
+    /// </summary>
+    Task<IReadOnlyList<SimilarTagCandidateDto>> FindSimilarTagsAsync(string name, float minSimilarity = 0.5f, int maxResults = 5, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたタグ名に最適な親タグの候補を AI / ベクトル類似度により推論・提案します。
+    /// </summary>
+    Task<TagDto?> SuggestParentTagAsync(SuggestParentTagRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグダイアグラムに新規エッジを作成します。
+    /// </summary>
+    Task<TagDiagramEdgeDto?> CreateTagEdgeAsync(CreateTagEdgeRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// タグダイアグラムのエッジを削除します。
+    /// </summary>
+    Task<bool> DeleteTagEdgeAsync(int edgeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定されたエッジに紐付けられている意味付けタグ一覧を取得します。
+    /// </summary>
+    Task<IReadOnlyList<TagEdgeAttachmentDto>> GetAttachmentsForEdgeAsync(int edgeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// エッジに意味付けタグを紐付けます（RightAssetを消費）。
+    /// </summary>
+    Task<TagEdgeAttachmentDto?> AttachTagToEdgeAsync(int edgeId, AttachTagToEdgeRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// エッジから意味付けタグの紐付けを解除します。
+    /// </summary>
+    Task<bool> DetachTagFromEdgeAsync(int attachmentId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1534,5 +1569,74 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
 
         ApplyLinkReplacementsResponse? result = await response.Content.ReadFromJsonAsync<ApplyLinkReplacementsResponse>(cancellationToken);
         return result?.ConvertedContent;
+    }
+
+    public async Task<IReadOnlyList<SimilarTagCandidateDto>> FindSimilarTagsAsync(string name, float minSimilarity = 0.5f, int maxResults = 5, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return [];
+        }
+
+        var url = $"api/tag/similar?name={Uri.EscapeDataString(name)}&minSimilarity={minSimilarity.ToString(System.Globalization.CultureInfo.InvariantCulture)}&maxResults={maxResults}";
+        List<SimilarTagCandidateDto>? result = await _httpClient.GetFromJsonAsync<List<SimilarTagCandidateDto>>(url, cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<TagDto?> SuggestParentTagAsync(SuggestParentTagRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag/suggest-parent", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<TagDto>(cancellationToken);
+    }
+
+    public async Task<TagDiagramEdgeDto?> CreateTagEdgeAsync(CreateTagEdgeRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag-diagram/edges", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<TagDiagramEdgeDto>(cancellationToken);
+    }
+
+    public async Task<bool> DeleteTagEdgeAsync(int edgeId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.DeleteAsync(new Uri($"api/tag-diagram/edges/{edgeId}", UriKind.Relative), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<TagEdgeAttachmentDto>> GetAttachmentsForEdgeAsync(int edgeId, CancellationToken cancellationToken = default)
+    {
+        List<TagEdgeAttachmentDto>? result = await _httpClient.GetFromJsonAsync<List<TagEdgeAttachmentDto>>($"api/tag-diagram/edges/{edgeId}/attachments", cancellationToken);
+        return result ?? [];
+    }
+
+    public async Task<TagEdgeAttachmentDto?> AttachTagToEdgeAsync(int edgeId, AttachTagToEdgeRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/tag-diagram/edges/{edgeId}/attachments", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<TagEdgeAttachmentDto>(cancellationToken);
+    }
+
+    public async Task<bool> DetachTagFromEdgeAsync(int attachmentId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.DeleteAsync(new Uri($"api/tag-diagram/attachments/{attachmentId}", UriKind.Relative), cancellationToken);
+        return response.IsSuccessStatusCode;
     }
 }
