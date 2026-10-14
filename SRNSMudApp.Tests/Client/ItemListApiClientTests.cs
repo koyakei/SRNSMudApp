@@ -2096,4 +2096,61 @@ public class ItemListApiClientTests
         // Assert
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task GetConfirmedAccountsAsync_ReturnsListOnSuccess()
+    {
+        // Arrange
+        var expected = new List<UserConfirmationDto>
+        {
+            new("u1", "alice", "alice@example.com", true),
+            new("u2", "bob", "bob@example.com", false)
+        };
+
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/user/confirmed-accounts", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(expected), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<UserConfirmationDto>? result = await apiClient.GetConfirmedAccountsAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Count);
+        Assert.True(result[0].EmailConfirmed);
+        Assert.False(result[1].EmailConfirmed);
+    }
+
+    [Fact]
+    public async Task ToggleUserConfirmationAsync_ReturnsNewStatus()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/user/u1/toggle-confirmation", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(true), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        bool result = await apiClient.ToggleUserConfirmationAsync("u1");
+
+        // Assert
+        Assert.True(result);
+    }
 }

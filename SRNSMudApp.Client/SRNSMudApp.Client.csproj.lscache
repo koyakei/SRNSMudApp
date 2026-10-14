@@ -149,6 +149,7 @@ Components/
  TagTreeView.razor
  UserGroupView.razor
 Pages/
+ AddTagPage.razor
  Auth.razor
  BountyBoardPage.razor
  ContractManagementPage.razor
@@ -158,6 +159,7 @@ Pages/
  NotificationPage.razor
  PublicOfferBoardPage.razor
  ReportManagementPage.razor
+ RequireConfirmedAccountPage.razor
  RightAssetOverviewPage.razor
  TagDetailPage.razor
  TagDiagramPage.razor
@@ -165,6 +167,7 @@ Pages/
  TagImportPage.razor
  TagListPage.razor
  TagManagementPage.razor
+ TagSearchPage.razor
  TagTreePage.razor
  UserDetailPage.razor
  UserGroupMembersPage.razor

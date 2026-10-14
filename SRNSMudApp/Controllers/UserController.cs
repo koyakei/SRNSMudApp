@@ -228,4 +228,48 @@ public sealed class UserController(IUserDataProvider userDataProvider) : Control
 
         return Ok(true);
     }
+
+    /// <summary>
+    /// 全ユーザーのメール確認（EmailConfirmed）状態一覧を取得します（管理者専用）。
+    /// </summary>
+    [HttpGet("confirmed-accounts")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IReadOnlyList<UserConfirmationDto>>> GetConfirmedAccounts(
+        CancellationToken cancellationToken)
+    {
+        List<ApplicationUser> users = await _userDataProvider.GetAllUsersAsync() ?? [];
+        var dtos = users.Select(u => new UserConfirmationDto(
+            UserId: u.Id,
+            UserName: u.UserName,
+            Email: u.Email,
+            EmailConfirmed: u.EmailConfirmed
+        )).ToList();
+
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// 指定したユーザーのメール確認（EmailConfirmed）状態を反転します（管理者専用）。
+    /// </summary>
+    [HttpPost("{userId}/toggle-confirmation")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<bool>> ToggleUserConfirmation(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var targetUser = await _userDataProvider.FindUserByIdAsync(userId);
+        if (targetUser == null)
+        {
+            return NotFound("ユーザーが見つかりません。");
+        }
+
+        var result = await _userDataProvider.ToggleUserEmailConfirmationAsync(userId);
+        if (!result.Succeeded)
+        {
+            return BadRequest(string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+
+        var updated = await _userDataProvider.FindUserByIdAsync(userId);
+        return Ok(updated?.EmailConfirmed ?? !targetUser.EmailConfirmed);
+    }
 }

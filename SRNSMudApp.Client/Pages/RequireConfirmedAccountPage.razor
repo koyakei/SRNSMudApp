@@ -1,0 +1,198 @@
+@page "/Admin/WasmRequireConfirmedAccount"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>ユーザー確認設定 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-10">
+    <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-4">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+            <div>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">ユーザー確認設定 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    全ユーザーのメール確認状態（EmailConfirmed）を確認・切り替えます（デバッグ・運用管理用）。
+                </MudText>
+            </div>
+        </div>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadUsersAsync"
+                   Disabled="_isLoading"
+                   data-testid="refresh-btn">
+            更新
+        </MudButton>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (_users == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="rounded-lg">
+            ユーザー一覧の取得に失敗しました。
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="rounded-xl overflow-hidden" Elevation="2">
+            <MudTable Items="@_users"
+                      Dense="true"
+                      Hover="true"
+                      Filter="FilterFunc"
+                      data-testid="confirmed-accounts-table">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6">登録ユーザー一覧 (@_users.Count 件)</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchString"
+                                  Placeholder="Email または ユーザー名で検索..."
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  IconSize="Size.Medium"
+                                  Class="mt-0"
+                                  Clearable="true"
+                                  Immediate="true"
+                                  data-testid="search-input" />
+                </ToolBarContent>
+
+                <HeaderContent>
+                    <MudTh>Email</MudTh>
+                    <MudTh>ユーザー名</MudTh>
+                    <MudTh>確認状態</MudTh>
+                    <MudTh Style="text-align: right;">アクション</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd DataLabel="Email">@context.Email</MudTd>
+                    <MudTd DataLabel="ユーザー名">@context.UserName</MudTd>
+                    <MudTd DataLabel="確認状態">
+                        @if (context.EmailConfirmed)
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">
+                                確認済み (Confirmed)
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                                未確認 (Unconfirmed)
+                            </MudChip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="アクション" Style="text-align: right;">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="@(context.EmailConfirmed ? Color.Warning : Color.Success)"
+                                   Size="Size.Small"
+                                   Disabled="@(_processingUserIds.Contains(context.UserId))"
+                                   OnClick="@(() => ToggleConfirmationAsync(context))"
+                                   data-testid="@($"toggle-btn-{context.UserId}")">
+                            @if (_processingUserIds.Contains(context.UserId))
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                            }
+                            else
+                            {
+                                <span>@(context.EmailConfirmed ? "未確認にする" : "確認済みにする")</span>
+                            }
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="[10, 25, 50, 100]" />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<UserConfirmationDto>? _users;
+    private bool _isLoading = true;
+    private string _searchString = string.Empty;
+    private readonly HashSet<string> _processingUserIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await ApiClient.GetConfirmedAccountsAsync();
+            _users = result != null ? [..result] : null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ユーザー一覧の取得に失敗しました: {ex.Message}", Severity.Error);
+            _users = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ToggleConfirmationAsync(UserConfirmationDto user)
+    {
+        _processingUserIds.Add(user.UserId);
+        try
+        {
+            bool newStatus = await ApiClient.ToggleUserConfirmationAsync(user.UserId);
+            Snackbar.Add($"{user.Email ?? user.UserName} の確認状態を更新しました: {(newStatus ? "確認済み" : "未確認")}", Severity.Success);
+
+            // ローカルリストの項目を更新
+            if (_users != null)
+            {
+                int index = _users.FindIndex(u => u.UserId == user.UserId);
+                if (index >= 0)
+                {
+                    _users[index] = _users[index] with { EmailConfirmed = newStatus };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"更新に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingUserIds.Remove(user.UserId);
+        }
+    }
+
+    private bool FilterFunc(UserConfirmationDto user)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            return true;
+        }
+
+        if (user.Email?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        if (user.UserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return false;
+    }
+}
+

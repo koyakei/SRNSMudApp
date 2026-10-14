@@ -1,0 +1,187 @@
+@page "/Tag/WasmSearch"
+@using System.Threading
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>タグ検索 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8 mb-10">
+    <div class="d-flex align-center mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h4" Class="font-weight-bold">タグ検索 (WASM)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                タグ名を入力して検索し、タグの詳細情報や関連アイテムを確認できます。
+            </MudText>
+        </div>
+    </div>
+
+    <MudPaper Class="pa-6 rounded-xl mb-6" Elevation="2">
+        <MudAutocomplete T="TagSuggestion"
+                         Label="タグ名で検索"
+                         Value="_selectedTag"
+                         ValueChanged="OnTagSelectedAsync"
+                         SearchFunc="@SearchTagsAsync"
+                         ToStringFunc="@(tag => tag?.TagName)"
+                         Placeholder="例: テクノロジー, AI, 設計..."
+                         ResetValueOnEmptyText="false"
+                         CoerceValue="false"
+                         Clearable="true"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.LocalOffer"
+                         data-testid="tag-search-autocomplete" />
+    </MudPaper>
+
+    @if (_isLoadingDetail)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (_tagDetail != null)
+    {
+        <MudCard Class="rounded-xl shadow-sm mb-6" data-testid="tag-search-result-card">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" />
+                    </MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <div class="d-flex align-center gap-2 flex-wrap">
+                        <MudText Typo="Typo.h5" Class="font-weight-bold">@_tagDetail.Name</MudText>
+                        <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Filled">
+                            Weight: @_tagDetail.Score
+                        </MudChip>
+                        @if (_tagDetail.IsPrivate)
+                        {
+                            <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">非公開</MudChip>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        作成者: @(!string.IsNullOrWhiteSpace(_tagDetail.OwnerUserName) ? _tagDetail.OwnerUserName : "不明")
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+
+            <MudCardContent>
+                @if (!string.IsNullOrWhiteSpace(_tagDetail.Content))
+                {
+                    <MudText Typo="Typo.body1" Class="mb-4" Style="white-space: pre-wrap;">
+                        @_tagDetail.Content
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4 fst-italic">
+                        説明はありません。
+                    </MudText>
+                }
+
+                @if (_tagDetail.RelatedTags is { Count: > 0 })
+                {
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">関連タグ:</MudText>
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        @foreach (var related in _tagDetail.RelatedTags)
+                        {
+                            <MudChip T="string"
+                                     Color="Color.Primary"
+                                     Variant="Variant.Outlined"
+                                     Size="Size.Small"
+                                     OnClick="@(() => NavigateToTagDetail(related.Id))">
+                                @related.Name
+                            </MudChip>
+                        }
+                    </div>
+                }
+
+                <MudAlert Severity="Severity.Info" Dense="true" Class="rounded-lg">
+                    関連アイテム数: @(_tagDetail.RelatedItems?.Count ?? 0) 件
+                </MudAlert>
+            </MudCardContent>
+
+            <MudCardActions Class="pa-4 pt-0 d-flex gap-3 flex-wrap">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                           OnClick="@(() => NavigateToTagDetail(_tagDetail.Id))"
+                           data-testid="go-to-tag-detail-btn">
+                    タグ詳細を表示
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.List"
+                           OnClick="@(() => NavigateToItemsWithTag(_tagDetail.Name))"
+                           data-testid="go-to-items-btn">
+                    このタグのアイテムを表示
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Info"
+                           StartIcon="@Icons.Material.Filled.AccountTree"
+                           OnClick="@(() => NavigationManager.NavigateTo("/Tag/WasmTree"))"
+                           data-testid="go-to-tag-tree-btn">
+                    タグツリー
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+    else if (_selectedTag != null && !_selectedTag.TagId.HasValue)
+    {
+        <MudAlert Severity="Severity.Warning" Class="rounded-lg">
+            選択されたタグの ID が不明です。
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private TagSuggestion? _selectedTag;
+    private TagDetailDto? _tagDetail;
+    private bool _isLoadingDetail;
+
+    private async Task<IEnumerable<TagSuggestion>> SearchTagsAsync(string? value, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return await ApiClient.SearchTagsAsync(value, cancellationToken);
+    }
+
+    private async Task OnTagSelectedAsync(TagSuggestion? tag)
+    {
+        _selectedTag = tag;
+        _tagDetail = null;
+
+        if (tag?.TagId != null)
+        {
+            _isLoadingDetail = true;
+            try
+            {
+                _tagDetail = await ApiClient.GetTagDetailAsync(tag.TagId.Value);
+            }
+            finally
+            {
+                _isLoadingDetail = false;
+            }
+        }
+    }
+
+    private void NavigateToTagDetail(int tagId)
+    {
+        NavigationManager.NavigateTo($"/Tag/WasmDetail/{tagId}");
+    }
+
+    private void NavigateToItemsWithTag(string tagName)
+    {
+        NavigationManager.NavigateTo($"/Item/WasmList?tag={Uri.EscapeDataString(tagName)}");
+    }
+}
+

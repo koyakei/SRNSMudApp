@@ -305,4 +305,72 @@ public class UserControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.True((bool)okResult.Value!);
     }
+
+    [Fact]
+    public async Task GetConfirmedAccounts_ReturnsListOfUsersWithStatus()
+    {
+        // Arrange
+        var controller = CreateController();
+        var users = new List<ApplicationUser>
+        {
+            new() { Id = "u1", UserName = "alice", Email = "alice@example.com", EmailConfirmed = true },
+            new() { Id = "u2", UserName = "bob", Email = "bob@example.com", EmailConfirmed = false }
+        };
+
+        _userDataProviderMock
+            .Setup(p => p.GetAllUsersAsync())
+            .ReturnsAsync(users);
+
+        // Act
+        ActionResult<IReadOnlyList<UserConfirmationDto>> result =
+            await controller.GetConfirmedAccounts(CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IReadOnlyList<UserConfirmationDto>>(okResult.Value);
+        Assert.Equal(2, dtos.Count);
+        Assert.True(dtos[0].EmailConfirmed);
+        Assert.False(dtos[1].EmailConfirmed);
+    }
+
+    [Fact]
+    public async Task ToggleUserConfirmation_WhenUserNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var controller = CreateController();
+        _userDataProviderMock
+            .Setup(p => p.FindUserByIdAsync("unknown"))
+            .ReturnsAsync((ApplicationUser?)null);
+
+        // Act
+        ActionResult<bool> result = await controller.ToggleUserConfirmation("unknown", CancellationToken.None);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ToggleUserConfirmation_WhenSuccessful_TogglesAndReturnsNewStatus()
+    {
+        // Arrange
+        var controller = CreateController();
+        var user = new ApplicationUser { Id = "u1", UserName = "alice", Email = "alice@example.com", EmailConfirmed = false };
+        var updatedUser = new ApplicationUser { Id = "u1", UserName = "alice", Email = "alice@example.com", EmailConfirmed = true };
+
+        _userDataProviderMock
+            .SetupSequence(p => p.FindUserByIdAsync("u1"))
+            .ReturnsAsync(user)
+            .ReturnsAsync(updatedUser);
+
+        _userDataProviderMock
+            .Setup(p => p.ToggleUserEmailConfirmationAsync("u1"))
+            .ReturnsAsync(Microsoft.AspNetCore.Identity.IdentityResult.Success);
+
+        // Act
+        ActionResult<bool> result = await controller.ToggleUserConfirmation("u1", CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True((bool)okResult.Value!);
+    }
 }

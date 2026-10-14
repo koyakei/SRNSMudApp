@@ -405,6 +405,16 @@ public interface IItemListApiClient
     /// JSON 形式のタグ付け構造データ（Item, TagRelation, TagEdge）を一括インポートします。
     /// </summary>
     Task<ImportTaggingResponse?> ImportTaggingJsonAsync(ImportTaggingJsonRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 全ユーザーのメール確認状態一覧を取得します（管理者専用）。
+    /// </summary>
+    Task<IReadOnlyList<UserConfirmationDto>?> GetConfirmedAccountsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 指定したユーザーのメール確認状態を反転します（管理者専用）。
+    /// </summary>
+    Task<bool> ToggleUserConfirmationAsync(string userId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -1095,5 +1105,21 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         }
 
         return await response.Content.ReadFromJsonAsync<ImportTaggingResponse>(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<UserConfirmationDto>?> GetConfirmedAccountsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<List<UserConfirmationDto>>("api/user/confirmed-accounts", cancellationToken);
+    }
+
+    public async Task<bool> ToggleUserConfirmationAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/user/{Uri.EscapeDataString(userId)}/toggle-confirmation", UriKind.Relative), null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        return await response.Content.ReadFromJsonAsync<bool>(cancellationToken);
     }
 }

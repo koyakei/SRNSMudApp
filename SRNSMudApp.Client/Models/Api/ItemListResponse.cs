@@ -411,3 +411,13 @@ public sealed record ImportTaggingResponse(
     int CreatedAttachmentsCount,
     IReadOnlyList<string> Messages
 );
+
+/// <summary>
+/// ユーザーメール確認状態 DTO。
+/// </summary>
+public sealed record UserConfirmationDto(
+    string UserId,
+    string? UserName,
+    string? Email,
+    bool EmailConfirmed
+);
