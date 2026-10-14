@@ -1,10 +1,15 @@
 @page "/Tag/WasmDetail/{TagId:int}"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
 @using SRNSMudApp.Client.Models.Api
 @using SRNSMudApp.Client.Services
 @implements IDisposable
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
-    <div class="d-flex align-center gap-2 mb-4">
+<PageTitle>@(Tag != null ? $"{Tag.Name} - タグ詳細 (WASM)" : "タグ詳細 (WASM)") - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5 mb-10">
+    <div class="d-flex align-center gap-2 mb-4 flex-wrap">
         <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
                        OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="一覧に戻る" />
         <MudText Typo="Typo.h5" Class="font-weight-bold">タグ詳細 (WASM)</MudText>
@@ -33,75 +38,178 @@
     }
     else
     {
+        @if (Tag.IsLocked)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4 rounded-lg" Dense="true" Elevation="1">
+                このタグはロックされています。新規作成・編集・削除は制限されています（管理者のみ操作可能）。
+            </MudAlert>
+        }
+
         <MudCard Outlined="true" Class="rounded-xl mb-4">
             <MudCardContent Class="pa-5">
-                <div class="d-flex align-start justify-space-between flex-wrap gap-3">
-                    <div class="d-flex align-start gap-3">
-                        @* 投票スコア *@
-                        <div class="d-flex flex-column align-center vote-container">
-                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1"
-                                           OnClick="@(() => VoteTagAsync(true))" title="Upvote" />
-                            <MudText Typo="Typo.body2" Class="vote-score font-weight-bold">@Tag.Score</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1"
-                                           OnClick="@(() => VoteTagAsync(false))" title="Downvote" />
+                @if (_isEditing)
+                {
+                    <div class="d-flex flex-column gap-3" data-testid="tag-edit-form">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">タグ情報の編集</MudText>
+                        <MudTextField @bind-Value="_editName" Label="タグ名 *" Variant="Variant.Outlined" Required="true"
+                                      data-testid="edit-tag-name-input" />
+                        <MudTextField @bind-Value="_editContent" Label="説明・定義" Variant="Variant.Outlined" Lines="3"
+                                      data-testid="edit-tag-content-input" />
+                        <MudSwitch T="bool" @bind-Value="_editIsPrivate" Label="非公開タグ" Color="Color.Warning"
+                                   data-testid="edit-tag-private-switch" />
+                        <div class="d-flex justify-end gap-2 mt-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CancelEdit"
+                                       data-testid="cancel-edit-btn">
+                                キャンセル
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveEditAsync"
+                                       Disabled="_isSaving" data-testid="save-edit-btn">
+                                @if (_isSaving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                    <span class="ms-2">保存中...</span>
+                                }
+                                else
+                                {
+                                    <span>保存</span>
+                                }
+                            </MudButton>
                         </div>
-
-                        <div>
-                            <div class="d-flex align-center gap-2 flex-wrap">
-                                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
-                                <MudText Typo="Typo.h5" Class="font-weight-bold">@Tag.Name</MudText>
-                                @if (Tag.IsPrivate)
-                                {
-                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">非公開</MudChip>
-                                }
-                                @if (!string.IsNullOrEmpty(Tag.TargetUserGroupName))
-                                {
-                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">@Tag.TargetUserGroupName</MudChip>
-                                }
-                                @if (Tag.IsLocked)
-                                {
-                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
-                                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />ロック中
-                                    </MudChip>
-                                }
-                                @if (Tag.AutoAcceptIncomingTaggingRequests)
-                                {
-                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">自動承認</MudChip>
-                                }
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-start justify-space-between flex-wrap gap-3">
+                        <div class="d-flex align-start gap-3">
+                            @* 投票スコア *@
+                            <div class="d-flex flex-column align-center vote-container">
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                               OnClick="@(() => VoteTagAsync(true))" title="Upvote" data-testid="tag-upvote-btn" />
+                                <MudText Typo="Typo.body2" Class="vote-score font-weight-bold">@Tag.Score</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                               OnClick="@(() => VoteTagAsync(false))" title="Downvote" data-testid="tag-downvote-btn" />
                             </div>
 
-                            @if (!string.IsNullOrEmpty(Tag.Content))
+                            <div>
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">@Tag.Name</MudText>
+                                    @if (Tag.IsPrivate)
+                                    {
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">非公開</MudChip>
+                                    }
+                                    @if (!string.IsNullOrEmpty(Tag.TargetUserGroupName))
+                                    {
+                                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">@Tag.TargetUserGroupName</MudChip>
+                                    }
+                                    @if (Tag.IsLocked)
+                                    {
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />ロック中
+                                        </MudChip>
+                                    }
+                                    @if (Tag.AutoAcceptIncomingTaggingRequests)
+                                    {
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">自動承認</MudChip>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(Tag.Content))
+                                {
+                                    <MudText Typo="Typo.body1" Class="mt-2" Style="white-space: pre-wrap;">@Tag.Content</MudText>
+                                }
+
+                                <div class="d-flex align-center gap-3 mt-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        作成者:
+                                        @if (!string.IsNullOrEmpty(Tag.OwnerUserId))
+                                        {
+                                            <MudLink Href="@($"/User/WasmDetail/{Tag.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                                @(Tag.OwnerUserName ?? "不明")
+                                            </MudLink>
+                                        }
+                                        else
+                                        {
+                                            @(Tag.OwnerUserName ?? "不明")
+                                        }
+                                    </MudText>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-center gap-2 flex-wrap">
+                            @if (_isAdmin)
                             {
-                                <MudText Typo="Typo.body1" Class="mt-2" Style="white-space: pre-wrap;">@Tag.Content</MudText>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="@(Tag.IsLocked ? Color.Success : Color.Error)"
+                                           Size="Size.Small"
+                                           StartIcon="@(Tag.IsLocked ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                                           OnClick="ToggleLockAsync"
+                                           data-testid="toggle-tag-lock-btn">
+                                    @(Tag.IsLocked ? "ロック解除" : "ロック")
+                                </MudButton>
                             }
 
-                            <div class="d-flex align-center gap-3 mt-2">
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    作成者:
-                                    @if (!string.IsNullOrEmpty(Tag.OwnerUserId))
+                            @if (CanEditOrDelete && (!Tag.IsLocked || _isAdmin))
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Edit"
+                                           OnClick="StartEdit"
+                                           data-testid="start-edit-btn">
+                                    編集
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Delete"
+                                           OnClick="StartDelete"
+                                           data-testid="delete-tag-btn">
+                                    削除
+                                </MudButton>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_currentUserId))
+                            {
+                                <MudButton Variant="@(Tag.IsFollowing ? Variant.Outlined : Variant.Filled)"
+                                           Color="@(Tag.IsFollowing ? Color.Default : Color.Primary)"
+                                           Size="Size.Small"
+                                           StartIcon="@(Tag.IsFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
+                                           OnClick="ToggleFollowAsync" Disabled="IsTogglingFollow"
+                                           data-testid="toggle-follow-btn">
+                                    @(Tag.IsFollowing ? "フォロー解除" : "フォロー")
+                                </MudButton>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_showDeleteConfirm)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4 rounded-lg" data-testid="delete-confirm-box">
+                        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                            <MudText Typo="Typo.body2">
+                                タグ「@Tag.Name」を削除してもよろしいですか？この操作は取り消せません。
+                            </MudText>
+                            <div class="d-flex gap-2">
+                                <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                                           OnClick="@(() => _showDeleteConfirm = false)" data-testid="cancel-delete-btn">
+                                    キャンセル
+                                </MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                           OnClick="ConfirmDeleteAsync" Disabled="_isDeleting"
+                                           data-testid="confirm-delete-btn">
+                                    @if (_isDeleting)
                                     {
-                                        <MudLink Href="@($"/User/WasmDetail/{Tag.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
-                                            @(Tag.OwnerUserName ?? "不明")
-                                        </MudLink>
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                        <span class="ms-1">削除中...</span>
                                     }
                                     else
                                     {
-                                        @(Tag.OwnerUserName ?? "不明")
+                                        <span>削除実行</span>
                                     }
-                                </MudText>
+                                </MudButton>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="d-flex align-center gap-2">
-                        <MudButton Variant="@(Tag.IsFollowing ? Variant.Outlined : Variant.Filled)"
-                                   Color="@(Tag.IsFollowing ? Color.Default : Color.Primary)"
-                                   StartIcon="@(Tag.IsFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
-                                   OnClick="ToggleFollowAsync" Disabled="IsTogglingFollow">
-                            @(Tag.IsFollowing ? "フォロー解除" : "フォロー")
-                        </MudButton>
-                    </div>
-                </div>
+                    </MudAlert>
+                }
             </MudCardContent>
         </MudCard>
 
@@ -225,6 +333,9 @@
     [Parameter]
     public int TagId { get; set; }
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
     [Inject]
     public required IItemListApiClient ApiClient { get; set; }
 
@@ -240,8 +351,28 @@
 
     public bool IsTogglingFollow { get; private set; }
 
+    private string? _currentUserId;
+    private bool _isAdmin;
+    private bool CanEditOrDelete => _isAdmin || (!string.IsNullOrEmpty(_currentUserId) && _currentUserId == Tag?.OwnerUserId);
+
+    private bool _isEditing;
+    private bool _isSaving;
+    private string _editName = string.Empty;
+    private string? _editContent;
+    private bool _editIsPrivate;
+
+    private bool _showDeleteConfirm;
+    private bool _isDeleting;
+
     protected override async Task OnInitializedAsync()
     {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            _currentUserId = authState.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _isAdmin = authState.User?.IsInRole("Admin") ?? false;
+        }
+
         await LoadTagAsync();
     }
 
@@ -264,6 +395,110 @@
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private void StartEdit()
+    {
+        if (Tag == null) return;
+        _editName = Tag.Name;
+        _editContent = Tag.Content;
+        _editIsPrivate = Tag.IsPrivate;
+        _isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        _isEditing = false;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task SaveEditAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName))
+        {
+            Snackbar.Add("タグ名を入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            var request = new UpdateTagRequest(_editName.Trim(), _editContent?.Trim(), _editIsPrivate);
+            bool ok = await ApiClient.UpdateTagAsync(TagId, request, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグ情報を更新しました。", Severity.Success);
+                _isEditing = false;
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("タグの更新に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"更新エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void StartDelete()
+    {
+        _showDeleteConfirm = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ConfirmDeleteAsync()
+    {
+        _isDeleting = true;
+        try
+        {
+            bool ok = await ApiClient.DeleteTagAsync(TagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグを削除しました。", Severity.Success);
+                NavigationManager.NavigateTo("Tag/WasmList");
+            }
+            else
+            {
+                Snackbar.Add("タグの削除に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"削除エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isDeleting = false;
+            _showDeleteConfirm = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ToggleLockAsync()
+    {
+        try
+        {
+            bool ok = await ApiClient.ToggleTagLockAsync(TagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("タグのロック状態を切り替えました。", Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add("ロック状態の変更に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ロックエラー: {ex.Message}", Severity.Error);
         }
     }
 
@@ -368,4 +603,3 @@
         _cts.Dispose();
     }
 }
-
