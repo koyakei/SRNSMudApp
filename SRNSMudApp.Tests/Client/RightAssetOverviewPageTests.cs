@@ -140,6 +140,104 @@ public class RightAssetOverviewPageTests : IAsyncDisposable
         Assert.Contains("UserOne", cut.Markup);
     }
 
+    [Fact]
+    public async Task WhenPurchaseButtonClicked_TogglesPurchasePanel_AndLoadsNetworksAndWallet()
+    {
+        // Arrange
+        var overview = new RightAssetOverviewResponse(
+            TagId: 10,
+            TagName: "TestTag",
+            TagContent: "Desc",
+            TagWeight: 5,
+            IsSystem: false,
+            TotalHoldersCount: 1,
+            TotalActiveAmount: 50,
+            TotalActiveAssetsCount: 1,
+            TotalBurnedAmount: 0,
+            Holders: [],
+            Assets: []
+        );
+        _apiClientMock
+            .Setup(c => c.GetRightAssetOverviewAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(overview);
+
+        var networks = new List<JpycNetworkDto>
+        {
+            new("polygon-amoy", "Polygon Amoy", 80002, "0xContractAddress", "https://faucet.com", "https://explorer.com", true, true)
+        };
+        _apiClientMock
+            .Setup(c => c.GetJpycNetworksAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(networks);
+
+        var wallet = new DepositWalletDto("u1", "polygon-amoy", "0xUserDepositAddress", DateTime.UtcNow);
+        _apiClientMock
+            .Setup(c => c.GetUserDepositWalletAsync("polygon-amoy", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(wallet);
+
+        var cut = _ctx.Render<RightAssetOverviewPage>(parameters => parameters.Add(p => p.TagId, 10));
+
+        // Act - JPYCで購入ボタンをクリック
+        var purchaseBtn = cut.Find("[data-testid='overview-purchase-jpyc-button']");
+        await cut.InvokeAsync(() => purchaseBtn.Click());
+
+        // Assert - パネルが表示され、ウォレットアドレスとコントラクトアドレスが描画されていること
+        Assert.Contains("data-testid=\"purchase-jpyc-panel\"", cut.Markup);
+        Assert.Contains("0xUserDepositAddress", cut.Markup);
+        Assert.Contains("0xContractAddress", cut.Markup);
+        Assert.Contains("Polygon Amoy", cut.Markup);
+    }
+
+    [Fact]
+    public async Task WhenSimulatePaymentClicked_SetsTxHash()
+    {
+        // Arrange
+        var overview = new RightAssetOverviewResponse(
+            TagId: 10,
+            TagName: "TestTag",
+            TagContent: "Desc",
+            TagWeight: 5,
+            IsSystem: false,
+            TotalHoldersCount: 1,
+            TotalActiveAmount: 50,
+            TotalActiveAssetsCount: 1,
+            TotalBurnedAmount: 0,
+            Holders: [],
+            Assets: []
+        );
+        _apiClientMock
+            .Setup(c => c.GetRightAssetOverviewAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(overview);
+
+        var networks = new List<JpycNetworkDto>
+        {
+            new("polygon-amoy", "Polygon Amoy", 80002, "0xContractAddress", "https://faucet.com", "https://explorer.com", true, true)
+        };
+        _apiClientMock
+            .Setup(c => c.GetJpycNetworksAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(networks);
+
+        _apiClientMock
+            .Setup(c => c.GetUserDepositWalletAsync("polygon-amoy", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DepositWalletDto("u1", "polygon-amoy", "0xUserDepositAddress", DateTime.UtcNow));
+
+        _apiClientMock
+            .Setup(c => c.SimulateDepositAsync(It.IsAny<SimulateDepositRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("0xSimulatedHash123");
+
+        var cut = _ctx.Render<RightAssetOverviewPage>(parameters => parameters.Add(p => p.TagId, 10));
+
+        // JPYCで購入ボタンをクリック
+        var purchaseBtn = cut.Find("[data-testid='overview-purchase-jpyc-button']");
+        await cut.InvokeAsync(() => purchaseBtn.Click());
+
+        // Act - シミュレートリンクをクリック
+        var simulateLink = cut.Find("[data-testid='simulate-payment-link']");
+        await cut.InvokeAsync(() => simulateLink.Click());
+
+        // Assert - TxHash が反映される
+        Assert.Contains("0xSimulatedHash123", cut.Markup);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

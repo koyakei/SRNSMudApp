@@ -1,5 +1,7 @@
 namespace SRNSMudApp.Client.Models.Api;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// タグ情報 DTO。
 /// </summary>
@@ -493,4 +495,45 @@ public sealed record RightAssetDto(
     string TargetTagName,
     int Amount,
     bool IsBurned
+);
+
+/// <summary>
+/// JPYC ネットワーク情報 DTO。
+/// </summary>
+[SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "URL strings are used directly for UI binding and links")]
+[SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "URL strings are used directly for UI binding and links")]
+public sealed record JpycNetworkDto(
+    string Name,
+    string DisplayName,
+    long ChainId,
+    string ContractAddress,
+    string? FaucetUrl,
+    string ExplorerUrl,
+    bool IsTestnet,
+    bool IsRecommended = false
+);
+
+/// <summary>
+/// ユーザー専用 JPYC 受取ウォレット情報 DTO。
+/// </summary>
+public sealed record DepositWalletDto(
+    string UserId,
+    string NetworkName,
+    string DepositAddress,
+    DateTime CreatedAt
+);
+
+/// <summary>
+/// JPYC 購入完了結果 DTO。
+/// </summary>
+public sealed record PurchaseRightAssetResultDto(
+    int RightAssetId,
+    int TagId,
+    string TagName,
+    int Amount,
+    int TotalJpycAmount,
+    string NetworkName,
+    string TransactionHash,
+    string DepositAddress,
+    DateTime PurchasedAt
 );

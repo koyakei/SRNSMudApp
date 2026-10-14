@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using SRNSMudApp.Client.Models.Api;
+using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
@@ -19,10 +20,12 @@ using SRNSMudApp.Services;
 [ApiController]
 [Route("api/right-asset")]
 public sealed class RightAssetController(
-    IRightAssetDataProvider rightAssetDataProvider) : ControllerBase
+    IRightAssetDataProvider rightAssetDataProvider,
+    IRightAssetPurchaseService? rightAssetPurchaseService = null) : ControllerBase
 {
     private readonly IRightAssetDataProvider _rightAssetDataProvider =
         rightAssetDataProvider ?? throw new ArgumentNullException(nameof(rightAssetDataProvider));
+    private readonly IRightAssetPurchaseService? _rightAssetPurchaseService = rightAssetPurchaseService;
 
     /// <summary>
     /// RightAsset が発行されている代表的なタグ一覧を取得します。
@@ -100,5 +103,148 @@ public sealed class RightAssetController(
         );
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// サポートされている JPYC ネットワーク一覧を取得します。
+    /// </summary>
+    [HttpGet("networks")]
+    [AllowAnonymous]
+    public ActionResult<IReadOnlyList<JpycNetworkDto>> GetNetworks()
+    {
+        if (_rightAssetPurchaseService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        IReadOnlyList<JpycNetworkInfo> networks = _rightAssetPurchaseService.GetSupportedNetworks();
+        var dtos = networks.Select(n => new JpycNetworkDto(
+            Name: n.Name,
+            DisplayName: n.DisplayName,
+            ChainId: n.ChainId,
+            ContractAddress: n.ContractAddress,
+            FaucetUrl: n.FaucetUrl,
+            ExplorerUrl: n.ExplorerUrl,
+            IsTestnet: n.IsTestnet,
+            IsRecommended: n.IsRecommended
+        )).ToList();
+
+        return Ok(dtos);
+    }
+
+    /// <summary>
+    /// ユーザー専用の JPYC 受取ウォレットを取得または新規発行します。
+    /// </summary>
+    [HttpGet("deposit-wallet")]
+    [Authorize]
+    public async Task<ActionResult<DepositWalletDto>> GetDepositWallet(
+        [FromQuery] string networkName = "polygon-amoy",
+        CancellationToken cancellationToken = default)
+    {
+        string? currentUserId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("ウォレットを取得するにはログインが必要です。");
+        }
+
+        if (_rightAssetPurchaseService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        UserDepositWalletDto wallet = await _rightAssetPurchaseService.GetOrCreateUserDepositWalletAsync(
+            currentUserId, networkName, cancellationToken);
+
+        return Ok(new DepositWalletDto(
+            UserId: wallet.UserId,
+            NetworkName: wallet.NetworkName,
+            DepositAddress: wallet.DepositAddress,
+            CreatedAt: wallet.CreatedAt
+        ));
+    }
+
+    /// <summary>
+    /// テストネット用にユーザー専用受取アドレスへの JPYC 送金をシミュレートします。
+    /// </summary>
+    [HttpPost("simulate-deposit")]
+    [Authorize]
+    public async Task<ActionResult<string>> SimulateDeposit(
+        [FromBody] SimulateDepositRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        string? currentUserId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("送金シミュレーションにはログインが必要です。");
+        }
+
+        if (_rightAssetPurchaseService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        string txHash = await _rightAssetPurchaseService.SimulateDepositAsync(
+            currentUserId, request.NetworkName, request.AmountJpyc, cancellationToken);
+
+        return Ok(txHash);
+    }
+
+    /// <summary>
+    /// JPYC トランザクションを検証し、RightAsset を購入・発行します。
+    /// </summary>
+    [HttpPost("purchase")]
+    [Authorize]
+    public async Task<ActionResult<PurchaseRightAssetResultDto>> PurchaseRightAsset(
+        [FromBody] PurchaseRightAssetRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        string? currentUserId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(currentUserId))
+        {
+            return Unauthorized("RightAsset を購入するにはログインが必要です。");
+        }
+
+        if (_rightAssetPurchaseService == null)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
+        }
+
+        var jpycRequest = new JpycPurchaseRequestDto(
+            RequestedTagId: request.RequestedTagId,
+            Amount: request.Amount,
+            UnitPriceJpyc: request.UnitPriceJpyc,
+            NetworkName: request.NetworkName,
+            TransactionHash: request.TransactionHash,
+            SenderWalletAddress: request.SenderWalletAddress
+        );
+
+        SRNSMudApp.Models.Unions.Result<RightAsset> result =
+            await _rightAssetPurchaseService.PurchaseRightAssetWithJpycAsync(
+                currentUserId, jpycRequest, cancellationToken);
+
+        switch (result)
+        {
+            case SRNSMudApp.Models.Unions.Success<RightAsset> success:
+                RightAsset asset = success.Value;
+                return Ok(new PurchaseRightAssetResultDto(
+                    RightAssetId: asset.Id,
+                    TagId: asset.TargetTagId,
+                    TagName: asset.TargetTag?.Name ?? string.Empty,
+                    Amount: asset.Amount,
+                    TotalJpycAmount: jpycRequest.TotalJpycAmount,
+                    NetworkName: jpycRequest.NetworkName,
+                    TransactionHash: jpycRequest.TransactionHash ?? string.Empty,
+                    DepositAddress: jpycRequest.SenderWalletAddress ?? string.Empty,
+                    PurchasedAt: DateTime.UtcNow
+                ));
+            case SRNSMudApp.Models.Unions.Failure failure:
+                return BadRequest(failure.ErrorMessage);
+            default:
+                return StatusCode(500, "RightAsset の購入中に予期しないエラーが発生しました。");
+        }
     }
 }

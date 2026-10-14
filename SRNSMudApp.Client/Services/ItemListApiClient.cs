@@ -337,6 +337,26 @@ public interface IItemListApiClient
     Task<RightAssetOverviewResponse?> GetRightAssetOverviewAsync(int tagId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// サポートされている JPYC ネットワーク一覧を取得します。
+    /// </summary>
+    Task<IReadOnlyList<JpycNetworkDto>> GetJpycNetworksAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// ユーザー専用の JPYC 受取ウォレットを取得または新規発行します。
+    /// </summary>
+    Task<DepositWalletDto?> GetUserDepositWalletAsync(string networkName = "polygon-amoy", CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// テストネット用にユーザー専用受取アドレスへの JPYC 送金をシミュレートします。
+    /// </summary>
+    Task<string?> SimulateDepositAsync(SimulateDepositRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// JPYC による RightAsset の購入・発行を行います。
+    /// </summary>
+    Task<PurchaseRightAssetResultDto?> PurchaseRightAssetAsync(PurchaseRightAssetRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 不適切なコンテンツの通報を作成します。
     /// </summary>
     Task<ContentReportDto?> CreateReportAsync(CreateReportRequest request, CancellationToken cancellationToken = default);
@@ -1078,6 +1098,57 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         {
             return null;
         }
+    }
+
+    public async Task<IReadOnlyList<JpycNetworkDto>> GetJpycNetworksAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            List<JpycNetworkDto>? result = await _httpClient.GetFromJsonAsync<List<JpycNetworkDto>>("api/right-asset/networks", cancellationToken);
+            return result ?? [];
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+    }
+
+    public async Task<DepositWalletDto?> GetUserDepositWalletAsync(string networkName = "polygon-amoy", CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<DepositWalletDto>($"api/right-asset/deposit-wallet?networkName={Uri.EscapeDataString(networkName)}", cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<string?> SimulateDepositAsync(SimulateDepositRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/right-asset/simulate-deposit", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    public async Task<PurchaseRightAssetResultDto?> PurchaseRightAssetAsync(PurchaseRightAssetRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/right-asset/purchase", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<PurchaseRightAssetResultDto>(cancellationToken);
     }
 
     public async Task<ContentReportDto?> CreateReportAsync(CreateReportRequest request, CancellationToken cancellationToken = default)

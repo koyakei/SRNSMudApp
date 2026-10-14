@@ -292,3 +292,20 @@ public sealed record ProposeMutualContractRequest(
     int ProposedWeight = 1,
     string RequestType = "Add"
 );
+
+/// <summary>
+/// JPYC 送金シミュレーション API のリクエスト DTO。
+/// </summary>
+public sealed record SimulateDepositRequest(string NetworkName, int AmountJpyc);
+
+/// <summary>
+/// JPYC による RightAsset 購入 API のリクエスト DTO。
+/// </summary>
+public sealed record PurchaseRightAssetRequest(
+    int RequestedTagId,
+    int Amount,
+    int UnitPriceJpyc,
+    string NetworkName,
+    string? TransactionHash = null,
+    string? SenderWalletAddress = null
+);

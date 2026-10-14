@@ -2530,4 +2530,123 @@ public class ItemListApiClientTests
         Assert.Equal(100, result.Id);
         Assert.Equal("Mutual", result.ContractType);
     }
+
+    [Fact]
+    public async Task GetJpycNetworksAsync_ReturnsNetworks()
+    {
+        // Arrange
+        var networks = new List<JpycNetworkDto>
+        {
+            new("polygon-amoy", "Polygon Amoy", 80002, "0x123", "https://faucet.com", "https://explorer.com", true, true)
+        };
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/right-asset/networks", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(networks), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        IReadOnlyList<JpycNetworkDto> result = await apiClient.GetJpycNetworksAsync();
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal("polygon-amoy", result[0].Name);
+        Assert.True(result[0].IsRecommended);
+    }
+
+    [Fact]
+    public async Task GetUserDepositWalletAsync_ReturnsWallet()
+    {
+        // Arrange
+        var wallet = new DepositWalletDto("user-1", "polygon-amoy", "0xWalletAddress", DateTime.UtcNow);
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Get, req.Method);
+            Assert.Equal("https://example.com/api/right-asset/deposit-wallet?networkName=polygon-amoy", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(wallet), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        DepositWalletDto? result = await apiClient.GetUserDepositWalletAsync("polygon-amoy");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("user-1", result.UserId);
+        Assert.Equal("0xWalletAddress", result.DepositAddress);
+    }
+
+    [Fact]
+    public async Task SimulateDepositAsync_ReturnsTxHash()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/right-asset/simulate-deposit", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("0xSimulatedHash", System.Text.Encoding.UTF8, "text/plain")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        string? result = await apiClient.SimulateDepositAsync(new SimulateDepositRequest("polygon-amoy", 500));
+
+        // Assert
+        Assert.Equal("0xSimulatedHash", result);
+    }
+
+    [Fact]
+    public async Task PurchaseRightAssetAsync_ReturnsResultDto()
+    {
+        // Arrange
+        var purchaseResult = new PurchaseRightAssetResultDto(
+            RightAssetId: 50,
+            TagId: 10,
+            TagName: "TagName",
+            Amount: 5,
+            TotalJpycAmount: 500,
+            NetworkName: "polygon-amoy",
+            TransactionHash: "0xRealHash",
+            DepositAddress: "0xWallet",
+            PurchasedAt: DateTime.UtcNow
+        );
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Equal("https://example.com/api/right-asset/purchase", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(purchaseResult), System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act
+        PurchaseRightAssetResultDto? result = await apiClient.PurchaseRightAssetAsync(new PurchaseRightAssetRequest(10, 5, 100, "polygon-amoy", "0xRealHash"));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(50, result.RightAssetId);
+        Assert.Equal(10, result.TagId);
+        Assert.Equal(500, result.TotalJpycAmount);
+    }
 }
