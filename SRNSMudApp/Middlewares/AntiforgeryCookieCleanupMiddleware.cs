@@ -25,17 +25,11 @@ namespace SRNSMudApp.Middlewares;
 /// これにより、DefaultAntiforgery 内で CryptographicException（The key was not found in the key ring）
 /// がログにエラー出力されるのを防止する。
 /// </summary>
-public sealed partial class AntiforgeryCookieCleanupMiddleware
+public sealed partial class AntiforgeryCookieCleanupMiddleware(
+    RequestDelegate next,
+    ILogger<AntiforgeryCookieCleanupMiddleware> logger)
 {
     private const string AntiforgeryPurpose = "Microsoft.AspNetCore.Antiforgery.AntiforgeryToken.v1";
-    private readonly RequestDelegate _next;
-    private readonly ILogger<AntiforgeryCookieCleanupMiddleware> _logger;
-
-    public AntiforgeryCookieCleanupMiddleware(RequestDelegate next, ILogger<AntiforgeryCookieCleanupMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "復号不可能な古い Antiforgery Cookie ({CookieNames}) を検出しました。ブラウザから削除し、リクエストから除外します。")]
     private static partial void LogInvalidAntiforgeryCookie(ILogger logger, string cookieNames);
@@ -58,28 +52,19 @@ public sealed partial class AntiforgeryCookieCleanupMiddleware
             if (dataProtectionProvider is not null)
             {
                 IDataProtector protector = dataProtectionProvider.CreateProtector(AntiforgeryPurpose);
-                List<string>? invalidCookies = null;
 
-                foreach (KeyValuePair<string, string> cookie in antiforgeryCookies)
+                // 宣言的 LINQ による復号不能 Cookie のフィルタリング
+                var invalidCookies = antiforgeryCookies
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Value) && !TryUnprotect(protector, c.Value))
+                    .Select(c => c.Key)
+                    .ToList();
+
+                if (invalidCookies.Count > 0)
                 {
-                    if (string.IsNullOrWhiteSpace(cookie.Value))
-                    {
-                        continue;
-                    }
-
-                    if (!TryUnprotect(protector, cookie.Value))
-                    {
-                        invalidCookies ??= [];
-                        invalidCookies.Add(cookie.Key);
-                    }
-                }
-
-                if (invalidCookies is not null)
-                {
-                    if (_logger.IsEnabled(LogLevel.Information))
+                    if (logger.IsEnabled(LogLevel.Information))
                     {
                         var invalidCookieNames = string.Join(", ", invalidCookies);
-                        LogInvalidAntiforgeryCookie(_logger, invalidCookieNames);
+                        LogInvalidAntiforgeryCookie(logger, invalidCookieNames);
                     }
 
                     // ブラウザへクッキー削除レスポンスヘッダを発行（ルートパス指定と既定の双方で確実に消去）
@@ -102,7 +87,7 @@ public sealed partial class AntiforgeryCookieCleanupMiddleware
                         .Where(c => !invalidCookies.Contains(c.Key))
                         .ToDictionary(c => c.Key, c => c.Value, StringComparer.Ordinal);
 
-                    var filteredCollection = new FilteredCookieCollection(filteredCookies);
+                    FilteredCookieCollection filteredCollection = new(filteredCookies);
                     context.Request.Cookies = filteredCollection;
                     context.Features.Set<IRequestCookiesFeature>(new RequestCookiesFeatureWrapper(filteredCollection));
 
@@ -119,7 +104,7 @@ public sealed partial class AntiforgeryCookieCleanupMiddleware
             }
         }
 
-        await _next(context);
+        await next(context);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

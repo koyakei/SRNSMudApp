@@ -10,6 +10,7 @@ using MudBlazor;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
+using SRNSMudApp.Resources;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
 
@@ -304,4 +305,104 @@ public partial class ItemDetail
     /// </summary>
     private IEnumerable<TaggingRequestEntity> GetFilteredRequests(IEnumerable<TaggingRequestEntity>? requests) =>
         ItemDetailRequestFilter.FilterRequests(requests, _currentUserId, _onlyMyRequests, _searchQuery, _allTags);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task OpenAddCommentDialogAsync(TagWeightLedger ledger)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<TagLedgerCommentDialog>("タグ履歴にコメントを追加", options);
+        DialogResult? result = await dialog.Result;
+        if (result is { Canceled: false, Data: string comment } && !string.IsNullOrWhiteSpace(comment))
+        {
+            try
+            {
+                await ViewModel.AddLedgerCommentAsync(ledger, comment);
+                _ = Snackbar.Add("コメントを投稿しました", Severity.Success);
+                await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"コメントの投稿に失敗しました: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task OpenAddTagDialogAsync(TagWeightLedger ledger)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<Components.Tag.TagAddDialog>("タグの追加", options);
+        DialogResult? result = await dialog.Result;
+        if (result is { Canceled: false, Data: Data.Tag selectedTag })
+        {
+            try
+            {
+                await ViewModel.AddLedgerTagAsync(ledger, selectedTag.Id);
+                _ = Snackbar.Add("タグを追加しました", Severity.Success);
+                await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                _ = Snackbar.Add($"タグの追加に失敗しました: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層で発生した例外の内容をユーザーへ通知するために広く捕捉する")]
+    private async Task VoteLedgerReactionAsync(TagWeightLedger ledger, string reactionTagName, int targetWeight)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        if (string.IsNullOrEmpty(_currentUserId))
+        {
+            _ = Snackbar.Add(ErrorMessages.LoginRequired, Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            ItemVoteResult? voteResult = await ViewModel.VoteLedgerReactionAsync(ledger, reactionTagName, targetWeight);
+            if (voteResult is null)
+            {
+                return;
+            }
+
+            if (voteResult.Action == ItemVoteAction.Added)
+            {
+                var parameters = new DialogParameters
+                {
+                    [nameof(ReactionCommentDialog.ReactionTagName)] = reactionTagName
+                };
+                var options = new DialogOptions
+                {
+                    CloseOnEscapeKey = true,
+                    MaxWidth = MaxWidth.Small,
+                    FullWidth = true,
+                    Position = DialogPosition.BottomRight,
+                    CloseButton = true,
+                    BackgroundClass = "reaction-toast-dialog-overlay"
+                };
+                IDialogReference dialog = await DialogLauncher.ShowAsync<ReactionCommentDialog>("リアクションを追加", parameters, options);
+                DialogResult? result = await dialog.Result;
+                if (result is not null && !result.Canceled && result.Data is ReactionCommentDialogResult { Saved: true } dialogResult)
+                {
+                    if (!string.IsNullOrWhiteSpace(dialogResult.Comment))
+                    {
+                        _ = await ViewModel.UpdateLedgerReactionCommentAsync(voteResult.RelationId, dialogResult.Comment);
+                    }
+                }
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _ = Snackbar.Add($"リアクションの送信に失敗しました: {ex.Message}", Severity.Error);
+        }
+    }
 }

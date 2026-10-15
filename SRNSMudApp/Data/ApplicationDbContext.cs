@@ -318,6 +318,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(l => l.SourceId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        _ = builder.Entity<TagWeightLedger>()
+            .HasOne(l => l.CommentItem)
+            .WithMany()
+            .HasForeignKey(l => l.CommentItemId)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // -- TimelineEvent のリレーション設定 --
         _ = builder.Entity<TimelineEvent>()
             .HasOne(e => e.Owner)

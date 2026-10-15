@@ -38,10 +38,10 @@ public static class SitemapEndpoints
             ISitemapIndexService sitemapIndexService,
             CancellationToken cancellationToken) =>
         {
-            var baseUri = new Uri($"{request.Scheme}://{request.Host}");
+            Uri baseUri = new($"{request.Scheme}://{request.Host}");
 
             // 分割された各子サイトマップのインデックスノードを作成
-            var sitemapIndex = new SitemapIndex([
+            SitemapIndex sitemapIndex = new([
                 new SitemapIndexNode(new Uri(baseUri, "/sitemap-pages.xml").ToString())
                 {
                     LastModified = DateTime.UtcNow,
@@ -65,9 +65,9 @@ public static class SitemapEndpoints
             ISitemapService sitemapService,
             CancellationToken cancellationToken) =>
         {
-            var baseUri = new Uri($"{request.Scheme}://{request.Host}");
+            Uri baseUri = new($"{request.Scheme}://{request.Host}");
             var nodes = staticPageProvider.GetNodes(baseUri);
-            var sitemap = new Sitemap(nodes);
+            Sitemap sitemap = new(nodes);
 
             var xml = await sitemapService.SerializeAsync(sitemap, cancellationToken);
             return Results.Content(xml, XmlContentType);
@@ -82,9 +82,9 @@ public static class SitemapEndpoints
             ISitemapService sitemapService,
             CancellationToken cancellationToken) =>
         {
-            var baseUri = new Uri($"{request.Scheme}://{request.Host}");
+            Uri baseUri = new($"{request.Scheme}://{request.Host}");
             var nodes = await articleProvider.GetNodesAsync(baseUri, cancellationToken);
-            var sitemap = new Sitemap(nodes);
+            Sitemap sitemap = new(nodes);
 
             var xml = await sitemapService.SerializeAsync(sitemap, cancellationToken);
             return Results.Content(xml, XmlContentType);

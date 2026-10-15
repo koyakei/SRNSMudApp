@@ -59,3 +59,36 @@ As soon as Milestone 1 (including its current review gate/fixes) is completed an
 1. Ensure solution builds (`dotnet build`) with 0 errors and all tests (`dotnet test`) pass.
 2. Produce the comprehensive design pattern review report (documenting findings across all layers, details of Milestone 1 fixes implemented, and documenting Milestone 2, Milestone 3, and other improvements as recommendations/future roadmap).
 3. Conclude the teamwork task.
+
+## 2026-10-14T13:04:12Z
+
+Modernize active C# code (Controllers, Middleware, and Pages/Components) across the solution by adopting modern C# features (pattern matching, switch expressions, target-typed `new()`, and declarative LINQ) and eliminating analyzer/Roslynator warnings while ensuring zero behavioral regression. Use a full team of agents to plan, execute, and verify the changes across the projects.
+
+Working directory: /workspaces/SRNSWebApp
+Integrity mode: demo
+
+## Requirements
+
+### R1. Target Scope
+Modernize active application code across `SRNSMudApp` and `SRNSMudApp.Client`, focusing on Controllers, Middleware, and Razor Components/Pages.
+
+### R2. Modern C# Language Features & Declarative Idioms
+- Modernize imperative constructs using modern C# features (e.g. pattern matching, switch expressions, target-typed `new()`).
+- Convert suitable imperative `for`/`foreach` loops to declarative LINQ expressions where clarity and readability are improved without degrading performance.
+- Maintain exact logical and functional equivalence with original behavior.
+
+### R3. Code Quality & Analyzer Cleanliness
+- Identify and resolve Roslynator and IDE analyzer warnings in the affected code.
+- Comply with repository architectural rules: maintain separation of Blazor UI from domain/data access, asynchronous I/O, and zero new warnings.
+
+## Acceptance Criteria
+
+### Build & Static Verification
+- [ ] Solution builds cleanly with zero errors (`dotnet build SRNSMudApp.sln`).
+- [ ] Roslynator and IDE analyzer warnings are eliminated or not increased in modified files.
+- [ ] `dotnet format --diagnostics IDE0055` passes without style violations.
+
+### Behavioral & Test Verification
+- [ ] All unit tests pass cleanly without regression (`dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`).
+- [ ] E2E tests pass cleanly (`dotnet test SRNSMudApp.E2ETests/SRNSMudApp.E2ETests.csproj`).
+- [ ] No regression in application startup, middleware pipeline, or component rendering logic.

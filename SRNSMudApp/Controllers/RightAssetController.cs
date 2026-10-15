@@ -19,6 +19,7 @@ using SRNSMudApp.Services;
 /// </summary>
 [ApiController]
 [Route("api/right-asset")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class RightAssetController(
     IRightAssetDataProvider rightAssetDataProvider,
     IRightAssetPurchaseService? rightAssetPurchaseService = null) : ControllerBase
@@ -88,7 +89,7 @@ public sealed class RightAssetController(
             UpdatedDate: a.UpdatedDate
         )).ToList();
 
-        var response = new RightAssetOverviewResponse(
+        RightAssetOverviewResponse response = new(
             TagId: overview.Tag.Id,
             TagName: overview.Tag.Name,
             TagContent: overview.Tag.Content,
@@ -213,7 +214,7 @@ public sealed class RightAssetController(
             return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status501NotImplemented);
         }
 
-        var jpycRequest = new JpycPurchaseRequestDto(
+        JpycPurchaseRequestDto jpycRequest = new(
             RequestedTagId: request.RequestedTagId,
             Amount: request.Amount,
             UnitPriceJpyc: request.UnitPriceJpyc,
@@ -226,25 +227,22 @@ public sealed class RightAssetController(
             await _rightAssetPurchaseService.PurchaseRightAssetWithJpycAsync(
                 currentUserId, jpycRequest, cancellationToken);
 
-        switch (result)
+        // switch 式による Result<RightAsset> のハンドリング
+        return result switch
         {
-            case SRNSMudApp.Models.Unions.Success<RightAsset> success:
-                RightAsset asset = success.Value;
-                return Ok(new PurchaseRightAssetResultDto(
-                    RightAssetId: asset.Id,
-                    TagId: asset.TargetTagId,
-                    TagName: asset.TargetTag?.Name ?? string.Empty,
-                    Amount: asset.Amount,
-                    TotalJpycAmount: jpycRequest.TotalJpycAmount,
-                    NetworkName: jpycRequest.NetworkName,
-                    TransactionHash: jpycRequest.TransactionHash ?? string.Empty,
-                    DepositAddress: jpycRequest.SenderWalletAddress ?? string.Empty,
-                    PurchasedAt: DateTime.UtcNow
-                ));
-            case SRNSMudApp.Models.Unions.Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "RightAsset の購入中に予期しないエラーが発生しました。");
-        }
+            SRNSMudApp.Models.Unions.Success<RightAsset> success => Ok(new PurchaseRightAssetResultDto(
+                RightAssetId: success.Value.Id,
+                TagId: success.Value.TargetTagId,
+                TagName: success.Value.TargetTag?.Name ?? string.Empty,
+                Amount: success.Value.Amount,
+                TotalJpycAmount: jpycRequest.TotalJpycAmount,
+                NetworkName: jpycRequest.NetworkName,
+                TransactionHash: jpycRequest.TransactionHash ?? string.Empty,
+                DepositAddress: jpycRequest.SenderWalletAddress ?? string.Empty,
+                PurchasedAt: DateTime.UtcNow
+            )),
+            SRNSMudApp.Models.Unions.Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "RightAsset の購入中に予期しないエラーが発生しました。")
+        };
     }
 }

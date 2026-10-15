@@ -20,6 +20,7 @@ using SRNSMudApp.Services;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class ContractController(
     IContractManagementDataProvider contractDataProvider,
     ITaggingContractService taggingContractService,
@@ -68,15 +69,12 @@ public sealed class ContractController(
         }
 
         Result<string> result = await _taggingContractService.AcceptContractAsync(id, currentUserId);
-        switch (result)
+        return result switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("コントラクトの承認に失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("コントラクトの承認に失敗しました。")
+        };
     }
 
     /// <summary>
@@ -94,15 +92,12 @@ public sealed class ContractController(
         }
 
         Result<string> result = await _taggingContractService.CancelContractAsync(id, currentUserId);
-        switch (result)
+        return result switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("コントラクトの拒否に失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("コントラクトの拒否に失敗しました。")
+        };
     }
 
     /// <summary>
@@ -120,15 +115,12 @@ public sealed class ContractController(
         }
 
         Result<string> result = await _taggingContractService.CancelContractAsync(id, currentUserId);
-        switch (result)
+        return result switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("コントラクトの取り下げに失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("コントラクトの取り下げに失敗しました。")
+        };
     }
 
     /// <summary>
@@ -207,15 +199,12 @@ public sealed class ContractController(
             proposedWeight: request.ProposedWeight,
             message: request.Message);
 
-        switch (result)
+        return result switch
         {
-            case Success<TaggingRequestEntity> success:
-                return Ok(MapToDto(success.Value, currentUserId));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "コントラクト提案の送信中に予期しないエラーが発生しました。");
-        }
+            Success<TaggingRequestEntity> success => Ok(MapToDto(success.Value, currentUserId)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "コントラクト提案の送信中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -269,20 +258,17 @@ public sealed class ContractController(
             requestType: requestType,
             proposedWeight: request.ProposedWeight);
 
-        switch (result)
+        return result switch
         {
-            case Success<TaggingRequestEntity> success:
-                return Ok(MapToDto(success.Value, currentUserId));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "相互コントラクト提案の送信中に予期しないエラーが発生しました。");
-        }
+            Success<TaggingRequestEntity> success => Ok(MapToDto(success.Value, currentUserId)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "相互コントラクト提案の送信中に予期しないエラーが発生しました。")
+        };
     }
 
     private static ContractDto MapToDto(TaggingRequestEntity contract, string currentUserId)
     {
-        return new ContractDto(
+        return new(
             Id: contract.Id,
             ContractType: contract.ContractType,
             Status: contract.Status.ToString(),

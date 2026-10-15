@@ -45,7 +45,8 @@ public sealed class TagLockController(ITagLockService tagLockService) : Controll
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.Level < 0 || request.Level > 20)
+        // 関係パターンマッチングによる階層範囲チェック
+        if (request.Level is < 0 or > 20)
         {
             return BadRequest("ロック階層は 0 以上 20 以下で指定してください。");
         }
@@ -86,7 +87,8 @@ public sealed class TagLockController(ITagLockService tagLockService) : Controll
     [HttpPost("{id:int}/toggle")]
     public async Task<ActionResult<bool>> ToggleTagLock(int id, CancellationToken cancellationToken)
     {
-        if (id <= 0)
+        // 関係パターンマッチングによるID正値チェック
+        if (id is <= 0)
         {
             return BadRequest("有効なタグIDを指定してください。");
         }

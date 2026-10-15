@@ -21,6 +21,7 @@ using SRNSMudApp.Services.Commands;
 /// </summary>
 [ApiController]
 [Route("api/public-offer")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class PublicOfferController(
     IPublicOfferDataProvider publicOfferDataProvider,
     ITaggingContractService taggingContractService,
@@ -93,7 +94,7 @@ public sealed class PublicOfferController(
             return BadRequest("指定されたタグが存在しません。");
         }
 
-        var offer = new PublicTradeOffer
+        PublicTradeOffer offer = new()
         {
             OfferedTagId = request.OfferedTagId,
             RequiredAssetAmount = request.RequiredAssetAmount,
@@ -103,15 +104,13 @@ public sealed class PublicOfferController(
         };
 
         Result<bool> result = await _createPublicOfferHandler.HandleAsync(new CreatePublicOfferCommand(offer), cancellationToken);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("オファーの作成に失敗しました。");
-        }
+            Success<bool> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("オファーの作成に失敗しました。")
+        };
     }
 
     /// <summary>
@@ -172,7 +171,7 @@ public sealed class PublicOfferController(
             return BadRequest("指定されたアイテムが見つかりません。");
         }
 
-        var triggerContract = new TaggingRequestEntity
+        TaggingRequestEntity triggerContract = new()
         {
             ContractType = "Trigger",
             OwnerId = currentUserId,
@@ -187,14 +186,13 @@ public sealed class PublicOfferController(
         Result<bool> commandResult = await _createTriggerContractHandler.HandleAsync(
             new CreateTriggerContractCommand(triggerContract), cancellationToken);
 
-        switch (commandResult)
+        if (commandResult is not Success<bool>)
         {
-            case Success<bool>:
-                break;
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("トリガー契約の作成に失敗しました。");
+            return commandResult switch
+            {
+                Failure failure => BadRequest(failure.ErrorMessage),
+                _ => BadRequest("トリガー契約の作成に失敗しました。")
+            };
         }
 
         Result<string> acceptResult = await _taggingContractService.AcceptContractAsync(
@@ -202,14 +200,12 @@ public sealed class PublicOfferController(
             currentUserId,
             request.AssetIdToConsume);
 
-        switch (acceptResult)
+        // switch 式による Result<string> のハンドリング
+        return acceptResult switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure fail:
-                return BadRequest(fail.ErrorMessage);
-            default:
-                return BadRequest("契約の完了に失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure fail => BadRequest(fail.ErrorMessage),
+            _ => BadRequest("契約の完了に失敗しました。")
+        };
     }
 }

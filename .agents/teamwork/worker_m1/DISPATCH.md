@@ -1,71 +1,51 @@
-# Dispatch: Worker M1 (Security, Concurrency & Data Integrity)
+## 2026-10-14T13:36:00Z
+You are Worker 1 (worker_m1) responsible for implementing Milestone 1: Controllers & Middleware Modernization.
 
-## Objective
-Implement critical fixes for SEC-01, THREAD-01, DATA-01, and DATA-02 across SRNSWebApp.
-
-## Exclusive Write Ownership
-You own and may edit ONLY the following files:
-- `SRNSMudApp/Controllers/PushNotificationController.cs`
-- `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`
-- `SRNSMudApp/Services/RightAssetPurchaseService.cs`
-- `SRNSMudApp/Data/ExecutionStrategyExtensions.cs`
-- Related unit tests in `SRNSMudApp.Tests/` (e.g. `ExternalTokenVerificationServiceTests.cs`, `PushNotificationControllerTests.cs`, `RightAssetPurchaseServiceTests.cs`)
-
-## Specific Fix Requirements
-1. **SEC-01**: In `SRNSMudApp/Controllers/PushNotificationController.cs`:
-   - Add `[Authorize(Roles = "Admin")]` to `SendNotification` (`[HttpPost("send")]`).
-   - In `Subscribe`, ensure `userId` is obtained from authenticated claims `User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User?.FindFirst("sub")?.Value`. If unauthenticated or null, do not allow arbitrary spoofed userId without validation.
-2. **THREAD-01**: In `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`:
-   - In `VerifyLineTokenAsync`: Do NOT mutate `_httpClient.DefaultRequestHeaders.Authorization`. Use a per-request `HttpRequestMessage(HttpMethod.Get, ...)` with `request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken)` and call `await _httpClient.SendAsync(request, cancellationToken)`.
-3. **DATA-01 & DATA-02**: In `SRNSMudApp/Services/RightAssetPurchaseService.cs`:
-   - Ensure `RightAsset` and `JpycDepositTransaction` are committed atomically. Wrap them in a transaction using `await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken); ... await tx.CommitAsync(cancellationToken);` or add both entities before calling `SaveChangesAsync` once.
-   - In `Data/ExecutionStrategyExtensions.cs`: Update documentation comments to clarify transaction boundaries.
-
-## Coding Standards & Guidelines
-- Japanese comments explaining design rationale.
-- Async I/O, C# 15 features, primary constructors where appropriate.
-- Run `dotnet build` to ensure 0 errors and no new warnings.
-- Run `dotnet test` to ensure existing and updated tests pass.
-- Format with `dotnet format --diagnostics IDE0055` if necessary.
-
-## MANDATORY INTEGRITY WARNING
-DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_preview_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
-
-## Deliverables
-Write your handoff report to:
-`/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md`
-Report files changed, build results, and test results.
-
-
-## 2026-10-02T14:17:55Z
-You are worker_m1.
-Your working directory is: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1
-Read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md before starting work.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/PROJECT.md.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/DISPATCH.md.
-Also read skills: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/skills/dotnet-best-practices/SKILL.md and /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/skills/dotnet-design-pattern-review/SKILL.md.
+Your working directory is: /workspaces/SRNSWebApp/.agents/teamwork/worker_m1
+You MUST read /workspaces/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md (under header ## 2026-10-14T13:04:12Z) before starting work.
+Also read:
+- /workspaces/SRNSWebApp/.agents/teamwork/orchestrator_2/PROJECT.md
+- /workspaces/SRNSWebApp/.agents/teamwork/explorer_survey_ctrl_mid/handoff.md (Detailed survey catalog with 17 concrete modernization candidates)
+- /workspaces/SRNSWebApp/.agents/teamwork/explorer_survey_baseline/handoff.md (Baseline build, test, and analyzer report)
+- Repository rules: /workspaces/SRNSWebApp/AGENTS.md, /workspaces/SRNSWebApp/.agents/rules/mainRules.md, and /workspaces/SRNSWebApp/.agents/skills/dotnet-best-practices/SKILL.md
 
 MANDATORY INTEGRITY WARNING:
 DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_preview_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
 
-Your task is Milestone 1: Security, Concurrency & Data Integrity.
-Exclusive write ownership:
-- SRNSMudApp/Controllers/PushNotificationController.cs
-- SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs
-- SRNSMudApp/Services/RightAssetPurchaseService.cs
-- SRNSMudApp/Data/ExecutionStrategyExtensions.cs
-- Related test files in SRNSMudApp.Tests/
+Scope & Write Ownership:
+You have exclusive write ownership over:
+- `SRNSMudApp/Controllers/` (e.g., PushNotificationController, BountyController, ContractController, InvitationController, ItemController, ItemSplitController, LinkPreviewController, PublicOfferController, ReportController, RightAssetController, TagController, TagDiagramController, TagImportController, TagLockController, TagProposalController, UserController, UserGroupController)
+- `SRNSMudApp/Middlewares/AntiforgeryCookieCleanupMiddleware.cs`
+- `SRNSMudApp/Endpoints/SitemapEndpoints.cs`
+- `SRNSMudApp/Program.cs` (pipeline and DI configuration)
+DO NOT edit any Razor component files, which are reserved for Milestone 2.
 
-Implement the fixes:
-1. SEC-01 in PushNotificationController.cs: Add [Authorize(Roles = "Admin")] on SendNotification; ensure Subscribe validates authenticated userId.
-2. THREAD-01 in ExternalTokenVerificationService.cs: Do not mutate _httpClient.DefaultRequestHeaders.Authorization. Use per-request HttpRequestMessage in VerifyLineTokenAsync.
-3. DATA-01 / DATA-02 in RightAssetPurchaseService.cs: Ensure atomic persistence of RightAsset and JpycDepositTransaction using an explicit transaction or single SaveChangesAsync. Update ExecutionStrategyExtensions.cs documentation.
+Tasks to Implement:
+Implement modern C# features and declarative LINQ as surveyed in `explorer_survey_ctrl_mid/handoff.md`:
+1. PushNotificationController: Adopt property pattern matching for subscription validation and user identity claim extraction.
+2. BountyController: Convert imperative DTO list construction to declarative LINQ `.Select(...)`; convert `Result<bool>` switch statement to switch expression.
+3. ContractController: Convert verbose `Result<T>` switch statements with dead `default: break;` to clean C# switch expressions.
+4. InvitationController: Modernize `MapToDto` with property pattern switch expression and target-typed `new()`.
+5. ItemController: Convert imperative filter `foreach` loop to declarative LINQ `.Select(...).OfType<ItemListFilter>()`; convert `Result<string>` to switch expression; use target-typed `new()`.
+6. ItemSplitController: Modernize 5 `Result<T>` switch statements to switch expressions.
+7. LinkPreviewController & PublicOfferController: Adopt helper/method group with target-typed `new()`; modernize 3 `Result<bool>` switch statements to switch expressions.
+8. ReportController & RightAssetController: Use ternary async expressions; convert `Result<RightAsset>` switch statement to switch expression with target-typed `new()`.
+9. TagController, TagDiagramController, TagImportController, TagLockController, TagProposalController: Adopt property patterns, LINQ tuple projection in item ID parsing, async null-coalescing `?? await`, relational pattern matching `is < 0 or > 20`, and 8 `Result<T>` switch expressions.
+10. AntiforgeryCookieCleanupMiddleware: Adopt primary constructor; convert cookie filtering loop to declarative LINQ `.Where(...).Select(...).ToList()`.
+11. Program.cs & SitemapEndpoints.cs: Pattern matching with property extraction, target-typed `new()`.
+12. Comply with Japanese comments for design rationale as required by repository rules.
 
-Verify your changes:
-- Run dotnet build to ensure 0 errors.
-- Run dotnet test to ensure all unit and integration tests pass.
+Verification Requirements:
+1. `dotnet build SRNSMudApp.sln`: Must succeed with 0 warnings, 0 errors.
+2. `dotnet format --diagnostics IDE0055 --verify-no-changes`: Must exit with 0 violations.
+3. `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~Controllers|FullyQualifiedName~Antiforgery"`: Must pass cleanly with 0 failures.
+4. Run full test suite `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`.
 
-Write your handoff report to:
-/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md
-Include modified files, build output, test results, and verification commands.
-Send a message to orchestrator parent when complete.
+Deliverables:
+Update your `progress.md` after each major step.
+When complete, write `handoff.md` in `/workspaces/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md` documenting:
+- Files modified
+- Changes implemented and rationale
+- Verification commands executed with exact output
+- Residual risks or notes for reviewers
+Notify the orchestrator with `send_message` when your handoff.md is ready.

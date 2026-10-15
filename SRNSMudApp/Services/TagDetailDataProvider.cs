@@ -122,6 +122,11 @@ public class TagDetailDataProvider(
 
         List<TagWeightLedger> weightLedgers = await context.TagWeightLedgers!
             .Include(l => l.Owner)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.Owner)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.Owner)
             .Where(l => l.TagId == tagId || l.TargetTagId == tagId)
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()

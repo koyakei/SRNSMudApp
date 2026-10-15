@@ -20,6 +20,7 @@ using SRNSMudApp.Services.Commands;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class BountyController(
     IBountyDataProvider bountyDataProvider,
     ITaggingContractService taggingContractService,
@@ -49,13 +50,13 @@ public sealed class BountyController(
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         BountyBoardData boardData = await _bountyDataProvider.GetActiveBountiesAsync();
 
-        var dtos = new List<BountyDto>();
-        foreach (TaggingRequestEntity bounty in boardData.Bounties)
+        // 宣言的 LINQ によるバウンティ DTO プロジェクション
+        var dtos = boardData.Bounties.Select(bounty =>
         {
             int? rewardAssetId = null;
             string? rewardTagName = null;
 
-            if (bounty.Payload is BountyPayload bp && bp.OfferedRewardAssetId != 0)
+            if (bounty.Payload is BountyPayload { OfferedRewardAssetId: not 0 } bp)
             {
                 rewardAssetId = bp.OfferedRewardAssetId;
                 if (boardData.RewardAssets.TryGetValue(bp.OfferedRewardAssetId, out RightAsset? asset))
@@ -67,7 +68,7 @@ public sealed class BountyController(
             bool isMyBounty = !string.IsNullOrEmpty(currentUserId) && bounty.RequesterUserId == currentUserId;
             bool canFulfill = !string.IsNullOrEmpty(currentUserId) && !isMyBounty;
 
-            dtos.Add(new BountyDto(
+            return new BountyDto(
                 Id: bounty.Id,
                 RequesterUserId: bounty.RequesterUserId,
                 RequesterUserName: bounty.Owner?.UserName,
@@ -80,8 +81,8 @@ public sealed class BountyController(
                 CreatedDate: bounty.CreatedDate,
                 IsMyBounty: isMyBounty,
                 CanFulfill: canFulfill
-            ));
-        }
+            );
+        }).ToList();
 
         return Ok(new BountyBoardResponse(dtos, dtos.Count));
     }
@@ -114,7 +115,7 @@ public sealed class BountyController(
             return BadRequest("指定されたアイテムが存在しません。");
         }
 
-        var bounty = new TaggingRequestEntity
+        TaggingRequestEntity bounty = new()
         {
             ContractType = "Bounty",
             OwnerId = currentUserId,
@@ -126,15 +127,13 @@ public sealed class BountyController(
         };
 
         Result<bool> result = await _createBountyHandler.HandleAsync(new CreateBountyCommand(bounty), cancellationToken);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("バウンティの作成に失敗しました。");
-        }
+            Success<bool> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("バウンティの作成に失敗しました。")
+        };
     }
 
     /// <summary>
@@ -157,14 +156,12 @@ public sealed class BountyController(
             currentUserId,
             request?.AssetIdToConsume);
 
-        switch (result)
+        // switch 式による Result<string> のハンドリング
+        return result switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("バウンティの完了に失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("バウンティの完了に失敗しました。")
+        };
     }
 }

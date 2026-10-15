@@ -1,10 +1,11 @@
 @using MudBlazor
 @using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Resources
 
 @if (Items.Count == 0)
 {
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-        重み変動履歴はありません。
+        @ClientMessages.NoWeightLedgers
     </MudText>
 }
 else
@@ -17,6 +18,7 @@ else
             <MudTh>種別</MudTh>
             <MudTh Style="text-align: right;">変動量</MudTh>
             <MudTh Style="text-align: right;">更新後重み</MudTh>
+            <MudTh>コメント</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="日時">@context.CreatedDate.ToLocalTime().ToString("g")</MudTd>
@@ -38,6 +40,27 @@ else
                 }
             </MudTd>
             <MudTd DataLabel="更新後重み" Style="text-align: right;">@context.NewWeight</MudTd>
+            <MudTd DataLabel="コメント">
+                @if (!string.IsNullOrEmpty(context.Comment))
+                {
+                    @if (context.CommentItemId.HasValue)
+                    {
+                        <MudLink Href="@($"/ItemDetail/{context.CommentItemId.Value}")" Color="Color.Primary" Typo="Typo.body2">
+                            @context.Comment
+                        </MudLink>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">@context.Comment</MudText>
+                    }
+                }
+                else if (context.CommentItemId.HasValue)
+                {
+                    <MudLink Href="@($"/ItemDetail/{context.CommentItemId.Value}")" Color="Color.Primary" Typo="Typo.body2">
+                        (アイテムを見る)
+                    </MudLink>
+                }
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -49,4 +72,3 @@ else
     [Parameter]
     public IReadOnlyList<TagWeightLedgerDto> Items { get; set; } = [];
 }
-

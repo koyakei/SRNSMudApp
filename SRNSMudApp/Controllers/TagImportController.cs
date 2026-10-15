@@ -115,7 +115,7 @@ public sealed class TagImportController(
         }
 
         TaggingImportPayload payload = root.TaggingRequestEntity;
-        var relationIdToTagMap = new Dictionary<string, int>();
+        Dictionary<string, int> relationIdToTagMap = [];
 
         // 1. TagRelations のタグを検索または自動作成
         foreach (var relDto in payload.TagRelations)
@@ -123,19 +123,13 @@ public sealed class TagImportController(
             if (string.IsNullOrWhiteSpace(relDto.Tag?.Name)) continue;
 
             bool isSystem = string.Equals(relDto.Tag.TagKind, "SystemClassificationTag", StringComparison.OrdinalIgnoreCase);
-            var existingTag = await _taggingImportDataProvider.FindExistingTagAsync(
-                relDto.Tag.Name, currentUserId, isSystem, cancellationToken);
-
-            if (existingTag != null)
-            {
-                relationIdToTagMap[relDto.RelationId] = existingTag.Id;
-            }
-            else
-            {
-                var createdTag = await _taggingImportDataProvider.CreateTagAsync(
+            // 非同期 null 合体演算子 (?? await) によるタグ取得または自動生成の集約
+            var tag = await _taggingImportDataProvider.FindExistingTagAsync(
+                relDto.Tag.Name, currentUserId, isSystem, cancellationToken)
+                ?? await _taggingImportDataProvider.CreateTagAsync(
                     relDto.Tag.Name, currentUserId, isSystem, parentTagId: null, cancellationToken);
-                relationIdToTagMap[relDto.RelationId] = createdTag.Id;
-            }
+
+            relationIdToTagMap[relDto.RelationId] = tag.Id;
         }
 
         // 2. TagEdges の AppliedTags を検索または自動作成

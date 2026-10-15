@@ -1,10 +1,12 @@
 @using MudBlazor
 @using SRNSMudApp.Client.Models.Api
 
+@using SRNSMudApp.Client.Resources
+
 @if (PendingProposals == null || TotalPendingProposals == 0)
 {
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-        保留中の変更提案はありません。
+        @ClientMessages.NoPendingProposals
     </MudText>
 }
 else

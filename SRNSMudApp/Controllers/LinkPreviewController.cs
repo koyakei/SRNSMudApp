@@ -54,7 +54,7 @@ public sealed class LinkPreviewController(
             .Select(t => new TagPreviewItemDto(t.Id, t.Name, t.OwnerName, t.Weight))
             .ToList();
 
-        var dto = new LinkPreviewDto(
+        LinkPreviewDto dto = new(
             Url: preview.Url,
             Title: preview.Title,
             Description: preview.Description,
@@ -87,15 +87,12 @@ public sealed class LinkPreviewController(
         InternalLinkConversionResult result = await _internalLinkConversionService.DetectLinkCandidatesAsync(
             request.Content, request.AutoReplaceThreshold, cancellationToken);
 
-        var autoCandidates = result.AutoReplaceCandidates
-            .Select(c => new LinkConversionCandidateDto(
-                c.OriginalText, c.TagId, c.TagName, c.Similarity, c.StartIndex, c.Length, c.IsAutoReplace))
-            .ToList();
+        // ローカル関数による DTO マッピング集約
+        static LinkConversionCandidateDto MapCandidate(LinkConversionCandidate c) => new(
+            c.OriginalText, c.TagId, c.TagName, c.Similarity, c.StartIndex, c.Length, c.IsAutoReplace);
 
-        var manualCandidates = result.ManualCandidates
-            .Select(c => new LinkConversionCandidateDto(
-                c.OriginalText, c.TagId, c.TagName, c.Similarity, c.StartIndex, c.Length, c.IsAutoReplace))
-            .ToList();
+        var autoCandidates = result.AutoReplaceCandidates.Select(MapCandidate).ToList();
+        var manualCandidates = result.ManualCandidates.Select(MapCandidate).ToList();
 
         return Ok(new InternalLinkConversionResultDto(autoCandidates, manualCandidates));
     }

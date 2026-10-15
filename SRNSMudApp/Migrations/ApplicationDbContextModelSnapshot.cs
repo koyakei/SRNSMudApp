@@ -1250,6 +1250,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Property<int?>("ConsumedRightAssetId")
                     .HasColumnType("int");
 
+                b.Property<int?>("CommentItemId")
+                    .HasColumnType("int");
+
                 b.Property<DateTime>("CreatedDate")
                     .HasColumnType("datetime2");
 
@@ -1301,6 +1304,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.HasKey("Id");
 
                 b.HasIndex("ConsumedRightAssetId");
+
+                b.HasIndex("CommentItemId");
 
                 b.HasIndex("OwnerId");
 
@@ -2208,6 +2213,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
 
         modelBuilder.Entity("SRNSMudApp.Data.TagWeightLedger", b =>
             {
+                b.HasOne("SRNSMudApp.Data.Item", "CommentItem")
+                    .WithMany()
+                    .HasForeignKey("CommentItemId")
+                    .OnDelete(DeleteBehavior.NoAction);
+
                 b.HasOne("SRNSMudApp.Data.RightAsset", "ConsumedRightAsset")
                     .WithMany()
                     .HasForeignKey("ConsumedRightAssetId")

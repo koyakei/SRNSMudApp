@@ -28,6 +28,7 @@ using ReactionTagNames = SRNSMudApp.Models.ReactionTagNames;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class ItemController(
     IItemListDataProvider itemListDataProvider,
     IItemListExportService itemListExportService,
@@ -112,27 +113,21 @@ public sealed class ItemController(
         [FromBody] ItemListQueryRequest? request,
         CancellationToken cancellationToken)
     {
-        var req = request ?? new ItemListQueryRequest();
+        ItemListQueryRequest req = request ?? new();
 
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var isAdmin = User?.IsInRole("Admin") ?? false;
 
-        // リクエスト DTO からドメインのフィルタリストを作成
-        var domainFilters = new List<ItemListFilter>();
-        if (req.Filters is not null)
-        {
-            foreach (ItemListFilterDto f in req.Filters)
+        // リクエスト DTO から宣言的 LINQ とパターンマッチングによりドメインフィルタリストを構築
+        var domainFilters = (req.Filters ?? [])
+            .Select<ItemListFilterDto, ItemListFilter?>(f => f switch
             {
-                if (f.TagId.HasValue)
-                {
-                    domainFilters.Add(new TagIdFilter(f.TagId.Value, f.UserName));
-                }
-                else if (!string.IsNullOrWhiteSpace(f.TagName))
-                {
-                    domainFilters.Add(new TagNameFilter(f.TagName, f.UserName));
-                }
-            }
-        }
+                { TagId: { } tagId } => new TagIdFilter(tagId, f.UserName),
+                { TagName: { Length: > 0 } tagName } when !string.IsNullOrWhiteSpace(tagName) => new TagNameFilter(tagName, f.UserName),
+                _ => null
+            })
+            .OfType<ItemListFilter>()
+            .ToList();
 
         // ソートリストを作成
         var domainSorts = req.Sorts?.Select(s => new ItemListSort(s.TagId, s.Ascending)).ToList()
@@ -210,7 +205,7 @@ public sealed class ItemController(
             ))
             .ToList();
 
-        return new ItemDto(
+        return new(
             Id: item.Id,
             Content: item.Content,
             OwnerUserName: item.Owner?.UserName,
@@ -246,7 +241,7 @@ public sealed class ItemController(
             ))
             .ToList();
 
-        return new TagDto(
+        return new(
             Id: tag.Id,
             Name: tag.Name,
             Content: tag.Content,
@@ -683,7 +678,7 @@ public sealed class ItemController(
             return BadRequest("インポートするデータが空です。");
         }
 
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(request.CsvContent));
+        using MemoryStream stream = new(System.Text.Encoding.UTF8.GetBytes(request.CsvContent));
         var linesToProcess = await ItemImportViewModel.ParseCsvStreamAsync(stream, cancellationToken);
         if (linesToProcess.Count == 0)
         {
@@ -742,15 +737,12 @@ public sealed class ItemController(
         Result<string> result = await _approveCommandHandler.HandleAsync(
             new ApproveTaggingRequestCommand(requestId, currentUserId), cancellationToken);
 
-        switch (result)
+        return result switch
         {
-            case Success<string>:
-                return Ok();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return BadRequest("リクエストの承認に失敗しました。");
-        }
+            Success<string> => Ok(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => BadRequest("リクエストの承認に失敗しました。")
+        };
     }
 
     /// <summary>
@@ -811,7 +803,9 @@ public sealed class ItemController(
             PreviousWeight: l.PreviousWeight,
             Delta: l.Delta,
             NewWeight: l.NewWeight,
-            CreatedDate: l.CreatedDate
+            CreatedDate: l.CreatedDate,
+            CommentItemId: l.EffectiveCommentItem?.Id,
+            Comment: l.EffectiveCommentItem?.Content
         )).ToList();
 
         return Ok(dtos);

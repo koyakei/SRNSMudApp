@@ -553,7 +553,9 @@ public sealed record TagWeightLedgerDto(
     int PreviousWeight,
     int Delta,
     int NewWeight,
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    int? CommentItemId = null,
+    string? Comment = null
 );
 
 /// <summary>

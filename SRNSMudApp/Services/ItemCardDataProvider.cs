@@ -1,6 +1,9 @@
+using System.Text.Json;
+
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 
 namespace SRNSMudApp.Services;
@@ -139,27 +142,64 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         _ = context.Items.Add(item);
 
-        switch (initialTagIds is { Count: > 0 })
+        List<TagRelation> tagRelations = [];
+        if (initialTagIds is { Count: > 0 })
         {
-            case true:
+            tagRelations = initialTagIds
+                .Select(tagId => new TagRelation
                 {
-                    var tagRelations = initialTagIds
-                        .Select(tagId => new TagRelation
-                        {
-                            TagId = tagId,
-                            Weight = 1,
-                            OwnerId = item.OwnerId
-                        })
-                        .ToList();
+                    TagId = tagId,
+                    Weight = 1,
+                    OwnerId = item.OwnerId
+                })
+                .ToList();
 
-                    item.TagRelations = tagRelations;
-                    break;
-                }
-            default:
-                break;
+            item.TagRelations = tagRelations;
         }
 
         _ = await context.SaveChangesAsync();
+
+        if (tagRelations.Count > 0)
+        {
+            var tagIds = tagRelations.Select(tr => tr.TagId).ToList();
+            List<Tag> tags = await context.Tags.Where(t => tagIds.Contains(t.Id)).ToListAsync();
+            foreach (TagRelation relation in tagRelations)
+            {
+                Tag? tag = tags.FirstOrDefault(t => t.Id == relation.TagId);
+                var prevWeight = tag?.CachedWeight ?? 0;
+                if (tag != null)
+                {
+                    tag.CachedWeight += 1;
+                }
+
+                _ = context.TagWeightLedgers.Add(new TagWeightLedger
+                {
+                    TagId = relation.TagId,
+                    TagNameSnapshot = tag?.Name ?? string.Empty,
+                    ItemId = item.Id,
+                    SourceType = "TagRelationInsert",
+                    SourceId = relation.Id,
+                    TagRelation = relation,
+                    PreviousWeight = prevWeight,
+                    NewWeight = tag?.CachedWeight ?? 1,
+                    Delta = 1,
+                    IsOwnerAction = true,
+                    Reason = "タグの新規追加",
+                    OwnerId = item.OwnerId
+                });
+
+                _ = context.TimelineEvents.Add(new TimelineEvent
+                {
+                    OwnerId = item.OwnerId,
+                    TimelineTargetJson = JsonSerializer.Serialize<TimelineTarget>(new ItemTarget(item.Id)),
+                    FollowedTagId = relation.TagId,
+                    ParsedEventType = TimelineEventType.Insert,
+                    NewWeight = 1
+                });
+            }
+
+            _ = await context.SaveChangesAsync();
+        }
     }
     public async Task<bool> UpdateItemContentAsync(int itemId, string content)
     {

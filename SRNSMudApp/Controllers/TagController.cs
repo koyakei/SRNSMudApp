@@ -64,7 +64,7 @@ public sealed class TagController(
         }
 
         var isAdmin = User?.IsInRole("Admin") ?? false;
-        var newTag = new Tag
+        Tag newTag = new()
         {
             Name = request.Name.Trim(),
             Content = request.Content?.Trim() ?? string.Empty,
@@ -171,13 +171,14 @@ public sealed class TagController(
         SystemTagsResult systemTags = await _homeDataProvider
             .EnsureSystemTagsAsync(currentUserId, cancellationToken);
 
-        if (!systemTags.GoodTagId.HasValue || !systemTags.BadTagId.HasValue)
+        // プロパティパターンマッチングによるシステムタグIDの安全な抽出
+        if (systemTags is not { GoodTagId: { } goodTagId, BadTagId: { } badTagId })
         {
             return BadRequest("システムタグの取得に失敗しました。");
         }
 
-        int targetSystemTagId = request.IsUpvote ? systemTags.GoodTagId.Value : systemTags.BadTagId.Value;
-        int oppositeSystemTagId = request.IsUpvote ? systemTags.BadTagId.Value : systemTags.GoodTagId.Value;
+        int targetSystemTagId = request.IsUpvote ? goodTagId : badTagId;
+        int oppositeSystemTagId = request.IsUpvote ? badTagId : goodTagId;
 
         await _tagCardDataProvider.ToggleTagVoteAsync(id, currentUserId, targetSystemTagId, oppositeSystemTagId);
         return Ok();
@@ -276,7 +277,7 @@ public sealed class TagController(
 
     private static TagDto MapToTagDto(Tag tag)
     {
-        return new TagDto(
+        return new(
             Id: tag.Id,
             Name: tag.Name,
             Content: tag.Content,
@@ -476,7 +477,9 @@ public sealed class TagController(
             PreviousWeight: l.PreviousWeight,
             Delta: l.Delta,
             NewWeight: l.NewWeight,
-            CreatedDate: l.CreatedDate
+            CreatedDate: l.CreatedDate,
+            CommentItemId: l.EffectiveCommentItem?.Id,
+            Comment: l.EffectiveCommentItem?.Content
         )).ToList();
 
         return Ok(dtos);

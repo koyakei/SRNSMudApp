@@ -5,6 +5,7 @@
 @using MudBlazor
 @using SRNSMudApp.Client.Components.Tag
 @using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Resources
 @using SRNSMudApp.Client.Services
 @implements IDisposable
 
@@ -42,14 +43,14 @@
     }
     else if (Tag == null)
     {
-        <MudAlert Severity="Severity.Warning">タグが見つかりませんでした。</MudAlert>
+        <MudAlert Severity="Severity.Warning">@ClientMessages.TagNotFound</MudAlert>
     }
     else
     {
         @if (Tag.IsLocked)
         {
             <MudAlert Severity="Severity.Error" Class="mb-4 rounded-lg" Dense="true" Elevation="1">
-                このタグはロックされています。新規作成・編集・削除は制限されています（管理者のみ操作可能）。
+                @ClientMessages.TagLockedAlert
             </MudAlert>
         }
 
@@ -240,7 +241,7 @@
                     <MudAlert Severity="Severity.Error" Class="mt-4 rounded-lg" data-testid="delete-confirm-box">
                         <div class="d-flex align-center justify-space-between flex-wrap gap-2">
                             <MudText Typo="Typo.body2">
-                                タグ「@Tag.Name」を削除してもよろしいですか？この操作は取り消せません。
+                                @ClientMessages.FormatTagDeleteConfirm(Tag.Name)
                             </MudText>
                             <div class="d-flex gap-2">
                                 <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
@@ -280,7 +281,7 @@
                 @if (Tag.PendingRequests.Count == 0)
                 {
                     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-                        保留中のタグ付け提案はありません。
+                        @ClientMessages.NoPendingTaggingRequests
                     </MudText>
                 }
                 else
@@ -446,7 +447,7 @@
         catch (Exception ex)
         {
             Logger?.LogError(ex, "タグ情報 (TagId: {TagId}) の読み込み中にエラーが発生しました。", TagId);
-            Snackbar.Add($"タグ情報の取得に失敗しました: {ex.Message}", Severity.Error);
+            Snackbar.Add(ClientMessages.FormatTagLoadFailed(ex.Message), Severity.Error);
         }
         finally
         {
@@ -473,7 +474,7 @@
     {
         if (string.IsNullOrWhiteSpace(_editName))
         {
-            Snackbar.Add("タグ名を入力してください。", Severity.Warning);
+            Snackbar.Add(ClientMessages.TagNameRequired, Severity.Warning);
             return;
         }
 
@@ -484,13 +485,13 @@
             bool ok = await ApiClient.UpdateTagAsync(TagId, request, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("タグ情報を更新しました。", Severity.Success);
+                Snackbar.Add(ClientMessages.TagUpdateSuccess, Severity.Success);
                 _isEditing = false;
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("タグの更新に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.TagUpdateFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -522,12 +523,12 @@
             bool ok = await ApiClient.DeleteTagAsync(TagId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("タグを削除しました。", Severity.Success);
+                Snackbar.Add(ClientMessages.TagDeleteSuccess, Severity.Success);
                 NavigationManager.NavigateTo("Tag/WasmList");
             }
             else
             {
-                Snackbar.Add("タグの削除に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.TagDeleteFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -582,7 +583,7 @@
             }
             else
             {
-                Snackbar.Add("提案の送信に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.ProposalSubmitFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -608,12 +609,12 @@
             bool ok = await ApiClient.ApproveTagNameProposalAsync(proposalId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("タグ名変更提案を承認しました。", Severity.Success);
+                Snackbar.Add(ClientMessages.ProposalApproveNameSuccess, Severity.Success);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("承認に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.ProposalApproveFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -635,12 +636,12 @@
             bool ok = await ApiClient.RejectTagNameProposalAsync(proposalId, cancellationToken: _cts.Token);
             if (ok)
             {
-                Snackbar.Add("タグ名変更提案を却下しました。", Severity.Info);
+                Snackbar.Add(ClientMessages.ProposalRejectNameSuccess, Severity.Info);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("却下に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.ProposalRejectFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -662,7 +663,7 @@
             bool ok = await ApiClient.CancelTagNameProposalAsync(proposalId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("提案を取り下げました。", Severity.Info);
+                Snackbar.Add(ClientMessages.ProposalCancelNameSuccess, Severity.Info);
                 await LoadTagAsync();
             }
         }
@@ -685,12 +686,12 @@
             bool ok = await ApiClient.ApproveTagContentProposalAsync(proposalId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("説明文変更提案を承認しました。", Severity.Success);
+                Snackbar.Add(ClientMessages.ProposalApproveContentSuccess, Severity.Success);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("承認に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.ProposalApproveFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -712,12 +713,12 @@
             bool ok = await ApiClient.RejectTagContentProposalAsync(proposalId, cancellationToken: _cts.Token);
             if (ok)
             {
-                Snackbar.Add("説明文変更提案を却下しました。", Severity.Info);
+                Snackbar.Add(ClientMessages.ProposalRejectContentSuccess, Severity.Info);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("却下に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.ProposalRejectFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -739,7 +740,7 @@
             bool ok = await ApiClient.CancelTagContentProposalAsync(proposalId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("提案を取り下げました。", Severity.Info);
+                Snackbar.Add(ClientMessages.ProposalCancelContentSuccess, Severity.Info);
                 await LoadTagAsync();
             }
         }
@@ -762,12 +763,12 @@
             bool ok = await ApiClient.ToggleTagLockAsync(TagId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("タグのロック状態を切り替えました。", Severity.Success);
+                Snackbar.Add(ClientMessages.TagLockToggleSuccess, Severity.Success);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("ロック状態の変更に失敗しました。", Severity.Error);
+                Snackbar.Add(ClientMessages.TagLockToggleFailed, Severity.Error);
             }
         }
         catch (OperationCanceledException)
@@ -794,7 +795,7 @@
         {
             bool isFollowing = await ApiClient.ToggleTagFollowAsync(TagId, _cts.Token);
             Tag = Tag with { IsFollowing = isFollowing };
-            Snackbar.Add(isFollowing ? "タグをフォローしました。" : "フォローを解除しました。", Severity.Success);
+            Snackbar.Add(isFollowing ? ClientMessages.TagFollowSuccess : ClientMessages.TagUnfollowSuccess, Severity.Success);
         }
         catch (OperationCanceledException)
         {
@@ -803,7 +804,7 @@
         catch (Exception ex)
         {
             Logger?.LogError(ex, "タグフォロー切替 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
-            Snackbar.Add($"フォロー状態の変更に失敗しました: {ex.Message}", Severity.Error);
+            Snackbar.Add(ClientMessages.FormatTagFollowFailed(ex.Message), Severity.Error);
         }
         finally
         {
@@ -828,7 +829,7 @@
             }
             else
             {
-                Snackbar.Add("投票に失敗しました。", Severity.Warning);
+                Snackbar.Add(ClientMessages.TagVoteFailed, Severity.Warning);
             }
         }
         catch (OperationCanceledException)
@@ -850,12 +851,12 @@
             bool ok = await ApiClient.ApproveTaggingRequestAsync(requestId, _cts.Token);
             if (ok)
             {
-                Snackbar.Add("リクエストを承認しました。", Severity.Success);
+                Snackbar.Add(ClientMessages.TaggingRequestApproveSuccess, Severity.Success);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("リクエストの承認に失敗しました。", Severity.Warning);
+                Snackbar.Add(ClientMessages.TaggingRequestApproveFailed, Severity.Warning);
             }
         }
         catch (OperationCanceledException)
@@ -877,12 +878,12 @@
             bool ok = await ApiClient.RejectTaggingRequestAsync(requestId, new RejectTaggingRequest("タグオーナーによる却下"), _cts.Token);
             if (ok)
             {
-                Snackbar.Add("リクエストを却下しました。", Severity.Info);
+                Snackbar.Add(ClientMessages.TaggingRequestRejectSuccess, Severity.Info);
                 await LoadTagAsync();
             }
             else
             {
-                Snackbar.Add("リクエストの却下に失敗しました。", Severity.Warning);
+                Snackbar.Add(ClientMessages.TaggingRequestRejectFailed, Severity.Warning);
             }
         }
         catch (OperationCanceledException)

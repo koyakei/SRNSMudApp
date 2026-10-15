@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="TagNotFound" xml:space="preserve">
+    <value>タグが見つかりませんでした。</value>
+  </data>
+  <data name="TagLockedAlert" xml:space="preserve">
+    <value>このタグはロックされています。新規作成・編集・削除は制限されています（管理者のみ操作可能）。</value>
+  </data>
+  <data name="TagNameRequired" xml:space="preserve">
+    <value>タグ名を入力してください。</value>
+  </data>
+  <data name="TagUpdateSuccess" xml:space="preserve">
+    <value>タグ情報を更新しました。</value>
+  </data>
+  <data name="TagUpdateFailed" xml:space="preserve">
+    <value>タグの更新に失敗しました。</value>
+  </data>
+  <data name="TagDeleteSuccess" xml:space="preserve">
+    <value>タグを削除しました。</value>
+  </data>
+  <data name="TagDeleteFailed" xml:space="preserve">
+    <value>タグの削除に失敗しました。</value>
+  </data>
+  <data name="TagDeleteConfirm" xml:space="preserve">
+    <value>タグ「{0}」を削除してもよろしいですか？この操作は取り消せません。</value>
+  </data>
+  <data name="TagFollowSuccess" xml:space="preserve">
+    <value>タグをフォローしました。</value>
+  </data>
+  <data name="TagUnfollowSuccess" xml:space="preserve">
+    <value>フォローを解除しました。</value>
+  </data>
+  <data name="TagFollowFailed" xml:space="preserve">
+    <value>フォロー状態の変更に失敗しました: {0}</value>
+  </data>
+  <data name="TagVoteFailed" xml:space="preserve">
+    <value>投票に失敗しました。</value>
+  </data>
+  <data name="TagLockToggleSuccess" xml:space="preserve">
+    <value>タグのロック状態を切り替えました。</value>
+  </data>
+  <data name="TagLockToggleFailed" xml:space="preserve">
+    <value>ロック状態の変更に失敗しました。</value>
+  </data>
+  <data name="TagLoadFailed" xml:space="preserve">
+    <value>タグ情報の取得に失敗しました: {0}</value>
+  </data>
+  <data name="ProposalNameTitle" xml:space="preserve">
+    <value>タグ名の変更を提案</value>
+  </data>
+  <data name="ProposalNameLabel" xml:space="preserve">
+    <value>新しいタグ名 *</value>
+  </data>
+  <data name="ProposalNameSuccess" xml:space="preserve">
+    <value>タグ名変更の提案を送信しました。</value>
+  </data>
+  <data name="ProposalNameValidation" xml:space="preserve">
+    <value>提案するタグ名を入力してください。</value>
+  </data>
+  <data name="ProposalContentTitle" xml:space="preserve">
+    <value>説明文の変更を提案</value>
+  </data>
+  <data name="ProposalContentLabel" xml:space="preserve">
+    <value>新しい説明文 *</value>
+  </data>
+  <data name="ProposalContentSuccess" xml:space="preserve">
+    <value>説明文変更の提案を送信しました。</value>
+  </data>
+  <data name="ProposalContentValidation" xml:space="preserve">
+    <value>提案する説明文を入力してください。</value>
+  </data>
+  <data name="ProposalSubmitFailed" xml:space="preserve">
+    <value>提案の送信に失敗しました。</value>
+  </data>
+  <data name="ProposalApproveNameSuccess" xml:space="preserve">
+    <value>タグ名変更提案を承認しました。</value>
+  </data>
+  <data name="ProposalRejectNameSuccess" xml:space="preserve">
+    <value>タグ名変更提案を却下しました。</value>
+  </data>
+  <data name="ProposalCancelNameSuccess" xml:space="preserve">
+    <value>提案を取り下げました。</value>
+  </data>
+  <data name="ProposalApproveContentSuccess" xml:space="preserve">
+    <value>説明文変更提案を承認しました。</value>
+  </data>
+  <data name="ProposalRejectContentSuccess" xml:space="preserve">
+    <value>説明文変更提案を却下しました。</value>
+  </data>
+  <data name="ProposalCancelContentSuccess" xml:space="preserve">
+    <value>提案を取り下げました。</value>
+  </data>
+  <data name="ProposalApproveFailed" xml:space="preserve">
+    <value>承認に失敗しました。</value>
+  </data>
+  <data name="ProposalRejectFailed" xml:space="preserve">
+    <value>却下に失敗しました。</value>
+  </data>
+  <data name="TaggingRequestApproveSuccess" xml:space="preserve">
+    <value>リクエストを承認しました。</value>
+  </data>
+  <data name="TaggingRequestRejectSuccess" xml:space="preserve">
+    <value>リクエストを却下しました。</value>
+  </data>
+  <data name="TaggingRequestApproveFailed" xml:space="preserve">
+    <value>リクエストの承認に失敗しました。</value>
+  </data>
+  <data name="TaggingRequestRejectFailed" xml:space="preserve">
+    <value>リクエストの却下に失敗しました。</value>
+  </data>
+  <data name="NoRelatedItems" xml:space="preserve">
+    <value>このタグに関連付けられたアイテムはありません。</value>
+  </data>
+  <data name="NoRelatedTags" xml:space="preserve">
+    <value>関連するタグはありません。</value>
+  </data>
+  <data name="NoPendingTaggingRequests" xml:space="preserve">
+    <value>保留中のタグ付け提案はありません。</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>保留中の変更提案はありません。</value>
+  </data>
+  <data name="NoWeightLedgers" xml:space="preserve">
+    <value>重み変動履歴はありません。</value>
+  </data>
+</root>
+

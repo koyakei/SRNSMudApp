@@ -63,7 +63,7 @@ public sealed class InvitationController(
         string code = RandomNumberGenerator.GetString(CodeCharacters, 16);
         DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        var invitation = new Invitation
+        Invitation invitation = new()
         {
             Email = request.Email.Trim(),
             InvitationCode = code,
@@ -97,11 +97,15 @@ public sealed class InvitationController(
 
     private static InvitationDto MapToDto(Invitation invitation, DateTime utcNow)
     {
-        string status = invitation.IsUsed
-            ? "Used"
-            : invitation.ExpirationDate < utcNow ? "Expired" : "Pending";
+        // プロパティパターン switch 式によるステータス判定
+        string status = invitation switch
+        {
+            { IsUsed: true } => "Used",
+            { ExpirationDate: var exp } when exp < utcNow => "Expired",
+            _ => "Pending"
+        };
 
-        return new InvitationDto(
+        return new(
             Id: invitation.Id,
             Email: invitation.Email,
             InvitationCode: invitation.InvitationCode,

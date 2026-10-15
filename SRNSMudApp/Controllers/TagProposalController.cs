@@ -20,6 +20,7 @@ using SRNSMudApp.Services;
 /// </summary>
 [ApiController]
 [Route("api/tag-proposal")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class TagProposalController(
     ITagNameProposalService nameProposalService,
     ITagContentProposalService contentProposalService) : ControllerBase
@@ -58,15 +59,13 @@ public sealed class TagProposalController(
             currentUserId,
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<TagNameProposal> のハンドリング
+        return result switch
         {
-            case Success<TagNameProposal> success:
-                return Ok(MapToNameDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "提案の申請中に予期しないエラーが発生しました。");
-        }
+            Success<TagNameProposal> success => Ok(MapToNameDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "提案の申請中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -93,15 +92,13 @@ public sealed class TagProposalController(
             currentUserId,
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<TagContentProposal> のハンドリング
+        return result switch
         {
-            case Success<TagContentProposal> success:
-                return Ok(MapToContentDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "提案の申請中に予期しないエラーが発生しました。");
-        }
+            Success<TagContentProposal> success => Ok(MapToContentDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "提案の申請中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -139,15 +136,13 @@ public sealed class TagProposalController(
         }
 
         Result<Tag> result = await _nameProposalService.ApproveProposalAsync(proposalId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<Tag> のハンドリング
+        return result switch
         {
-            case Success<Tag>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "承認処理中に予期しないエラーが発生しました。");
-        }
+            Success<Tag> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "承認処理中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -172,15 +167,13 @@ public sealed class TagProposalController(
             request?.RejectReason?.Trim(),
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "却下処理中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "却下処理中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -199,15 +192,13 @@ public sealed class TagProposalController(
         }
 
         Result<Tag> result = await _contentProposalService.ApproveProposalAsync(proposalId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<Tag> のハンドリング
+        return result switch
         {
-            case Success<Tag>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "承認処理中に予期しないエラーが発生しました。");
-        }
+            Success<Tag> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "承認処理中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -232,15 +223,13 @@ public sealed class TagProposalController(
             request?.RejectReason?.Trim(),
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "却下処理中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "却下処理中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -259,15 +248,13 @@ public sealed class TagProposalController(
         }
 
         Result<bool> result = await _nameProposalService.CancelProposalAsync(proposalId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "取り下げ処理中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "取り下げ処理中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -286,15 +273,13 @@ public sealed class TagProposalController(
         }
 
         Result<bool> result = await _contentProposalService.CancelProposalAsync(proposalId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "取り下げ処理中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "取り下げ処理中に予期しないエラーが発生しました。")
+        };
     }
 
     private static TagNameProposalDto MapToNameDto(TagNameProposal entity) => new(

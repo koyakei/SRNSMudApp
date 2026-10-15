@@ -20,6 +20,7 @@ using SRNSMudApp.Services;
 /// </summary>
 [ApiController]
 [Route("api/item-split")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class ItemSplitController(IItemSplitService itemSplitService) : ControllerBase
 {
     private readonly IItemSplitService _itemSplitService =
@@ -53,15 +54,13 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
             currentUserId,
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<Item> のハンドリング
+        return result switch
         {
-            case Success<Item> success:
-                return Ok(MapToItemDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "アイテムの直接分割中に予期しないエラーが発生しました。");
-        }
+            Success<Item> success => Ok(MapToItemDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "アイテムの直接分割中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -92,15 +91,13 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
             currentUserId,
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<ItemSplitRequest> のハンドリング
+        return result switch
         {
-            case Success<ItemSplitRequest> success:
-                return Ok(MapToSplitRequestDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "分割リクエストの申請中に予期しないエラーが発生しました。");
-        }
+            Success<ItemSplitRequest> success => Ok(MapToSplitRequestDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "分割リクエストの申請中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -134,15 +131,13 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
         }
 
         Result<Item> result = await _itemSplitService.ApproveSplitAsync(requestId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<Item> のハンドリング
+        return result switch
         {
-            case Success<Item> success:
-                return Ok(MapToItemDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "分割リクエストの承認中に予期しないエラーが発生しました。");
-        }
+            Success<Item> success => Ok(MapToItemDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "分割リクエストの承認中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -167,15 +162,13 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
             request?.RejectReason?.Trim(),
             cancellationToken);
 
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "分割リクエストの却下中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "分割リクエストの却下中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -194,15 +187,13 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
         }
 
         Result<bool> result = await _itemSplitService.CancelSplitAsync(requestId, currentUserId, cancellationToken);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return Ok(true);
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "分割リクエストの取り下げ中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => Ok(true),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "分割リクエストの取り下げ中に予期しないエラーが発生しました。")
+        };
     }
 
     private static ItemDto MapToItemDto(Item entity)
@@ -215,7 +206,7 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
                 OwnerUserName: tr.Owner?.UserName ?? tr.Tag?.Owner?.UserName
             )).ToList();
 
-        return new ItemDto(
+        return new(
             Id: entity.Id,
             Content: entity.Content,
             OwnerUserName: entity.Owner?.UserName,

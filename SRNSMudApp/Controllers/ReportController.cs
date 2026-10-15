@@ -69,17 +69,8 @@ public sealed class ReportController(
         [FromQuery] string? targetType = null,
         CancellationToken cancellationToken = default)
     {
-        ReportStatus? filterStatus = null;
-        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ReportStatus>(status, true, out var s))
-        {
-            filterStatus = s;
-        }
-
-        ReportTargetType? filterTargetType = null;
-        if (!string.IsNullOrWhiteSpace(targetType) && Enum.TryParse<ReportTargetType>(targetType, true, out var t))
-        {
-            filterTargetType = t;
-        }
+        ReportStatus? filterStatus = !string.IsNullOrWhiteSpace(status) && Enum.TryParse<ReportStatus>(status, true, out var s) ? s : null;
+        ReportTargetType? filterTargetType = !string.IsNullOrWhiteSpace(targetType) && Enum.TryParse<ReportTargetType>(targetType, true, out var t) ? t : null;
 
         List<ContentReport> reports = await _contentReportService.GetReportsAsync(filterStatus, filterTargetType);
         var dtos = reports.Select(MapToDto).ToList();
@@ -154,15 +145,10 @@ public sealed class ReportController(
             return Unauthorized("ユーザー情報が取得できません。");
         }
 
-        bool success;
-        if (request.HideTarget)
-        {
-            success = await _contentReportService.ResolveReportWithHideAsync(id, request.ResolutionNote, currentUserId);
-        }
-        else
-        {
-            success = await _contentReportService.ResolveReportWithActionAsync(id, request.DeleteTarget, request.ResolutionNote, currentUserId);
-        }
+        // 三項非同期式による処置分岐の簡潔化
+        bool success = request.HideTarget
+            ? await _contentReportService.ResolveReportWithHideAsync(id, request.ResolutionNote, currentUserId)
+            : await _contentReportService.ResolveReportWithActionAsync(id, request.DeleteTarget, request.ResolutionNote, currentUserId);
 
         if (!success)
         {
@@ -174,7 +160,7 @@ public sealed class ReportController(
 
     private static ContentReportDto MapToDto(ContentReport report)
     {
-        return new ContentReportDto(
+        return new(
             Id: report.Id,
             TargetType: report.TargetType.ToString(),
             ItemId: report.ItemId,

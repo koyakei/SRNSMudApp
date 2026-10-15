@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using SRNSMudApp.Client.Models.Api;
+using SRNSMudApp.Client.Resources;
 
 /// <summary>
 /// タグ変更提案の種別ごとの挙動を抽象化する Strategy インターフェース。
@@ -44,6 +45,12 @@ public interface ITagProposalStrategy
     /// <summary>
     /// 提案を API クライアント経由で送信します。
     /// </summary>
+    /// <param name="apiClient">API クライアント。</param>
+    /// <param name="tagId">タグ ID。</param>
+    /// <param name="value">提案値。</param>
+    /// <param name="reason">提案理由。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <returns>送信成否。</returns>
     Task<bool> SubmitAsync(ITagProposalApiClient apiClient, int tagId, string value, string? reason, CancellationToken cancellationToken);
 }
 
@@ -52,11 +59,11 @@ public interface ITagProposalStrategy
 /// </summary>
 public sealed class TagNameProposalStrategy : ITagProposalStrategy
 {
-    public string Title => "タグ名の変更を提案";
-    public string ValueLabel => "新しいタグ名 *";
+    public string Title => ClientMessages.ProposalNameTitle;
+    public string ValueLabel => ClientMessages.ProposalNameLabel;
     public int Lines => 1;
-    public string SuccessMessage => "タグ名変更の提案を送信しました。";
-    public string ValidationErrorMessage => "提案するタグ名を入力してください。";
+    public string SuccessMessage => ClientMessages.ProposalNameSuccess;
+    public string ValidationErrorMessage => ClientMessages.ProposalNameValidation;
     public string TestId => "proposal-name-input";
 
     public async Task<bool> SubmitAsync(ITagProposalApiClient apiClient, int tagId, string value, string? reason, CancellationToken cancellationToken)
@@ -74,11 +81,11 @@ public sealed class TagNameProposalStrategy : ITagProposalStrategy
 /// </summary>
 public sealed class TagContentProposalStrategy : ITagProposalStrategy
 {
-    public string Title => "説明文の変更を提案";
-    public string ValueLabel => "新しい説明文 *";
+    public string Title => ClientMessages.ProposalContentTitle;
+    public string ValueLabel => ClientMessages.ProposalContentLabel;
     public int Lines => 3;
-    public string SuccessMessage => "説明文変更の提案を送信しました。";
-    public string ValidationErrorMessage => "提案する説明文を入力してください。";
+    public string SuccessMessage => ClientMessages.ProposalContentSuccess;
+    public string ValidationErrorMessage => ClientMessages.ProposalContentValidation;
     public string TestId => "proposal-content-input";
 
     public async Task<bool> SubmitAsync(ITagProposalApiClient apiClient, int tagId, string value, string? reason, CancellationToken cancellationToken)

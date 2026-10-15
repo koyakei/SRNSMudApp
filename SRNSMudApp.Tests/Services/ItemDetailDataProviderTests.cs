@@ -139,6 +139,37 @@ public class ItemDetailDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task GetItemDetailAsync_WhenTagRelationExistsWithoutLedger_ReturnsSynthesizedLedger()
+    {
+        var (db, sut, _, userId, tagId, itemId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            // TagRelation を直接追加（初期タグ付与などで Ledger が未作成のケース）
+            var relation = new TagRelation
+            {
+                ItemId = itemId,
+                TagId = tagId,
+                OwnerId = userId,
+                Weight = 1
+            };
+            db.TagRelations.Add(relation);
+            await db.SaveChangesAsync();
+
+            // ItemDetailDataProvider から詳細取得
+            ItemDetailPageData? result = await sut.GetItemDetailAsync(itemId);
+
+            Assert.NotNull(result);
+            // Ledger 未作成の TagRelation に対しても履歴が生成されて含まれること
+            Assert.Single(result.Ledgers);
+            TagWeightLedger ledger = result.Ledgers[0];
+            Assert.Equal(tagId, ledger.TagId);
+            Assert.Equal(itemId, ledger.ItemId);
+            Assert.Equal(1, ledger.Delta);
+            Assert.Equal($"Tag_{tid}", ledger.TagNameSnapshot);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

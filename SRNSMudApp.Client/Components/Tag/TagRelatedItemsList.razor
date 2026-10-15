@@ -1,10 +1,11 @@
 @using MudBlazor
 @using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Resources
 
 @if (Items.Count == 0)
 {
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
-        このタグに関連付けられたアイテムはありません。
+        @ClientMessages.NoRelatedItems
     </MudText>
 }
 else
@@ -48,4 +49,3 @@ else
     [Parameter]
     public IReadOnlyList<ItemDto> Items { get; set; } = [];
 }
-

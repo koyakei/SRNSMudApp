@@ -21,13 +21,24 @@ using SRNSMudApp.Services;
 /// </summary>
 [ApiController]
 [Route("api/tag-diagram")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
 public sealed class TagDiagramController(
     ITagDiagramDataProvider diagramDataProvider,
+    ITagDiagramDtoMapper? dtoMapper = null,
     ITagEdgeService? tagEdgeService = null) : ControllerBase
 {
     private readonly ITagDiagramDataProvider _diagramDataProvider =
         diagramDataProvider ?? throw new ArgumentNullException(nameof(diagramDataProvider));
+    private readonly ITagDiagramDtoMapper _dtoMapper = dtoMapper ?? TagDiagramDtoMapper.Default;
     private readonly ITagEdgeService? _tagEdgeService = tagEdgeService;
+
+    /// <summary>
+    /// テスト互換用コンストラクタ。
+    /// </summary>
+    public TagDiagramController(ITagDiagramDataProvider diagramDataProvider, ITagEdgeService? tagEdgeService)
+        : this(diagramDataProvider, null, tagEdgeService)
+    {
+    }
 
     /// <summary>
     /// タグダイアグラム用のノード（タグ）、エッジ、およびコンテキストアイテムを取得します。
@@ -44,11 +55,12 @@ public sealed class TagDiagramController(
         List<Item> contextItems = [];
         if (!string.IsNullOrWhiteSpace(itemIds))
         {
+            // LINQ によるタプル射影を用いたアイテムID解析
             var parsedIds = itemIds
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(s => int.TryParse(s, out var id) ? (int?)id : null)
-                .Where(id => id.HasValue)
-                .Select(id => id!.Value)
+                .Select(s => (Success: int.TryParse(s, out var id), Id: id))
+                .Where(x => x.Success)
+                .Select(x => x.Id)
                 .ToList();
 
             if (parsedIds.Count > 0)
@@ -57,7 +69,7 @@ public sealed class TagDiagramController(
             }
         }
 
-        var nodeDtos = allTags.Select(MapToTagDto).ToList();
+        var nodeDtos = allTags.Select(_dtoMapper.MapToTagDto).ToList();
         var edgeDtos = allEdges.Select(e => new TagDiagramEdgeDto(
             Id: e.Id,
             SourceTagId: e.SourceTagId,
@@ -65,58 +77,9 @@ public sealed class TagDiagramController(
             OwnerUserName: e.Owner?.UserName
         )).ToList();
 
-        var itemDtos = contextItems.Select(MapToItemDto).ToList();
+        var itemDtos = contextItems.Select(_dtoMapper.MapToItemDto).ToList();
 
         return Ok(new TagDiagramResponse(nodeDtos, edgeDtos, itemDtos));
-    }
-
-    private static TagDto MapToTagDto(Tag tag)
-    {
-        return new TagDto(
-            Id: tag.Id,
-            Name: tag.Name,
-            Content: tag.Content,
-            OwnerUserName: tag.Owner?.UserName,
-            OwnerUserId: tag.OwnerId,
-            Score: TagCardViewModel.GetTagScore(tag),
-            IsPrivate: tag.IsPrivate,
-            TargetUserGroupName: tag.TargetUserGroup?.Name
-        );
-    }
-
-    private static ItemDto MapToItemDto(Item item)
-    {
-        var relations = item.TagRelations
-            .Select(tr => new TagRelationDto(
-                TagId: tr.TagId,
-                TagName: tr.Tag?.Name ?? string.Empty,
-                Weight: tr.Weight,
-                OwnerUserName: tr.Owner?.UserName ?? tr.Tag?.Owner?.UserName
-            ))
-            .ToList();
-
-        return new ItemDto(
-            Id: item.Id,
-            Content: item.Content,
-            OwnerUserName: item.Owner?.UserName,
-            UpdatedDate: item.UpdatedDate,
-            IsPrivate: item.IsPrivate,
-            TagRelations: relations,
-            ItemKindJson: item.ItemKindJson,
-            ParentItemId: item.ParentItemId,
-            RootItemId: item.RootItemId,
-            QuotedItemId: item.QuotedItemId,
-            OwnerUserId: item.OwnerId,
-            Score: ItemCardViewModel.GetItemScore(item.TagRelations),
-            ShinjiScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Shinji),
-            ZenScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Zen),
-            BiScore: ItemCardViewModel.GetReactionScore(item.TagRelations, ReactionTagNames.Bi),
-            ReplyCount: 0,
-            QuoteCount: 0,
-            QuotedItemContent: item.QuotedItem?.Content,
-            QuotedItemOwnerUserName: item.QuotedItem?.Owner?.UserName,
-            TargetUserGroupName: item.TargetUserGroup?.Name
-        );
     }
 
     /// <summary>
@@ -140,21 +103,18 @@ public sealed class TagDiagramController(
         }
 
         Result<TagEdge> result = await _tagEdgeService.CreateEdgeAsync(request.SourceTagId, request.TargetTagId, currentUserId);
-        switch (result)
+        // switch 式による Result<TagEdge> のハンドリング
+        return result switch
         {
-            case Success<TagEdge> success:
-                TagEdge edge = success.Value;
-                return Ok(new TagDiagramEdgeDto(
-                    Id: edge.Id,
-                    SourceTagId: edge.SourceTagId,
-                    TargetTagId: edge.TargetTagId,
-                    OwnerUserName: edge.Owner?.UserName
-                ));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "エッジ作成中に予期しないエラーが発生しました。");
-        }
+            Success<TagEdge> success => Ok(new TagDiagramEdgeDto(
+                Id: success.Value.Id,
+                SourceTagId: success.Value.SourceTagId,
+                TargetTagId: success.Value.TargetTagId,
+                OwnerUserName: success.Value.Owner?.UserName
+            )),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "エッジ作成中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -176,15 +136,13 @@ public sealed class TagDiagramController(
         }
 
         Result<bool> result = await _tagEdgeService.DeleteEdgeAsync(edgeId, currentUserId);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return NoContent();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "エッジ削除中に予期しないエラーが発生しました。");
-        }
+            Success<bool> => NoContent(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "エッジ削除中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -200,7 +158,7 @@ public sealed class TagDiagramController(
         }
 
         IReadOnlyList<TagEdgeTagAttachment> attachments = await _tagEdgeService.GetAttachmentsForEdgeAsync(edgeId);
-        var dtos = attachments.Select(MapToAttachmentDto).ToList();
+        var dtos = attachments.Select(_dtoMapper.MapToAttachmentDto).ToList();
         return Ok(dtos);
     }
 
@@ -229,15 +187,13 @@ public sealed class TagDiagramController(
         Result<TagEdgeTagAttachment> result = await _tagEdgeService.AttachTagToEdgeAsync(
             edgeId, request.TagId, request.RightAssetId, currentUserId, request.Weight);
 
-        switch (result)
+        // switch 式による Result<TagEdgeTagAttachment> のハンドリング
+        return result switch
         {
-            case Success<TagEdgeTagAttachment> success:
-                return Ok(MapToAttachmentDto(success.Value));
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "タグ紐付け中に予期しないエラーが発生しました。");
-        }
+            Success<TagEdgeTagAttachment> success => Ok(_dtoMapper.MapToAttachmentDto(success.Value)),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "タグ紐付け中に予期しないエラーが発生しました。")
+        };
     }
 
     /// <summary>
@@ -259,27 +215,12 @@ public sealed class TagDiagramController(
         }
 
         Result<bool> result = await _tagEdgeService.DetachTagFromEdgeAsync(attachmentId, currentUserId);
-        switch (result)
+        // switch 式による Result<bool> のハンドリング
+        return result switch
         {
-            case Success<bool>:
-                return NoContent();
-            case Failure failure:
-                return BadRequest(failure.ErrorMessage);
-            default:
-                return StatusCode(500, "紐付け解除中に予期しないエラーが発生しました。");
-        }
-    }
-
-    private static TagEdgeAttachmentDto MapToAttachmentDto(TagEdgeTagAttachment att)
-    {
-        return new TagEdgeAttachmentDto(
-            Id: att.Id,
-            EdgeId: att.TagEdgeId,
-            TagId: att.TagId,
-            TagName: att.Tag?.Name ?? string.Empty,
-            OwnerUserName: att.Owner?.UserName,
-            Weight: att.Weight,
-            CreatedDate: att.CreatedDate
-        );
+            Success<bool> => NoContent(),
+            Failure failure => BadRequest(failure.ErrorMessage),
+            _ => StatusCode(500, "紐付け解除中に予期しないエラーが発生しました。")
+        };
     }
 }
