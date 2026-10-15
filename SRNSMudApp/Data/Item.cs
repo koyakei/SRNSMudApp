@@ -1,7 +1,10 @@
 #region
 
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics.CodeAnalysis;
+
+using SRNSMudApp.Models;
 
 #endregion
 
@@ -71,4 +74,8 @@ public class Item : BaseEntity, ITaggable
 
     /// <summary>管理者による非公開化の理由。</summary>
     public string? AdminHiddenReason { get; set; }
+
+    /// <summary>タグ履歴コメントに付随するタグ付与アクションのメタ情報。</summary>
+    [NotMapped]
+    public TagActionMetadata? TagActionInfo { get; set; }
 }

@@ -43,12 +43,30 @@
             <div class="d-flex flex-column gap-3 mb-4 pl-4" style="border-left: 2px solid #e0e0e0;">
                 @foreach (Data.Item reply in Replies!)
                 {
-                    // リプライの描画はコンテナ (ItemCard) がテンプレートとして提供する
-                    var template = ReplyTemplate;
-                    if (template != null)
-                    {
-                        @template(reply)
-                    }
+                    <div class="reply-thread-item" data-testid="@($"reply-thread-item-{reply.Id}")">
+                        @if (reply.TagActionInfo is not null)
+                        {
+                            <div class="d-flex align-center flex-wrap gap-2 mb-1 tag-action-header" data-testid="@($"tag-action-header-{reply.Id}")">
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.LocalOffer">
+                                    @reply.TagActionInfo.TagName
+                                </MudChip>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    タグオーナー: @(reply.TagActionInfo.TagOwnerUserName ?? "システム")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="@(reply.TagActionInfo.Weight > 0 ? Color.Success : reply.TagActionInfo.Weight < 0 ? Color.Error : Color.Default)">
+                                    付与ウェイト: @(reply.TagActionInfo.Weight > 0 ? $"+{reply.TagActionInfo.Weight}" : reply.TagActionInfo.Weight.ToString())
+                                </MudText>
+                            </div>
+                        }
+                        @{
+                            // リプライの描画はコンテナ (ItemCard) がテンプレートとして提供する
+                            var template = ReplyTemplate;
+                            if (template != null)
+                            {
+                                @template(reply)
+                            }
+                        }
+                    </div>
                 }
             </div>
         }

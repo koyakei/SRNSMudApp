@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 
 namespace SRNSMudApp.Services;
 
@@ -38,16 +39,117 @@ public class ItemReplyService(
 
     public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId)
     {
+        if (parentItemId <= 0)
+        {
+            return [];
+        }
+
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Items!
+
+        // 1. 通常のリプライを取得
+        List<Item> regularReplies = await context.Items!
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
+                .ThenInclude(tr => tr.Tag)
             .Include(i => i.NotificationRecipients)
             .Include(i => i.TargetUserGroup)
             .Where(i => i.ParentItemId == parentItemId)
             .OrderBy(i => i.CreatedDate)
             .ToListAsync();
+
+        var replyIds = new HashSet<int>(regularReplies.Select(r => r.Id));
+
+        // 2. タグ履歴（TagWeightLedger）由来のコメントを取得
+        List<TagWeightLedger> ledgers = await context.TagWeightLedgers
+            .Include(l => l.Tag)
+                .ThenInclude(t => t.Owner)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.Owner)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.NotificationRecipients)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.TargetUserGroup)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.Tag)
+                    .ThenInclude(t => t.Owner)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.Owner)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.TagRelations)
+                        .ThenInclude(tr => tr.Tag)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.NotificationRecipients)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.TargetUserGroup)
+            .Where(l => (l.ItemId == parentItemId || (l.TagRelation != null && l.TagRelation.ItemId == parentItemId))
+                        && (l.CommentItemId != null || (l.TagRelation != null && l.TagRelation.CommentItemId != null)))
+            .OrderBy(l => l.CreatedDate)
+            .ToListAsync();
+
+        List<Item> tagComments = [];
+        var processedCommentItemIds = new HashSet<int>(replyIds);
+
+        foreach (TagWeightLedger ledger in ledgers)
+        {
+            Item? commentItem = ledger.EffectiveCommentItem;
+            if (commentItem is not null &&
+                !string.IsNullOrWhiteSpace(commentItem.Content) &&
+                processedCommentItemIds.Add(commentItem.Id))
+            {
+                var tagName = ledger.Tag?.Name
+                    ?? ledger.TagRelation?.Tag?.Name
+                    ?? (!string.IsNullOrEmpty(ledger.TagNameSnapshot) ? ledger.TagNameSnapshot : "タグ");
+                var tagOwnerName = ledger.Tag?.Owner?.UserName
+                    ?? ledger.TagRelation?.Tag?.Owner?.UserName;
+                var weight = ledger.Delta != 0 ? ledger.Delta : (ledger.TagRelation?.Weight ?? 1);
+
+                commentItem.TagActionInfo = new TagActionMetadata(tagName, tagOwnerName, weight);
+                tagComments.Add(commentItem);
+            }
+        }
+
+        // 3. TagWeightLedger にまだ登録されていない TagRelation の CommentItem を補完
+        List<TagRelation> relationsWithComment = await context.TagRelations
+            .Include(tr => tr.Tag)
+                .ThenInclude(t => t.Owner)
+            .Include(tr => tr.CommentItem)
+                .ThenInclude(ci => ci!.Owner)
+            .Include(tr => tr.CommentItem)
+                .ThenInclude(ci => ci!.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+            .Include(tr => tr.CommentItem)
+                .ThenInclude(ci => ci!.NotificationRecipients)
+            .Include(tr => tr.CommentItem)
+                .ThenInclude(ci => ci!.TargetUserGroup)
+            .Where(tr => tr.ItemId == parentItemId && tr.CommentItemId != null)
+            .OrderBy(tr => tr.CreatedDate)
+            .ToListAsync();
+
+        foreach (TagRelation tr in relationsWithComment)
+        {
+            Item? commentItem = tr.CommentItem;
+            if (commentItem is not null &&
+                !string.IsNullOrWhiteSpace(commentItem.Content) &&
+                processedCommentItemIds.Add(commentItem.Id))
+            {
+                var tagName = tr.Tag?.Name ?? "タグ";
+                var tagOwnerName = tr.Tag?.Owner?.UserName;
+                var weight = tr.Weight;
+
+                commentItem.TagActionInfo = new TagActionMetadata(tagName, tagOwnerName, weight);
+                tagComments.Add(commentItem);
+            }
+        }
+
+        // 4. 時系列順にマージ
+        return [.. regularReplies.Concat(tagComments).OrderBy(r => r.CreatedDate)];
     }
 
     public async Task<int> GetItemReplyCountAsync(int parentItemId)
@@ -58,7 +160,46 @@ public class ItemReplyService(
         }
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        return await context.Items!.CountAsync(i => i.ParentItemId == parentItemId);
+
+        var regularReplyCount = await context.Items!
+            .CountAsync(i => i.ParentItemId == parentItemId);
+
+        var regularReplyIds = await context.Items!
+            .Where(i => i.ParentItemId == parentItemId)
+            .Select(i => i.Id)
+            .ToListAsync();
+
+        var ledgerCommentItemIds = await context.TagWeightLedgers
+            .Where(l => (l.ItemId == parentItemId || (l.TagRelation != null && l.TagRelation.ItemId == parentItemId))
+                        && (l.CommentItemId != null || (l.TagRelation != null && l.TagRelation.CommentItemId != null)))
+            .Select(l => l.CommentItemId ?? l.TagRelation!.CommentItemId)
+            .Where(id => id != null)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToListAsync();
+
+        var relationCommentItemIds = await context.TagRelations
+            .Where(tr => tr.ItemId == parentItemId && tr.CommentItemId != null)
+            .Select(tr => tr.CommentItemId!.Value)
+            .Distinct()
+            .ToListAsync();
+
+        var allCommentItemIds = ledgerCommentItemIds
+            .Concat(relationCommentItemIds)
+            .Except(regularReplyIds)
+            .Distinct()
+            .ToList();
+
+        if (allCommentItemIds.Count == 0)
+        {
+            return regularReplyCount;
+        }
+
+        var validCommentCount = await context.Items!
+            .Where(i => allCommentItemIds.Contains(i.Id) && !string.IsNullOrWhiteSpace(i.Content))
+            .CountAsync();
+
+        return regularReplyCount + validCommentCount;
     }
 
     public async Task<Item?> AddItemReplyAsync(

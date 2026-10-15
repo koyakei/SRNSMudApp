@@ -266,4 +266,88 @@ public class ItemReplyServiceTests : IAsyncLifetime
             Assert.Equal($"Group_{tid}", privateReplyInList.TargetUserGroup.Name);
         }
     }
+
+    [Fact]
+    public async Task GetItemRepliesAsync_ShouldIncludeTagHistoryComments_WithTagActionMetadata()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userOwner = $"user_owner_{tid}";
+            var userTagger = $"user_tagger_{tid}";
+            await dbContext.SeedUsersAsync(userOwner, userTagger);
+
+            var parentItem = new Item { Content = $"Parent Item_{tid}", OwnerId = userOwner };
+            var tag = new Tag { Name = $"Csharp_{tid}", OwnerId = userOwner };
+            dbContext.Items.Add(parentItem);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // 通常のリプライ
+            var normalReply = new Item
+            {
+                Content = $"Normal reply_{tid}",
+                OwnerId = userOwner,
+                ParentItemId = parentItem.Id,
+                CreatedDate = DateTime.UtcNow.AddMinutes(1)
+            };
+            dbContext.Items.Add(normalReply);
+
+            // タグ履歴コメントアイテム
+            var commentItem = new Item
+            {
+                Content = $"Tag history comment_{tid}",
+                OwnerId = userTagger,
+                CreatedDate = DateTime.UtcNow.AddMinutes(2)
+            };
+            dbContext.Items.Add(commentItem);
+            await dbContext.SaveChangesAsync();
+
+            var relation = new TagRelation
+            {
+                ItemId = parentItem.Id,
+                TagId = tag.Id,
+                OwnerId = userTagger,
+                Weight = 3,
+                CommentItemId = commentItem.Id
+            };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
+
+            var ledger = new TagWeightLedger
+            {
+                TagId = tag.Id,
+                ItemId = parentItem.Id,
+                SourceType = "TagRelationInsert",
+                SourceId = relation.Id,
+                TagRelation = relation,
+                CommentItemId = commentItem.Id,
+                Delta = 3,
+                OwnerId = userTagger,
+                CreatedDate = DateTime.UtcNow.AddMinutes(2)
+            };
+            dbContext.TagWeightLedgers.Add(ledger);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: GetItemRepliesAsync
+            IReadOnlyList<Item> replies = await service.GetItemRepliesAsync(parentItem.Id);
+
+            // Assert 1: 通常リプライとタグ履歴コメントの両方が返る
+            Assert.Equal(2, replies.Count);
+            var retrievedNormal = replies.FirstOrDefault(r => r.Id == normalReply.Id);
+            Assert.NotNull(retrievedNormal);
+            Assert.Null(retrievedNormal.TagActionInfo);
+
+            var retrievedTagComment = replies.FirstOrDefault(r => r.Id == commentItem.Id);
+            Assert.NotNull(retrievedTagComment);
+            Assert.NotNull(retrievedTagComment.TagActionInfo);
+            Assert.Equal($"Csharp_{tid}", retrievedTagComment.TagActionInfo.TagName);
+            Assert.Equal(userOwner, retrievedTagComment.TagActionInfo.TagOwnerUserName);
+            Assert.Equal(3, retrievedTagComment.TagActionInfo.Weight);
+
+            // Act 2: GetItemReplyCountAsync
+            int count = await service.GetItemReplyCountAsync(parentItem.Id);
+            Assert.Equal(2, count);
+        }
+    }
 }
