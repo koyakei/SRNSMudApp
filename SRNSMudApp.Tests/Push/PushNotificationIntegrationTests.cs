@@ -7,11 +7,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 using SRNSMudApp.Models.Push;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-public class PushNotificationIntegrationTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class PushNotificationIntegrationTests(TestWebApplicationFactory factory)
+    : IClassFixture<TestWebApplicationFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 

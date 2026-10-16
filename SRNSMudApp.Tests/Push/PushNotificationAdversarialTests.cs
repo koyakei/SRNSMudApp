@@ -16,13 +16,14 @@ using Moq;
 using SRNSMudApp.Controllers;
 using SRNSMudApp.Models.Push;
 using SRNSMudApp.Services.Push;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
-public class PushNotificationAdversarialTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class PushNotificationAdversarialTests(TestWebApplicationFactory factory)
+    : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory = factory;
+    private readonly TestWebApplicationFactory _factory = factory;
 
     [Fact]
     public async Task Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_DirectStoreExploit()

@@ -1,26 +1,30 @@
 #region
 
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 
+using SRNSMudApp.Tests.TestSupport;
+
 #endregion
 
 namespace SRNSMudApp.Tests;
 
-public class LoginIntegrationTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class LoginIntegrationTests(TestWebApplicationFactory factory)
+    : IClassFixture<TestWebApplicationFactory>
 {
     [Fact]
     public async Task PostLogin_WithoutFormName_ShouldFailWithAntiforgeryOrRoutingError()
     {
         // Arrange
-        HttpClient client = factory.CreateClient();
+        var customFactory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        HttpClient client = customFactory.CreateClient();
 
         // Generate a valid Antiforgery token using the DI container
-        using IServiceScope scope = factory.Services.CreateScope();
+        using IServiceScope scope = customFactory.Services.CreateScope();
         IAntiforgery antiforgery = scope.ServiceProvider.GetRequiredService<IAntiforgery>();
         var httpContext = new DefaultHttpContext();
         AntiforgeryTokenSet tokenSet = antiforgery.GetAndStoreTokens(httpContext);

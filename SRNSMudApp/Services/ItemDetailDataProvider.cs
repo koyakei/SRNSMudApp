@@ -58,6 +58,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
 
     private static IQueryable<Item> IncludeItemDetails(IQueryable<Item> query) =>
         query
+            .AsSplitQuery()
             .Include(i => i.Owner)
             .Include(i => i.TargetUserGroup)
             .Include(i => i.QuotedItem)

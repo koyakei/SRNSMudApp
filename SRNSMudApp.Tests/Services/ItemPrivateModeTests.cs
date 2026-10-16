@@ -234,17 +234,11 @@ public class ItemPrivateModeTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // 1. WhereVisibleToUser クエリの検証 (通常ユーザー vs 管理者)
-            var visibleItemsAnonymous = await db.Items.WhereVisibleToUser(db, null, isAdmin: false).ToListAsync();
-            var visibleItemsAuthor = await db.Items.WhereVisibleToUser(db, authorId, isAdmin: false).ToListAsync();
-            var visibleItemsFollower = await db.Items.WhereVisibleToUser(db, followerId, isAdmin: false).ToListAsync();
-            var visibleItemsStranger = await db.Items.WhereVisibleToUser(db, strangerId, isAdmin: false).ToListAsync();
-            var visibleItemsAdmin = await db.Items.WhereVisibleToUser(db, adminId, isAdmin: true).ToListAsync();
-
-            Assert.DoesNotContain(visibleItemsAnonymous, i => i.Id == item.Id);
-            Assert.DoesNotContain(visibleItemsAuthor, i => i.Id == item.Id);
-            Assert.DoesNotContain(visibleItemsFollower, i => i.Id == item.Id);
-            Assert.DoesNotContain(visibleItemsStranger, i => i.Id == item.Id);
-            Assert.Contains(visibleItemsAdmin, i => i.Id == item.Id);
+            Assert.False(await db.Items.Where(i => i.Id == item.Id).WhereVisibleToUser(db, null, isAdmin: false).AnyAsync());
+            Assert.False(await db.Items.Where(i => i.Id == item.Id).WhereVisibleToUser(db, authorId, isAdmin: false).AnyAsync());
+            Assert.False(await db.Items.Where(i => i.Id == item.Id).WhereVisibleToUser(db, followerId, isAdmin: false).AnyAsync());
+            Assert.False(await db.Items.Where(i => i.Id == item.Id).WhereVisibleToUser(db, strangerId, isAdmin: false).AnyAsync());
+            Assert.True(await db.Items.Where(i => i.Id == item.Id).WhereVisibleToUser(db, adminId, isAdmin: true).AnyAsync());
 
             // 2. IsItemVisibleToUserAsync の検証
             Assert.False(await item.IsItemVisibleToUserAsync(db, null, isAdmin: false));

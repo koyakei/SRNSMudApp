@@ -58,8 +58,8 @@ public class TagCqsServiceTests : IAsyncLifetime
             var userId = $"u_{tid}";
             await dbContext.SeedUsersAsync(userId);
 
-            var tagB = new Tag { Name = $"B_Tag_{tid}", OwnerId = userId };
-            var tagA = new Tag { Name = $"A_Tag_{tid}", OwnerId = userId };
+            var tagB = new Tag { Name = $"!00_B_Tag_{tid}", OwnerId = userId };
+            var tagA = new Tag { Name = $"!00_A_Tag_{tid}", OwnerId = userId };
             dbContext.Tags.AddRange(tagB, tagA);
             await dbContext.SaveChangesAsync();
 

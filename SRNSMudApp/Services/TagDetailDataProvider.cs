@@ -92,6 +92,7 @@ public class TagDetailDataProvider(
         }
 
         List<Item> relatedItems = await context.Items
+            .AsSplitQuery()
             .Include(i => i.Owner)
             .Include(i => i.TargetUserGroup)
             .Include(i => i.TagRelations)
