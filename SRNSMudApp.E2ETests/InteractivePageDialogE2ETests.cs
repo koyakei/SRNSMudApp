@@ -40,20 +40,20 @@ public class InteractivePageDialogE2ETests : PageTest
         var createButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "グループを作成" });
         await Expect(createButton).ToBeVisibleAsync();
 
-        // InteractiveServer 回線確立直後のクリック取りこぼしを防ぐため、ダイアログ表示をリトライ確認
+        // InteractiveServer 回線確立直後のクリック取りこぼしを防ぐため、ダイアログ表示を短いタイムアウトでリトライ確認
         var dialogTitle = Page.GetByText("新規グループ作成").Last;
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < 8; attempt++)
         {
             await createButton.ClickAsync();
             try
             {
                 await Expect(Page.GetByLabel("グループ名"))
-                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 2000 });
+                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 500 });
                 break;
             }
-            catch when (attempt < 4)
+            catch when (attempt < 7)
             {
-                await Task.Delay(500);
+                await Task.Delay(100);
             }
         }
 
@@ -100,18 +100,18 @@ public class InteractivePageDialogE2ETests : PageTest
         var outboxTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "送信済み (Outbox)" });
         await Expect(outboxTab).ToBeVisibleAsync();
 
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < 8; attempt++)
         {
             await outboxTab.ClickAsync();
             try
             {
                 await Expect(Page.GetByText("現在、送信したコントラクトの提案はありません。"))
-                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 2000 });
+                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 500 });
                 break;
             }
-            catch when (attempt < 4)
+            catch when (attempt < 7)
             {
-                await Task.Delay(500);
+                await Task.Delay(100);
             }
         }
 
@@ -123,18 +123,18 @@ public class InteractivePageDialogE2ETests : PageTest
         await Expect(bountyCreateBtn).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 10000 });
 
         var submitBountyBtn = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "依頼を作成" });
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < 8; attempt++)
         {
             await bountyCreateBtn.ClickAsync();
             try
             {
                 await Expect(submitBountyBtn)
-                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 2000 });
+                    .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 500 });
                 break;
             }
-            catch when (attempt < 4)
+            catch when (attempt < 7)
             {
-                await Task.Delay(500);
+                await Task.Delay(100);
             }
         }
 

@@ -328,7 +328,11 @@ using (IServiceScope scope = app.Services.CreateScope())
             }
 
             // 公式システム分類タグツリーのシード（未投入の場合に自動投入）
-            _ = await SystemTagSeedService.SeedSystemTagsAsync(db, systemUser.Id, app.Logger);
+            // Testing 環境では起動高速化のため、明示的に有効化されていない限りスキップする
+            if (!app.Environment.IsEnvironment("Testing") || string.Equals(Environment.GetEnvironmentVariable("SEED_SYSTEM_TAGS"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = await SystemTagSeedService.SeedSystemTagsAsync(db, systemUser.Id, app.Logger);
+            }
         }
         finally
         {
