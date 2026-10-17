@@ -20,12 +20,21 @@ namespace SRNSMudApp.Services;
 /// </summary>
 public class ItemCardSplitCoordinator(
     IItemSplitService itemSplitService,
+    IItemQuoteService itemQuoteService,
+    IItemCardVoteCoordinator voteCoordinator,
+    IItemCardDataProvider itemCardDataProvider,
     IDialogLauncher dialogLauncher,
     ISnackbar snackbar,
     IJSRuntime js) : IItemCardSplitCoordinator
 {
     private readonly IItemSplitService _itemSplitService =
         itemSplitService ?? throw new ArgumentNullException(nameof(itemSplitService));
+    private readonly IItemQuoteService _itemQuoteService =
+        itemQuoteService ?? throw new ArgumentNullException(nameof(itemQuoteService));
+    private readonly IItemCardVoteCoordinator _voteCoordinator =
+        voteCoordinator ?? throw new ArgumentNullException(nameof(voteCoordinator));
+    private readonly IItemCardDataProvider _itemCardDataProvider =
+        itemCardDataProvider ?? throw new ArgumentNullException(nameof(itemCardDataProvider));
     private readonly IDialogLauncher _dialogLauncher =
         dialogLauncher ?? throw new ArgumentNullException(nameof(dialogLauncher));
     private readonly ISnackbar _snackbar =
@@ -266,6 +275,132 @@ public class ItemCardSplitCoordinator(
                 return false;
             default:
                 return false;
+        }
+    }
+
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層の操作失敗時に例外メッセージを Snackbar で安全に通知し、ロールバックを行うため")]
+    public async Task<ItemSplitWithReactionResult?> RequestSplitWithReactionAsync(
+        Item item,
+        string currentUserId,
+        string reactionTagName,
+        int targetWeight,
+        int? reactionTagId,
+        IReadOnlyList<Tag> allTags,
+        Func<Task>? ensureSystemTagsAsync,
+        string? selectedText = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            try
+            {
+                selectedText = await _js.InvokeAsync<string>("selectionHelper.getSelectedText");
+            }
+            catch (JSException)
+            {
+                return null;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            _ = _snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
+            return null;
+        }
+
+        string reqNormalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+        string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (item.Content == null || !reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
+        {
+            _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
+            return null;
+        }
+
+        // 1. 選択されたテキストを本文として引用アイテムを投稿
+        Item? quoteItem;
+        try
+        {
+            quoteItem = await _itemQuoteService.CreateQuoteItemAsync(item.Id, selectedText, currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _ = _snackbar.Add($"引用アイテムの作成に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        if (quoteItem is null)
+        {
+            _ = _snackbar.Add("引用アイテムの作成に失敗しました。", Severity.Error);
+            return null;
+        }
+
+        // 2. 引用アイテムに対してリアクションタグを投票
+        ItemVoteResult? voteResult;
+        try
+        {
+            voteResult = await _voteCoordinator.ToggleReactionAsync(
+                quoteItem.Id, currentUserId, reactionTagName, targetWeight, reactionTagId, allTags, ensureSystemTagsAsync);
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"リアクションの投票に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        if (voteResult is null)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add("リアクションの投票に失敗しました。", Severity.Error);
+            return null;
+        }
+
+        // 3. 分割リクエストを送信 (RequesterQuoteItemId = quoteItem.Id)
+        Result<ItemSplitRequest> splitResult;
+        try
+        {
+            splitResult = await _itemSplitService.RequestSplitAsync(
+                item.Id, selectedText, currentUserId, quoteItem.Id);
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"分割リクエストの送信に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        switch (splitResult)
+        {
+            case Success<ItemSplitRequest> success:
+                _ = _snackbar.Add("引用してリアクションを投票し、アイテム分割リクエストを送信しました。", Severity.Success);
+                try
+                {
+                    await _js.InvokeVoidAsync("selectionHelper.clearSelection");
+                }
+                catch (JSException)
+                {
+                }
+
+                return new ItemSplitWithReactionResult(success.Value, voteResult, quoteItem);
+
+            case Failure fail:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
+                return null;
+
+            default:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                return null;
         }
     }
 

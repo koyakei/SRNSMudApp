@@ -273,6 +273,10 @@ public class ItemSplitService(
             if (existing is not null)
             {
                 existing.Weight += tr.Weight;
+                if (existing.CommentItemId is null && tr.CommentItemId is not null)
+                {
+                    existing.CommentItemId = tr.CommentItemId;
+                }
                 existing.UpdatedDate = DateTime.UtcNow;
             }
             else
@@ -283,6 +287,7 @@ public class ItemSplitService(
                     Weight = tr.Weight,
                     OwnerId = tr.OwnerId,
                     ItemId = targetItem.Id,
+                    CommentItemId = tr.CommentItemId,
                     CreatedDate = tr.CreatedDate,
                     UpdatedDate = DateTime.UtcNow
                 };

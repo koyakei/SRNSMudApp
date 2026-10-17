@@ -1119,4 +1119,108 @@ public class ItemSplitServiceTests : IAsyncLifetime
             Assert.Equal(TradeStatus.Canceled, updatedReq.Status);
         }
     }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithReactionTagAndCommentOnQuoteItem_MigratesReactionTagAndCommentToNewItem()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item
+            {
+                OwnerId = ownerId,
+                Content = $"前半_[リアクション分割_{tid}]_後半"
+            };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 引用アイテムを作成
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"リアクション分割_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+            await dbContext.SaveChangesAsync();
+
+            // リアクションタグとコメント用アイテムを作成
+            var reactionTag = new Tag
+            {
+                Name = $"真_{tid}",
+                OwnerId = requesterId
+            };
+            dbContext.Tags.Add(reactionTag);
+
+            var commentItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"素晴らしい主張です_{tid}"
+            };
+            dbContext.Items.Add(commentItem);
+            await dbContext.SaveChangesAsync();
+
+            // 引用アイテムにリアクションタグ（コメント付き）を付与
+            var reactionRelation = new TagRelation
+            {
+                TagId = reactionTag.Id,
+                ItemId = quoteItem.Id,
+                Weight = 1,
+                OwnerId = requesterId,
+                CommentItemId = commentItem.Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            dbContext.TagRelations.Add(reactionRelation);
+
+            // 分割リクエスト（RequesterQuoteItemId に quoteItem.Id を指定）
+            var request = new ItemSplitRequest
+            {
+                OriginalItem = originalItem,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = $"リアクション分割_{tid}",
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId,
+                RequesterQuoteItemId = quoteItem.Id
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act: オーナーが分割リクエストを承認
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            if (result is not Success<Item> successResult)
+            {
+                Assert.Fail(result is Failure f ? f.ErrorMessage : "result is not Success");
+                return;
+            }
+            Item newItem = successResult.Value;
+
+            dbContext.ChangeTracker.Clear();
+
+            // 1. 引用アイテムが削除されていること
+            Item? deletedQuote = await dbContext.Items.FindAsync(quoteItem.Id);
+            Assert.Null(deletedQuote);
+
+            // 2. コメント用アイテムは残っていること
+            Item? remainingComment = await dbContext.Items.FindAsync(commentItem.Id);
+            Assert.NotNull(remainingComment);
+
+            // 3. リアクションタグ情報（Weight, CommentItemId）が新アイテムへ移行されていること
+            var migratedRelations = await dbContext.TagRelations
+                .Where(r => r.ItemId == newItem.Id)
+                .ToListAsync();
+
+            TagRelation migratedReaction = Assert.Single(migratedRelations);
+            Assert.Equal(reactionTag.Id, migratedReaction.TagId);
+            Assert.Equal(1, migratedReaction.Weight);
+            Assert.Equal(commentItem.Id, migratedReaction.CommentItemId);
+        }
+    }
 }

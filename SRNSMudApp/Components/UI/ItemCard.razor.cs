@@ -425,6 +425,42 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
+        // 他人がownerのアイテムで本文の一部が選択されている場合、引用投稿＋リアクション投票＋分割リクエストを実行する
+        if (!((IOwnable)Item).IsOwnedBy(CurrentUserId))
+        {
+            string? selectedText = null;
+            try
+            {
+                selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedText))
+            {
+                string reqNormalizedContent = (Item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+                string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+                if (Item.Content != null && reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
+                {
+                    Func<Task>? ensureAsyncForSplit = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
+                    ItemSplitWithReactionResult? splitResult = await SplitCoordinator.RequestSplitWithReactionAsync(
+                        Item, CurrentUserId, reactionTagName, targetWeight, reactionTagId, AllTags, ensureAsyncForSplit, selectedText);
+
+                    if (splitResult is not null)
+                    {
+                        await ReloadSplitRequestsAsync();
+                        await NotifyDataChangedAsync();
+
+                        // リアクションコメント入力ダイアログを表示
+                        await ShowReactionCommentDialogAsync(splitResult.VoteResult.RelationId, reactionTagName);
+                    }
+                    return;
+                }
+            }
+        }
+
         bool isCurrentlyUpvoted = IsItemReactionUpvoted(reactionTagName);
         bool isCurrentlyDownvoted = IsItemReactionDownvoted(reactionTagName);
         bool isNewAddition = !isCurrentlyUpvoted && !isCurrentlyDownvoted;
@@ -442,30 +478,35 @@ public partial class ItemCard : IAsyncDisposable
 
         if (isNewAddition && voteResult.Action == ItemVoteAction.Added)
         {
-            var parameters = new DialogParameters
+            await ShowReactionCommentDialogAsync(voteResult.RelationId, reactionTagName);
+        }
+    }
+
+    private async Task ShowReactionCommentDialogAsync(int relationId, string reactionTagName)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(ReactionCommentDialog.ReactionTagName)] = reactionTagName
+        };
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            Position = DialogPosition.BottomRight,
+            CloseButton = true,
+            BackgroundClass = "reaction-toast-dialog-overlay"
+        };
+        IDialogReference dialog = await DialogLauncher.ShowAsync<ReactionCommentDialog>("リアクションを追加", parameters, options);
+        DialogResult? result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is ReactionCommentDialogResult { Saved: true } dialogResult)
+        {
+            if (!string.IsNullOrWhiteSpace(dialogResult.Comment))
             {
-                [nameof(ReactionCommentDialog.ReactionTagName)] = reactionTagName
-            };
-            var options = new DialogOptions
-            {
-                CloseOnEscapeKey = true,
-                MaxWidth = MaxWidth.Small,
-                FullWidth = true,
-                Position = DialogPosition.BottomRight,
-                CloseButton = true,
-                BackgroundClass = "reaction-toast-dialog-overlay"
-            };
-            IDialogReference dialog = await DialogLauncher.ShowAsync<ReactionCommentDialog>("リアクションを追加", parameters, options);
-            DialogResult? result = await dialog.Result;
-            if (result is not null && !result.Canceled && result.Data is ReactionCommentDialogResult { Saved: true } dialogResult)
-            {
-                if (!string.IsNullOrWhiteSpace(dialogResult.Comment))
+                bool updated = await VoteCoordinator.UpdateReactionCommentAsync(relationId, CurrentUserId, dialogResult.Comment);
+                if (updated)
                 {
-                    bool updated = await VoteCoordinator.UpdateReactionCommentAsync(voteResult.RelationId, CurrentUserId, dialogResult.Comment);
-                    if (updated)
-                    {
-                        await NotifyDataChangedAsync();
-                    }
+                    await NotifyDataChangedAsync();
                 }
             }
         }

@@ -25,6 +25,9 @@ public class ItemCardSplitCoordinatorTests
     private const string RequesterId = "requester-user";
 
     private readonly Mock<IItemSplitService> _itemSplitServiceMock = new();
+    private readonly Mock<IItemQuoteService> _itemQuoteServiceMock = new();
+    private readonly Mock<IItemCardVoteCoordinator> _voteCoordinatorMock = new();
+    private readonly Mock<IItemCardDataProvider> _itemCardDataProviderMock = new();
     private readonly Mock<IDialogLauncher> _dialogLauncherMock = new();
     private readonly Mock<ISnackbar> _snackbarMock = new();
     private readonly Mock<IJSRuntime> _jsMock = new();
@@ -34,6 +37,9 @@ public class ItemCardSplitCoordinatorTests
     {
         _coordinator = new ItemCardSplitCoordinator(
             _itemSplitServiceMock.Object,
+            _itemQuoteServiceMock.Object,
+            _voteCoordinatorMock.Object,
+            _itemCardDataProviderMock.Object,
             _dialogLauncherMock.Object,
             _snackbarMock.Object,
             _jsMock.Object);
@@ -42,10 +48,13 @@ public class ItemCardSplitCoordinatorTests
     [Fact]
     public void Constructor_NullParameters_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(null!, _dialogLauncherMock.Object, _snackbarMock.Object, _jsMock.Object));
-        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, null!, _snackbarMock.Object, _jsMock.Object));
-        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _dialogLauncherMock.Object, null!, _jsMock.Object));
-        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _dialogLauncherMock.Object, _snackbarMock.Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(null!, _itemQuoteServiceMock.Object, _voteCoordinatorMock.Object, _itemCardDataProviderMock.Object, _dialogLauncherMock.Object, _snackbarMock.Object, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, null!, _voteCoordinatorMock.Object, _itemCardDataProviderMock.Object, _dialogLauncherMock.Object, _snackbarMock.Object, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _itemQuoteServiceMock.Object, null!, _itemCardDataProviderMock.Object, _dialogLauncherMock.Object, _snackbarMock.Object, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _itemQuoteServiceMock.Object, _voteCoordinatorMock.Object, null!, _dialogLauncherMock.Object, _snackbarMock.Object, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _itemQuoteServiceMock.Object, _voteCoordinatorMock.Object, _itemCardDataProviderMock.Object, null!, _snackbarMock.Object, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _itemQuoteServiceMock.Object, _voteCoordinatorMock.Object, _itemCardDataProviderMock.Object, _dialogLauncherMock.Object, null!, _jsMock.Object));
+        Assert.Throws<ArgumentNullException>(() => new ItemCardSplitCoordinator(_itemSplitServiceMock.Object, _itemQuoteServiceMock.Object, _voteCoordinatorMock.Object, _itemCardDataProviderMock.Object, _dialogLauncherMock.Object, _snackbarMock.Object, null!));
     }
 
     [Fact]
@@ -421,5 +430,155 @@ public class ItemCardSplitCoordinatorTests
 
         Assert.Null(result);
         _snackbarMock.Verify(s => s.Add("このテキストに対する分割リクエストは既に申請中です。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RequestSplitWithReactionAsync_WhenUserIdIsNullOrWhiteSpace_ReturnsNullAndShowsWarning(string? userId)
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, userId!, ReactionTagNames.Shinji, 1, null, [], null, "World");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("リクエストを送信するにはログインが必要です。", Severity.Warning, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenTextNotSelected_ReturnsNullAndShowsWarning()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult(""));
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, null);
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("分割するテキストが選択されていません。", Severity.Warning, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenSelectedTextNotInContent_ReturnsNullAndShowsError()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, "NotPresent");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenQuoteCreationFails_ReturnsNullAndShowsError()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _itemQuoteServiceMock
+            .Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync((Item?)null);
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, "World");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("引用アイテムの作成に失敗しました。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenReactionVoteFails_DeletesQuoteItemAndReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 10, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+
+        _ = _itemQuoteServiceMock
+            .Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+
+        _ = _voteCoordinatorMock
+            .Setup(v => v.ToggleReactionAsync(10, RequesterId, ReactionTagNames.Shinji, 1, null, It.IsAny<IReadOnlyList<Tag>>(), null))
+            .ReturnsAsync((ItemVoteResult?)null);
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, "World");
+
+        Assert.Null(result);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(10), Times.Once);
+        _snackbarMock.Verify(s => s.Add("リアクションの投票に失敗しました。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenSplitRequestFails_DeletesQuoteItemAndReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 10, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+        var voteResult = new ItemVoteResult(ItemVoteAction.Added, 100, 1);
+
+        _ = _itemQuoteServiceMock
+            .Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+
+        _ = _voteCoordinatorMock
+            .Setup(v => v.ToggleReactionAsync(10, RequesterId, ReactionTagNames.Shinji, 1, null, It.IsAny<IReadOnlyList<Tag>>(), null))
+            .ReturnsAsync(voteResult);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 10, default))
+            .ReturnsAsync(new Failure("既に分割リクエストが存在します。"));
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, "World");
+
+        Assert.Null(result);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(10), Times.Once);
+        _snackbarMock.Verify(s => s.Add("既に分割リクエストが存在します。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithReactionAsync_WhenSuccessful_CreatesQuote_VotesReaction_CreatesSplitRequest_ClearsSelection_AndReturnsResult()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 10, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+        var voteResult = new ItemVoteResult(ItemVoteAction.Added, 100, 1);
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 50,
+            TargetItemId = 1,
+            SelectedText = "World",
+            RequesterUserId = RequesterId,
+            RequesterQuoteItemId = 10
+        };
+
+        _ = _itemQuoteServiceMock
+            .Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+
+        _ = _voteCoordinatorMock
+            .Setup(v => v.ToggleReactionAsync(10, RequesterId, ReactionTagNames.Shinji, 1, null, It.IsAny<IReadOnlyList<Tag>>(), null))
+            .ReturnsAsync(voteResult);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 10, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<object>("selectionHelper.clearSelection", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult<object>(null!));
+
+        var result = await _coordinator.RequestSplitWithReactionAsync(
+            item, RequesterId, ReactionTagNames.Shinji, 1, null, [], null, "World");
+
+        Assert.NotNull(result);
+        Assert.Same(splitRequest, result.SplitRequest);
+        Assert.Same(voteResult, result.VoteResult);
+        Assert.Same(quoteItem, result.QuoteItem);
+
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(It.IsAny<int>()), Times.Never);
+        _snackbarMock.Verify(s => s.Add("引用してリアクションを投票し、アイテム分割リクエストを送信しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+        _jsMock.Verify(j => j.InvokeAsync<object>("selectionHelper.clearSelection", It.IsAny<object[]>()), Times.Once);
     }
 }
