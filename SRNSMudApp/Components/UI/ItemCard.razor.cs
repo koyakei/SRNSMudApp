@@ -426,39 +426,21 @@ public partial class ItemCard : IAsyncDisposable
         }
 
         // 他人がownerのアイテムで本文の一部が選択されている場合、引用投稿＋リアクション投票＋分割リクエストを実行する
-        if (!((IOwnable)Item).IsOwnedBy(CurrentUserId))
+        if (await SplitCoordinator.GetValidSelectedTextForSplitAsync(Item, CurrentUserId) is { } selectedText)
         {
-            string? selectedText = null;
-            try
-            {
-                selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
-            }
-            catch (JSException)
-            {
-                // ignored
-            }
+            Func<Task>? ensureAsyncForSplit = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
+            ItemSplitWithReactionResult? splitResult = await SplitCoordinator.RequestSplitWithReactionAsync(
+                Item, CurrentUserId, reactionTagName, targetWeight, reactionTagId, AllTags, ensureAsyncForSplit, selectedText);
 
-            if (!string.IsNullOrWhiteSpace(selectedText))
+            if (splitResult is not null)
             {
-                string reqNormalizedContent = (Item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-                string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-                if (Item.Content != null && reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
-                {
-                    Func<Task>? ensureAsyncForSplit = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
-                    ItemSplitWithReactionResult? splitResult = await SplitCoordinator.RequestSplitWithReactionAsync(
-                        Item, CurrentUserId, reactionTagName, targetWeight, reactionTagId, AllTags, ensureAsyncForSplit, selectedText);
+                await ReloadSplitRequestsAsync();
+                await NotifyDataChangedAsync();
 
-                    if (splitResult is not null)
-                    {
-                        await ReloadSplitRequestsAsync();
-                        await NotifyDataChangedAsync();
-
-                        // リアクションコメント入力ダイアログを表示
-                        await ShowReactionCommentDialogAsync(splitResult.VoteResult.RelationId, reactionTagName);
-                    }
-                    return;
-                }
+                // リアクションコメント入力ダイアログを表示
+                await ShowReactionCommentDialogAsync(splitResult.VoteResult.RelationId, reactionTagName);
             }
+            return;
         }
 
         bool isCurrentlyUpvoted = IsItemReactionUpvoted(reactionTagName);
@@ -522,33 +504,15 @@ public partial class ItemCard : IAsyncDisposable
         }
 
         // 他人がownerのアイテムで本文の一部が選択されている場合、分割リクエスト兼引用投稿フローを実行する
-        if (!((IOwnable)Item).IsOwnedBy(CurrentUserId))
+        if (await SplitCoordinator.GetValidSelectedTextForSplitAsync(Item, CurrentUserId) is not null)
         {
-            string? selectedText = null;
-            try
+            ItemSplitRequest? request = await SplitCoordinator.RequestSplitSelectionAsync(Item, CurrentUserId);
+            if (request is not null)
             {
-                selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
+                await ReloadSplitRequestsAsync();
+                await NotifyDataChangedAsync();
             }
-            catch (JSException)
-            {
-                // ignored
-            }
-
-            if (!string.IsNullOrWhiteSpace(selectedText))
-            {
-                string reqNormalizedContent = (Item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-                string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-                if (Item.Content != null && reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
-                {
-                    ItemSplitRequest? request = await SplitCoordinator.RequestSplitSelectionAsync(Item, CurrentUserId);
-                    if (request is not null)
-                    {
-                        await ReloadSplitRequestsAsync();
-                        await NotifyDataChangedAsync();
-                    }
-                    return;
-                }
-            }
+            return;
         }
 
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };

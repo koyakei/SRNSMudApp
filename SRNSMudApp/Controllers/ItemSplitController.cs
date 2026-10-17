@@ -231,6 +231,8 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
         OwnerUserId: entity.OwnerUserId,
         Status: entity.Status.ToString(),
         RejectReason: entity.RejectReason,
-        CreatedDate: entity.CreatedDate
+        CreatedDate: entity.CreatedDate,
+        RequesterQuoteItemId: entity.RequesterQuoteItemId,
+        CreatedItemId: entity.CreatedItemId
     );
 }

@@ -72,6 +72,15 @@ public interface IItemCardSplitCoordinator
         IReadOnlyList<Tag> allTags,
         Func<Task>? ensureSystemTagsAsync,
         string? selectedText = null);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されているかを検証し、分割対象として有効なテキストを取得する。
+    ///     未ログイン、自身所有アイテム、テキスト未選択、またはアイテム本文に含まれていない場合は null を返す。
+    /// </summary>
+    /// <param name="item">検証対象のアイテム。</param>
+    /// <param name="currentUserId">現在ログイン中のユーザー ID。</param>
+    /// <returns>有効な選択テキスト。無効または対象外の場合は null。</returns>
+    Task<string?> GetValidSelectedTextForSplitAsync(Item item, string? currentUserId);
 }
 
 /// <summary>

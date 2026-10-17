@@ -483,7 +483,9 @@ public sealed record ItemSplitRequestDto(
     string OwnerUserId,
     string Status,
     string? RejectReason,
-    DateTimeOffset CreatedDate
+    DateTimeOffset CreatedDate,
+    int? RequesterQuoteItemId = null,
+    int? CreatedItemId = null
 );
 
 /// <summary>

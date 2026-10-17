@@ -55,12 +55,8 @@ public class ItemCardSplitCoordinator(
             return false;
         }
 
-        string selectedText;
-        try
-        {
-            selectedText = await _js.InvokeAsync<string>("selectionHelper.getSelectedText");
-        }
-        catch (JSException)
+        string? selectedText = await GetSelectedTextAsync();
+        if (selectedText is null)
         {
             return false;
         }
@@ -71,10 +67,7 @@ public class ItemCardSplitCoordinator(
             return false;
         }
 
-        string normalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-        string normalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        if (item.Content == null || !normalizedContent.Contains(normalizedSelected, StringComparison.Ordinal))
+        if (!ContainsSelectedText(item.Content, selectedText))
         {
             _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
             return false;
@@ -88,14 +81,7 @@ public class ItemCardSplitCoordinator(
                 case Success<Item> success:
                     item.Content = ReplaceSelectedTextWithLink(item.Content, selectedText, success.Value.Id);
                     _ = _snackbar.Add("アイテムを分割しました。", Severity.Success);
-                    try
-                    {
-                        await _js.InvokeVoidAsync("selectionHelper.clearSelection");
-                    }
-                    catch (JSException)
-                    {
-                    }
-
+                    await ClearSelectionAsync();
                     return true;
                 case Failure fail:
                     _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
@@ -122,12 +108,8 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
-        string selectedText;
-        try
-        {
-            selectedText = await _js.InvokeAsync<string>("selectionHelper.getSelectedText");
-        }
-        catch (JSException)
+        string? selectedText = await GetSelectedTextAsync();
+        if (selectedText is null)
         {
             return null;
         }
@@ -138,10 +120,7 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
-        string reqNormalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-        string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        if (item.Content == null || !reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
+        if (!ContainsSelectedText(item.Content, selectedText))
         {
             _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
             return null;
@@ -170,14 +149,7 @@ public class ItemCardSplitCoordinator(
             {
                 case Success<ItemSplitRequest> success:
                     _ = _snackbar.Add("アイテム分割リクエストを送信しました。", Severity.Success);
-                    try
-                    {
-                        await _js.InvokeVoidAsync("selectionHelper.clearSelection");
-                    }
-                    catch (JSException)
-                    {
-                    }
-
+                    await ClearSelectionAsync();
                     return success.Value;
                 case Failure fail:
                     _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
@@ -301,11 +273,8 @@ public class ItemCardSplitCoordinator(
 
         if (string.IsNullOrWhiteSpace(selectedText))
         {
-            try
-            {
-                selectedText = await _js.InvokeAsync<string>("selectionHelper.getSelectedText");
-            }
-            catch (JSException)
+            selectedText = await GetSelectedTextAsync();
+            if (selectedText is null)
             {
                 return null;
             }
@@ -317,10 +286,7 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
-        string reqNormalizedContent = (item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-        string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        if (item.Content == null || !reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
+        if (!ContainsSelectedText(item.Content, selectedText))
         {
             _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
             return null;
@@ -383,13 +349,7 @@ public class ItemCardSplitCoordinator(
         {
             case Success<ItemSplitRequest> success:
                 _ = _snackbar.Add("引用してリアクションを投票し、アイテム分割リクエストを送信しました。", Severity.Success);
-                try
-                {
-                    await _js.InvokeVoidAsync("selectionHelper.clearSelection");
-                }
-                catch (JSException)
-                {
-                }
+                await ClearSelectionAsync();
 
                 return new ItemSplitWithReactionResult(success.Value, voteResult, quoteItem);
 
@@ -404,25 +364,80 @@ public class ItemCardSplitCoordinator(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<string?> GetValidSelectedTextForSplitAsync(Item item, string? currentUserId)
+    {
+        if (item is null || string.IsNullOrWhiteSpace(currentUserId))
+        {
+            return null;
+        }
+
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            return null;
+        }
+
+        string? selectedText = await GetSelectedTextAsync();
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            return null;
+        }
+
+        return ContainsSelectedText(item.Content, selectedText) ? selectedText : null;
+    }
+
+    private async Task<string?> GetSelectedTextAsync()
+    {
+        try
+        {
+            return await _js.InvokeAsync<string>("selectionHelper.getSelectedText");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+    }
+
+    private async Task ClearSelectionAsync()
+    {
+        try
+        {
+            await _js.InvokeVoidAsync("selectionHelper.clearSelection");
+        }
+        catch (JSException)
+        {
+            // ignored
+        }
+    }
+
+    private static bool ContainsSelectedText(string? content, string selectedText)
+    {
+        if (content is null)
+        {
+            return false;
+        }
+
+        string normalizedContent = content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        string normalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        return normalizedContent.Contains(normalizedSelected, StringComparison.Ordinal);
+    }
+
     private static string ReplaceSelectedTextWithLink(string content, string selectedText, int createdItemId)
     {
         string linkUrl = $"/ItemDetail/{createdItemId}";
-        int index = content.IndexOf(selectedText, StringComparison.Ordinal);
-        int lengthToReplace = selectedText.Length;
+        string crlf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+        string lf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        if (index < 0)
+        ReadOnlySpan<string> candidates = [selectedText, crlf, lf];
+        foreach (string candidate in candidates)
         {
-            string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-            int crlfIndex = content.IndexOf(crlfSelected, StringComparison.Ordinal);
-            if (crlfIndex >= 0)
+            int index = content.IndexOf(candidate, StringComparison.Ordinal);
+            if (index >= 0)
             {
-                index = crlfIndex;
-                lengthToReplace = crlfSelected.Length;
+                return content.Remove(index, candidate.Length).Insert(index, linkUrl);
             }
         }
 
-        return index >= 0
-            ? content.Remove(index, lengthToReplace).Insert(index, linkUrl)
-            : content;
+        return content;
     }
 }

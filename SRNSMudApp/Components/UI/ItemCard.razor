@@ -105,7 +105,14 @@
                                             <b>@(req.RequesterUser?.UserName ?? "ユーザー")</b> さんからの分割リクエスト:
                                             <span class="font-italic ml-1">「@(req.SelectedText.Length > 20 ?
                                                                                                                                                                                                                         $"{req.SelectedText[..20]}..." : req.SelectedText)」</span>
-                                            </MudText>
+                                            @if (req.RequesterQuoteItemId.HasValue)
+                                            {
+                                                <MudLink Href="@($"/ItemDetail/{req.RequesterQuoteItemId.Value}")" Typo="Typo.caption" Color="Color.Info" Class="ml-2"
+                                                         data-testid="@($"quote-item-link-{req.Id}")">
+                                                    (引用投稿: #@req.RequesterQuoteItemId.Value)
+                                                </MudLink>
+                                            }
+                                        </MudText>
                                         </div>
                                         <div class="d-flex align-center">
                                             @if (((IOwnable)Item).IsOwnedBy(CurrentUserId))

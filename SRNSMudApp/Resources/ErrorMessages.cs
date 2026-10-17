@@ -79,4 +79,61 @@ public static class ErrorMessages
 
     public static string FormatInsufficientPermissionBalance(object needed, object current) =>
         string.Format(CultureInfo.CurrentCulture, InsufficientPermissionBalance, needed, current);
+
+    public static string SplitTextRequired =>
+        GetString(nameof(SplitTextRequired));
+
+    public static string SplitRequesterRequired =>
+        GetString(nameof(SplitRequesterRequired));
+
+    public static string SplitItemNotFound =>
+        GetString(nameof(SplitItemNotFound));
+
+    public static string SplitSelfItemNotAllowed =>
+        GetString(nameof(SplitSelfItemNotAllowed));
+
+    public static string SplitSelectedTextNotInContent =>
+        GetString(nameof(SplitSelectedTextNotInContent));
+
+    public static string SplitQuoteItemNotFound =>
+        GetString(nameof(SplitQuoteItemNotFound));
+
+    public static string SplitDuplicateRequestExists =>
+        GetString(nameof(SplitDuplicateRequestExists));
+
+    public static string SplitTargetItemRequired =>
+        GetString(nameof(SplitTargetItemRequired));
+
+    public static string OwnerUserRequired =>
+        GetString(nameof(OwnerUserRequired));
+
+    public static string NotAuthorizedToSplit =>
+        GetString(nameof(NotAuthorizedToSplit));
+
+    public static string SplitRequestNotProposedForApprove =>
+        GetString(nameof(SplitRequestNotProposedForApprove));
+
+    public static string FormatSplitRequestNotProposedForApprove(object status) =>
+        string.Format(CultureInfo.CurrentCulture, SplitRequestNotProposedForApprove, status);
+
+    public static string SplitOriginalItemNotFound =>
+        GetString(nameof(SplitOriginalItemNotFound));
+
+    public static string SplitOriginalItemContentChanged =>
+        GetString(nameof(SplitOriginalItemContentChanged));
+
+    public static string SplitRequestNotProposedForReject =>
+        GetString(nameof(SplitRequestNotProposedForReject));
+
+    public static string FormatSplitRequestNotProposedForReject(object status) =>
+        string.Format(CultureInfo.CurrentCulture, SplitRequestNotProposedForReject, status);
+
+    public static string NotAuthorizedToCancel =>
+        GetString(nameof(NotAuthorizedToCancel));
+
+    public static string SplitRequestNotProposedForCancel =>
+        GetString(nameof(SplitRequestNotProposedForCancel));
+
+    public static string FormatSplitRequestNotProposedForCancel(object status) =>
+        string.Format(CultureInfo.CurrentCulture, SplitRequestNotProposedForCancel, status);
 }

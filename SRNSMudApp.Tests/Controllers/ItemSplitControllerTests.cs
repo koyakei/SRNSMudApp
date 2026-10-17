@@ -188,6 +188,7 @@ public class ItemSplitControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<ItemSplitRequestDto>(okResult.Value);
         Assert.Equal(51, dto.Id);
+        Assert.Equal(88, dto.RequesterQuoteItemId);
         _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "分割テキスト", "u2", 88, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -289,5 +290,189 @@ public class ItemSplitControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.True((bool)okResult.Value!);
+    }
+
+    [Fact]
+    public async Task RequestSplit_WhenSelectedTextIsEmpty_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        // Act
+        var result = await controller.RequestSplit(new RequestItemSplitRequest(10, "   "), CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("分割対象のテキストを指定してください。", badRequestResult.Value);
+    }
+
+    [Fact]
+    public async Task ApproveSplit_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(null);
+
+        // Act
+        var result = await controller.ApproveSplit(50, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ApproveSplit_WhenFailure_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        _itemSplitServiceMock
+            .Setup(s => s.ApproveSplitAsync(50, "u1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Failure("このリクエストを承認する権限がありません。"));
+
+        // Act
+        var result = await controller.ApproveSplit(50, CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("このリクエストを承認する権限がありません。", badRequestResult.Value);
+    }
+
+    [Fact]
+    public async Task RejectSplit_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(null);
+
+        // Act
+        var result = await controller.RejectSplit(50, null, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task RejectSplit_WhenFailure_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        _itemSplitServiceMock
+            .Setup(s => s.RejectSplitAsync(50, "u1", "理由", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Failure("申請中ではないリクエストは却下できません。"));
+
+        // Act
+        var result = await controller.RejectSplit(50, new RejectSplitRequest("理由"), CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("申請中ではないリクエストは却下できません。", badRequestResult.Value);
+    }
+
+    [Fact]
+    public async Task CancelSplit_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        // Arrange
+        var controller = CreateController(null);
+
+        // Act
+        var result = await controller.CancelSplit(50, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task CancelSplit_WhenFailure_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u2")], "test"));
+        var controller = CreateController(user);
+
+        _itemSplitServiceMock
+            .Setup(s => s.CancelSplitAsync(50, "u2", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Failure("このリクエストを取り下げる権限がありません。"));
+
+        // Act
+        var result = await controller.CancelSplit(50, CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("このリクエストを取り下げる権限がありません。", badRequestResult.Value);
+    }
+
+    [Fact]
+    public void Constructor_WhenServiceNull_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new ItemSplitController(null!));
+    }
+
+    [Fact]
+    public async Task DirectSplit_WhenRequestNull_ThrowsArgumentNullException()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => controller.DirectSplit(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RequestSplit_WhenRequestNull_ThrowsArgumentNullException()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => controller.RequestSplit(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RejectSplit_WhenRequestNull_PassesNullReasonAndReturnsOkTrue()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        _itemSplitServiceMock
+            .Setup(s => s.RejectSplitAsync(50, "u1", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<bool>(true));
+
+        var result = await controller.RejectSplit(50, null, CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True((bool)okResult.Value!);
+    }
+
+    [Fact]
+    public async Task RejectSplit_WhenReasonHasWhitespace_TrimsReason()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        _itemSplitServiceMock
+            .Setup(s => s.RejectSplitAsync(50, "u1", "トリム理由", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<bool>(true));
+
+        var result = await controller.RejectSplit(50, new RejectSplitRequest("  トリム理由  "), CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True((bool)okResult.Value!);
+        _itemSplitServiceMock.Verify(s => s.RejectSplitAsync(50, "u1", "トリム理由", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetPendingSplitRequests_WhenEmpty_ReturnsOkEmptyList()
+    {
+        var controller = CreateController();
+
+        _itemSplitServiceMock
+            .Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(999, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var result = await controller.GetPendingSplitRequests(999, CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IReadOnlyList<ItemSplitRequestDto>>(okResult.Value);
+        Assert.Empty(list);
     }
 }

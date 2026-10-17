@@ -56,20 +56,35 @@ public interface IItemSplitService
     /// <summary>
     ///     アイテム所有者が分割リクエストを却下する。
     /// </summary>
+    /// <param name="splitRequestId">却下対象の分割リクエスト ID。</param>
+    /// <param name="ownerUserId">分割元アイテムの所有者ユーザー ID。</param>
+    /// <param name="rejectReason">却下理由（任意）。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>処理結果の成否、または失敗理由。</returns>
     Task<Result<bool>> RejectSplitAsync(int splitRequestId, string ownerUserId, string? rejectReason, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     リクエスト送信者が申請中の分割リクエストを取り下げる。
     /// </summary>
+    /// <param name="splitRequestId">取り下げる分割リクエスト ID。</param>
+    /// <param name="requesterUserId">リクエスト申請者のユーザー ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>処理結果の成否、または失敗理由。</returns>
     Task<Result<bool>> CancelSplitAsync(int splitRequestId, string requesterUserId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     指定されたアイテムに対する保留中（Proposed）の分割リクエスト一覧を取得する。
     /// </summary>
+    /// <param name="itemId">分割元アイテムの ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>保留中の分割リクエスト一覧。</returns>
     Task<IReadOnlyList<ItemSplitRequest>> GetPendingSplitRequestsForOriginalItemAsync(int itemId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     指定された分割リクエストを関連エンティティ込みで取得する。
     /// </summary>
+    /// <param name="splitRequestId">取得対象の分割リクエスト ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>取得された分割リクエスト。存在しない場合は null。</returns>
     Task<ItemSplitRequest?> GetSplitRequestByIdAsync(int splitRequestId, CancellationToken cancellationToken = default);
 }

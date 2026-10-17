@@ -224,6 +224,15 @@
                                 <MudAlert Severity="Severity.Normal" Dense="true" Class="my-1">
                                     @splitReq.SelectedText
                                 </MudAlert>
+                                @if (splitReq.RequesterQuoteItemId.HasValue)
+                                {
+                                    <div class="d-flex align-center gap-1">
+                                        <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Color="Color.Info" />
+                                        <MudLink Href="@($"/Item/WasmDetail/{splitReq.RequesterQuoteItemId.Value}")" Typo="Typo.caption" Color="Color.Info">
+                                            連動引用投稿 (#@splitReq.RequesterQuoteItemId.Value)
+                                        </MudLink>
+                                    </div>
+                                }
                             </MudPaper>
                         }
                     </div>
