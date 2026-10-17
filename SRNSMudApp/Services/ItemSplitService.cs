@@ -24,6 +24,7 @@ public class ItemSplitService(
         int originalItemId,
         string selectedText,
         string requesterUserId,
+        int? requesterQuoteItemId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(selectedText))
@@ -60,6 +61,18 @@ public class ItemSplitService(
             return Result.Fail<ItemSplitRequest>("選択されたテキストが元アイテムの本文に含まれていません。");
         }
 
+        // requesterQuoteItemId が指定された場合、その引用アイテムが requesterUserId 所有のものかを確認する
+        if (requesterQuoteItemId.HasValue)
+        {
+            bool quoteItemValid = await context.Items.AnyAsync(
+                i => i.Id == requesterQuoteItemId.Value && i.OwnerId == requesterUserId,
+                cancellationToken);
+            if (!quoteItemValid)
+            {
+                return Result.Fail<ItemSplitRequest>("指定された引用アイテムが見つかりません。");
+            }
+        }
+
         // 同一アイテム・同一テキスト・同一送信者による重複リクエスト（申請中）を防止
         bool duplicateExists = await context.ItemSplitRequests
             .AnyAsync(r => r.OriginalItemId == originalItemId &&
@@ -72,7 +85,7 @@ public class ItemSplitService(
             return Result.Fail<ItemSplitRequest>("このテキストに対する分割リクエストは既に申請中です。");
         }
 
-        var request = new ItemSplitRequest
+        ItemSplitRequest request = new()
         {
             OriginalItemId = originalItemId,
             RequesterUserId = requesterUserId,
@@ -80,6 +93,7 @@ public class ItemSplitService(
             SelectedText = selectedText,
             Status = TradeStatus.Proposed,
             OwnerId = requesterUserId, // BaseEntity.OwnerId は作成者 (Requester)
+            RequesterQuoteItemId = requesterQuoteItemId,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };
@@ -139,29 +153,7 @@ public class ItemSplitService(
             return Result.Fail<Item>("このアイテムを分割する権限がありません。");
         }
 
-        int index = originalItem.Content.IndexOf(selectedText, StringComparison.Ordinal);
-        string textToReplace = selectedText;
-        if (index < 0)
-        {
-            string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-            int crlfIndex = originalItem.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
-            if (crlfIndex >= 0)
-            {
-                index = crlfIndex;
-                textToReplace = crlfSelected;
-            }
-            else
-            {
-                string lfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-                int lfIndex = originalItem.Content.IndexOf(lfSelected, StringComparison.Ordinal);
-                if (lfIndex >= 0)
-                {
-                    index = lfIndex;
-                    textToReplace = lfSelected;
-                }
-            }
-        }
-
+        (int index, string textToReplace) = FindSelectedText(originalItem.Content, selectedText);
         if (index < 0)
         {
             return Result.Fail<Item>("選択されたテキストが元アイテムの本文に含まれていません。");
@@ -209,29 +201,7 @@ public class ItemSplitService(
             return Result.Fail<Item>("分割対象の元アイテムが見つかりません。");
         }
 
-        int index = originalItem.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
-        string requestTextToReplace = request.SelectedText;
-        if (index < 0)
-        {
-            string crlfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-            int crlfIndex = originalItem.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
-            if (crlfIndex >= 0)
-            {
-                index = crlfIndex;
-                requestTextToReplace = crlfSelected;
-            }
-            else
-            {
-                string lfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-                int lfIndex = originalItem.Content.IndexOf(lfSelected, StringComparison.Ordinal);
-                if (lfIndex >= 0)
-                {
-                    index = lfIndex;
-                    requestTextToReplace = lfSelected;
-                }
-            }
-        }
-
+        (int index, string requestTextToReplace) = FindSelectedText(originalItem.Content, request.SelectedText);
         if (index < 0)
         {
             return Result.Fail<Item>("元アイテムの本文が更新されたため、指定されたテキストが見つかりません。");
@@ -242,10 +212,19 @@ public class ItemSplitService(
         // 元アイテム本文の該当テキストを /ItemDetail/{newItem.Id} リンクに置換
         originalItem.UpdatedDate = DateTime.UtcNow;
 
-        // 3. リクエスト状態更新
+        // リクエスト状態更新
         request.Status = TradeStatus.Executed;
         request.CreatedItemId = newItem.Id;
         request.UpdatedDate = DateTime.UtcNow;
+
+        // 引用アイテムの移行: リクエスト者が同時に投稿した引用Itemがあれば、
+        // そのタグ・被引用情報を新しく作成されたアイテムへ引き継ぎ、引用Item自体を削除する
+        if (request.RequesterQuoteItemId.HasValue)
+        {
+            var quoteItemId = request.RequesterQuoteItemId.Value;
+            request.RequesterQuoteItemId = null;
+            await MigrateRequesterQuoteItemAsync(context, quoteItemId, newItem, cancellationToken);
+        }
 
         _ = await context.SaveChangesAsync(cancellationToken);
 
@@ -261,6 +240,107 @@ public class ItemSplitService(
         return Result.Ok(newItem);
     }
 
+    /// <summary>
+    ///     分割リクエスト申請者が同時に投稿した引用アイテムを、
+    ///     承認によって新しく作成されたアイテムへ移行する。
+    ///     引用アイテムに付いていた TagRelation（タグ）および被引用（QuotedByItems）を新アイテムへ付け替え、
+    ///     引用アイテム自体を削除する。
+    /// </summary>
+    private static async Task MigrateRequesterQuoteItemAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        Item targetItem,
+        CancellationToken cancellationToken)
+    {
+        Item? quoteItem = await context.Items
+            .Include(i => i.TagRelations)
+            .FirstOrDefaultAsync(i => i.Id == quoteItemId, cancellationToken);
+
+        if (quoteItem is null)
+        {
+            return;
+        }
+
+        // 1. TagRelation（タグ付け情報）を新アイテムへ付け替える
+        //    新アイテムに同一タグが既にある場合は Weight を加算、なければ新規作成
+        var existingRelationsOnTarget = await context.TagRelations
+            .Where(x => x.ItemId == targetItem.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (TagRelation tr in quoteItem.TagRelations.ToList())
+        {
+            TagRelation? existing = existingRelationsOnTarget.FirstOrDefault(x => x.TagId == tr.TagId);
+            if (existing is not null)
+            {
+                existing.Weight += tr.Weight;
+                existing.UpdatedDate = DateTime.UtcNow;
+            }
+            else
+            {
+                TagRelation newRelation = new()
+                {
+                    TagId = tr.TagId,
+                    Weight = tr.Weight,
+                    OwnerId = tr.OwnerId,
+                    ItemId = targetItem.Id,
+                    CreatedDate = tr.CreatedDate,
+                    UpdatedDate = DateTime.UtcNow
+                };
+                _ = context.TagRelations.Add(newRelation);
+                existingRelationsOnTarget.Add(newRelation);
+            }
+        }
+
+        // 2. 引用アイテムを引用していたItem（被引用）の QuotedItemId を新アイテムへ付け替える
+        List<Item> quotedByItems = await context.Items
+            .Where(i => i.QuotedItemId == quoteItemId)
+            .ToListAsync(cancellationToken);
+
+        foreach (Item quotingItem in quotedByItems)
+        {
+            quotingItem.QuotedItemId = targetItem.Id;
+            quotingItem.UpdatedDate = DateTime.UtcNow;
+        }
+
+        // 3. 引用アイテムに対するリプライがあれば新アイテムへ付け替える
+        List<Item> replyItems = await context.Items
+            .Where(i => i.ParentItemId == quoteItemId)
+            .ToListAsync(cancellationToken);
+
+        foreach (Item replyItem in replyItems)
+        {
+            replyItem.ParentItemId = targetItem.Id;
+            if (replyItem.RootItemId == quoteItemId)
+            {
+                replyItem.RootItemId = targetItem.RootItemId ?? targetItem.Id;
+            }
+            replyItem.UpdatedDate = DateTime.UtcNow;
+        }
+
+        // 4. 引用アイテム自体を削除する（引用アイテムの TagRelations は Cascade で削除）
+        _ = context.Items.Remove(quoteItem);
+    }
+
+    private static (int Index, string TextToReplace) FindSelectedText(string content, string selectedText)
+    {
+        int index = content.IndexOf(selectedText, StringComparison.Ordinal);
+        if (index >= 0)
+        {
+            return (index, selectedText);
+        }
+
+        string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+        int crlfIndex = content.IndexOf(crlfSelected, StringComparison.Ordinal);
+        if (crlfIndex >= 0)
+        {
+            return (crlfIndex, crlfSelected);
+        }
+
+        string lfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        int lfIndex = content.IndexOf(lfSelected, StringComparison.Ordinal);
+        return lfIndex >= 0 ? (lfIndex, lfSelected) : (-1, selectedText);
+    }
+
     private static async Task<Item> CreateSplitItemAsync(
         ApplicationDbContext context,
         Item originalItem,
@@ -270,7 +350,7 @@ public class ItemSplitService(
     {
         // 所有者・公開範囲・引用元の扱いを直接分割と承認分割で統一する。
         string originalContent = originalItem.Content;
-        var newItem = new Item
+        Item newItem = new()
         {
             Content = selectedText,
             OwnerId = originalItem.OwnerId,

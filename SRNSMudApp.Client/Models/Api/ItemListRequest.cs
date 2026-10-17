@@ -234,6 +234,9 @@ public sealed record ImportTagCsvRequest(
     bool AsSystem = false
 );
 
+/// <summary>
+/// タグ付け JSON インポート API のリクエスト DTO。
+/// </summary>
 public sealed record ImportTaggingJsonRequest(string JsonText);
 
 /// <summary>
@@ -264,7 +267,7 @@ public sealed record DirectSplitItemRequest(int OriginalItemId, string SelectedT
 /// <summary>
 /// アイテム分割リクエスト申請 API のリクエスト DTO。
 /// </summary>
-public sealed record RequestItemSplitRequest(int OriginalItemId, string SelectedText);
+public sealed record RequestItemSplitRequest(int OriginalItemId, string SelectedText, int? RequesterQuoteItemId = null);
 
 /// <summary>
 /// アイテム分割リクエスト却下 API のリクエスト DTO。

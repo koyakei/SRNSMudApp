@@ -89,6 +89,7 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
             request.OriginalItemId,
             request.SelectedText.Trim(),
             currentUserId,
+            request.RequesterQuoteItemId,
             cancellationToken);
 
         // switch 式による Result<ItemSplitRequest> のハンドリング

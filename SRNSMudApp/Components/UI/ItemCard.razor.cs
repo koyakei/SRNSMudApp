@@ -480,6 +480,36 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
+        // 他人がownerのアイテムで本文の一部が選択されている場合、分割リクエスト兼引用投稿フローを実行する
+        if (!((IOwnable)Item).IsOwnedBy(CurrentUserId))
+        {
+            string? selectedText = null;
+            try
+            {
+                selectedText = await JS.InvokeAsync<string>("selectionHelper.getSelectedText");
+            }
+            catch (JSException)
+            {
+                // ignored
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedText))
+            {
+                string reqNormalizedContent = (Item.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+                string reqNormalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+                if (Item.Content != null && reqNormalizedContent.Contains(reqNormalizedSelected, StringComparison.Ordinal))
+                {
+                    ItemSplitRequest? request = await SplitCoordinator.RequestSplitSelectionAsync(Item, CurrentUserId);
+                    if (request is not null)
+                    {
+                        await ReloadSplitRequestsAsync();
+                        await NotifyDataChangedAsync();
+                    }
+                    return;
+                }
+            }
+        }
+
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var parameters = new DialogParameters
         {

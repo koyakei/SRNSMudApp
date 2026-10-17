@@ -77,25 +77,7 @@ public class ItemCardSplitCoordinator(
             switch (splitResult)
             {
                 case Success<Item> success:
-                    var linkUrl = $"/ItemDetail/{success.Value.Id}";
-                    int index = item.Content.IndexOf(selectedText, StringComparison.Ordinal);
-                    int lengthToReplace = selectedText.Length;
-                    if (index < 0)
-                    {
-                        string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-                        int crlfIndex = item.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
-                        if (crlfIndex >= 0)
-                        {
-                            index = crlfIndex;
-                            lengthToReplace = crlfSelected.Length;
-                        }
-                    }
-
-                    if (index >= 0)
-                    {
-                        item.Content = item.Content.Remove(index, lengthToReplace).Insert(index, linkUrl);
-                    }
-
+                    item.Content = ReplaceSelectedTextWithLink(item.Content, selectedText, success.Value.Id);
                     _ = _snackbar.Add("アイテムを分割しました。", Severity.Success);
                     try
                     {
@@ -156,17 +138,25 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
-        var parameters = new DialogParameters<SplitRequestConfirmDialog>
+        // 引用コメント入力付きの分割リクエスト確認ダイアログを表示する
+        DialogParameters<SplitRequestWithQuoteDialog> parameters = new()
         {
-            { x => x.SelectedText, selectedText }
+            { x => x.SelectedText, selectedText },
+            { x => x.QuotedItem, item },
+            { x => x.CurrentUserId, currentUserId }
         };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        IDialogReference dialog = await _dialogLauncher.ShowAsync<SplitRequestConfirmDialog>("アイテム分割リクエストの送信", parameters, options);
+        DialogOptions options = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        IDialogReference dialog = await _dialogLauncher.ShowAsync<SplitRequestWithQuoteDialog>(
+            "アイテム分割リクエストの送信", parameters, options);
         DialogResult? result = await dialog.Result;
 
-        if (result is { Canceled: false })
+        if (result is { Canceled: false, Data: SplitRequestWithQuoteDialogResult dialogResult })
         {
-            Result<ItemSplitRequest> splitResult = await _itemSplitService.RequestSplitAsync(item.Id, selectedText, currentUserId);
+            // 引用コメントがある場合は先に引用Itemを作成する
+            int? quoteItemId = dialogResult.CreatedQuoteItemId;
+
+            Result<ItemSplitRequest> splitResult = await _itemSplitService.RequestSplitAsync(
+                item.Id, selectedText, currentUserId, quoteItemId);
             switch (splitResult)
             {
                 case Success<ItemSplitRequest> success:
@@ -208,24 +198,7 @@ public class ItemCardSplitCoordinator(
         {
             case Success<Item> success:
                 _ = _snackbar.Add("分割リクエストを承認しました。", Severity.Success);
-                var linkUrl = $"/ItemDetail/{success.Value.Id}";
-                int index = item.Content.IndexOf(request.SelectedText, StringComparison.Ordinal);
-                int lengthToReplace = request.SelectedText.Length;
-                if (index < 0)
-                {
-                    string crlfSelected = request.SelectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-                    int crlfIndex = item.Content.IndexOf(crlfSelected, StringComparison.Ordinal);
-                    if (crlfIndex >= 0)
-                    {
-                        index = crlfIndex;
-                        lengthToReplace = crlfSelected.Length;
-                    }
-                }
-
-                if (index >= 0)
-                {
-                    item.Content = item.Content.Remove(index, lengthToReplace).Insert(index, linkUrl);
-                }
+                item.Content = ReplaceSelectedTextWithLink(item.Content, request.SelectedText, success.Value.Id);
                 return true;
             case Failure fail:
                 _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
@@ -294,5 +267,27 @@ public class ItemCardSplitCoordinator(
             default:
                 return false;
         }
+    }
+
+    private static string ReplaceSelectedTextWithLink(string content, string selectedText, int createdItemId)
+    {
+        string linkUrl = $"/ItemDetail/{createdItemId}";
+        int index = content.IndexOf(selectedText, StringComparison.Ordinal);
+        int lengthToReplace = selectedText.Length;
+
+        if (index < 0)
+        {
+            string crlfSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            int crlfIndex = content.IndexOf(crlfSelected, StringComparison.Ordinal);
+            if (crlfIndex >= 0)
+            {
+                index = crlfIndex;
+                lengthToReplace = crlfSelected.Length;
+            }
+        }
+
+        return index >= 0
+            ? content.Remove(index, lengthToReplace).Insert(index, linkUrl)
+            : content;
     }
 }

@@ -14,9 +14,19 @@ public interface IItemSplitService
     /// <param name="originalItemId">分割元アイテムの ID。</param>
     /// <param name="selectedText">分割対象として選択された本文。</param>
     /// <param name="requesterUserId">リクエストを申請するユーザーの ID。</param>
+    /// <param name="requesterQuoteItemId">
+    ///     リクエスト送信者が同時に投稿した引用アイテムの ID（任意）。
+    ///     分割リクエストが承認された場合、この引用アイテムのタグ・被引用情報が
+    ///     分割によって新たに作成されたアイテムへ移行される。
+    /// </param>
     /// <param name="cancellationToken">キャンセレーショントークン。</param>
     /// <returns>作成された分割リクエスト、または失敗理由。</returns>
-    Task<Result<ItemSplitRequest>> RequestSplitAsync(int originalItemId, string selectedText, string requesterUserId, CancellationToken cancellationToken = default);
+    Task<Result<ItemSplitRequest>> RequestSplitAsync(
+        int originalItemId,
+        string selectedText,
+        string requesterUserId,
+        int? requesterQuoteItemId = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     アイテム所有者による選択テキストの直接分割を実行する。

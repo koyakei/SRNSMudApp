@@ -215,13 +215,13 @@ public class ItemCardSplitCoordinatorTests
             .Returns(ValueTask.FromResult("World"));
 
         var dialogRef = new Mock<IDialogReference>();
-        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(true));
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(null)));
         _ = _dialogLauncherMock
-            .Setup(l => l.ShowAsync(typeof(SplitRequestConfirmDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
             .ReturnsAsync(dialogRef.Object);
 
         _ = _itemSplitServiceMock
-            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, default))
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, null, default))
             .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
 
         var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
@@ -290,13 +290,13 @@ public class ItemCardSplitCoordinatorTests
             .Returns(ValueTask.FromResult("World\nTest"));
 
         var dialogRef = new Mock<IDialogReference>();
-        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(true));
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(null)));
         _ = _dialogLauncherMock
-            .Setup(l => l.ShowAsync(typeof(SplitRequestConfirmDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
             .ReturnsAsync(dialogRef.Object);
 
         _ = _itemSplitServiceMock
-            .Setup(s => s.RequestSplitAsync(1, "World\nTest", RequesterId, default))
+            .Setup(s => s.RequestSplitAsync(1, "World\nTest", RequesterId, null, default))
             .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
 
         var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
@@ -322,5 +322,104 @@ public class ItemCardSplitCoordinatorTests
         Assert.True(result);
         Assert.Equal("Hello\r\n/ItemDetail/99", item.Content);
         _snackbarMock.Verify(s => s.Add("分割リクエストを承認しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WithCreatedQuoteItem_PassesQuoteItemIdToService()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var createdQuote = new Item { Id = 77, OwnerId = RequesterId, Content = "Quote comment" };
+        var createdRequest = new ItemSplitRequest { Id = 18, OwnerId = OwnerId, RequesterUserId = RequesterId, SelectedText = "World", RequesterQuoteItemId = 77 };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(77, createdQuote)));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 77, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(18, result.Id);
+        Assert.Equal(77, result.RequesterQuoteItemId);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "World", RequesterId, 77, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WhenDialogCancelled_ReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Cancel());
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.Null(result);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WhenQuoteContentOmitted_SubmitsWithNullQuoteId()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var createdRequest = new ItemSplitRequest { Id = 20, OwnerId = OwnerId, RequesterUserId = RequesterId, SelectedText = "World", RequesterQuoteItemId = null };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(null)));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(createdRequest));
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.NotNull(result);
+        Assert.Equal(20, result.Id);
+        Assert.Null(result.RequesterQuoteItemId);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "World", RequesterId, null, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WhenServiceReturnsFailure_ShowsErrorSnackbar()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(null)));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _ = _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(new Failure("このテキストに対する分割リクエストは既に申請中です。"));
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("このテキストに対する分割リクエストは既に申請中です。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
     }
 }

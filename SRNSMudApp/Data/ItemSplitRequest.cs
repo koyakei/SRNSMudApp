@@ -44,4 +44,14 @@ public class ItemSplitRequest : BaseEntity
     /// <summary>却下時の理由（任意）。</summary>
     [StringLength(500)]
     public string? RejectReason { get; set; }
+
+    /// <summary>
+    ///     リクエスト送信者が分割リクエストと同時に投稿した引用アイテムの ID。
+    ///     分割リクエストが承認された際、この引用アイテムのタグ・被引用情報を
+    ///     分割によって新しく作成されたアイテムへ移行し、引用アイテム自体は削除される。
+    /// </summary>
+    public int? RequesterQuoteItemId { get; set; }
+
+    /// <summary>リクエスト送信者が同時に投稿した引用アイテム。</summary>
+    public Item? RequesterQuoteItem { get; set; }
 }

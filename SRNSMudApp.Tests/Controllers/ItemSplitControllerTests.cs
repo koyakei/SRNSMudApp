@@ -144,7 +144,7 @@ public class ItemSplitControllerTests
         };
 
         _itemSplitServiceMock
-            .Setup(s => s.RequestSplitAsync(1, "分割テキスト", "u2", It.IsAny<CancellationToken>()))
+            .Setup(s => s.RequestSplitAsync(1, "分割テキスト", "u2", It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
 
         // Act
@@ -155,6 +155,40 @@ public class ItemSplitControllerTests
         var dto = Assert.IsType<ItemSplitRequestDto>(okResult.Value);
         Assert.Equal(50, dto.Id);
         Assert.Equal("Proposed", dto.Status);
+    }
+
+    [Fact]
+    public async Task RequestSplit_WithRequesterQuoteItemId_PassesQuoteItemIdToService()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u2")], "test"));
+        var controller = CreateController(user);
+
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 51,
+            OriginalItemId = 1,
+            SelectedText = "分割テキスト",
+            RequesterUserId = "u2",
+            OwnerUserId = "u1",
+            OwnerId = "u2",
+            Status = TradeStatus.Proposed,
+            RequesterQuoteItemId = 88,
+            CreatedDate = DateTime.UtcNow
+        };
+
+        _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "分割テキスト", "u2", 88, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        // Act
+        var result = await controller.RequestSplit(new RequestItemSplitRequest(1, "分割テキスト", RequesterQuoteItemId: 88), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ItemSplitRequestDto>(okResult.Value);
+        Assert.Equal(51, dto.Id);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "分割テキスト", "u2", 88, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

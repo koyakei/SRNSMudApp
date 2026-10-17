@@ -601,6 +601,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(500)
                     .HasColumnType("nvarchar(500)");
 
+                b.Property<int?>("RequesterQuoteItemId")
+                    .HasColumnType("int");
+
                 b.Property<string>("RequesterUserId")
                     .IsRequired()
                     .HasMaxLength(450)
@@ -626,6 +629,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("OwnerId");
 
                 b.HasIndex("OwnerUserId");
+
+                b.HasIndex("RequesterQuoteItemId");
 
                 b.HasIndex("RequesterUserId");
 
@@ -1898,6 +1903,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .OnDelete(DeleteBehavior.Restrict)
                     .IsRequired();
 
+                b.HasOne("SRNSMudApp.Data.Item", "RequesterQuoteItem")
+                    .WithMany()
+                    .HasForeignKey("RequesterQuoteItemId")
+                    .OnDelete(DeleteBehavior.SetNull);
+
                 b.Navigation("CreatedItem");
 
                 b.Navigation("OriginalItem");
@@ -1905,6 +1915,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Owner");
 
                 b.Navigation("OwnerUser");
+
+                b.Navigation("RequesterQuoteItem");
 
                 b.Navigation("RequesterUser");
             });

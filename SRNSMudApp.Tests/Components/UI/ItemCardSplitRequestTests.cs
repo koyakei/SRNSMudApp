@@ -10,6 +10,7 @@ using Moq;
 using MudBlazor;
 using MudBlazor.Services;
 
+using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
@@ -224,6 +225,155 @@ public sealed class ItemCardSplitRequestTests : IAsyncLifetime
         // Assert
         ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
         Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("分割するテキストが選択されていません"));
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenQuoteClicked_AndTextSelectedOnNonOwnedItem_TriggersSplitRequestWithQuote()
+    {
+        // Arrange
+        var item = new DataItem
+        {
+            Id = 15,
+            Content = "他ユーザーのアイテム本文の一部を切り抜く",
+            OwnerId = OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(15, default))
+            .ReturnsAsync([]);
+
+        // selectionHelper.getSelectedText が選択テキストを返すように設定
+        _ctx.JSInterop.Setup<string>("selectionHelper.getSelectedText").SetResult("一部を切り抜く");
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(99)));
+        _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 201,
+            OriginalItemId = 15,
+            SelectedText = "一部を切り抜く",
+            RequesterUserId = CurrentUserId,
+            OwnerUserId = OtherUserId,
+            OwnerId = CurrentUserId,
+            Status = TradeStatus.Proposed,
+            RequesterQuoteItemId = 99
+        };
+
+        _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(15, "一部を切り抜く", CurrentUserId, 99, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId));
+
+        // Act: 引用ボタンをクリック
+        var quoteBtn = cut.Find($"[data-testid='quote-button-{item.Id}']");
+        await cut.InvokeAsync(() => quoteBtn.Click());
+
+        // Assert: SplitRequestWithQuoteDialog が呼び出され、RequestSplitAsync に渡されたこと
+        _dialogLauncherMock.Verify(l => l.ShowAsync(
+            typeof(SplitRequestWithQuoteDialog),
+            "アイテム分割リクエストの送信",
+            It.IsAny<DialogParameters>(),
+            It.IsAny<DialogOptions>()), Times.Once);
+
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(
+            15, "一部を切り抜く", CurrentUserId, 99, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenQuoteClicked_OnOwnedItem_OpensStandardQuoteDialog()
+    {
+        // Arrange: 自分のアイテム（OwnerId == CurrentUserId）
+        var item = new DataItem
+        {
+            Id = 16,
+            Content = "自分のアイテム本文の一部",
+            OwnerId = CurrentUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(16, default))
+            .ReturnsAsync([]);
+
+        // テキスト選択があっても自分のアイテムなら通常の引用ダイアログが開く
+        _ctx.JSInterop.Setup<string>("selectionHelper.getSelectedText").SetResult("一部");
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Cancel());
+        _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(QuoteItemDialog), "引用して投稿", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId));
+
+        // Act: 引用ボタンをクリック
+        var quoteBtn = cut.Find($"[data-testid='quote-button-{item.Id}']");
+        await cut.InvokeAsync(() => quoteBtn.Click());
+
+        // Assert: QuoteItemDialog が開かれ、SplitRequestWithQuoteDialog は開かれないこと
+        _dialogLauncherMock.Verify(l => l.ShowAsync(
+            typeof(QuoteItemDialog),
+            "引用して投稿",
+            It.IsAny<DialogParameters>(),
+            It.IsAny<DialogOptions>()), Times.Once);
+
+        _dialogLauncherMock.Verify(l => l.ShowAsync(
+            typeof(SplitRequestWithQuoteDialog),
+            It.IsAny<string>(),
+            It.IsAny<DialogParameters>(),
+            It.IsAny<DialogOptions>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenQuoteClicked_WithoutTextSelection_OpensStandardQuoteDialog()
+    {
+        // Arrange: 他人のアイテムだがテキスト選択なし
+        var item = new DataItem
+        {
+            Id = 17,
+            Content = "他人のアイテム本文",
+            OwnerId = OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(17, default))
+            .ReturnsAsync([]);
+
+        _ctx.JSInterop.Setup<string>("selectionHelper.getSelectedText").SetResult("");
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Cancel());
+        _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(QuoteItemDialog), "引用して投稿", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId));
+
+        // Act: 引用ボタンをクリック
+        var quoteBtn = cut.Find($"[data-testid='quote-button-{item.Id}']");
+        await cut.InvokeAsync(() => quoteBtn.Click());
+
+        // Assert: QuoteItemDialog が開かれ、SplitRequestWithQuoteDialog は開かれないこと
+        _dialogLauncherMock.Verify(l => l.ShowAsync(
+            typeof(QuoteItemDialog),
+            "引用して投稿",
+            It.IsAny<DialogParameters>(),
+            It.IsAny<DialogOptions>()), Times.Once);
+
+        _dialogLauncherMock.Verify(l => l.ShowAsync(
+            typeof(SplitRequestWithQuoteDialog),
+            It.IsAny<string>(),
+            It.IsAny<DialogParameters>(),
+            It.IsAny<DialogOptions>()), Times.Never);
     }
 
     public async Task DisposeAsync()

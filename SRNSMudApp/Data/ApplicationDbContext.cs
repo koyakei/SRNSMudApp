@@ -766,6 +766,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         _ = builder.Entity<ItemSplitRequest>()
             .HasIndex(r => r.Status);
 
+        _ = builder.Entity<ItemSplitRequest>()
+            .HasOne(r => r.RequesterQuoteItem)
+            .WithMany()
+            .HasForeignKey(r => r.RequesterQuoteItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // --- TagContentProposal Configuration ---
         _ = builder.Entity<TagContentProposal>()
             .HasOne(p => p.Owner)
