@@ -35,6 +35,12 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
     private IItemQuoteService ItemQuoteService { get; set; } = null!;
 
     [Inject]
+    private IItemReplyService ItemReplyService { get; set; } = null!;
+
+    [Inject]
+    private IItemCardDataProvider ItemCardDataProvider { get; set; } = null!;
+
+    [Inject]
     private ISnackbar Snackbar { get; set; } = null!;
 
     [Inject]
@@ -59,16 +65,33 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
         _isSubmitting = true;
         try
         {
-            // 引用コメントが入力された場合のみ引用Itemを作成する
+            // 引用コメントが入力された場合、選択テキスト(SelectedText)を本文とした引用アイテムを作成し、
+            // 入力されたコメントはその引用アイテムへのリプライとして保存する。
+            // （承認時に引用アイテムが分割後の新アイテムへ置き換わる際、コメントもリプライとして新アイテムへ引き継がれる）
             Data.Item? createdQuote = null;
             if (!string.IsNullOrWhiteSpace(_quoteContent))
             {
+                string quoteBody = !string.IsNullOrWhiteSpace(SelectedText) ? SelectedText : _quoteContent;
                 createdQuote = await ItemQuoteService.CreateQuoteItemAsync(
-                    QuotedItem.Id, _quoteContent, CurrentUserId);
+                    QuotedItem.Id, quoteBody, CurrentUserId);
 
                 if (createdQuote is null)
                 {
                     Snackbar.Add("引用の投稿に失敗しました。", Severity.Error);
+                    return;
+                }
+
+                Data.Item? commentReply = await ItemReplyService.AddItemReplyAsync(
+                    createdQuote.Id,
+                    _quoteContent,
+                    CurrentUserId,
+                    isPrivate: QuotedItem.IsPrivate,
+                    targetUserGroupId: QuotedItem.TargetUserGroupId);
+
+                if (commentReply is null)
+                {
+                    await ItemCardDataProvider.DeleteItemAsync(createdQuote.Id);
+                    Snackbar.Add("引用コメントの保存に失敗しました。", Severity.Error);
                     return;
                 }
             }

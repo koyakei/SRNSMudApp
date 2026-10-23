@@ -4,6 +4,8 @@ using Microsoft.JSInterop;
 
 using MudBlazor;
 
+using SRNSMudApp.Components.Contract;
+using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
@@ -98,6 +100,8 @@ public class ItemCardSplitCoordinator(
     }
 
     /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層の操作失敗時に例外メッセージを Snackbar で安全に通知し、ロールバックを行うため")]
     public async Task<ItemSplitRequest?> RequestSplitSelectionAsync(Item item, string currentUserId)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -105,6 +109,12 @@ public class ItemCardSplitCoordinator(
         if (string.IsNullOrWhiteSpace(currentUserId))
         {
             _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return null;
+        }
+
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            _ = _snackbar.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error);
             return null;
         }
 
@@ -140,11 +150,24 @@ public class ItemCardSplitCoordinator(
 
         if (result is { Canceled: false, Data: SplitRequestWithQuoteDialogResult dialogResult })
         {
-            // 引用コメントがある場合は先に引用Itemを作成する
             int? quoteItemId = dialogResult.CreatedQuoteItemId;
 
-            Result<ItemSplitRequest> splitResult = await _itemSplitService.RequestSplitAsync(
-                item.Id, selectedText, currentUserId, quoteItemId);
+            Result<ItemSplitRequest> splitResult;
+            try
+            {
+                splitResult = await _itemSplitService.RequestSplitAsync(
+                    item.Id, selectedText, currentUserId, quoteItemId);
+            }
+            catch (Exception ex)
+            {
+                if (quoteItemId.HasValue)
+                {
+                    await _itemCardDataProvider.DeleteItemAsync(quoteItemId.Value);
+                }
+                _ = _snackbar.Add($"分割リクエストの送信に失敗しました: {ex.Message}", Severity.Error);
+                return null;
+            }
+
             switch (splitResult)
             {
                 case Success<ItemSplitRequest> success:
@@ -152,9 +175,17 @@ public class ItemCardSplitCoordinator(
                     await ClearSelectionAsync();
                     return success.Value;
                 case Failure fail:
+                    if (quoteItemId.HasValue)
+                    {
+                        await _itemCardDataProvider.DeleteItemAsync(quoteItemId.Value);
+                    }
                     _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
                     return null;
                 default:
+                    if (quoteItemId.HasValue)
+                    {
+                        await _itemCardDataProvider.DeleteItemAsync(quoteItemId.Value);
+                    }
                     return null;
             }
         }
@@ -384,6 +415,158 @@ public class ItemCardSplitCoordinator(
         }
 
         return ContainsSelectedText(item.Content, selectedText) ? selectedText : null;
+    }
+
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層の操作失敗時に例外メッセージを Snackbar で安全に通知し、ロールバックを行うため")]
+    public async Task<TagAddOutcome> RequestSplitWithTagAddAsync(
+        Item item,
+        string currentUserId,
+        string? selectedText = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return TagAddOutcome.None;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            selectedText = await GetSelectedTextAsync();
+            if (selectedText is null)
+            {
+                return TagAddOutcome.None;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            _ = _snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
+            return TagAddOutcome.None;
+        }
+
+        if (!ContainsSelectedText(item.Content, selectedText))
+        {
+            _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
+            return TagAddOutcome.None;
+        }
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        IDialogReference dialog = await _dialogLauncher.ShowAsync<TagAddDialog>("タグの追加", options);
+        DialogResult? result = await dialog.Result;
+
+        if (result is not { Canceled: false, Data: Tag selectedTag })
+        {
+            return TagAddOutcome.None;
+        }
+
+        Tag? tagFromDb = await _itemCardDataProvider.GetTagWithOwnerAsync(selectedTag.Id);
+        if (tagFromDb is null)
+        {
+            return TagAddOutcome.None;
+        }
+
+        // 1. 選択されたテキストを本文として引用アイテムを投稿
+        Item? quoteItem;
+        try
+        {
+            quoteItem = await _itemQuoteService.CreateQuoteItemAsync(item.Id, selectedText, currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _ = _snackbar.Add($"引用アイテムの作成に失敗しました: {ex.Message}", Severity.Error);
+            return TagAddOutcome.None;
+        }
+
+        if (quoteItem is null)
+        {
+            _ = _snackbar.Add("引用アイテムの作成に失敗しました。", Severity.Error);
+            return TagAddOutcome.None;
+        }
+
+        // 2. 引用アイテムに対して直接タグ付け、またはコントラクト提案を実行
+        TagAddOutcome tagOutcome;
+        try
+        {
+            bool canAttachDirectly = await _itemCardDataProvider.CanUserAttachTagDirectlyAsync(tagFromDb.Id, currentUserId);
+            if (canAttachDirectly)
+            {
+                TagRelation? newRelation = await _itemCardDataProvider.AddFreeTagRelationAsync(
+                    quoteItem.Id, tagFromDb.Id, currentUserId);
+                if (newRelation is null)
+                {
+                    await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                    _ = _snackbar.Add("タグの追加に失敗しました。", Severity.Error);
+                    return TagAddOutcome.None;
+                }
+
+                quoteItem.TagRelations ??= [];
+                newRelation.Tag = tagFromDb;
+                quoteItem.TagRelations.Add(newRelation);
+                tagOutcome = TagAddOutcome.AddedDirectly;
+            }
+            else
+            {
+                var proposeParams = new DialogParameters<ProposeContractDialog>
+                {
+                    { x => x.TargetItem, quoteItem },
+                    { x => x.RequestedTag, tagFromDb },
+                    { x => x.WeightDelta, 1 }
+                };
+                var proposeOptions = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+                IDialogReference proposeDialog = await _dialogLauncher.ShowAsync<ProposeContractDialog>(
+                    "コントラクトの提案", proposeParams, proposeOptions);
+                DialogResult? proposeResult = await proposeDialog.Result;
+
+                if (proposeResult is not { Canceled: false })
+                {
+                    await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                    return TagAddOutcome.None;
+                }
+
+                tagOutcome = TagAddOutcome.ContractProposed;
+            }
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"タグの追加に失敗しました: {ex.Message}", Severity.Error);
+            return TagAddOutcome.None;
+        }
+
+        // 3. 分割リクエストを送信 (RequesterQuoteItemId = quoteItem.Id)
+        Result<ItemSplitRequest> splitResult;
+        try
+        {
+            splitResult = await _itemSplitService.RequestSplitAsync(
+                item.Id, selectedText, currentUserId, quoteItem.Id);
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"分割リクエストの送信に失敗しました: {ex.Message}", Severity.Error);
+            return TagAddOutcome.None;
+        }
+
+        switch (splitResult)
+        {
+            case Success<ItemSplitRequest>:
+                _ = _snackbar.Add("引用してタグを追加し、アイテム分割リクエストを送信しました。", Severity.Success);
+                await ClearSelectionAsync();
+                return tagOutcome;
+
+            case Failure fail:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
+                return TagAddOutcome.None;
+
+            default:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                return TagAddOutcome.None;
+        }
     }
 
     private async Task<string?> GetSelectedTextAsync()

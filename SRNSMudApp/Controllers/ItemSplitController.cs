@@ -50,7 +50,7 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
 
         Result<Item> result = await _itemSplitService.SplitDirectlyAsync(
             request.OriginalItemId,
-            request.SelectedText.Trim(),
+            request.SelectedText,
             currentUserId,
             cancellationToken);
 
@@ -87,7 +87,7 @@ public sealed class ItemSplitController(IItemSplitService itemSplitService) : Co
 
         Result<ItemSplitRequest> result = await _itemSplitService.RequestSplitAsync(
             request.OriginalItemId,
-            request.SelectedText.Trim(),
+            request.SelectedText,
             currentUserId,
             request.RequesterQuoteItemId,
             cancellationToken);

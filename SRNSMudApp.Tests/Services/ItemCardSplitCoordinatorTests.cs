@@ -4,6 +4,8 @@ using Moq;
 
 using MudBlazor;
 
+using SRNSMudApp.Components.Contract;
+using SRNSMudApp.Components.Tag;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
@@ -919,27 +921,190 @@ public class ItemCardSplitCoordinatorTests
     }
 
     [Fact]
-    public async Task RequestSplitSelectionAsync_WhenUserIsOwner_ShowsErrorSnackbarAndReturnsNull()
+    public async Task RequestSplitSelectionAsync_WhenUserIsOwner_ShowsErrorSnackbarWithoutOpeningDialog_AndReturnsNull()
     {
         var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitSelectionAsync(item, OwnerId);
+
+        Assert.Null(result);
+        _dialogLauncherMock.Verify(
+            l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), It.IsAny<string>(), It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()),
+            Times.Never);
+        _itemSplitServiceMock.Verify(
+            s => s.RequestSplitAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _snackbarMock.Verify(s => s.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitSelectionAsync_WhenServiceReturnsFailure_AndQuoteItemWasCreated_DeletesQuoteItem()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var createdQuote = new Item { Id = 91, OwnerId = RequesterId, Content = "World" };
 
         _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
             .Returns(ValueTask.FromResult("World"));
 
         var dialogRef = new Mock<IDialogReference>();
-        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(null)));
+        dialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(new SplitRequestWithQuoteDialogResult(91, createdQuote)));
         _ = _dialogLauncherMock
             .Setup(l => l.ShowAsync(typeof(SplitRequestWithQuoteDialog), "アイテム分割リクエストの送信", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
             .ReturnsAsync(dialogRef.Object);
 
         _ = _itemSplitServiceMock
-            .Setup(s => s.RequestSplitAsync(1, "World", OwnerId, null, default))
-            .ReturnsAsync(new Failure(ErrorMessages.SplitSelfItemNotAllowed));
+            .Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 91, default))
+            .ReturnsAsync(new Failure("このテキストに対する分割リクエストは既に申請中です。"));
 
-        var result = await _coordinator.RequestSplitSelectionAsync(item, OwnerId);
+        var result = await _coordinator.RequestSplitSelectionAsync(item, RequesterId);
 
         Assert.Null(result);
-        _snackbarMock.Verify(s => s.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(91), Times.Once);
+        _snackbarMock.Verify(s => s.Add("このテキストに対する分割リクエストは既に申請中です。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithTagAddAsync_WhenCanAttachDirectly_CreatesQuote_AddsFreeTag_AndSubmitsSplitRequest()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var selectedTag = new Tag { Id = 10, Name = "Tag10", OwnerId = RequesterId };
+        var quoteItem = new Item { Id = 55, OwnerId = RequesterId, Content = "World", QuotedItemId = 1, TagRelations = [] };
+        var createdRelation = new TagRelation { Id = 101, ItemId = 55, TagId = 10, OwnerId = RequesterId };
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 201,
+            OriginalItemId = 1,
+            SelectedText = "World",
+            RequesterUserId = RequesterId,
+            OwnerId = RequesterId,
+            RequesterQuoteItemId = 55
+        };
+
+        var tagDialogRef = new Mock<IDialogReference>();
+        tagDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(selectedTag));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(TagAddDialog), "タグの追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(tagDialogRef.Object);
+
+        _ = _itemCardDataProviderMock.Setup(d => d.GetTagWithOwnerAsync(10)).ReturnsAsync(selectedTag);
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default)).ReturnsAsync(quoteItem);
+        _ = _itemCardDataProviderMock.Setup(d => d.CanUserAttachTagDirectlyAsync(10, RequesterId)).ReturnsAsync(true);
+        _ = _itemCardDataProviderMock.Setup(d => d.AddFreeTagRelationAsync(55, 10, RequesterId)).ReturnsAsync(createdRelation);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 55, default)).ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        TagAddOutcome outcome = await _coordinator.RequestSplitWithTagAddAsync(item, RequesterId, "World");
+
+        Assert.Equal(TagAddOutcome.AddedDirectly, outcome);
+        Assert.Single(quoteItem.TagRelations);
+        Assert.Equal(10, quoteItem.TagRelations.Single().TagId);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(It.IsAny<int>()), Times.Never);
+        _snackbarMock.Verify(s => s.Add("引用してタグを追加し、アイテム分割リクエストを送信しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithTagAddAsync_WhenCannotAttachDirectly_OpensProposeContractDialogTargetingQuoteItem_AndSubmitsSplitRequest()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var selectedTag = new Tag { Id = 20, Name = "ProtectedTag", OwnerId = OwnerId };
+        var quoteItem = new Item { Id = 56, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 202,
+            OriginalItemId = 1,
+            SelectedText = "World",
+            RequesterUserId = RequesterId,
+            OwnerId = RequesterId,
+            RequesterQuoteItemId = 56
+        };
+
+        var tagDialogRef = new Mock<IDialogReference>();
+        tagDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(selectedTag));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(TagAddDialog), "タグの追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(tagDialogRef.Object);
+
+        var proposeDialogRef = new Mock<IDialogReference>();
+        proposeDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok<object?>(null));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(ProposeContractDialog), "コントラクトの提案", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(proposeDialogRef.Object);
+
+        _ = _itemCardDataProviderMock.Setup(d => d.GetTagWithOwnerAsync(20)).ReturnsAsync(selectedTag);
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default)).ReturnsAsync(quoteItem);
+        _ = _itemCardDataProviderMock.Setup(d => d.CanUserAttachTagDirectlyAsync(20, RequesterId)).ReturnsAsync(false);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 56, default)).ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        TagAddOutcome outcome = await _coordinator.RequestSplitWithTagAddAsync(item, RequesterId, "World");
+
+        Assert.Equal(TagAddOutcome.ContractProposed, outcome);
+        _dialogLauncherMock.Verify(
+            l => l.ShowAsync(
+                typeof(ProposeContractDialog),
+                "コントラクトの提案",
+                It.Is<DialogParameters>(p => ReferenceEquals(p.Get<Item>(nameof(ProposeContractDialog.TargetItem)), quoteItem)),
+                It.IsAny<DialogOptions>()),
+            Times.Once);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithTagAddAsync_WhenProposeContractDialogCancelled_DeletesQuoteItemAndReturnsNone()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var selectedTag = new Tag { Id = 20, Name = "ProtectedTag", OwnerId = OwnerId };
+        var quoteItem = new Item { Id = 57, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+
+        var tagDialogRef = new Mock<IDialogReference>();
+        tagDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(selectedTag));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(TagAddDialog), "タグの追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(tagDialogRef.Object);
+
+        var proposeDialogRef = new Mock<IDialogReference>();
+        proposeDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Cancel());
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(ProposeContractDialog), "コントラクトの提案", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(proposeDialogRef.Object);
+
+        _ = _itemCardDataProviderMock.Setup(d => d.GetTagWithOwnerAsync(20)).ReturnsAsync(selectedTag);
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default)).ReturnsAsync(quoteItem);
+        _ = _itemCardDataProviderMock.Setup(d => d.CanUserAttachTagDirectlyAsync(20, RequesterId)).ReturnsAsync(false);
+
+        TagAddOutcome outcome = await _coordinator.RequestSplitWithTagAddAsync(item, RequesterId, "World");
+
+        Assert.Equal(TagAddOutcome.None, outcome);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(57), Times.Once);
+        _itemSplitServiceMock.Verify(
+            s => s.RequestSplitAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithTagAddAsync_WhenSplitRequestFails_DeletesQuoteItemAndReturnsNone()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var selectedTag = new Tag { Id = 10, Name = "Tag10", OwnerId = RequesterId };
+        var quoteItem = new Item { Id = 58, OwnerId = RequesterId, Content = "World", QuotedItemId = 1 };
+        var createdRelation = new TagRelation { Id = 102, ItemId = 58, TagId = 10, OwnerId = RequesterId };
+
+        var tagDialogRef = new Mock<IDialogReference>();
+        tagDialogRef.Setup(r => r.Result).ReturnsAsync(DialogResult.Ok(selectedTag));
+        _ = _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(TagAddDialog), "タグの追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(tagDialogRef.Object);
+
+        _ = _itemCardDataProviderMock.Setup(d => d.GetTagWithOwnerAsync(10)).ReturnsAsync(selectedTag);
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default)).ReturnsAsync(quoteItem);
+        _ = _itemCardDataProviderMock.Setup(d => d.CanUserAttachTagDirectlyAsync(10, RequesterId)).ReturnsAsync(true);
+        _ = _itemCardDataProviderMock.Setup(d => d.AddFreeTagRelationAsync(58, 10, RequesterId)).ReturnsAsync(createdRelation);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 58, default))
+            .ReturnsAsync(new Failure("既に分割リクエストが存在します。"));
+
+        TagAddOutcome outcome = await _coordinator.RequestSplitWithTagAddAsync(item, RequesterId, "World");
+
+        Assert.Equal(TagAddOutcome.None, outcome);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(58), Times.Once);
+        _snackbarMock.Verify(s => s.Add("既に分割リクエストが存在します。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

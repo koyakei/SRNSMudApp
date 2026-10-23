@@ -12,6 +12,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Components.Item;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Services;
 using SRNSMudApp.Services.Dialogs;
@@ -40,6 +41,7 @@ public sealed class ItemCardSplitRequestTests : IAsyncLifetime
     private readonly Mock<IItemSplitService> _itemSplitServiceMock = new();
     private readonly Mock<IItemCardVoteCoordinator> _voteCoordinatorMock = new();
     private readonly Mock<IItemCardSplitCoordinator> _splitCoordinatorMock = new();
+    private readonly Mock<IItemCardTagCoordinator> _tagCoordinatorMock = new();
 
     public ItemCardSplitRequestTests()
     {
@@ -69,6 +71,9 @@ public sealed class ItemCardSplitRequestTests : IAsyncLifetime
 
         _ctx.Services.RemoveAll<IItemCardSplitCoordinator>();
         _ctx.Services.AddScoped(_ => _splitCoordinatorMock.Object);
+
+        _ctx.Services.RemoveAll<IItemCardTagCoordinator>();
+        _ctx.Services.AddScoped(_ => _tagCoordinatorMock.Object);
 
         _ctx.Render<MudPopoverProvider>();
     }
@@ -679,6 +684,139 @@ public sealed class ItemCardSplitRequestTests : IAsyncLifetime
         _dialogLauncherMock.Verify(l => l.ShowAsync(
             typeof(ReactionCommentDialog), "リアクションを追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()), Times.Once);
         _itemSplitServiceMock.Verify(s => s.GetPendingSplitRequestsForOriginalItemAsync(35, default), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenReactionClicked_WithValidSelectedText_AndCommentSaved_UpdatesReactionCommentAndNotifiesDataChanged()
+    {
+        // Arrange: 文字選択状態でリアクションをクリックし、ReactionCommentDialog でコメントを保存するケース
+        var item = new DataItem
+        {
+            Id = 38,
+            Content = "他ユーザーのアイテム本文の一部をリアクションしてコメントする",
+            OwnerId = OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(38, default))
+            .ReturnsAsync([]);
+
+        _splitCoordinatorMock.Setup(c => c.GetValidSelectedTextForSplitAsync(item, CurrentUserId))
+            .ReturnsAsync("一部をリアクションしてコメントする");
+
+        var quoteItem = new DataItem { Id = 109, Content = "一部をリアクションしてコメントする", OwnerId = CurrentUserId };
+        var voteResult = new ItemVoteResult(ItemVoteAction.Added, 888, 1);
+        var splitRequest = new ItemSplitRequest { Id = 402, SelectedText = "一部をリアクションしてコメントする", OwnerId = CurrentUserId };
+        var splitWithReactionResult = new ItemSplitWithReactionResult(splitRequest, voteResult, quoteItem);
+
+        _splitCoordinatorMock.Setup(c => c.RequestSplitWithReactionAsync(
+                item, CurrentUserId, ReactionTagNames.Shinji, 1, null, It.IsAny<IReadOnlyList<DataTag>>(), It.IsAny<Func<Task>?>(), "一部をリアクションしてコメントする"))
+            .ReturnsAsync(splitWithReactionResult);
+
+        var dialogRef = new Mock<IDialogReference>();
+        dialogRef.Setup(r => r.Result).ReturnsAsync(
+            DialogResult.Ok(new ReactionCommentDialogResult(Saved: true, Comment: "この部分に深く共感しました")));
+        _dialogLauncherMock
+            .Setup(l => l.ShowAsync(typeof(ReactionCommentDialog), "リアクションを追加", It.IsAny<DialogParameters>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(dialogRef.Object);
+
+        _voteCoordinatorMock
+            .Setup(v => v.UpdateReactionCommentAsync(888, CurrentUserId, "この部分に深く共感しました"))
+            .ReturnsAsync(true);
+
+        int dataChangedCount = 0;
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId)
+            .Add(p => p.OnDataChanged, () => dataChangedCount++));
+
+        // Act: リアクションボタンをクリック
+        var upvoteBtn = cut.Find("[data-testid='reaction-shinji-upvote']");
+        await cut.InvokeAsync(() => upvoteBtn.Click());
+
+        // Assert: 引用アイテム上の TagRelation (RelationId=888) に対してリアクションコメントが保存されること
+        _voteCoordinatorMock.Verify(
+            v => v.UpdateReactionCommentAsync(888, CurrentUserId, "この部分に深く共感しました"),
+            Times.Once);
+        Assert.Equal(2, dataChangedCount);
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenAddTagClicked_WithValidSelectedText_CallsCoordinatorRequestSplitWithTagAddAsync()
+    {
+        // Arrange: 他ユーザーのアイテムで有効な選択テキストがある状態で「+ タグを追加」をクリック
+        var item = new DataItem
+        {
+            Id = 39,
+            Content = "他ユーザーのアイテム本文の一部を選択してタグを追加する",
+            OwnerId = OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(39, default))
+            .ReturnsAsync([]);
+
+        _splitCoordinatorMock.Setup(c => c.GetValidSelectedTextForSplitAsync(item, CurrentUserId))
+            .ReturnsAsync("一部を選択してタグを追加する");
+
+        _splitCoordinatorMock.Setup(c => c.RequestSplitWithTagAddAsync(item, CurrentUserId, "一部を選択してタグを追加する"))
+            .ReturnsAsync(TagAddOutcome.AddedDirectly);
+
+        int dataChangedCount = 0;
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId)
+            .Add(p => p.OnDataChanged, () => dataChangedCount++));
+
+        // Act: タグ追加ボタンをクリック
+        var addTagBtn = cut.Find("button[title='タグを追加']");
+        await cut.InvokeAsync(() => addTagBtn.Click());
+
+        // Assert: SplitCoordinator.RequestSplitWithTagAddAsync が呼ばれ、元アイテムへの直接タグ追加は呼ばれないこと
+        _splitCoordinatorMock.Verify(
+            c => c.RequestSplitWithTagAddAsync(item, CurrentUserId, "一部を選択してタグを追加する"),
+            Times.Once);
+        _tagCoordinatorMock.Verify(
+            t => t.PromptAndAddTagAsync(It.IsAny<DataItem>(), It.IsAny<string>()),
+            Times.Never);
+        _itemSplitServiceMock.Verify(s => s.GetPendingSplitRequestsForOriginalItemAsync(39, default), Times.AtLeast(2));
+        Assert.Equal(1, dataChangedCount);
+    }
+
+    [Fact]
+    public async Task ItemCard_WhenAddTagClicked_WithoutValidSelectedText_CallsTagCoordinatorPromptAndAddTagAsync()
+    {
+        // Arrange: テキスト未選択時は従来どおり TagCoordinator.PromptAndAddTagAsync を呼ぶ
+        var item = new DataItem
+        {
+            Id = 40,
+            Content = "他ユーザーのアイテム本文",
+            OwnerId = OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(40, default))
+            .ReturnsAsync([]);
+
+        _splitCoordinatorMock.Setup(c => c.GetValidSelectedTextForSplitAsync(item, CurrentUserId))
+            .ReturnsAsync((string?)null);
+
+        _tagCoordinatorMock.Setup(t => t.PromptAndAddTagAsync(item, CurrentUserId))
+            .ReturnsAsync(TagAddOutcome.AddedDirectly);
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId));
+
+        // Act
+        var addTagBtn = cut.Find("button[title='タグを追加']");
+        await cut.InvokeAsync(() => addTagBtn.Click());
+
+        // Assert
+        _tagCoordinatorMock.Verify(t => t.PromptAndAddTagAsync(item, CurrentUserId), Times.Once);
+        _splitCoordinatorMock.Verify(
+            c => c.RequestSplitWithTagAddAsync(It.IsAny<DataItem>(), It.IsAny<string>(), It.IsAny<string?>()),
+            Times.Never);
     }
 
     [Fact]

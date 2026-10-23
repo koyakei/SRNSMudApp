@@ -692,7 +692,7 @@
         IsSplitting = true;
         try
         {
-            var req = new DirectSplitItemRequest(ItemId, SplitSelectedText.Trim());
+            var req = new DirectSplitItemRequest(ItemId, SplitSelectedText);
             ItemDto? newItem = await ApiClient.SplitItemDirectlyAsync(req, _cts.Token);
             if (newItem != null)
             {
@@ -726,7 +726,7 @@
         IsSplitting = true;
         try
         {
-            var req = new RequestItemSplitRequest(ItemId, SplitSelectedText.Trim());
+            var req = new RequestItemSplitRequest(ItemId, SplitSelectedText);
             ItemSplitRequestDto? splitReq = await ApiClient.RequestItemSplitAsync(req, _cts.Token);
             if (splitReq != null)
             {

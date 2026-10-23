@@ -29,6 +29,8 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
     private const string CurrentUserId = "test-user-1";
     private readonly BunitContext _ctx = new();
     private readonly Mock<IItemQuoteService> _itemQuoteServiceMock = new();
+    private readonly Mock<IItemReplyService> _itemReplyServiceMock = new();
+    private readonly Mock<IItemCardDataProvider> _itemCardDataMock = new();
     private readonly Mock<ILinkPreviewService> _linkPreviewServiceMock = new();
 
     public SplitRequestWithQuoteDialogTests()
@@ -37,6 +39,8 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
         _ = _ctx.Services.AddMudServices().AddMockSrnsServices();
 
         _ = _ctx.Services.AddScoped(_ => _itemQuoteServiceMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _itemReplyServiceMock.Object);
+        _ = _ctx.Services.AddScoped(_ => _itemCardDataMock.Object);
         _ = _ctx.Services.AddScoped(_ => _linkPreviewServiceMock.Object);
         _ = _ctx.Services.AddTransient<QuoteItemViewModel>();
 
@@ -116,18 +120,23 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SplitRequestWithQuoteDialog_WhenSubmittedWithQuoteContent_CreatesQuoteAndClosesWithId()
+    public async Task SplitRequestWithQuoteDialog_WhenSubmittedWithQuoteContent_CreatesQuoteWithSelectedTextAndReplyComment_AndClosesWithId()
     {
         // Arrange
         var host = _ctx.Render<DialogHost>();
         var dialogService = _ctx.Services.GetRequiredService<IDialogService>();
 
         var quotedItem = new DataItem { Id = 12, Content = "元アイテム本文", OwnerId = "other-user" };
-        var createdQuoteItem = new DataItem { Id = 77, Content = "私の引用コメント", OwnerId = CurrentUserId };
+        var createdQuoteItem = new DataItem { Id = 77, Content = "対象テキスト", OwnerId = CurrentUserId };
+        var createdReplyItem = new DataItem { Id = 78, Content = "私の引用コメント", OwnerId = CurrentUserId, ParentItemId = 77 };
 
         _itemQuoteServiceMock
-            .Setup(s => s.CreateQuoteItemAsync(12, "私の引用コメント", CurrentUserId, null, It.IsAny<CancellationToken>()))
+            .Setup(s => s.CreateQuoteItemAsync(12, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(createdQuoteItem);
+
+        _itemReplyServiceMock
+            .Setup(r => r.AddItemReplyAsync(77, "私の引用コメント", CurrentUserId, null, false, null))
+            .ReturnsAsync(createdReplyItem);
 
         var parameters = new DialogParameters<SplitRequestWithQuoteDialog>
         {
@@ -159,7 +168,8 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
         Assert.Equal(77, dialogResult.CreatedQuoteItemId);
         Assert.Equal(createdQuoteItem, dialogResult.CreatedQuoteItem);
 
-        _itemQuoteServiceMock.Verify(s => s.CreateQuoteItemAsync(12, "私の引用コメント", CurrentUserId, null, It.IsAny<CancellationToken>()), Times.Once);
+        _itemQuoteServiceMock.Verify(s => s.CreateQuoteItemAsync(12, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()), Times.Once);
+        _itemReplyServiceMock.Verify(r => r.AddItemReplyAsync(77, "私の引用コメント", CurrentUserId, null, false, null), Times.Once);
     }
 
     [Fact]
@@ -173,7 +183,7 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
         var quotedItem = new DataItem { Id = 13, Content = "元アイテム本文", OwnerId = "other-user" };
 
         _itemQuoteServiceMock
-            .Setup(s => s.CreateQuoteItemAsync(13, "失敗する引用", CurrentUserId, null, It.IsAny<CancellationToken>()))
+            .Setup(s => s.CreateQuoteItemAsync(13, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((DataItem?)null);
 
         var parameters = new DialogParameters<SplitRequestWithQuoteDialog>
@@ -199,6 +209,52 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
 
         // Assert: エラー Snackbar が表示され、ダイアログは閉じない
         Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("引用の投稿に失敗しました"));
+        Assert.False(dialogRef.Result.IsCompleted);
+    }
+
+    [Fact]
+    public async Task SplitRequestWithQuoteDialog_WhenReplySaveFails_DeletesQuoteItem_ShowsErrorSnackbar_AndKeepsDialogOpen()
+    {
+        // Arrange
+        var host = _ctx.Render<DialogHost>();
+        var dialogService = _ctx.Services.GetRequiredService<IDialogService>();
+        var snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+
+        var quotedItem = new DataItem { Id = 15, Content = "元アイテム本文", OwnerId = "other-user" };
+        var createdQuoteItem = new DataItem { Id = 88, Content = "対象テキスト", OwnerId = CurrentUserId };
+
+        _itemQuoteServiceMock
+            .Setup(s => s.CreateQuoteItemAsync(15, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createdQuoteItem);
+
+        _itemReplyServiceMock
+            .Setup(r => r.AddItemReplyAsync(88, "失敗するコメント", CurrentUserId, null, false, null))
+            .ReturnsAsync((DataItem?)null);
+
+        var parameters = new DialogParameters<SplitRequestWithQuoteDialog>
+        {
+            { x => x.SelectedText, "対象テキスト" },
+            { x => x.QuotedItem, quotedItem },
+            { x => x.CurrentUserId, CurrentUserId }
+        };
+
+        var dialogRef = await dialogService.ShowAsync<SplitRequestWithQuoteDialog>("アイテム分割リクエストの送信", parameters);
+
+        host.WaitForAssertion(() =>
+        {
+            var input = host.Find("textarea");
+            Assert.NotNull(input);
+        });
+
+        var textarea = host.Find("textarea");
+        textarea.Input("失敗するコメント");
+
+        var submitBtn = host.Find("button[data-testid='confirm-split-request-with-quote-button']");
+        await host.InvokeAsync(() => submitBtn.Click());
+
+        // Assert: 作成された引用アイテムがロールバック削除され、エラー Snackbar が表示され、ダイアログは閉じない
+        _itemCardDataMock.Verify(d => d.DeleteItemAsync(88), Times.Once);
+        Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains("引用コメントの保存に失敗しました"));
         Assert.False(dialogRef.Result.IsCompleted);
     }
 

@@ -720,11 +720,11 @@ public class ItemSplitServiceTests : IAsyncLifetime
             dbContext.Items.Add(originalItem);
             await dbContext.SaveChangesAsync();
 
-            // 申請者が同時に投稿した引用アイテム
+            // 申請者が同時に投稿した引用アイテム（本文は切り抜き対象テキスト）
             var quoteItem = new Item
             {
                 OwnerId = requesterId,
-                Content = $"引用投稿コメント_{tid}",
+                Content = $"[切り抜き対象_{tid}]",
                 QuotedItemId = originalItem.Id
             };
             dbContext.Items.Add(quoteItem);
@@ -745,7 +745,14 @@ public class ItemSplitServiceTests : IAsyncLifetime
             dbContext.Items.Add(thirdQuotingItem);
             await dbContext.SaveChangesAsync();
 
-            // 引用アイテムに対するリプライ
+            // 申請者の引用コメント（リプライ）および第三者のリプライ
+            var requesterCommentReply = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"引用投稿コメント_{tid}",
+                ParentItemId = quoteItem.Id,
+                RootItemId = quoteItem.Id
+            };
             var replyToQuoteItem = new Item
             {
                 OwnerId = thirdUserId,
@@ -753,7 +760,7 @@ public class ItemSplitServiceTests : IAsyncLifetime
                 ParentItemId = quoteItem.Id,
                 RootItemId = quoteItem.Id
             };
-            dbContext.Items.Add(replyToQuoteItem);
+            dbContext.Items.AddRange(requesterCommentReply, replyToQuoteItem);
             await dbContext.SaveChangesAsync();
 
             // 分割リクエスト（RequesterQuoteItemId に quoteItem.Id を指定）
@@ -801,10 +808,17 @@ public class ItemSplitServiceTests : IAsyncLifetime
             Assert.NotNull(updatedQuotingItem);
             Assert.Equal(newItem.Id, updatedQuotingItem.QuotedItemId);
 
-            // 4. リプライアイテムの ParentItemId が新アイテムの Id に置き換わっていること
+            // 4. 申請者の引用コメントおよび第三者のリプライが消失せず、新アイテムの傘下へ引き継がれていること
+            Item? updatedRequesterComment = await dbContext.Items.FindAsync(requesterCommentReply.Id);
+            Assert.NotNull(updatedRequesterComment);
+            Assert.Equal($"引用投稿コメント_{tid}", updatedRequesterComment.Content);
+            Assert.Equal(newItem.Id, updatedRequesterComment.ParentItemId);
+            Assert.Equal(newItem.Id, updatedRequesterComment.RootItemId);
+
             Item? updatedReplyItem = await dbContext.Items.FindAsync(replyToQuoteItem.Id);
             Assert.NotNull(updatedReplyItem);
             Assert.Equal(newItem.Id, updatedReplyItem.ParentItemId);
+            Assert.Equal(newItem.Id, updatedReplyItem.RootItemId);
         }
     }
 
@@ -888,7 +902,7 @@ public class ItemSplitServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ApproveSplitAsync_WhenRequesterQuoteItemHasDuplicateTags_CombinesWeights()
+    public async Task ApproveSplitAsync_WhenRequesterQuoteItemHasDuplicateTags_CombinesWeightsForSameOwner_AndPreservesDifferentOwners()
     {
         var (dbContext, service, _, tid) = CreateScope();
         await using (dbContext)
@@ -911,16 +925,17 @@ public class ItemSplitServiceTests : IAsyncLifetime
             var quoteItem = new Item
             {
                 OwnerId = requesterId,
-                Content = $"引用_{tid}",
+                Content = $"[切り抜き_{tid}]",
                 QuotedItemId = originalItem.Id
             };
             dbContext.Items.Add(quoteItem);
             await dbContext.SaveChangesAsync();
 
-            // 同一タグに異なる重みで 2 件の TagRelation を付与（別ユーザーまたは別コンテキストの紐付けを想定）
+            // 同一ユーザー(requesterId)の重複 TagRelation は合算され、別ユーザー(ownerId)の TagRelation は別レコードとして保持される
             var rel1 = new TagRelation { ItemId = quoteItem.Id, TagId = tag.Id, Weight = 2, OwnerId = requesterId };
-            var rel2 = new TagRelation { ItemId = quoteItem.Id, TagId = tag.Id, Weight = 3, OwnerId = ownerId };
-            dbContext.TagRelations.AddRange(rel1, rel2);
+            var rel2 = new TagRelation { ItemId = quoteItem.Id, TagId = tag.Id, Weight = 3, OwnerId = requesterId };
+            var relOtherOwner = new TagRelation { ItemId = quoteItem.Id, TagId = tag.Id, Weight = 4, OwnerId = ownerId };
+            dbContext.TagRelations.AddRange(rel1, rel2, relOtherOwner);
 
             var request = new ItemSplitRequest
             {
@@ -947,9 +962,10 @@ public class ItemSplitServiceTests : IAsyncLifetime
                     .Where(r => r.ItemId == success.Value.Id && r.TagId == tag.Id)
                     .ToListAsync();
 
-                // 重複がマージされて 1 レコードになり、Weight が 2 + 3 = 5 に合算されていること
-                Assert.Single(migratedRelations);
-                Assert.Equal(5, migratedRelations[0].Weight);
+                // 同一オーナー(requesterId)は 2 + 3 = 5 にマージされ、別オーナー(ownerId)の Weight=4 と合わせて 2 レコードになること
+                Assert.Equal(2, migratedRelations.Count);
+                Assert.Contains(migratedRelations, r => r.OwnerId == requesterId && r.Weight == 5);
+                Assert.Contains(migratedRelations, r => r.OwnerId == ownerId && r.Weight == 4);
             }
         }
     }
@@ -2050,7 +2066,7 @@ public class ItemSplitServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ApproveSplitAsync_WithTagWeightLedgerOnQuoteItem_MigratesLedgerToNewItem()
+    public async Task ApproveSplitAsync_WithTagWeightLedgerOnQuoteItem_MigratesLedgerAndCommentItemToNewItem()
     {
         var (dbContext, service, _, tid) = CreateScope();
         await using (dbContext)
@@ -2075,13 +2091,24 @@ public class ItemSplitServiceTests : IAsyncLifetime
             dbContext.Tags.Add(tag);
             await dbContext.SaveChangesAsync();
 
+            // リアクション・タグ履歴コメント用の TagCommentItem を作成（仕様どおり quoteItem とは別の CommentItem エンティティ）
+            var reactionCommentItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"リアクション理由コメント_{tid}",
+                ItemKindJson = System.Text.Json.JsonSerializer.Serialize(new TagCommentItem(quoteItem.Id, tag.Id))
+            };
+            dbContext.Items.Add(reactionCommentItem);
+            await dbContext.SaveChangesAsync();
+
             // quoteItem に対する TagRelation と TagWeightLedger を作成
             var tagRelation = new TagRelation
             {
                 ItemId = quoteItem.Id,
                 TagId = tag.Id,
                 OwnerId = requesterId,
-                Weight = 2
+                Weight = 2,
+                CommentItemId = reactionCommentItem.Id
             };
             dbContext.TagRelations.Add(tagRelation);
             await dbContext.SaveChangesAsync();
@@ -2090,9 +2117,9 @@ public class ItemSplitServiceTests : IAsyncLifetime
             {
                 TagId = tag.Id,
                 ItemId = quoteItem.Id,
-                SourceType = "TagRelation",
+                SourceType = "TagRelationInsert",
                 SourceId = tagRelation.Id,
-                CommentItemId = quoteItem.Id,
+                CommentItemId = reactionCommentItem.Id,
                 Delta = 2,
                 PreviousWeight = 0,
                 NewWeight = 2,
@@ -2129,11 +2156,26 @@ public class ItemSplitServiceTests : IAsyncLifetime
             // quoteItem は削除されている
             Assert.Null(await dbContext.Items.FindAsync(quoteItem.Id));
 
-            // TagWeightLedger の ItemId と CommentItemId が新アイテムへ付け替えられている
+            // 新アイテム上の TagRelation が作成され、CommentItemId を引き継いでいること
+            var newRelation = await dbContext.TagRelations
+                .FirstOrDefaultAsync(tr => tr.ItemId == newItem.Id && tr.TagId == tag.Id);
+            Assert.NotNull(newRelation);
+            Assert.Equal(reactionCommentItem.Id, newRelation.CommentItemId);
+
+            // TagWeightLedger の ItemId と SourceId（新しい TagRelation.Id）が新アイテム側へ付け替えられ、CommentItemId が維持されていること
             var updatedLedger = await dbContext.TagWeightLedgers.FindAsync(ledger.Id);
             Assert.NotNull(updatedLedger);
             Assert.Equal(newItem.Id, updatedLedger.ItemId);
-            Assert.Equal(newItem.Id, updatedLedger.CommentItemId);
+            Assert.Equal(newRelation.Id, updatedLedger.SourceId);
+            Assert.Equal(reactionCommentItem.Id, updatedLedger.CommentItemId);
+
+            // CommentItem の ItemKindJson (TagCommentItem.TargetItemId) も newItem.Id に更新されていること
+            var updatedCommentItem = await dbContext.Items.FindAsync(reactionCommentItem.Id);
+            Assert.NotNull(updatedCommentItem);
+            var commentMeta = System.Text.Json.JsonSerializer.Deserialize<TagCommentItem>(updatedCommentItem.ItemKindJson);
+            Assert.NotNull(commentMeta);
+            Assert.Equal(newItem.Id, commentMeta.TargetItemId);
+            Assert.Equal(tag.Id, commentMeta.TagId);
         }
     }
 

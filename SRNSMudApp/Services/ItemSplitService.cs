@@ -324,7 +324,7 @@ public partial class ItemSplitService(
 
         foreach (TagRelation tr in quoteItem.TagRelations.ToList())
         {
-            TagRelation? existing = existingRelationsOnTarget.FirstOrDefault(x => x.TagId == tr.TagId);
+            TagRelation? existing = existingRelationsOnTarget.FirstOrDefault(x => x.TagId == tr.TagId && x.OwnerId == tr.OwnerId);
             if (existing is not null)
             {
                 existing.Weight += tr.Weight;

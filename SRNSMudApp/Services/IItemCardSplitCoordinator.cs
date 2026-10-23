@@ -81,6 +81,19 @@ public interface IItemCardSplitCoordinator
     /// <param name="currentUserId">現在ログイン中のユーザー ID。</param>
     /// <returns>有効な選択テキスト。無効または対象外の場合は null。</returns>
     Task<string?> GetValidSelectedTextForSplitAsync(Item item, string? currentUserId);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されている場合に、タグ選択ダイアログを表示し、
+    ///     選択されたテキストを引用したアイテムを投稿した上でタグ付与（またはコントラクト提案）と分割リクエスト送信を実行する。
+    /// </summary>
+    /// <param name="item">対象の親アイテム。</param>
+    /// <param name="currentUserId">操作を実行するユーザー ID。</param>
+    /// <param name="selectedText">選択されたテキスト。null または空の場合は JS 経由で取得を試みる。</param>
+    /// <returns>タグ追加操作の結果（<see cref="TagAddOutcome" />）。</returns>
+    Task<TagAddOutcome> RequestSplitWithTagAddAsync(
+        Item item,
+        string currentUserId,
+        string? selectedText = null);
 }
 
 /// <summary>

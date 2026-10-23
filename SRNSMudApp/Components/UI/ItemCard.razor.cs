@@ -708,12 +708,24 @@ public partial class ItemCard : IAsyncDisposable
         _pendingSplitRequests = await ActionViewModel.GetPendingSplitRequestsAsync(Item.Id);
     }
 
-    // --- Tag Operations (Delegated to TagCoordinator) ---
+    // --- Tag Operations (Delegated to TagCoordinator / SplitCoordinator) ---
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "データベース一時切断時にUIがクラッシュするのを防ぐため")]
     private async Task OnAddTagClicked()
     {
         try
         {
+            // 他人がownerのアイテムで本文の一部が選択されている場合、引用投稿＋タグ付け＋分割リクエストを実行する
+            if (await SplitCoordinator.GetValidSelectedTextForSplitAsync(Item, CurrentUserId) is { } selectedText)
+            {
+                TagAddOutcome splitTagOutcome = await SplitCoordinator.RequestSplitWithTagAddAsync(Item, CurrentUserId, selectedText);
+                if (splitTagOutcome is TagAddOutcome.AddedDirectly or TagAddOutcome.ContractProposed)
+                {
+                    await ReloadSplitRequestsAsync();
+                    await NotifyDataChangedAsync();
+                }
+                return;
+            }
+
             TagAddOutcome outcome = await TagCoordinator.PromptAndAddTagAsync(Item, CurrentUserId);
             switch (outcome)
             {

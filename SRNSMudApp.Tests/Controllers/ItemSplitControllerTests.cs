@@ -475,4 +475,60 @@ public class ItemSplitControllerTests
         var list = Assert.IsAssignableFrom<IReadOnlyList<ItemSplitRequestDto>>(okResult.Value);
         Assert.Empty(list);
     }
+
+    [Fact]
+    public async Task DirectSplit_WhenSelectedTextHasSurroundingSpaces_PreservesExactSelectedTextForMatching()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u1")], "test"));
+        var controller = CreateController(user);
+
+        var newItem = new Item
+        {
+            Id = 102,
+            Content = "  インデント付きテキスト  ",
+            OwnerId = "u1",
+            UpdatedDate = DateTime.UtcNow
+        };
+
+        _itemSplitServiceMock
+            .Setup(s => s.SplitDirectlyAsync(1, "  インデント付きテキスト  ", "u1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<Item>(newItem));
+
+        var result = await controller.DirectSplit(new DirectSplitItemRequest(1, "  インデント付きテキスト  "), CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal("  インデント付きテキスト  ", dto.Content);
+        _itemSplitServiceMock.Verify(s => s.SplitDirectlyAsync(1, "  インデント付きテキスト  ", "u1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplit_WhenSelectedTextHasSurroundingSpaces_PreservesExactSelectedTextForMatching()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u2")], "test"));
+        var controller = CreateController(user);
+
+        var splitRequest = new ItemSplitRequest
+        {
+            Id = 55,
+            OriginalItemId = 1,
+            SelectedText = "  インデント付きテキスト  ",
+            RequesterUserId = "u2",
+            OwnerUserId = "u1",
+            OwnerId = "u2",
+            Status = TradeStatus.Proposed,
+            CreatedDate = DateTime.UtcNow
+        };
+
+        _itemSplitServiceMock
+            .Setup(s => s.RequestSplitAsync(1, "  インデント付きテキスト  ", "u2", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        var result = await controller.RequestSplit(new RequestItemSplitRequest(1, "  インデント付きテキスト  "), CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<ItemSplitRequestDto>(okResult.Value);
+        Assert.Equal("  インデント付きテキスト  ", dto.SelectedText);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "  インデント付きテキスト  ", "u2", null, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
