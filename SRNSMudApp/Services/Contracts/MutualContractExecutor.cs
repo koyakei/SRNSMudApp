@@ -44,19 +44,10 @@ public class MutualContractExecutor(
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
         consumedAsset.IsBurned = true;
         consumedAsset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
-        _ = dbContext.RightAssets!.Update(consumedAsset);
+        _ = dbContext.RightAssets.Update(consumedAsset);
 
-        var offeredTagAsset = new RightAsset
-        {
-            OwnerId = contract.RequesterUserId,
-            TargetTagId = contract.Payload is MutualPayload m2 ? m2.OfferedTagId : 0,
-            IsBurned = true,
-            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
-        };
-        _ = dbContext.RightAssets!.Add(offeredTagAsset);
-
-        Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags!.FindAsync(contract.RequestedTagId);
-        Tag? offeredTag = await dbContext.Tags!.FindAsync(contract.Payload is MutualPayload m3 ? m3.OfferedTagId : 0);
+        Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
+        Tag? offeredTag = await dbContext.Tags.FindAsync(contract.Payload is MutualPayload m3 ? m3.OfferedTagId : 0);
 
         Result<(Tag Req, Tag Off)> fetchResult = (requestedTag, offeredTag) switch
         {
@@ -68,11 +59,11 @@ public class MutualContractExecutor(
         return await (fetchResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<(Tag req, Tag off)> s => ProcessMutualTagsAsync(dbContext, contract, s.Value.req, s.Value.off, requesterAssetId, offeredTagAsset, executorUserId)
+            Success<(Tag req, Tag off)> s => ProcessMutualTagsAsync(dbContext, contract, s.Value.req, s.Value.off, requesterAssetId, executorUserId)
         });
     }
 
-    private static async Task<Result<string>> ProcessMutualTagsAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, Tag offeredTag, int requesterAssetId, RightAsset offeredTagAsset, string executorUserId)
+    private async Task<Result<string>> ProcessMutualTagsAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, Tag offeredTag, int requesterAssetId, string executorUserId)
     {
         Result<string> processResult = await (contract.RequestType switch
         {
@@ -84,7 +75,8 @@ public class MutualContractExecutor(
         return await (processResult switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<string> => ProcessMutualOfferedAsync(dbContext, contract, offeredTag, offeredTagAsset, executorUserId)
+            Success<string> s when s.Value == "削除対象が存在しません。" => Task.FromResult<Result<string>>(s),
+            Success<string> => ProcessMutualOfferedAsync(dbContext, contract, offeredTag, executorUserId)
         });
     }
 
@@ -138,17 +130,11 @@ public class MutualContractExecutor(
         TagRelation? relation1Remove = await dbContext.TagRelations
             .FirstOrDefaultAsync(tr => tr.ItemId == contract.TargetItemId && tr.TagId == contract.RequestedTagId);
 
-        Result<TagRelation> removeResult = relation1Remove switch
+        return await (relation1Remove switch
         {
-            null => new Failure("対象のタグ付けが見つかりません。"),
-            var r => new Success<TagRelation>(r)
-        };
-
-        return removeResult switch
-        {
-            Failure f => f,
-            Success<TagRelation> s => ProcessMutualRemoveRelation(dbContext, contract, requestedTag, s.Value, requesterAssetId, executorUserId)
-        };
+            null => Task.FromResult<Result<string>>(new Success<string>("削除対象が存在しません。")),
+            var r => Task.FromResult(ProcessMutualRemoveRelation(dbContext, contract, requestedTag, r, requesterAssetId, executorUserId))
+        });
     }
 
     private static Result<string> ProcessMutualRemoveRelation(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag requestedTag, TagRelation relation, int requesterAssetId, string executorUserId)
@@ -189,12 +175,21 @@ public class MutualContractExecutor(
         return new Success<string>("削除完了");
     }
 
-    private static async Task<Result<string>> ProcessMutualOfferedAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag offeredTag, RightAsset offeredTagAsset, string executorUserId)
+    private async Task<Result<string>> ProcessMutualOfferedAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, Tag offeredTag, string executorUserId)
     {
         if (contract.Payload is not MutualPayload mutualPayload)
         {
             return new Failure("Mutual payload is missing");
         }
+
+        var offeredTagAsset = new RightAsset
+        {
+            OwnerId = contract.RequesterUserId,
+            TargetTagId = mutualPayload.OfferedTagId,
+            IsBurned = true,
+            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
+        };
+        _ = dbContext.RightAssets.Add(offeredTagAsset);
 
         var relation2 = new TagRelation
         {

@@ -234,7 +234,7 @@ public class GratisContractExecutor(
 
         return await (relation switch
         {
-            null => Task.FromResult<Result<string>>(new Failure(ContractMessages.TagRelationNotFound)),
+            null => Task.FromResult<Result<string>>(new Success<string>("削除対象が存在しません。")),
             var r => ProcessRelationDecreaseAsync(dbContext, contract, tag, r, consumedAssetId, executorUserId, isRemove)
         });
     }

@@ -418,4 +418,106 @@ public class TagEdgeServiceTests : IAsyncLifetime
             Assert.NotNull(matchedEdge1.TagAttachments.First().Tag);
         }
     }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsAsync_WhenTagOwnerHasZeroAssets_AutoMintsTenAssets()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag = new Tag { Name = $"OwnerTag_{tid}", OwnerId = userId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            List<RightAsset> assets = await service.GetAvailableRightAssetsAsync(userId, tag.Id);
+
+            // Assert: オーナーの場合は10個のアセットが自動発行される
+            Assert.Single(assets);
+            Assert.Equal(10, assets[0].Amount);
+            Assert.False(assets[0].IsBurned);
+            Assert.Equal(userId, assets[0].OwnerId);
+            Assert.Equal(tag.Id, assets[0].TargetTagId);
+
+            // DB にも永続化されていること
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var savedAsset = await verifyDb.RightAssets.FirstOrDefaultAsync(a => a.Id == assets[0].Id);
+            Assert.NotNull(savedAsset);
+            Assert.Equal(10, savedAsset.Amount);
+            Assert.False(savedAsset.IsBurned);
+        }
+    }
+
+    [Fact]
+    public async Task GetAvailableRightAssetsAsync_WhenNonOwnerHasZeroAssets_ReturnsEmptyList()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var otherUserId = $"other_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, otherUserId);
+
+            var tag = new Tag { Name = $"OwnerTag_{tid}", OwnerId = ownerId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 非オーナーが取得
+            List<RightAsset> assets = await service.GetAvailableRightAssetsAsync(otherUserId, tag.Id);
+
+            // Assert: 自動発行されず空リスト
+            Assert.Empty(assets);
+
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var assetCount = await verifyDb.RightAssets.CountAsync(a => a.TargetTagId == tag.Id);
+            Assert.Equal(0, assetCount);
+        }
+    }
+
+    [Fact]
+    public async Task AttachTagToEdgeAsync_WhenAssetAmountGreaterThanOne_DecrementsAmountAndDoesNotBurn()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag1 = new Tag { Name = $"Tag1_{tid}", OwnerId = userId };
+            var tag2 = new Tag { Name = $"Tag2_{tid}", OwnerId = userId };
+            var tagMeaning = new Tag { Name = $"Meaning_{tid}", OwnerId = userId, CachedWeight = 5 };
+            dbContext.Tags.AddRange(tag1, tag2, tagMeaning);
+            await dbContext.SaveChangesAsync();
+
+            var edge = new TagEdge { SourceTagId = tag1.Id, TargetTagId = tag2.Id, OwnerId = userId };
+            dbContext.TagEdges.Add(edge);
+
+            // 残高 5 の RightAsset
+            var asset = new RightAsset
+            {
+                OwnerId = userId,
+                TargetTagId = tagMeaning.Id,
+                Amount = 5,
+                IsBurned = false
+            };
+            dbContext.RightAssets.Add(asset);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 1 回付与 (1 消費)
+            Result<TagEdgeTagAttachment> result = await service.AttachTagToEdgeAsync(
+                edge.Id, tagMeaning.Id, asset.Id, userId, weight: 2);
+
+            // Assert
+            Assert.True(result is Success<TagEdgeTagAttachment>);
+
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var updatedAsset = await verifyDb.RightAssets.FindAsync(asset.Id);
+            Assert.NotNull(updatedAsset);
+            Assert.Equal(4, updatedAsset.Amount); // 5 - 1 = 4
+            Assert.False(updatedAsset.IsBurned); // まだ残量があるため Burn されないこと
+        }
+    }
 }

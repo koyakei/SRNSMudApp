@@ -254,6 +254,111 @@ public class TagRelationServiceTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task AllocateWeightAsync_WhenDeltaIsZero_ThrowsArgumentException()
+    {
+        var (_, service, _) = CreateScope();
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.AllocateWeightAsync(1, 1, 1, "anyUser", 0));
+        Assert.Contains("Manipulation delta cannot be 0", ex.Message);
+    }
+
+    [Fact]
+    public async Task AllocateWeightAsync_WhenRightAssetNotFound_ReturnsFailure()
+    {
+        var (context, service, tid) = CreateScope();
+        await using (context)
+        {
+            var user = $"user_{tid}";
+            await context.SeedUsersAsync(user);
+
+            var item = new Item { Content = $"Item_{tid}", OwnerId = user };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = user };
+            context.Items.Add(item);
+            context.Tags.Add(tag);
+            await context.SaveChangesAsync();
+
+            Result<bool> result = await service.AllocateWeightAsync(999999, item.Id, tag.Id, user, 1);
+            Assert.True(result is Failure f && f.ErrorMessage.Contains("RightAsset not found or unauthorized"));
+        }
+    }
+
+    [Fact]
+    public async Task AllocateWeightAsync_WhenRightAssetOwnedByDifferentUser_ReturnsFailure()
+    {
+        var (context, service, tid) = CreateScope();
+        await using (context)
+        {
+            var userA = $"userA_{tid}";
+            var userB = $"userB_{tid}";
+            await context.SeedUsersAsync(userA, userB);
+
+            var item = new Item { Content = $"Item_{tid}", OwnerId = userA };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userA };
+            context.Items.Add(item);
+            context.Tags.Add(tag);
+            await context.SaveChangesAsync();
+
+            var assetOfB = new RightAsset { TargetTagId = tag.Id, OwnerId = userB, Amount = 5, IsBurned = false };
+            context.RightAssets.Add(assetOfB);
+            await context.SaveChangesAsync();
+
+            // userA が userB 所有の RightAsset を消費しようとする
+            Result<bool> result = await service.AllocateWeightAsync(assetOfB.Id, item.Id, tag.Id, userA, 1);
+            Assert.True(result is Failure f && f.ErrorMessage.Contains("RightAsset not found or unauthorized"));
+        }
+    }
+
+    [Fact]
+    public async Task AllocateWeightAsync_WhenRightAssetIsBurned_ReturnsFailure()
+    {
+        var (context, service, tid) = CreateScope();
+        await using (context)
+        {
+            var user = $"user_{tid}";
+            await context.SeedUsersAsync(user);
+
+            var item = new Item { Content = $"Item_{tid}", OwnerId = user };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = user };
+            context.Items.Add(item);
+            context.Tags.Add(tag);
+            await context.SaveChangesAsync();
+
+            var burnedAsset = new RightAsset { TargetTagId = tag.Id, OwnerId = user, Amount = 5, IsBurned = true };
+            context.RightAssets.Add(burnedAsset);
+            await context.SaveChangesAsync();
+
+            Result<bool> result = await service.AllocateWeightAsync(burnedAsset.Id, item.Id, tag.Id, user, 1);
+            Assert.True(result is Failure f && f.ErrorMessage.Contains("RightAsset not found or unauthorized"));
+        }
+    }
+
+    [Fact]
+    public async Task AllocateWeightAsync_WhenRightAssetAmountInsufficient_ThrowsInvalidOperationException()
+    {
+        var (context, service, tid) = CreateScope();
+        await using (context)
+        {
+            var user = $"user_{tid}";
+            await context.SeedUsersAsync(user);
+
+            var item = new Item { Content = $"Item_{tid}", OwnerId = user };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = user };
+            context.Items.Add(item);
+            context.Tags.Add(tag);
+            await context.SaveChangesAsync();
+
+            var asset = new RightAsset { TargetTagId = tag.Id, OwnerId = user, Amount = 2, IsBurned = false };
+            context.RightAssets.Add(asset);
+            await context.SaveChangesAsync();
+
+            // 残高 2 に対して 5 を消費しようとする
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.AllocateWeightAsync(asset.Id, item.Id, tag.Id, user, 5));
+            Assert.Contains("RightAsset amount is insufficient", ex.Message);
+        }
+    }
+
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>
     {

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services;
 
 namespace SRNSMudApp.Tests;
 
@@ -325,5 +326,239 @@ public class TaggingContractProposeTests : TaggingContractTestBase
         Assert.NotNull(saved);
         Assert.Equal(TradeStatus.Executed, saved!.Status);
         Assert.NotNull(await dbContext.TagRelations.FirstOrDefaultAsync(tr => tr.ItemId == targetItem.Id && tr.TagId == tag.Id));
+    }
+
+    [Fact]
+    public async Task ProposeGratisEdgeContractAsync_WhenTagOwnerAutoAcceptIsEnabled_ShouldExecuteImmediatelyAndCreateEdgeAttachment()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var tagA = new Tag { Name = $"TagA_{tid}", OwnerId = requesterId };
+        var tagB = new Tag { Name = $"TagB_{tid}", OwnerId = requesterId };
+        var requestedTag = new Tag { Name = $"AutoAcceptTag_{tid}", OwnerId = tagOwnerId, AutoAcceptIncomingTaggingRequests = true, CachedWeight = 10 };
+        dbContext.Tags.AddRange(tagA, tagB, requestedTag);
+        await dbContext.SaveChangesAsync();
+
+        var edge = new TagEdge { SourceTagId = tagA.Id, TargetTagId = tagB.Id, OwnerId = requesterId };
+        dbContext.TagEdges.Add(edge);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisEdgeContractAsync(
+            requesterId,
+            tagOwnerId,
+            edge.Id,
+            requestedTag.Id,
+            requestType: TaggingRequestType.Add,
+            proposedWeight: 2,
+            message: "edge auto accept");
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        dbContext.ChangeTracker.Clear();
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Executed, saved!.Status);
+
+        TagEdgeTagAttachment? attachment = await dbContext.TagEdgeTagAttachments
+            .FirstOrDefaultAsync(a => a.TagEdgeId == edge.Id && a.TagId == requestedTag.Id);
+        Assert.NotNull(attachment);
+        Assert.Equal(2, attachment.Weight);
+    }
+
+    [Fact]
+    public async Task ProposeGratisEdgeContractAsync_WhenEdgeDoesNotExist_ReturnsFailure()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var requestedTag = new Tag { Name = $"Tag_{tid}", OwnerId = tagOwnerId };
+        dbContext.Tags.Add(requestedTag);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeGratisEdgeContractAsync(
+            requesterId,
+            tagOwnerId,
+            999999,
+            requestedTag.Id,
+            requestType: TaggingRequestType.Add);
+
+        // Assert
+        Assert.True(result is Failure);
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException("Expected Failure")
+        };
+        Assert.Equal(ContractMessages.TagEdgeNotFound, fail.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ProposeMutualContractAsync_WhenTagOwnerAutoAcceptIsEnabled_ShouldExecuteImmediatelyAndCreateBothRelations()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var targetItem1 = new Item { Content = $"TargetItem1_{tid}", OwnerId = requesterId };
+        var targetItem2 = new Item { Content = $"TargetItem2_{tid}", OwnerId = tagOwnerId };
+        var requestedTag = new Tag { Name = $"ReqTag_{tid}", OwnerId = tagOwnerId, AutoAcceptIncomingTaggingRequests = true, CachedWeight = 10 };
+        var offeredTag = new Tag { Name = $"OffTag_{tid}", OwnerId = requesterId, CachedWeight = 10 };
+        dbContext.Items.AddRange(targetItem1, targetItem2);
+        dbContext.Tags.AddRange(requestedTag, offeredTag);
+        await dbContext.SaveChangesAsync();
+
+        var rightAsset = new RightAsset { Amount = 1, OwnerId = requesterId, TargetTagId = requestedTag.Id };
+        dbContext.RightAssets.Add(rightAsset);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeMutualContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem1.Id,
+            requestedTag.Id,
+            targetItem2.Id,
+            offeredTag.Id,
+            rightAsset.Id,
+            TaggingRequestType.Add,
+            proposedWeight: 1);
+
+        // Assert
+        Assert.True(result is Success<TaggingRequestEntity>);
+        var contract = result switch
+        {
+            Success<TaggingRequestEntity> s => s.Value,
+            _ => throw new InvalidOperationException("Expected Success")
+        };
+
+        dbContext.ChangeTracker.Clear();
+        TaggingRequestEntity? saved = await dbContext.TaggingRequestEntities
+            .FirstOrDefaultAsync(c => c.Id == contract.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(TradeStatus.Executed, saved!.Status);
+
+        TagRelation? rel1 = await dbContext.TagRelations
+            .FirstOrDefaultAsync(tr => tr.ItemId == targetItem1.Id && tr.TagId == requestedTag.Id);
+        Assert.NotNull(rel1);
+
+        TagRelation? rel2 = await dbContext.TagRelations
+            .FirstOrDefaultAsync(tr => tr.ItemId == targetItem2.Id && tr.TagId == offeredTag.Id);
+        Assert.NotNull(rel2);
+
+        RightAsset? consumedAsset = await dbContext.RightAssets.FindAsync(rightAsset.Id);
+        Assert.NotNull(consumedAsset);
+        Assert.True(consumedAsset!.IsBurned);
+    }
+
+    [Fact]
+    public async Task ProposeMutualContractAsync_WhenTargetItemDoesNotExist_ReturnsFailure()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var offeredItem = new Item { Content = $"OfferedItem_{tid}", OwnerId = tagOwnerId };
+        var tag1 = new Tag { Name = $"Tag1_{tid}", OwnerId = tagOwnerId };
+        var tag2 = new Tag { Name = $"Tag2_{tid}", OwnerId = requesterId };
+        dbContext.Items.Add(offeredItem);
+        dbContext.Tags.AddRange(tag1, tag2);
+        await dbContext.SaveChangesAsync();
+
+        var rightAsset = new RightAsset { Amount = 1, OwnerId = requesterId, TargetTagId = tag1.Id };
+        dbContext.RightAssets.Add(rightAsset);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.ProposeMutualContractAsync(
+            requesterId,
+            tagOwnerId,
+            999999,
+            tag1.Id,
+            offeredItem.Id,
+            tag2.Id,
+            rightAsset.Id);
+
+        // Assert
+        Assert.True(result is Failure);
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException("Expected Failure")
+        };
+        Assert.Equal("対象アイテムが見つかりません。", fail.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ProposeMutualContractAsync_WhenAutoAcceptFails_ReturnsFailureWithAutoAcceptFailedPrefix()
+    {
+        // Arrange
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var requesterId = $"req_{tid}";
+        var tagOwnerId = $"owner_{tid}";
+        await dbContext.SeedUsersAsync(requesterId, tagOwnerId);
+
+        var targetItem1 = new Item { Content = $"TargetItem1_{tid}", OwnerId = requesterId };
+        var targetItem2 = new Item { Content = $"TargetItem2_{tid}", OwnerId = tagOwnerId };
+        var requestedTag = new Tag { Name = $"ReqTag_{tid}", OwnerId = tagOwnerId, AutoAcceptIncomingTaggingRequests = true, CachedWeight = 10 };
+        dbContext.Items.AddRange(targetItem1, targetItem2);
+        dbContext.Tags.Add(requestedTag);
+        await dbContext.SaveChangesAsync();
+
+        var rightAsset = new RightAsset { Amount = 1, OwnerId = requesterId, TargetTagId = requestedTag.Id };
+        dbContext.RightAssets.Add(rightAsset);
+        await dbContext.SaveChangesAsync();
+
+        var nonExistentOfferedTagId = 999999;
+
+        // Act: 存在しない offeredTagId を指定することで、リクエスト生成後の自動承認（AcceptContractAsync）が失敗する
+        var result = await service.ProposeMutualContractAsync(
+            requesterId,
+            tagOwnerId,
+            targetItem1.Id,
+            requestedTag.Id,
+            targetItem2.Id,
+            nonExistentOfferedTagId,
+            rightAsset.Id,
+            TaggingRequestType.Add,
+            proposedWeight: 1);
+
+        // Assert
+        Assert.True(result is Failure);
+        var fail = result switch
+        {
+            Failure f => f,
+            _ => throw new InvalidOperationException("Expected Failure")
+        };
+        Assert.StartsWith(ContractMessages.AutoAcceptFailedFormatPrefix, fail.ErrorMessage);
     }
 }
