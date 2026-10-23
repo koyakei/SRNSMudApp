@@ -68,9 +68,33 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task DeleteItemAsync(int itemId)
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        Item? item = await context.Items.FindAsync(itemId);
+        Item? item = await context.Items
+            .Include(i => i.TagTarget)
+            .FirstOrDefaultAsync(i => i.Id == itemId);
         if (item is not null)
         {
+            // 外部キー制約（DeleteBehavior.Restrict）による削除失敗を防ぐため、
+            // 当該アイテム宛ての未決コントラクト提案やリクエスト本体を事前にクリーンアップする
+            if (item.TagTargetId > 0)
+            {
+                List<TaggingRequestEntity> relatedTaggingRequests = await context.TaggingRequestEntities
+                    .Where(t => t.TargetId == item.TagTargetId || t.RequestItemId == item.Id)
+                    .ToListAsync();
+                if (relatedTaggingRequests.Count > 0)
+                {
+                    context.TaggingRequestEntities.RemoveRange(relatedTaggingRequests);
+                }
+            }
+
+            // 当該アイテムへのリプライ（コメント等）も併せて削除する
+            List<Item> replyItems = await context.Items
+                .Where(i => i.ParentItemId == itemId || i.RootItemId == itemId)
+                .ToListAsync();
+            if (replyItems.Count > 0)
+            {
+                context.Items.RemoveRange(replyItems);
+            }
+
             _ = context.Items.Remove(item);
             _ = await context.SaveChangesAsync();
         }

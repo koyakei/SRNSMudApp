@@ -381,6 +381,27 @@ public partial class ItemCard : IAsyncDisposable
 
     private async Task ToggleItemVoteAsync(bool isUpvote)
     {
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            _ = Snackbar.Add(ErrorMessages.LoginRequired, Severity.Warning);
+            return;
+        }
+
+        // 他人がownerのアイテムで本文の一部が選択されている場合、引用投稿＋Good/Bad投票＋分割リクエストを実行する
+        if (await SplitCoordinator.GetValidSelectedTextForSplitAsync(Item, CurrentUserId) is { } selectedText)
+        {
+            Func<Task>? ensureAsyncForSplit = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
+            ItemSplitRequest? splitResult = await SplitCoordinator.RequestSplitWithVoteAsync(
+                Item, CurrentUserId, CurrentUserGoodTagId, isUpvote, ensureAsyncForSplit, selectedText);
+
+            if (splitResult is not null)
+            {
+                await ReloadSplitRequestsAsync();
+                await NotifyDataChangedAsync();
+            }
+            return;
+        }
+
         Func<Task>? ensureAsync = OnEnsureSystemTags.HasDelegate ? OnEnsureSystemTags.InvokeAsync : null;
         var success = await VoteCoordinator.ToggleVoteAsync(Item.Id, CurrentUserId, CurrentUserGoodTagId, isUpvote, ensureAsync);
         if (success)

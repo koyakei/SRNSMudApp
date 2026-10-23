@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
 using SRNSMudApp.Resources;
 
@@ -75,19 +77,31 @@ public partial class ItemSplitService(
             return Result.Fail<ItemSplitRequest>(ErrorMessages.SplitSelfItemNotAllowed);
         }
 
-        string normalizedContent = (originalItem.Content ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
-        string normalizedSelected = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        if (string.IsNullOrEmpty(originalItem.Content) || !normalizedContent.Contains(normalizedSelected, StringComparison.Ordinal))
+        (int index, string textToReplace) = FindSelectedText(originalItem.Content ?? string.Empty, selectedText);
+        if (index < 0)
         {
             return Result.Fail<ItemSplitRequest>(ErrorMessages.SplitSelectedTextNotInContent);
         }
 
-        // requesterQuoteItemId が指定された場合、その引用アイテムが requesterUserId 所有のものかを確認する
+        if (IntersectsExistingLink(originalItem.Content!, index, textToReplace.Length))
+        {
+            return Result.Fail<ItemSplitRequest>("既存のリンク文字列の途中で分割することはできません。");
+        }
+
+        const int maxReplacementLength = 22; // "/ItemDetail/2147483647".Length
+        if (originalItem.Content!.Length - textToReplace.Length + maxReplacementLength > 1000)
+        {
+            return Result.Fail<ItemSplitRequest>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
+        }
+
+        // requesterQuoteItemId が指定された場合、その引用アイテムが requesterUserId 所有であり、
+        // かつ元アイテムの引用であるかを確認する（他アイテムの誤削除や権限昇格を防ぐ）
         if (requesterQuoteItemId.HasValue)
         {
             bool quoteItemValid = await context.Items.AnyAsync(
-                i => i.Id == requesterQuoteItemId.Value && i.OwnerId == requesterUserId,
+                i => i.Id == requesterQuoteItemId.Value &&
+                     i.OwnerId == requesterUserId &&
+                     i.QuotedItemId == originalItemId,
                 cancellationToken);
             if (!quoteItemValid)
             {
@@ -95,11 +109,14 @@ public partial class ItemSplitService(
             }
         }
 
-        // 同一アイテム・同一テキスト・同一送信者による重複リクエスト（申請中）を防止
+        string crlf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+        string lf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // 同一アイテム・同一テキスト・同一送信者による重複リクエスト（申請中）を防止（改行コードの差を吸収）
         bool duplicateExists = await context.ItemSplitRequests
             .AnyAsync(r => r.OriginalItemId == originalItemId &&
                            r.RequesterUserId == requesterUserId &&
-                           r.SelectedText == selectedText &&
+                           (r.SelectedText == selectedText || r.SelectedText == crlf || r.SelectedText == lf) &&
                            r.Status == TradeStatus.Proposed, cancellationToken);
 
         if (duplicateExists)
@@ -183,6 +200,17 @@ public partial class ItemSplitService(
             return Result.Fail<Item>(ErrorMessages.SplitSelectedTextNotInContent);
         }
 
+        if (IntersectsExistingLink(originalItem.Content, index, textToReplace.Length))
+        {
+            return Result.Fail<Item>("既存のリンク文字列の途中で分割することはできません。");
+        }
+
+        const int maxReplacementLength = 22;
+        if (originalItem.Content.Length - textToReplace.Length + maxReplacementLength > 1000)
+        {
+            return Result.Fail<Item>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
+        }
+
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -242,6 +270,17 @@ public partial class ItemSplitService(
             return Result.Fail<Item>(ErrorMessages.SplitOriginalItemContentChanged);
         }
 
+        if (IntersectsExistingLink(originalItem.Content, index, requestTextToReplace.Length))
+        {
+            return Result.Fail<Item>("既存のリンク文字列の途中で分割することはできません。");
+        }
+
+        const int maxReplacementLength = 22;
+        if (originalItem.Content.Length - requestTextToReplace.Length + maxReplacementLength > 1000)
+        {
+            return Result.Fail<Item>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
+        }
+
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -296,6 +335,7 @@ public partial class ItemSplitService(
     ///     ApplicationDbContextModelSnapshot に定義されたすべてのエンティティリレーションを漏れなく新アイテムへ引き継ぎ、
     ///     引用アイテム自体を削除する。
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1508:Avoid dead code", Justification = "Payload is deserialized from JSON and must be type-checked at runtime")]
     private static async Task MigrateRequesterQuoteItemAsync(
         ApplicationDbContext context,
         int quoteItemId,
@@ -495,6 +535,21 @@ public partial class ItemSplitService(
             targetItem.TaggingRequestEntityId = quoteItem.TaggingRequestEntityId;
         }
 
+        // 相互タグ付けコントラクト (Mutual) で quoteItem が対価アイテム (OfferedTargetItemId) に指定されている場合、新アイテムへ移行する
+        string quoteItemIdStr = quoteItemId.ToString(CultureInfo.InvariantCulture);
+        List<TaggingRequestEntity> mutualRequests = await context.TaggingRequestEntities
+            .Where(t => t.ContractType == ContractTypes.Mutual && t.ContractPayloadJson.Contains(quoteItemIdStr))
+            .ToListAsync(cancellationToken);
+
+        foreach (TaggingRequestEntity mutualReq in mutualRequests)
+        {
+            if (mutualReq.Payload is MutualPayload mutual && mutual.OfferedTargetItemId == quoteItemId)
+            {
+                mutualReq.Payload = mutual with { OfferedTargetItemId = targetItem.Id };
+                mutualReq.UpdatedDate = DateTime.UtcNow;
+            }
+        }
+
         // 7. ContentReport（通報）の ItemId を新アイテムへ付け替える
         List<ContentReport> contentReports = await context.ContentReports
             .Where(r => r.ItemId == quoteItemId)
@@ -603,6 +658,82 @@ public partial class ItemSplitService(
         _ = context.Items.Remove(quoteItem);
     }
 
+    private static bool IntersectsExistingLink(string content, int targetIndex, int targetLength)
+    {
+        int targetEnd = targetIndex + targetLength;
+        foreach (System.Text.RegularExpressions.Match match in ContentParser.UrlRegex().Matches(content))
+        {
+            int matchEnd = match.Index + match.Length;
+            if (Math.Max(targetIndex, match.Index) < Math.Min(targetEnd, matchEnd))
+            {
+                if (targetIndex > match.Index || targetEnd < matchEnd)
+                {
+                    return true;
+                }
+            }
+        }
+        foreach (System.Text.RegularExpressions.Match match in ContentParser.InternalLinkRegex().Matches(content))
+        {
+            int matchEnd = match.Index + match.Length;
+            if (Math.Max(targetIndex, match.Index) < Math.Min(targetEnd, matchEnd))
+            {
+                if (targetIndex > match.Index || targetEnd < matchEnd)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static async Task DeleteRequesterQuoteItemAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        CancellationToken cancellationToken)
+    {
+        Item? quoteItem = await context.Items
+            .Include(i => i.TagTarget)
+            .FirstOrDefaultAsync(i => i.Id == quoteItemId, cancellationToken);
+
+        if (quoteItem is null)
+        {
+            return;
+        }
+
+        // 1. quoteItem をターゲットまたはリクエスト本体とする TaggingRequestEntity を削除
+        if (quoteItem.TagTargetId > 0)
+        {
+            List<TaggingRequestEntity> relatedTaggingRequests = await context.TaggingRequestEntities
+                .Where(t => t.TargetId == quoteItem.TagTargetId || t.RequestItemId == quoteItem.Id)
+                .ToListAsync(cancellationToken);
+            if (relatedTaggingRequests.Count > 0)
+            {
+                context.TaggingRequestEntities.RemoveRange(relatedTaggingRequests);
+            }
+        }
+
+        // 2. quoteItem に対するリプライ（コメント等）を削除
+        List<Item> replyItems = await context.Items
+            .Where(i => i.ParentItemId == quoteItemId || i.RootItemId == quoteItemId)
+            .ToListAsync(cancellationToken);
+        if (replyItems.Count > 0)
+        {
+            context.Items.RemoveRange(replyItems);
+        }
+
+        // 3. quoteItem を引用している別アイテムがあれば引用先を解除
+        List<Item> quotingItems = await context.Items
+            .Where(i => i.QuotedItemId == quoteItemId && i.Id != quoteItemId)
+            .ToListAsync(cancellationToken);
+        foreach (Item q in quotingItems)
+        {
+            q.QuotedItemId = null;
+        }
+
+        // 4. quoteItem 自体を削除
+        _ = context.Items.Remove(quoteItem);
+    }
+
     private static (int Index, string TextToReplace) FindSelectedText(string content, string selectedText)
     {
         string crlf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
@@ -681,6 +812,13 @@ public partial class ItemSplitService(
         request.RejectReason = rejectReason;
         request.UpdatedDate = DateTime.UtcNow;
 
+        // 却下時、連動して作成された引用アイテムを自動削除する（案A）
+        if (request.RequesterQuoteItemId.HasValue)
+        {
+            await DeleteRequesterQuoteItemAsync(context, request.RequesterQuoteItemId.Value, cancellationToken);
+            request.RequesterQuoteItemId = null;
+        }
+
         _ = await context.SaveChangesAsync(cancellationToken);
 
         _notificationService.NotifyNotificationsChanged();
@@ -725,6 +863,13 @@ public partial class ItemSplitService(
 
         request.Status = TradeStatus.Canceled;
         request.UpdatedDate = DateTime.UtcNow;
+
+        // 取り下げ時、連動して作成された引用アイテムを自動削除する（案A）
+        if (request.RequesterQuoteItemId.HasValue)
+        {
+            await DeleteRequesterQuoteItemAsync(context, request.RequesterQuoteItemId.Value, cancellationToken);
+            request.RequesterQuoteItemId = null;
+        }
 
         _ = await context.SaveChangesAsync(cancellationToken);
 

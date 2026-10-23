@@ -4,7 +4,9 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using SRNSMudApp.Data;
+using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
 using SRNSMudApp.Services;
 using SRNSMudApp.Tests.TestSupport;
 
@@ -1032,7 +1034,7 @@ public class ItemSplitServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RejectSplitAsync_WithRequesterQuoteItem_DoesNotDeleteQuoteItem()
+    public async Task RejectSplitAsync_WithRequesterQuoteItem_DeletesQuoteItem()
     {
         var (dbContext, service, _, tid) = CreateScope();
         await using (dbContext)
@@ -1078,19 +1080,19 @@ public class ItemSplitServiceTests : IAsyncLifetime
             Assert.True(result is Success<bool>);
             dbContext.ChangeTracker.Clear();
 
-            // 引用アイテムが削除されずに残っていること
+            // 案A: 引用アイテムが自動削除されること
             Item? remainingQuote = await dbContext.Items.FindAsync(quoteItem.Id);
-            Assert.NotNull(remainingQuote);
-            Assert.Equal(quoteItem.Id, remainingQuote.Id);
+            Assert.Null(remainingQuote);
 
             ItemSplitRequest? updatedReq = await dbContext.ItemSplitRequests.FindAsync(request.Id);
             Assert.NotNull(updatedReq);
             Assert.Equal(TradeStatus.Rejected, updatedReq.Status);
+            Assert.Null(updatedReq.RequesterQuoteItemId);
         }
     }
 
     [Fact]
-    public async Task CancelSplitAsync_WithRequesterQuoteItem_DoesNotDeleteQuoteItem()
+    public async Task CancelSplitAsync_WithRequesterQuoteItem_DeletesQuoteItem()
     {
         var (dbContext, service, _, tid) = CreateScope();
         await using (dbContext)
@@ -1136,14 +1138,14 @@ public class ItemSplitServiceTests : IAsyncLifetime
             Assert.True(result is Success<bool>);
             dbContext.ChangeTracker.Clear();
 
-            // 引用アイテムが削除されずに残っていること
+            // 案A: 引用アイテムが自動削除されること
             Item? remainingQuote = await dbContext.Items.FindAsync(quoteItem.Id);
-            Assert.NotNull(remainingQuote);
-            Assert.Equal(quoteItem.Id, remainingQuote.Id);
+            Assert.Null(remainingQuote);
 
             ItemSplitRequest? updatedReq = await dbContext.ItemSplitRequests.FindAsync(request.Id);
             Assert.NotNull(updatedReq);
             Assert.Equal(TradeStatus.Canceled, updatedReq.Status);
+            Assert.Null(updatedReq.RequesterQuoteItemId);
         }
     }
 
@@ -2493,6 +2495,201 @@ public class ItemSplitServiceTests : IAsyncLifetime
             var updatedNewItem = await dbContext.Items.FindAsync(newItem.Id);
             Assert.NotNull(updatedNewItem);
             Assert.Equal(replyToBounty.Id, updatedNewItem.TaggingRequestEntityId);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WithMismatchedQuoteItem_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            var otherItem = new Item { OwnerId = ownerId, Content = $"Other_{tid}" };
+            dbContext.Items.AddRange(originalItem, otherItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = otherItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(
+                originalItem.Id, "Target", requesterId, requesterQuoteItemId: quoteItem.Id);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains(ErrorMessages.SplitQuoteItemNotFound, failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithMutualContract_MigratesOfferedTargetItemId()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} [SplitTarget]" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+
+            var tag = new Tag { Name = $"tag_{tid}", OwnerId = requesterId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // 相互提案コントラクト（OfferedTargetItemId に quoteItem.Id が指定されている）
+            var mutualContract = new TaggingRequestEntity
+            {
+                TargetId = originalItem.TagTargetId,
+                RequestedTagId = tag.Id,
+                OwnerId = requesterId,
+                ContractType = ContractTypes.Mutual,
+                Payload = new MutualPayload(quoteItem.Id, tag.Id)
+            };
+            dbContext.TaggingRequestEntities.Add(mutualContract);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "[SplitTarget]",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            Assert.True(result is Success<Item>);
+            var newItem = result switch
+            {
+                Success<Item> s => s.Value,
+                _ => throw new Xunit.Sdk.XunitException("Expected Success<Item>")
+            };
+
+            dbContext.ChangeTracker.Clear();
+            var updatedContract = await dbContext.TaggingRequestEntities.FindAsync(mutualContract.Id);
+            Assert.NotNull(updatedContract);
+            Assert.Equal(ContractTypes.Mutual, updatedContract.ContractType);
+            var mutual = updatedContract.Payload switch
+            {
+                MutualPayload m => m,
+                _ => throw new Xunit.Sdk.XunitException("Expected MutualPayload")
+            };
+            Assert.Equal(newItem.Id, mutual.OfferedTargetItemId);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WithCrlfDuplicate_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Line1_{tid}\r\nLine2_{tid}\r\nLine3_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 1回目: \r\n 形式でリクエスト
+            Result<ItemSplitRequest> res1 = await service.RequestSplitAsync(originalItem.Id, $"Line1_{tid}\r\nLine2_{tid}", requesterId);
+            Assert.True(res1 is Success<ItemSplitRequest>);
+
+            // 2回目: \n 形式でリクエスト（改行コード正規化により重複として弾かれる）
+            Result<ItemSplitRequest> res2 = await service.RequestSplitAsync(originalItem.Id, $"Line1_{tid}\nLine2_{tid}", requesterId);
+            Assert.True(res2 is Failure);
+            var failure = res2 switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains(ErrorMessages.SplitDuplicateRequestExists, failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenIntersectsExistingLink_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Start_{tid} /ItemDetail/12345 End_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // リンクの途中を横断する選択
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, $"_{tid} /ItemDe", requesterId);
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("既存のリンク文字列の途中で分割することはできません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenExceedsMaxContentLength_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            // 995文字のアイテムを作成
+            string prefix = new('a', 990);
+            var originalItem = new Item { OwnerId = ownerId, Content = $"{prefix}12345" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // "12345"(5文字)を分割しようとすると、リンク置換 ("/ItemDetail/10000000" 等) によって1000文字を超える
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "12345", requesterId);
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。", failure.ErrorMessage);
         }
     }
 }

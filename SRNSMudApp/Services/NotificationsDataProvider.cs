@@ -134,12 +134,12 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 .Where(r => r.OwnerId == userId && r.Status != ReportStatus.Pending && r.HandledDate != null)
                 .ToListAsync(cancellationToken);
 
-            // 8. Split requests targeting the user (as item owner)
+            // 8. Split requests targeting the user (as item owner, excluding canceled requests)
             List<ItemSplitRequest> splitRequests = await context.ItemSplitRequests!
                 .AsNoTracking()
                 .Include(r => r.RequesterUser)
                 .Include(r => r.OriginalItem)
-                .Where(r => r.OwnerUserId == userId && r.RequesterUserId != userId)
+                .Where(r => r.OwnerUserId == userId && r.RequesterUserId != userId && r.Status != TradeStatus.Canceled)
                 .ToListAsync(cancellationToken);
 
             // 9. Resolved split requests (approved/rejected) for the requester

@@ -118,6 +118,12 @@ public class ItemCardSplitCoordinator(
             return null;
         }
 
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            _ = _snackbar.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error);
+            return null;
+        }
+
         string? selectedText = await GetSelectedTextAsync();
         if (selectedText is null)
         {
@@ -284,6 +290,124 @@ public class ItemCardSplitCoordinator(
     /// <inheritdoc />
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "UI 層の操作失敗時に例外メッセージを Snackbar で安全に通知し、ロールバックを行うため")]
+    public async Task<ItemSplitRequest?> RequestSplitWithVoteAsync(
+        Item item,
+        string currentUserId,
+        int? goodTagId,
+        bool isUpvote,
+        Func<Task>? ensureSystemTagsAsync,
+        string? selectedText = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return null;
+        }
+
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            _ = _snackbar.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error);
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            selectedText = await GetSelectedTextAsync();
+            if (selectedText is null)
+            {
+                return null;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            _ = _snackbar.Add("分割するテキストが選択されていません。", Severity.Warning);
+            return null;
+        }
+
+        if (!ContainsSelectedText(item.Content, selectedText))
+        {
+            _ = _snackbar.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error);
+            return null;
+        }
+
+        // 1. 選択されたテキストを本文として引用アイテムを投稿
+        Item? quoteItem;
+        try
+        {
+            quoteItem = await _itemQuoteService.CreateQuoteItemAsync(item.Id, selectedText, currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _ = _snackbar.Add($"引用アイテムの作成に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        if (quoteItem is null)
+        {
+            _ = _snackbar.Add("引用アイテムの作成に失敗しました。", Severity.Error);
+            return null;
+        }
+
+        // 2. 引用アイテムに対してGood/Bad投票
+        bool voteSuccess;
+        try
+        {
+            voteSuccess = await _voteCoordinator.ToggleVoteAsync(
+                quoteItem.Id, currentUserId, goodTagId, isUpvote, ensureSystemTagsAsync);
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"投票に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        if (!voteSuccess)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add("投票に失敗しました。", Severity.Error);
+            return null;
+        }
+
+        // 3. 分割リクエストを送信 (RequesterQuoteItemId = quoteItem.Id)
+        Result<ItemSplitRequest> splitResult;
+        try
+        {
+            splitResult = await _itemSplitService.RequestSplitAsync(
+                item.Id, selectedText, currentUserId, quoteItem.Id);
+        }
+        catch (Exception ex)
+        {
+            await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+            _ = _snackbar.Add($"分割リクエストの送信に失敗しました: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        switch (splitResult)
+        {
+            case Success<ItemSplitRequest> success:
+                string actionText = isUpvote ? "Good" : "Bad";
+                _ = _snackbar.Add($"引用して{actionText}投票し、アイテム分割リクエストを送信しました。", Severity.Success);
+                await ClearSelectionAsync();
+                return success.Value;
+
+            case Failure fail:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                _ = _snackbar.Add(fail.ErrorMessage, Severity.Error);
+                return null;
+
+            default:
+                await _itemCardDataProvider.DeleteItemAsync(quoteItem.Id);
+                return null;
+        }
+    }
+
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "UI 層の操作失敗時に例外メッセージを Snackbar で安全に通知し、ロールバックを行うため")]
     public async Task<ItemSplitWithReactionResult?> RequestSplitWithReactionAsync(
         Item item,
         string currentUserId,
@@ -299,6 +423,12 @@ public class ItemCardSplitCoordinator(
         if (string.IsNullOrWhiteSpace(currentUserId))
         {
             _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return null;
+        }
+
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            _ = _snackbar.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error);
             return null;
         }
 
@@ -430,6 +560,12 @@ public class ItemCardSplitCoordinator(
         if (string.IsNullOrWhiteSpace(currentUserId))
         {
             _ = _snackbar.Add("リクエストを送信するにはログインが必要です。", Severity.Warning);
+            return TagAddOutcome.None;
+        }
+
+        if (((IOwnable)item).IsOwnedBy(currentUserId))
+        {
+            _ = _snackbar.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error);
             return TagAddOutcome.None;
         }
 

@@ -1,4 +1,6 @@
 @page "/Item/WasmDetail/{ItemId:int}"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using MudBlazor
 @using SRNSMudApp.Client.Models
 @using SRNSMudApp.Client.Models.Api
@@ -211,14 +213,24 @@
                                         申請者: @(splitReq.RequesterUserName ?? splitReq.RequesterUserId) | @splitReq.CreatedDate.ToLocalTime().ToString("g")
                                     </MudText>
                                     <div class="d-flex align-center gap-2">
-                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                   OnClick="@(() => ApproveSplitAsync(splitReq.Id))">
-                                            承認
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                   OnClick="@(() => RejectSplitAsync(splitReq.Id))">
-                                            却下
-                                        </MudButton>
+                                        @if (IsOwner)
+                                        {
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       OnClick="@(() => ApproveSplitAsync(splitReq.Id))">
+                                                承認
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                       OnClick="@(() => RejectSplitAsync(splitReq.Id))">
+                                                却下
+                                            </MudButton>
+                                        }
+                                        else if (!string.IsNullOrEmpty(_currentUserId) && splitReq.RequesterUserId == _currentUserId)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                                       OnClick="@(() => CancelSplitAsync(splitReq.Id))">
+                                                取り下げ
+                                            </MudButton>
+                                        }
                                     </div>
                                 </div>
                                 <MudAlert Severity="Severity.Normal" Dense="true" Class="my-1">
@@ -246,14 +258,20 @@
                                           Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3"
                                           Placeholder="分割して新しいアイテムとして独立させたい部分を入力してください" />
                             <div class="d-flex justify-end gap-2">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                           OnClick="SplitDirectlyAsync" Disabled="@(string.IsNullOrWhiteSpace(SplitSelectedText) || IsSplitting)">
-                                    直接分割（所有者）
-                                </MudButton>
-                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
-                                           OnClick="RequestSplitAsync" Disabled="@(string.IsNullOrWhiteSpace(SplitSelectedText) || IsSplitting)">
-                                    分割リクエスト
-                                </MudButton>
+                                @if (IsOwner)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="SplitDirectlyAsync" Disabled="@(string.IsNullOrWhiteSpace(SplitSelectedText) || IsSplitting)">
+                                        直接分割（所有者）
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                               OnClick="RequestSplitAsync" Disabled="@(string.IsNullOrWhiteSpace(SplitSelectedText) || IsSplitting)">
+                                        分割リクエスト
+                                    </MudButton>
+                                }
                             </div>
                         </div>
                     </MudExpansionPanel>
@@ -339,11 +357,17 @@
     [Parameter]
     public int ItemId { get; set; }
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
     [Inject]
     public required IItemListApiClient ApiClient { get; set; }
 
     [Inject]
     public required ISnackbar Snackbar { get; set; }
+
+    private string? _currentUserId;
+    private bool IsOwner => !string.IsNullOrEmpty(_currentUserId) && _currentUserId == Item?.OwnerUserId;
 
     public ItemDto? Item { get; private set; }
 
@@ -375,6 +399,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            _currentUserId = authState.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
         await LoadItemAsync();
     }
 
@@ -790,6 +820,28 @@
         catch (Exception ex)
         {
             Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CancelSplitAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.CancelItemSplitAsync(requestId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add("分割リクエストを取り下げました。", Severity.Info);
+                await LoadItemAsync();
+            }
+            else
+            {
+                Snackbar.Add("分割リクエストの取り下げに失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
         }
     }
 

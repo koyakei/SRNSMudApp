@@ -284,6 +284,40 @@ public class ItemCardDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task DeleteItemAsync_WithRepliesAndTaggingRequests_DeletesSuccessfully()
+    {
+        var (db, sut, userId, _, itemId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var childItem = new Item { Content = $"reply_{tid}", OwnerId = userId, ParentItemId = itemId };
+            db.Items.Add(childItem);
+
+            var tag = new Tag { Name = $"tag_del_{tid}", OwnerId = userId };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var taggingReq = new TaggingRequestEntity
+            {
+                TargetId = itemId,
+                RequestedTagId = tag.Id,
+                OwnerId = userId
+            };
+            db.TaggingRequestEntities.Add(taggingReq);
+            await db.SaveChangesAsync();
+
+            // Act: 削除
+            await sut.DeleteItemAsync(itemId);
+
+            db.ChangeTracker.Clear();
+
+            // Assert: リプライ・リクエストも含めて正常に削除されること
+            Assert.Null(await db.Items.FindAsync(itemId));
+            Assert.Null(await db.Items.FindAsync(childItem.Id));
+            Assert.Null(await db.TaggingRequestEntities.FindAsync(taggingReq.Id));
+        }
+    }
+
     /// <summary>テスト用のシンプルなファクトリ。</summary>
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>

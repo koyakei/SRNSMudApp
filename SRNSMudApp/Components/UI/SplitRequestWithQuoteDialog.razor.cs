@@ -65,22 +65,27 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
         _isSubmitting = true;
         try
         {
-            // 引用コメントが入力された場合、選択テキスト(SelectedText)を本文とした引用アイテムを作成し、
-            // 入力されたコメントはその引用アイテムへのリプライとして保存する。
+            // 選択テキスト(SelectedText)を本文とした引用アイテムを作成する。
+            // 引用コメントが入力された場合は、その引用アイテムへのリプライとして保存する。
             // （承認時に引用アイテムが分割後の新アイテムへ置き換わる際、コメントもリプライとして新アイテムへ引き継がれる）
-            Data.Item? createdQuote = null;
+            string quoteBody = !string.IsNullOrWhiteSpace(SelectedText) ? SelectedText : _quoteContent;
+            if (string.IsNullOrWhiteSpace(quoteBody))
+            {
+                Snackbar.Add("引用するテキストが指定されていません。", Severity.Warning);
+                return;
+            }
+
+            Data.Item? createdQuote = await ItemQuoteService.CreateQuoteItemAsync(
+                QuotedItem.Id, quoteBody, CurrentUserId);
+
+            if (createdQuote is null)
+            {
+                Snackbar.Add("引用の投稿に失敗しました。", Severity.Error);
+                return;
+            }
+
             if (!string.IsNullOrWhiteSpace(_quoteContent))
             {
-                string quoteBody = !string.IsNullOrWhiteSpace(SelectedText) ? SelectedText : _quoteContent;
-                createdQuote = await ItemQuoteService.CreateQuoteItemAsync(
-                    QuotedItem.Id, quoteBody, CurrentUserId);
-
-                if (createdQuote is null)
-                {
-                    Snackbar.Add("引用の投稿に失敗しました。", Severity.Error);
-                    return;
-                }
-
                 Data.Item? commentReply = await ItemReplyService.AddItemReplyAsync(
                     createdQuote.Id,
                     _quoteContent,
@@ -96,7 +101,7 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
                 }
             }
 
-            SplitRequestWithQuoteDialogResult dialogResult = new(createdQuote?.Id, createdQuote);
+            SplitRequestWithQuoteDialogResult dialogResult = new(createdQuote.Id, createdQuote);
             MudDialog.Close(DialogResult.Ok(dialogResult));
         }
         finally
@@ -110,10 +115,9 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
 ///     <see cref="SplitRequestWithQuoteDialog" /> の戻り値。
 /// </summary>
 /// <param name="CreatedQuoteItemId">
-///     引用コメントが入力・保存された場合に作成された引用アイテムのID。
-///     引用コメントが省略された場合は null。
+///     作成された引用アイテムのID。
 /// </param>
 /// <param name="CreatedQuoteItem">
-///     引用コメントが入力・保存された場合に作成された引用アイテムのインスタンス。
+///     作成された引用アイテムのインスタンス。
 /// </param>
 public sealed record SplitRequestWithQuoteDialogResult(int? CreatedQuoteItemId, Data.Item? CreatedQuoteItem = null);

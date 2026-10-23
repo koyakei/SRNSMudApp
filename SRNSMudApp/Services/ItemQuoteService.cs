@@ -42,9 +42,13 @@ public class ItemQuoteService(
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        // 引用元のアイテムが存在することを確認する
-        var targetExists = await context.Items.AnyAsync(i => i.Id == quotedItemId, cancellationToken);
-        if (!targetExists)
+        // 引用元のアイテムが存在することを確認し、公開範囲（IsPrivate / TargetUserGroupId）を取得する。
+        // （非公開・グループ限定アイテムの引用が公開タイムラインへ流出するのを防ぐため、公開範囲を引き継ぐ）
+        var targetItem = await context.Items
+            .AsNoTracking()
+            .Select(i => new { i.Id, i.IsPrivate, i.TargetUserGroupId })
+            .FirstOrDefaultAsync(i => i.Id == quotedItemId, cancellationToken);
+        if (targetItem is null)
         {
             return null;
         }
@@ -54,6 +58,8 @@ public class ItemQuoteService(
             Content = content,
             OwnerId = userId,
             QuotedItemId = quotedItemId,
+            IsPrivate = targetItem.IsPrivate,
+            TargetUserGroupId = targetItem.TargetUserGroupId,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow,
             ItemKindJson = JsonSerializer.Serialize(new QuoteItem(quotedItemId))

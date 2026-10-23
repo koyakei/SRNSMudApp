@@ -51,6 +51,25 @@ public interface IItemCardSplitCoordinator
 
     /// <summary>
     ///     他ユーザーのアイテム本文の一部が選択されている場合に、そのテキストを引用したアイテムを投稿し、
+    ///     その引用アイテムに対して Good / Bad 投票を行った上で、分割リクエストを送信する。
+    /// </summary>
+    /// <param name="item">対象の親アイテム。</param>
+    /// <param name="currentUserId">操作を実行するユーザー ID。</param>
+    /// <param name="goodTagId">ユーザーの good タグ ID（未解決時は null）。</param>
+    /// <param name="isUpvote">Good (true) または Bad (false)。</param>
+    /// <param name="ensureSystemTagsAsync">システムタグ未作成時に作成を保証するコールバック。</param>
+    /// <param name="selectedText">選択されたテキスト。null または空の場合は JS 経由で取得を試みる。</param>
+    /// <returns>処理が完了した場合は作成された分割リクエスト、キャンセルまたは失敗した場合は null。</returns>
+    Task<ItemSplitRequest?> RequestSplitWithVoteAsync(
+        Item item,
+        string currentUserId,
+        int? goodTagId,
+        bool isUpvote,
+        Func<Task>? ensureSystemTagsAsync,
+        string? selectedText = null);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されている場合に、そのテキストを引用したアイテムを投稿し、
     ///     その引用アイテムに対して指定されたリアクションタグを投票した上で、分割リクエストを送信する。
     ///     分割リクエスト承認時は、引用アイテムに付与されたリアクションタグや関係ごと新アイテムへ置き換えられる。
     /// </summary>

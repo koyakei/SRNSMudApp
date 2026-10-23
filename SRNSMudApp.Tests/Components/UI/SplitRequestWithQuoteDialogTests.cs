@@ -82,13 +82,19 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SplitRequestWithQuoteDialog_WhenSubmittedWithoutQuoteContent_ClosesWithNullCreatedQuoteId()
+    public async Task SplitRequestWithQuoteDialog_WhenSubmittedWithoutQuoteContent_CreatesQuoteWithSelectedText_WithoutReplyComment_AndClosesWithId()
     {
         // Arrange
         var host = _ctx.Render<DialogHost>();
         var dialogService = _ctx.Services.GetRequiredService<IDialogService>();
 
         var quotedItem = new DataItem { Id = 11, Content = "元アイテム本文", OwnerId = "other-user" };
+        var createdQuoteItem = new DataItem { Id = 76, Content = "対象テキスト", OwnerId = CurrentUserId };
+
+        _itemQuoteServiceMock
+            .Setup(s => s.CreateQuoteItemAsync(11, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createdQuoteItem);
+
         var parameters = new DialogParameters<SplitRequestWithQuoteDialog>
         {
             { x => x.SelectedText, "対象テキスト" },
@@ -108,15 +114,16 @@ public sealed class SplitRequestWithQuoteDialogTests : IAsyncLifetime
         var submitBtn = host.Find("button[data-testid='confirm-split-request-with-quote-button']");
         await host.InvokeAsync(() => submitBtn.Click());
 
-        // Assert: 引用アイテム作成は呼ばれず、CreatedQuoteItemId == null でダイアログが閉じる
+        // Assert: 引用コメントなしでも選択テキストによる引用アイテムが作成され、リプライは作成されずにダイアログが閉じる
         var result = await dialogRef.Result;
         Assert.NotNull(result);
         Assert.False(result.Canceled);
         var dialogResult = Assert.IsType<SplitRequestWithQuoteDialogResult>(result.Data);
-        Assert.Null(dialogResult.CreatedQuoteItemId);
-        Assert.Null(dialogResult.CreatedQuoteItem);
+        Assert.Equal(76, dialogResult.CreatedQuoteItemId);
+        Assert.Equal(createdQuoteItem, dialogResult.CreatedQuoteItem);
 
-        _itemQuoteServiceMock.Verify(s => s.CreateQuoteItemAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyCollection<int>?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _itemQuoteServiceMock.Verify(s => s.CreateQuoteItemAsync(11, "対象テキスト", CurrentUserId, null, It.IsAny<CancellationToken>()), Times.Once);
+        _itemReplyServiceMock.Verify(r => r.AddItemReplyAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>?>(), It.IsAny<bool>(), It.IsAny<int?>()), Times.Never);
     }
 
     [Fact]

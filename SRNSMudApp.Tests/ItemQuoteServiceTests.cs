@@ -271,4 +271,40 @@ public class ItemQuoteServiceTests : IAsyncLifetime
             Assert.Null(source);
         }
     }
+
+    [Fact]
+    public async Task CreateQuoteItemAsync_WhenTargetIsPrivateOrGroup_ShouldInheritAttributes()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var group = new UserGroup { Name = $"Group_{tid}", OwnerId = userId };
+            dbContext.UserGroups.Add(group);
+            await dbContext.SaveChangesAsync();
+
+            var privateTargetItem = new Item
+            {
+                Content = $"PrivateTarget_{tid}",
+                OwnerId = userId,
+                IsPrivate = true,
+                TargetUserGroupId = group.Id
+            };
+            dbContext.Items.Add(privateTargetItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? quoteItem = await service.CreateQuoteItemAsync(privateTargetItem.Id, "Quote Private", userId);
+
+            Assert.NotNull(quoteItem);
+            Assert.True(quoteItem.IsPrivate);
+            Assert.Equal(group.Id, quoteItem.TargetUserGroupId);
+
+            Item? saved = await dbContext.Items.FirstOrDefaultAsync(i => i.Id == quoteItem.Id);
+            Assert.NotNull(saved);
+            Assert.True(saved.IsPrivate);
+            Assert.Equal(group.Id, saved.TargetUserGroupId);
+        }
+    }
 }
