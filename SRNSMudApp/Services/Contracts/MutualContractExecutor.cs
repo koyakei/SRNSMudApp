@@ -29,6 +29,10 @@ public class MutualContractExecutor(
         Result<RightAsset> assetValidation = contract.ConsumedRightAsset switch
         {
             null => new Failure("相互タグ付けには対価のアセットが必要です。"),
+            { OwnerId: var o } when o != contract.RequesterUserId => new Failure("指定された RightAsset を所有していません。"),
+            { IsBurned: true } => new Failure("指定された RightAsset は既に消費済みです。"),
+            var a when a.TargetTagId != contract.RequestedTagId => new Failure("指定された RightAsset は対象タグの権利ではありません。"),
+            var a when a.Amount < 1 => new Failure("指定された RightAsset の残量が不足しています。"),
             _ => new Success<RightAsset>(contract.ConsumedRightAsset)
         };
 
@@ -42,8 +46,16 @@ public class MutualContractExecutor(
     private async Task<Result<string>> ProcessMutualWithAssetAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, RightAsset consumedAsset, string executorUserId)
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
-        consumedAsset.IsBurned = true;
-        consumedAsset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        if (consumedAsset.Amount <= 1)
+        {
+            consumedAsset.Amount = 0;
+            consumedAsset.IsBurned = true;
+            consumedAsset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        }
+        else
+        {
+            consumedAsset.Amount -= 1;
+        }
         _ = dbContext.RightAssets.Update(consumedAsset);
 
         Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);

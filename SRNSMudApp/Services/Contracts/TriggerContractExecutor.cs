@@ -64,8 +64,10 @@ public class TriggerContractExecutor(
         return contract.ConsumedRightAsset switch
         {
             null => new Failure("提供された RightAsset の量が不足しています。"),
-            var a when a.Amount < offer.RequiredAssetAmount => new Failure("提供された RightAsset の量が不足しています。"),
+            { OwnerId: var o } when o != contract.RequesterUserId => new Failure("提供された RightAsset を所有していません。"),
+            { IsBurned: true } => new Failure("提供された RightAsset は既に消費済みです。"),
             var a when a.TargetTagId != offer.OfferedTagId => new Failure("提供された RightAsset は対象のタグの権利ではありません。"),
+            var a when a.Amount < offer.RequiredAssetAmount => new Failure("提供された RightAsset の量が不足しています。"),
             var a => new Success<RightAsset?>(a)
         };
     }
@@ -74,7 +76,7 @@ public class TriggerContractExecutor(
     {
         var consumedAssetId = await (validatedAsset switch
         {
-            not null => UpdateTriggerConsumedAssetAsync(dbContext, validatedAsset, contract.ConsumedRightAssetId!.Value),
+            not null => UpdateTriggerConsumedAssetAsync(dbContext, validatedAsset, contract.ConsumedRightAssetId!.Value, offer.RequiredAssetAmount),
             null => CreateTriggerOwnerAssetAsync(dbContext, offer)
         });
 
@@ -86,10 +88,18 @@ public class TriggerContractExecutor(
         });
     }
 
-    private Task<int> UpdateTriggerConsumedAssetAsync(ApplicationDbContext dbContext, RightAsset asset, int assetId)
+    private Task<int> UpdateTriggerConsumedAssetAsync(ApplicationDbContext dbContext, RightAsset asset, int assetId, int requiredAmount)
     {
-        asset.IsBurned = true;
-        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        if (asset.Amount <= requiredAmount)
+        {
+            asset.Amount = 0;
+            asset.IsBurned = true;
+            asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        }
+        else
+        {
+            asset.Amount -= requiredAmount;
+        }
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult(assetId);
     }

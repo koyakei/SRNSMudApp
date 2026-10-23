@@ -441,4 +441,102 @@ public class TaggingContractBountyTests : TaggingContractTestBase
         var updatedTag = await dbContext.Tags.FindAsync(tagB.Id);
         Assert.Equal(10, updatedTag!.CachedWeight);
     }
+
+    [Fact]
+    public async Task Bounty_WhenFulfillerAssetHasSurplusAmount_ShouldDeductRequiredAndKeepSurplus()
+    {
+        // Arrange: 要求量 2 に対して残高 5 のアセットを指定してバウンティ承認
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var userA = $"ua_{tid}";
+        var userB = $"ub_{tid}";
+        var userC = $"uc_{tid}";
+        await dbContext.SeedUsersAsync(userA, userB, userC);
+
+        var targetItemA = new Item { Content = $"TargetItemA_{tid}", OwnerId = userA };
+        var tagB = new Tag { Name = $"TagB_{tid}", OwnerId = userB, CachedWeight = 10 };
+        var tagC = new Tag { Name = $"TagC_{tid}", OwnerId = userA };
+        dbContext.Items.Add(targetItemA);
+        dbContext.Tags.AddRange(tagB, tagC);
+        await dbContext.SaveChangesAsync();
+
+        var rewardAsset = new RightAsset { Amount = 1, OwnerId = userA, TargetTagId = tagC.Id, IsBurned = false };
+        var fulfillerAsset = new RightAsset { Amount = 5, OwnerId = userC, TargetTagId = tagB.Id, IsBurned = false };
+        dbContext.RightAssets.AddRange(rewardAsset, fulfillerAsset);
+        await dbContext.SaveChangesAsync();
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Bounty",
+            RequesterUserId = userA,
+            TagOwnerUserId = userB,
+            TargetItemId = targetItemA.Id,
+            RequestedTagId = tagB.Id,
+            ProposedWeight = 2,
+            Payload = new BountyPayload(rewardAsset.Id),
+            OwnerId = userA
+        };
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var acceptResult = await service.AcceptContractAsync(contract.Id, userC, fulfillerAsset.Id);
+
+        // Assert: 承認成功し、5 - 2 = 3 が手元に残り、IsBurned == false
+        Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
+
+        dbContext.ChangeTracker.Clear();
+        var updatedFulfillerAsset = await dbContext.RightAssets.FindAsync(fulfillerAsset.Id);
+        Assert.NotNull(updatedFulfillerAsset);
+        Assert.False(updatedFulfillerAsset!.IsBurned);
+        Assert.Equal(3, updatedFulfillerAsset.Amount);
+    }
+
+    [Fact]
+    public async Task Bounty_WhenFulfillerAssetHasInsufficientAmount_ShouldReturnFailure()
+    {
+        // Arrange: 要求量 2 に対して残高 1 のアセットを指定
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var userA = $"ua_{tid}";
+        var userB = $"ub_{tid}";
+        var userC = $"uc_{tid}";
+        await dbContext.SeedUsersAsync(userA, userB, userC);
+
+        var targetItemA = new Item { Content = $"TargetItemA_{tid}", OwnerId = userA };
+        var tagB = new Tag { Name = $"TagB_{tid}", OwnerId = userB, CachedWeight = 10 };
+        var tagC = new Tag { Name = $"TagC_{tid}", OwnerId = userA };
+        dbContext.Items.Add(targetItemA);
+        dbContext.Tags.AddRange(tagB, tagC);
+        await dbContext.SaveChangesAsync();
+
+        var rewardAsset = new RightAsset { Amount = 1, OwnerId = userA, TargetTagId = tagC.Id, IsBurned = false };
+        var fulfillerAsset = new RightAsset { Amount = 1, OwnerId = userC, TargetTagId = tagB.Id, IsBurned = false };
+        dbContext.RightAssets.AddRange(rewardAsset, fulfillerAsset);
+        await dbContext.SaveChangesAsync();
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Bounty",
+            RequesterUserId = userA,
+            TagOwnerUserId = userB,
+            TargetItemId = targetItemA.Id,
+            RequestedTagId = tagB.Id,
+            ProposedWeight = 2,
+            Payload = new BountyPayload(rewardAsset.Id),
+            OwnerId = userA
+        };
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var acceptResult = await service.AcceptContractAsync(contract.Id, userC, fulfillerAsset.Id);
+
+        // Assert
+        Assert.True(acceptResult is Failure);
+        var fail = acceptResult switch { Failure f => f, _ => throw new InvalidOperationException() };
+        Assert.Equal("提供されたアセットの残量が不足しています。", fail.ErrorMessage);
+    }
 }
