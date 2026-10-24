@@ -258,12 +258,173 @@ public class ItemReplyServiceTests : IAsyncLifetime
             Assert.False(savedPublic.IsPrivate);
             Assert.Null(savedPublic.TargetUserGroupId);
 
-            // Act 3: GetItemRepliesAsync で TargetUserGroup が Include されること
-            IReadOnlyList<Item> replies = await service.GetItemRepliesAsync(parentItem.Id);
+            // Act 3: GetItemRepliesAsync で TargetUserGroup が Include されること (作成者として取得)
+            IReadOnlyList<Item> replies = await service.GetItemRepliesAsync(parentItem.Id, userId);
             var privateReplyInList = replies.FirstOrDefault(r => r.Id == reply.Id);
             Assert.NotNull(privateReplyInList);
             Assert.NotNull(privateReplyInList.TargetUserGroup);
             Assert.Equal($"Group_{tid}", privateReplyInList.TargetUserGroup.Name);
+        }
+    }
+
+    [Fact]
+    public async Task GetItemRepliesAsync_ShouldIncludeTagHistoryComments_WithTagActionMetadata()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userOwner = $"user_owner_{tid}";
+            var userTagger = $"user_tagger_{tid}";
+            await dbContext.SeedUsersAsync(userOwner, userTagger);
+
+            var parentItem = new Item { Content = $"Parent Item_{tid}", OwnerId = userOwner };
+            var tag = new Tag { Name = $"Csharp_{tid}", OwnerId = userOwner };
+            dbContext.Items.Add(parentItem);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // 通常のリプライ
+            var normalReply = new Item
+            {
+                Content = $"Normal reply_{tid}",
+                OwnerId = userOwner,
+                ParentItemId = parentItem.Id,
+                CreatedDate = DateTime.UtcNow.AddMinutes(1)
+            };
+            dbContext.Items.Add(normalReply);
+
+            // タグ履歴コメントアイテム
+            var commentItem = new Item
+            {
+                Content = $"Tag history comment_{tid}",
+                OwnerId = userTagger,
+                CreatedDate = DateTime.UtcNow.AddMinutes(2)
+            };
+            dbContext.Items.Add(commentItem);
+            await dbContext.SaveChangesAsync();
+
+            var relation = new TagRelation
+            {
+                ItemId = parentItem.Id,
+                TagId = tag.Id,
+                OwnerId = userTagger,
+                Weight = 3,
+                CommentItemId = commentItem.Id
+            };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
+
+            var ledger = new TagWeightLedger
+            {
+                TagId = tag.Id,
+                ItemId = parentItem.Id,
+                SourceType = "TagRelationInsert",
+                SourceId = relation.Id,
+                TagRelation = relation,
+                CommentItemId = commentItem.Id,
+                Delta = 3,
+                OwnerId = userTagger,
+                CreatedDate = DateTime.UtcNow.AddMinutes(2)
+            };
+            dbContext.TagWeightLedgers.Add(ledger);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: GetItemRepliesAsync
+            IReadOnlyList<Item> replies = await service.GetItemRepliesAsync(parentItem.Id);
+
+            // Assert 1: 通常リプライとタグ履歴コメントの両方が返る
+            Assert.Equal(2, replies.Count);
+            var retrievedNormal = replies.FirstOrDefault(r => r.Id == normalReply.Id);
+            Assert.NotNull(retrievedNormal);
+            Assert.Null(retrievedNormal.TagActionInfo);
+
+            var retrievedTagComment = replies.FirstOrDefault(r => r.Id == commentItem.Id);
+            Assert.NotNull(retrievedTagComment);
+            Assert.NotNull(retrievedTagComment.TagActionInfo);
+            Assert.Equal($"Csharp_{tid}", retrievedTagComment.TagActionInfo.TagName);
+            Assert.Equal(userOwner, retrievedTagComment.TagActionInfo.TagOwnerUserName);
+            Assert.Equal(3, retrievedTagComment.TagActionInfo.Weight);
+
+            // Act 2: GetItemReplyCountAsync
+            int count = await service.GetItemReplyCountAsync(parentItem.Id);
+            Assert.Equal(2, count);
+        }
+    }
+
+    [Fact]
+    public async Task GetItemRepliesAsync_WhenReplyIsPrivate_FiltersOutForUnauthorizedUser()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"uA_{tid}";
+            var userB = $"uB_{tid}";
+            var userC = $"uC_{tid}";
+            var adminUser = $"uAdmin_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, userC, adminUser);
+
+            var parentItem = new Item { Content = $"Parent_{tid}", OwnerId = userA };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            var privateReply = new Item
+            {
+                Content = $"PrivateReply_{tid}",
+                OwnerId = userB,
+                ParentItemId = parentItem.Id,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(privateReply);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userC)
+            IReadOnlyList<Item> repliesForUserC = await service.GetItemRepliesAsync(parentItem.Id, userC, isAdmin: false);
+            Assert.Empty(repliesForUserC);
+
+            // Act 2: 未ログインユーザー (null)
+            IReadOnlyList<Item> repliesForAnon = await service.GetItemRepliesAsync(parentItem.Id, null, isAdmin: false);
+            Assert.Empty(repliesForAnon);
+
+            // Act 3: 投稿者本人 (userB)
+            IReadOnlyList<Item> repliesForOwner = await service.GetItemRepliesAsync(parentItem.Id, userB, isAdmin: false);
+            Assert.Single(repliesForOwner);
+            Assert.Equal(privateReply.Id, repliesForOwner[0].Id);
+
+            // Act 4: 管理者 (adminUser)
+            IReadOnlyList<Item> repliesForAdmin = await service.GetItemRepliesAsync(parentItem.Id, adminUser, isAdmin: true);
+            Assert.Single(repliesForAdmin);
+            Assert.Equal(privateReply.Id, repliesForAdmin[0].Id);
+        }
+    }
+
+    [Fact]
+    public async Task AddItemReplyAsync_WhenRecipientOptedOut_ExcludesFromNotificationRecipients()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"uA_{tid}";
+            var userB = $"uB_{tid}";
+            var userC = $"uC_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, userC);
+
+            var parentItem = new Item { Content = $"Parent_{tid}", OwnerId = userA };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            // userA が会話からオプトアウト
+            await service.ToggleConversationOptOutAsync(parentItem.Id, userA);
+
+            // userB がリプライを投稿
+            var reply = await service.AddItemReplyAsync(
+                parentItemId: parentItem.Id,
+                content: $"Reply_{tid}",
+                userId: userB);
+
+            Assert.NotNull(reply);
+            // userA はオプトアウトしたため、NotificationRecipients に含まれないことを検証 (Issue 4-2)
+            Assert.DoesNotContain(reply!.NotificationRecipients, r => r.RecipientUserId == userA);
         }
     }
 }

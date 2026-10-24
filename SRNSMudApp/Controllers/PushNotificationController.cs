@@ -38,11 +38,11 @@ public sealed class PushNotificationController(
     [HttpPost("subscribe")]
     public async Task<IActionResult> Subscribe([FromBody] PushSubscriptionDto? subscription, CancellationToken cancellationToken)
     {
-        if (subscription == null ||
-            string.IsNullOrWhiteSpace(subscription.Endpoint) ||
-            subscription.Keys == null ||
-            string.IsNullOrWhiteSpace(subscription.Keys.P256Dh) ||
-            string.IsNullOrWhiteSpace(subscription.Keys.Auth))
+        // プロパティパターンマッチングによるサブスクリプション入力検証
+        if (subscription is not { Endpoint: { Length: > 0 } endpoint, Keys: { P256Dh: { Length: > 0 } p256, Auth: { Length: > 0 } auth } }
+            || string.IsNullOrWhiteSpace(endpoint)
+            || string.IsNullOrWhiteSpace(p256)
+            || string.IsNullOrWhiteSpace(auth))
         {
             return BadRequest(new { message = "無効なサブスクリプション情報です。" });
         }
@@ -50,7 +50,7 @@ public sealed class PushNotificationController(
         // SEC-01: 認証済みユーザーのIDを取得（ClaimTypes.NameIdentifier または "sub"）
         // 未認証ユーザーの場合はリクエストボディの UserId を任意に信用せず null とする（ユーザーIDのなりすまし登録を防止）
         string? authenticatedUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User?.FindFirst("sub")?.Value;
-        string? userId = (User?.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(authenticatedUserId))
+        string? userId = User is { Identity.IsAuthenticated: true } && !string.IsNullOrWhiteSpace(authenticatedUserId)
             ? authenticatedUserId
             : null;
 
@@ -68,7 +68,7 @@ public sealed class PushNotificationController(
     [HttpPost("unsubscribe")]
     public async Task<IActionResult> Unsubscribe([FromBody] PushUnsubscribeRequest? request, CancellationToken cancellationToken)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.Endpoint))
+        if (string.IsNullOrWhiteSpace(request?.Endpoint))
         {
             return BadRequest(new { message = "エンドポイントが指定されていません。" });
         }
@@ -84,7 +84,9 @@ public sealed class PushNotificationController(
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SendNotification([FromBody] PushNotificationPayload? payload, CancellationToken cancellationToken)
     {
-        if (payload == null || string.IsNullOrWhiteSpace(payload.Title) || string.IsNullOrWhiteSpace(payload.Body))
+        if (payload is not { Title: { Length: > 0 } title, Body: { Length: > 0 } body }
+            || string.IsNullOrWhiteSpace(title)
+            || string.IsNullOrWhiteSpace(body))
         {
             return BadRequest(new { message = "タイトルと本文は必須です。" });
         }
@@ -106,7 +108,7 @@ public sealed class PushNotificationController(
     public async Task<IActionResult> TestMe([FromBody] PushSubscriptionDto? fallbackSubscription, CancellationToken cancellationToken)
     {
         string? userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var payload = new PushNotificationPayload(
+        PushNotificationPayload payload = new(
             Title: "SRNS テスト通知",
             Body: "PWA への Web Push 通知が正常に動作しています！",
             Icon: "/images/icons/icon-192x192.png",
@@ -124,7 +126,7 @@ public sealed class PushNotificationController(
             if (userResult.FailedCount > 0 || userResult.ExpiredCount > 0)
             {
                 // ユーザー宛ての購読が存在するが送信失敗した場合
-                if (fallbackSubscription == null || string.IsNullOrWhiteSpace(fallbackSubscription.Endpoint))
+                if (string.IsNullOrWhiteSpace(fallbackSubscription?.Endpoint))
                 {
                     return BadRequest(new { message = "通知送信に失敗しました。サブスクリプションが失効しているか、サーバー設定を確認してください。" });
                 }
@@ -132,7 +134,7 @@ public sealed class PushNotificationController(
         }
 
         // ユーザーに紐づくサブスクリプションが無いか未ログインで fallbackSubscription がある場合
-        if (fallbackSubscription != null && !string.IsNullOrWhiteSpace(fallbackSubscription.Endpoint))
+        if (!string.IsNullOrWhiteSpace(fallbackSubscription?.Endpoint))
         {
             bool directSuccess = await _pushService.SendNotificationAsync(fallbackSubscription, payload, cancellationToken);
             if (directSuccess)

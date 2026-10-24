@@ -8,12 +8,13 @@ using Moq;
 using Sidio.Sitemap.Core;
 
 using SRNSMudApp.Services.Sitemap;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
 namespace SRNSMudApp.Tests.Endpoints;
 
-public class SitemapEndpointsTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class SitemapEndpointsTests(TestWebApplicationFactory factory) : IClassFixture<TestWebApplicationFactory>
 {
     [Fact]
     public async Task GetSitemapIndex_ReturnsValidXmlWithChildSitemaps()

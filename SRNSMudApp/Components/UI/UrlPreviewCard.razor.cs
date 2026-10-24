@@ -26,6 +26,9 @@ public partial class UrlPreviewCard
     public Func<string, Task<LinkPreviewData?>>? LoadPreview { get; set; }
 
     [Inject]
+    private NavigationManager NavigationManager { get; set; } = null!;
+
+    [Inject]
     private IJSRuntime JS { get; set; } = null!;
 
     // 取得状態は bool フラグではなく union で表現する (mainRules: 再代入撲滅 / if文撲滅)
@@ -63,16 +66,25 @@ public partial class UrlPreviewCard
 
     private async Task NavigateToUrl()
     {
-        if (!string.IsNullOrEmpty(Url))
+        if (string.IsNullOrEmpty(Url))
         {
-            try
-            {
-                await JS.InvokeVoidAsync("open", Url, "_blank");
-            }
-            catch (JSException)
-            {
-                // ignored
-            }
+            return;
+        }
+
+        // 内部リンク（相対パスまたは同一オリジンのパス）の場合は SPA 内で画面遷移する
+        if (UrlPreviewCardViewModel.TryGetInternalRoute(Url, NavigationManager.BaseUri, out var internalRoute))
+        {
+            NavigationManager.NavigateTo(internalRoute);
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("open", Url, "_blank");
+        }
+        catch (JSException)
+        {
+            // ignored
         }
     }
 }

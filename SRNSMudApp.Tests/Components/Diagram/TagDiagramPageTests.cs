@@ -753,6 +753,40 @@ public sealed class TagDiagramPageTests : IAsyncDisposable
         cut.WaitForState(() => cut.FindAll("div.tag-edge-inspector").Count == 0);
     }
 
+    [Fact]
+    public void TagDiagramPage_RendersItemNodesAndBackToItemListButton_WhenQueryItemIdsProvided()
+    {
+        // Arrange
+        var tag1 = new TagEntity { Id = 1, Name = "Alpha", OwnerId = TestUserId, CachedWeight = 5 };
+        var edge = new TagEdge { Id = 101, SourceTagId = 1, TargetTagId = 1, OwnerId = TestUserId };
+        var item1 = new ItemEntity { Id = 100, Content = "Item 100", OwnerId = TestUserId };
+        var item2 = new ItemEntity { Id = 200, Content = "Item 200", OwnerId = TestUserId };
+
+        _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1]);
+        _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+        _dataProviderMock.Setup(p => p.GetContextTagIdsForItemsAsync(It.IsAny<IEnumerable<int>>())).ReturnsAsync([1]);
+        _dataProviderMock.Setup(p => p.GetContextItemsAsync(It.IsAny<IEnumerable<int>>())).ReturnsAsync([item1, item2]);
+
+        // Act
+        var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        nav.NavigateTo("http://localhost/tag-diagram?itemIds=100,200");
+
+        var cut = _ctx.Render<TagDiagramPage>();
+        cut.WaitForState(() => cut.Markup.Contains("Tag Edge Diagram"));
+
+        // Assert: アイテム一覧に戻るボタンが表示されていること
+        var backBtn = cut.Find("[data-testid='back-to-itemlist-btn']");
+        Assert.NotNull(backBtn);
+        Assert.Contains("アイテム一覧に戻る", backBtn.TextContent);
+
+        // Assert: ダイアグラムに ItemNode が生成されていること
+        var canvas = cut.FindComponent<TagDiagramCanvas>();
+        var itemNodes = canvas.Instance.Diagram.Nodes.OfType<ItemNode>().ToList();
+        Assert.Equal(2, itemNodes.Count);
+        Assert.Contains(itemNodes, n => n.Item.Id == 100);
+        Assert.Contains(itemNodes, n => n.Item.Id == 200);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _ctx.DisposeAsync();

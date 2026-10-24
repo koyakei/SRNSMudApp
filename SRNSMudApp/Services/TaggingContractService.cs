@@ -280,8 +280,9 @@ public class TaggingContractService(
         {
             null => new Failure("契約が見つかりません。"),
             { Status: not TradeStatus.Proposed } => new Failure("実行・承認できない状態の契約です。"),
+            { ContractType: ContractTypes.Bounty, RequesterUserId: var reqId } when reqId == currentUserId => new Failure("自身が作成したバウンティは達成できません。"),
             { ContractType: ContractTypes.Trigger, RequesterUserId: var reqId } when reqId != currentUserId => new Failure("実行できない契約です。"),
-            { ContractType: ContractTypes.Gratis or ContractTypes.Mutual, TagOwnerUserId: var ownerId } when ownerId != currentUserId => new Failure("承認できない契約です。"),
+            { ContractType: ContractTypes.Gratis or ContractTypes.Mutual or ContractTypes.Move, TagOwnerUserId: var ownerId } when ownerId != currentUserId => new Failure("承認できない契約です。"),
             _ => new Success<TaggingRequestEntity>(entity)
         };
 
@@ -383,6 +384,48 @@ public class TaggingContractService(
         entity.Cancel();
         await dbContext.SaveChangesAsync();
         return new Success<string>("契約をキャンセルしました。");
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<Result<string>> RejectContractAsync(int contractId, string currentUserId, string? rejectionReason = null)
+    {
+        await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
+        TaggingRequestEntity? entity = await dbContext.TaggingRequestEntities
+                                          .FirstOrDefaultAsync(c => c.Id == contractId);
+
+        Result<TaggingRequestEntity> fetchResult = entity switch
+        {
+            null => new Failure("契約が見つかりません。"),
+            { Status: not TradeStatus.Proposed } => new Failure("この状態の契約は却下できません。"),
+            var e when e.TagOwnerUserId != currentUserId && e.RequesterUserId != currentUserId => new Failure("この契約を却下する権限がありません。"),
+            _ => new Success<TaggingRequestEntity>(entity)
+        };
+
+        return await (fetchResult switch
+        {
+            Failure f => Task.FromResult<Result<string>>(f),
+            Success<TaggingRequestEntity> s => ProcessRejectAsync(dbContext, s.Value, rejectionReason)
+        });
+    }
+
+    private static async Task<Result<string>> ProcessRejectAsync(ApplicationDbContext dbContext, TaggingRequestEntity entity, string? rejectionReason)
+    {
+        int updatedRows = await dbContext.TaggingRequestEntities
+            .Where(e => e.Id == entity.Id && e.Status == TradeStatus.Proposed)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, TradeStatus.Rejected));
+
+        if (updatedRows == 0)
+        {
+            return new Failure("このリクエストは既に処理されているか、状態が変更されています。");
+        }
+
+        RejectionInfo info = string.IsNullOrWhiteSpace(rejectionReason)
+            ? new NoRejection()
+            : new RejectionReason(rejectionReason);
+
+        entity.Reject(info);
+        await dbContext.SaveChangesAsync();
+        return new Success<string>("契約を拒否しました。");
     }
 
     /// <summary>

@@ -320,9 +320,9 @@
                                 @foreach (var ledger in data.Ledgers)
                                 {
                                     <MudListItem>
-                                        <div class="d-flex align-center">
+                                        <div class="d-flex align-center flex-wrap gap-2">
                                             <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
-                                                @(ledger.TagRelation?.Tag?.Name ?? ledger.TagNameSnapshot)
+                                                @(ledger.TagRelation?.Tag?.Name ?? ledger.Tag?.Name ?? (!string.IsNullOrEmpty(ledger.TagNameSnapshot) ? ledger.TagNameSnapshot : "タグ"))
                                             </MudChip>
                                             <MudText Typo="Typo.body2"
                                                      Color="@(ledger.Delta > 0 ? Color.Success : ledger.Delta < 0 ? Color.Error : Color.Default)"
@@ -330,16 +330,31 @@
                                                 @(ledger.Delta > 0 ? $"+{ledger.Delta}" : ledger.Delta.ToString())
                                             </MudText>
                                             <MudText Typo="Typo.body2" Class="mr-2">
-                                                @ledger.Owner?.UserName
+                                                @(ledger.Owner?.UserName ?? "システム")
                                             </MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-auto">
                                                 @ledger.CreatedDate.ToLocalTime().ToString("g")
                                             </MudText>
+                                            @if (!string.IsNullOrEmpty(_currentUserId))
+                                            {
+                                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                                           StartIcon="@Icons.Material.Filled.Comment"
+                                                           OnClick="@(() => OpenAddCommentDialogAsync(ledger))"
+                                                           data-testid="@($"add-comment-btn-{ledger.Id}")">
+                                                    @(ledger.EffectiveCommentItem is null ? "コメント" : "返信・コメント")
+                                                </MudButton>
+                                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Secondary"
+                                                           StartIcon="@Icons.Material.Filled.LocalOffer"
+                                                           OnClick="@(() => OpenAddTagDialogAsync(ledger))"
+                                                           data-testid="@($"add-tag-btn-{ledger.Id}")">
+                                                    タグ付け
+                                                </MudButton>
+                                            }
                                         </div>
-                                        @if (ledger.TagRelation?.CommentItem is not null && !string.IsNullOrWhiteSpace(ledger.TagRelation.CommentItem.Content))
+                                        @if (ledger.EffectiveCommentItem is not null)
                                         {
                                             <div class="pl-4 mt-2">
-                                                <SRNSMudApp.Components.UI.ItemCard Item="@ledger.TagRelation.CommentItem"
+                                                <SRNSMudApp.Components.UI.ItemCard Item="@ledger.EffectiveCommentItem"
                                                                                    AllTags="@_allTags"
                                                                                    AllTagRelationsToTags="@_allTagRelationsToTags"
                                                                                    CurrentUserId="@_currentUserId"
@@ -351,6 +366,22 @@
                                                                                    OnEnsureSystemTags="EnsureSystemTagsExistAsync"
                                                                                    OnDataChanged="LoadDataAsync"
                                                                                    EnableNavigation="true" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="pl-4 mt-1" data-testid="@($"ledger-reaction-bar-{ledger.Id}")">
+                                                <SRNSMudApp.Components.UI.ReactionBar ItemId="0"
+                                                                                      ShinjiScore="0"
+                                                                                      ZenScore="0"
+                                                                                      BiScore="0"
+                                                                                      IsShinjiUpvoted="false"
+                                                                                      IsShinjiDownvoted="false"
+                                                                                      IsZenUpvoted="false"
+                                                                                      IsZenDownvoted="false"
+                                                                                      IsBiUpvoted="false"
+                                                                                      IsBiDownvoted="false"
+                                                                                      OnReactionVoteClicked="@(args => VoteLedgerReactionAsync(ledger, args.ReactionTagName, args.TargetWeight))" />
                                             </div>
                                         }
                                     </MudListItem>

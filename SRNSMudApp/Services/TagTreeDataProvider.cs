@@ -66,108 +66,118 @@ public class TagTreeDataProvider(
     {
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
-        return await context.Database.ExecuteWithStrategyAsync(async () =>
+        try
         {
-            List<Tag> selectedTagsFromDb = await context.Tags.Where(t => selectedIds.Contains(t.Id)).ToListAsync();
-
-            var unauthorizedNames = selectedTagsFromDb
-                .Where(t => !isAdmin && t.OwnerId != userId)
-                .Select(t => t.Name)
-                .ToList();
-            var systemNames = selectedTagsFromDb
-                .Where(t => t.IsSystem)
-                .Select(t => t.Name)
-                .ToList();
-            var authorizedIds = selectedTagsFromDb
-                .Where(t => (isAdmin || t.OwnerId == userId) && !t.IsSystem)
-                .Select(t => t.Id)
-                .ToList();
-
-            if (_tagLockService != null && authorizedIds.Count > 0 && !isAdmin)
+            return await context.Database.ExecuteWithStrategyAsync(async () =>
             {
-                List<int> unlockedAuthorizedIds = [];
-                foreach (var id in authorizedIds)
+                context.ChangeTracker.Clear();
+
+                List<Tag> selectedTagsFromDb = await context.Tags.Where(t => selectedIds.Contains(t.Id)).ToListAsync();
+
+                var unauthorizedNames = selectedTagsFromDb
+                    .Where(t => !isAdmin && t.OwnerId != userId)
+                    .Select(t => t.Name)
+                    .ToList();
+                var systemNames = selectedTagsFromDb
+                    .Where(t => t.IsSystem)
+                    .Select(t => t.Name)
+                    .ToList();
+                var authorizedIds = selectedTagsFromDb
+                    .Where(t => (isAdmin || t.OwnerId == userId) && !t.IsSystem)
+                    .Select(t => t.Id)
+                    .ToList();
+
+                if (_tagLockService != null && authorizedIds.Count > 0 && !isAdmin)
                 {
-                    var isLocked = await _tagLockService.IsTagOrSiblingLockedAsync(id);
-                    if (!isLocked)
+                    List<int> unlockedAuthorizedIds = [];
+                    foreach (var id in authorizedIds)
                     {
-                        unlockedAuthorizedIds.Add(id);
-                    }
-                    else
-                    {
-                        var lockedTagName = selectedTagsFromDb.FirstOrDefault(t => t.Id == id)?.Name;
-                        if (lockedTagName != null && !unauthorizedNames.Contains(lockedTagName))
+                        var isLocked = await _tagLockService.IsTagOrSiblingLockedAsync(id);
+                        if (!isLocked)
                         {
-                            unauthorizedNames.Add(lockedTagName);
+                            unlockedAuthorizedIds.Add(id);
                         }
-                    }
-                }
-                authorizedIds = unlockedAuthorizedIds;
-            }
-
-            var hasDeleted = false;
-            var deletedCount = 0;
-
-            if (authorizedIds.Count > 0)
-            {
-                List<Tag> tagsToDelete = await context.Tags
-                    .Where(t => authorizedIds.Contains(t.Id))
-                    .ToListAsync();
-
-                if (tagsToDelete.Count > 0)
-                {
-                    // 外部キー制約 (DeleteBehavior.Restrict) により手動削除が必要な関連エンティティ（TagWeightLedger, TagRelationToTag 等）を削除
-                    await context.RemoveTagRestrictedDependenciesAsync(authorizedIds);
-
-                    // 削除対象のタグを親に持つ子タグを取得し、ルートタグ（"全て∀"）配下に変更する
-                    List<Tag> orphanedChildren = await context.Tags
-                        .Where(t => t.ParentTagId != null &&
-                                    authorizedIds.Contains(t.ParentTagId.Value) &&
-                                    !authorizedIds.Contains(t.Id))
-                        .ToListAsync();
-
-                    if (orphanedChildren.Count > 0)
-                    {
-                        Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
-
-                        HierarchyId? lastChildNode = rootTag != null
-                            ? await context.Tags
-                                .Where(t => t.ParentTagId == rootTag.Id)
-                                .OrderByDescending(t => t.Node)
-                                .Select(t => (HierarchyId?)t.Node)
-                                .FirstOrDefaultAsync()
-                            : null;
-
-                        foreach (Tag child in orphanedChildren)
+                        else
                         {
-                            child.ParentTagId = rootTag?.Id;
-                            if (rootTag != null)
+                            var lockedTagName = selectedTagsFromDb.FirstOrDefault(t => t.Id == id)?.Name;
+                            if (lockedTagName != null && !unauthorizedNames.Contains(lockedTagName))
                             {
-                                child.Node = rootTag.Node.GetDescendant(lastChildNode, null);
-                                lastChildNode = child.Node;
+                                unauthorizedNames.Add(lockedTagName);
                             }
                         }
                     }
-
-                    // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
-                    foreach (Tag tag in tagsToDelete)
-                    {
-                        tag.ParentTagId = null;
-                    }
-
-                    _ = await context.SaveChangesAsync();
-
-                    // タグ本体の削除
-                    context.Tags.RemoveRange(tagsToDelete);
-                    _ = await context.SaveChangesAsync();
-
-                    hasDeleted = true;
-                    deletedCount = tagsToDelete.Count;
+                    authorizedIds = unlockedAuthorizedIds;
                 }
-            }
 
-            return new TagTreeDeleteResult(hasDeleted, deletedCount, unauthorizedNames, systemNames);
-        });
+                var hasDeleted = false;
+                var deletedCount = 0;
+
+                if (authorizedIds.Count > 0)
+                {
+                    List<Tag> tagsToDelete = await context.Tags
+                        .Where(t => authorizedIds.Contains(t.Id))
+                        .ToListAsync();
+
+                    if (tagsToDelete.Count > 0)
+                    {
+                        // 外部キー制約 (DeleteBehavior.Restrict) により手動削除が必要な関連エンティティ（TagWeightLedger, TagRelationToTag 等）を削除
+                        await context.RemoveTagRestrictedDependenciesAsync(authorizedIds);
+
+                        // 削除対象のタグを親に持つ子タグを取得し、ルートタグ（"全て∀"）配下に変更する
+                        List<Tag> orphanedChildren = await context.Tags
+                            .Where(t => t.ParentTagId != null &&
+                                        authorizedIds.Contains(t.ParentTagId.Value) &&
+                                        !authorizedIds.Contains(t.Id))
+                            .ToListAsync();
+
+                        if (orphanedChildren.Count > 0)
+                        {
+                            Tag? rootTag = await context.Tags.FirstOrDefaultAsync(t => t.Name == Tag.RootTagName);
+
+                            HierarchyId? lastChildNode = rootTag != null
+                                ? await context.Tags
+                                    .Where(t => t.ParentTagId == rootTag.Id)
+                                    .OrderByDescending(t => t.Node)
+                                    .Select(t => (HierarchyId?)t.Node)
+                                    .FirstOrDefaultAsync()
+                                : null;
+
+                            foreach (Tag child in orphanedChildren)
+                            {
+                                child.ParentTagId = rootTag?.Id;
+                                if (rootTag != null)
+                                {
+                                    child.Node = rootTag.Node.GetDescendant(lastChildNode, null);
+                                    lastChildNode = child.Node;
+                                }
+                            }
+                        }
+
+                        // 自己参照外部キー制約エラーを避けるため、一旦親タグ参照を解除して保存
+                        foreach (Tag tag in tagsToDelete)
+                        {
+                            tag.ParentTagId = null;
+                        }
+
+                        _ = await context.SaveChangesAsync();
+
+                        // タグ本体の削除
+                        context.Tags.RemoveRange(tagsToDelete);
+                        _ = await context.SaveChangesAsync();
+
+                        hasDeleted = true;
+                        deletedCount = tagsToDelete.Count;
+                    }
+                }
+
+                return new TagTreeDeleteResult(hasDeleted, deletedCount, unauthorizedNames, systemNames);
+            });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return new TagTreeDeleteResult(false, 0, [], []);
+        }
     }
 
     public async Task AddTagAsync(Tag tag)
@@ -269,12 +279,40 @@ public class TagTreeDataProvider(
             .Select(t => (HierarchyId?)t.Node)
             .FirstOrDefaultAsync();
 
-        tagToUpdate.Node = parentNode.GetDescendant(lastChild, null);
+        HierarchyId oldNode = tagToUpdate.Node;
+        HierarchyId newNode = parentNode.GetDescendant(lastChild, null);
+
+        tagToUpdate.Node = newNode;
         tagToUpdate.ParentTagId = parentTagId;
         tagToUpdate.UpdatedDate = DateTime.UtcNow;
 
-        _ = await context.SaveChangesAsync();
-        return true;
+        // 子孫タグの HierarchyId ノードを再計算してツリー整合性を維持する
+        if (oldNode != null)
+        {
+            List<Tag> descendants = await context.Tags
+                .Where(t => t.Id != tagToUpdate.Id && t.Node.IsDescendantOf(oldNode))
+                .ToListAsync();
+
+            foreach (Tag descendant in descendants)
+            {
+                if (descendant.Node.GetReparentedValue(oldNode, newNode) is { } reparented)
+                {
+                    descendant.Node = reparented;
+                    descendant.UpdatedDate = DateTime.UtcNow;
+                }
+            }
+        }
+
+        try
+        {
+            _ = await context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return false;
+        }
     }
 
     public async Task<Result<TaggingRequestEntity>> RequestTagMoveAsync(string requesterUserId, int tagId, int? newParentTagId)
@@ -397,10 +435,18 @@ public class TagTreeDataProvider(
             return new Failure("リクエストをキャンセルする権限がありません。");
         }
 
-        request.Cancel();
-        request.UpdatedDate = DateTime.UtcNow;
-        _ = await context.SaveChangesAsync();
+        try
+        {
+            request.Cancel();
+            request.UpdatedDate = DateTime.UtcNow;
+            _ = await context.SaveChangesAsync();
 
-        return new Success<string>("移動リクエストをキャンセルしました。");
+            return new Success<string>("移動リクエストをキャンセルしました。");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return new Failure("データの状態が変更されました。ページを再読み込みしてから、もう一度やり直してください。");
+        }
     }
 }

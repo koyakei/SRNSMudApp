@@ -28,7 +28,22 @@ public interface IRightAssetDataProvider
     /// <param name="tagId">対象タグID。</param>
     /// <param name="cancellationToken">キャンセラレーショントークン。</param>
     /// <returns>RightAsset の概要データ。タグが存在しない場合は null。</returns>
-    Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(int tagId, CancellationToken cancellationToken = default);
+    Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(int tagId, CancellationToken cancellationToken = default) =>
+        GetRightAssetOverviewByTagIdAsync(tagId, null, false, cancellationToken);
+
+    /// <summary>
+    ///     指定されたタグにおける RightAsset の保有状況をユーザー可視性・権限を考慮して取得する。
+    /// </summary>
+    /// <param name="tagId">対象タグID。</param>
+    /// <param name="currentUserId">現在のユーザーID。</param>
+    /// <param name="isAdmin">管理者フラグ。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>RightAsset の概要データ。タグが存在しないか権限がない場合は null。</returns>
+    Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(
+        int tagId,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     RightAsset が発行されている代表的なタグ一覧を取得する（タグ未選択時のクイック選択用）。
@@ -36,7 +51,22 @@ public interface IRightAssetDataProvider
     /// <param name="count">取得最大件数。</param>
     /// <param name="cancellationToken">キャンセラレーショントークン。</param>
     /// <returns>タグごとの RightAsset 概要一覧。</returns>
-    Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default) =>
+        GetTopTagsWithRightAssetsAsync(count, null, false, cancellationToken);
+
+    /// <summary>
+    ///     RightAsset が発行されている代表的なタグ一覧をユーザー可視性・権限を考慮して取得する。
+    /// </summary>
+    /// <param name="count">取得最大件数。</param>
+    /// <param name="currentUserId">現在のユーザーID。</param>
+    /// <param name="isAdmin">管理者フラグ。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>タグごとの RightAsset 概要一覧。</returns>
+    Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(
+        int count,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     ログインユーザーが所持する有効な RightAsset 一覧（対価アセット選択用）を取得する。
@@ -72,7 +102,15 @@ public class RightAssetDataProvider(
     private readonly ILogger<RightAssetDataProvider>? _logger = logger;
 
     /// <inheritdoc />
-    public async Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(int tagId, CancellationToken cancellationToken = default)
+    public Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(int tagId, CancellationToken cancellationToken = default) =>
+        GetRightAssetOverviewByTagIdAsync(tagId, null, false, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<RightAssetOverviewData?> GetRightAssetOverviewByTagIdAsync(
+        int tagId,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default)
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -81,6 +119,12 @@ public class RightAssetDataProvider(
             .FirstOrDefaultAsync(t => t.Id == tagId, cancellationToken);
 
         if (tag is null)
+        {
+            return null;
+        }
+
+        // 非公開タグの認可チェック: 閲覧権限のないユーザーには RightAsset 保有者情報・概要を秘匿する (Issue 2-8)
+        if (!await tag.IsTagVisibleToUserAsync(dbContext, currentUserId, isAdmin))
         {
             return null;
         }
@@ -155,7 +199,15 @@ public class RightAssetDataProvider(
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(int count = 10, CancellationToken cancellationToken = default) =>
+        GetTopTagsWithRightAssetsAsync(count, null, false, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TagRightAssetSummary>> GetTopTagsWithRightAssetsAsync(
+        int count,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default)
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -195,24 +247,31 @@ public class RightAssetDataProvider(
                 : await MapToTagRightAssetSummariesAsync(
                 dbContext,
                 fallbackTagIds.Select(x => (x.TagId, x.TotalAmount, x.HolderCount)).ToList(),
+                currentUserId,
+                isAdmin,
                 cancellationToken);
         }
 
         return await MapToTagRightAssetSummariesAsync(
             dbContext,
             topTagIds.Select(x => (x.TagId, x.TotalAmount, x.HolderCount)).ToList(),
+            currentUserId,
+            isAdmin,
             cancellationToken);
     }
 
     private static async Task<IReadOnlyList<TagRightAssetSummary>> MapToTagRightAssetSummariesAsync(
         ApplicationDbContext dbContext,
         List<(int TagId, int TotalAmount, int HolderCount)> aggregatedTags,
+        string? currentUserId,
+        bool isAdmin,
         CancellationToken cancellationToken)
     {
         var ids = aggregatedTags.Select(x => x.TagId).ToList();
         var tags = await dbContext.Tags
             .AsNoTracking()
             .Where(t => ids.Contains(t.Id))
+            .WhereVisibleToUser(dbContext, currentUserId, isAdmin)
             .ToDictionaryAsync(t => t.Id, cancellationToken);
 
         return aggregatedTags

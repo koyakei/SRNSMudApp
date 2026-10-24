@@ -15,17 +15,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class BountyContractExecutor(
-    TimeProvider? timeProvider = null) : IContractExecutor
+    TimeProvider? timeProvider = null) : ContractExecutorBase(timeProvider)
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    public override string ContractType => ContractTypes.Bounty;
 
-    public string ContractType => ContractTypes.Bounty;
-
-    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    protected override async Task<Result<string>> ExecuteCoreAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
-        ArgumentNullException.ThrowIfNull(contract);
-
         Result<int> assetProvider = await ResolveBountyAssetProviderAsync(dbContext, contract, currentUserId, fulfillerAssetId);
 
         return await (assetProvider switch
@@ -39,14 +34,14 @@ public class BountyContractExecutor(
     {
         Result<int> state = (fulfillerAssetId.HasValue, contract.RequestedTag!.OwnerId == fulfillerUserId) switch
         {
-            (true, _) => await VerifyAndConsumeFulfillerAssetAsync(dbContext, fulfillerAssetId!.Value, fulfillerUserId, contract.RequestedTagId),
+            (true, _) => await VerifyAndConsumeFulfillerAssetAsync(dbContext, fulfillerAssetId!.Value, fulfillerUserId, contract.RequestedTagId, contract.ProposedWeight),
             (false, true) => await MintAndConsumeGoodwillAssetAsync(dbContext, fulfillerUserId, contract.RequestedTagId),
             (false, false) => new Failure("バウンティを承認するには対象タグの RightAsset が必要です。")
         };
         return state;
     }
 
-    private async Task<Result<int>> VerifyAndConsumeFulfillerAssetAsync(ApplicationDbContext dbContext, int fulfillerAssetId, string fulfillerUserId, int requestedTagId)
+    private async Task<Result<int>> VerifyAndConsumeFulfillerAssetAsync(ApplicationDbContext dbContext, int fulfillerAssetId, string fulfillerUserId, int requestedTagId, int requiredAmount)
     {
         RightAsset? fulfillerAsset = await dbContext.RightAssets
             .FirstOrDefaultAsync(a => a.Id == fulfillerAssetId && a.OwnerId == fulfillerUserId && !a.IsBurned);
@@ -55,20 +50,20 @@ public class BountyContractExecutor(
         {
             null => new Failure("提供されたアセットが無効または所有していません。"),
             var a when a.TargetTagId != requestedTagId => new Failure("提供されたアセットは対象タグの権利ではありません。"),
+            var a when a.Amount < requiredAmount => new Failure("提供されたアセットの残量が不足しています。"),
             var a => new Success<RightAsset>(a)
         };
 
         return assetValidation switch
         {
             Failure f => f,
-            Success<RightAsset> s => ConsumeFulfillerAsset(dbContext, s.Value)
+            Success<RightAsset> s => ConsumeFulfillerAsset(dbContext, s.Value, requiredAmount)
         };
     }
 
-    private Result<int> ConsumeFulfillerAsset(ApplicationDbContext dbContext, RightAsset asset)
+    private Result<int> ConsumeFulfillerAsset(ApplicationDbContext dbContext, RightAsset asset, int requiredAmount)
     {
-        asset.IsBurned = true;
-        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        asset.Consume(requiredAmount, TimeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return new Success<int>(asset.Id);
     }
@@ -80,7 +75,7 @@ public class BountyContractExecutor(
             OwnerId = fulfillerUserId,
             TargetTagId = requestedTagId,
             IsBurned = true,
-            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
+            Status = new Burned(TimeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -137,9 +132,7 @@ public class BountyContractExecutor(
 
     private static Result<string> CompleteBountyAddTagLedger(ApplicationDbContext dbContext, TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation newRelation, Tag tag)
     {
-        var previousWeight = tag.CachedWeight;
-        tag.CachedWeight += contract.ProposedWeight;
-        var newWeight = tag.CachedWeight;
+        var (previousWeight, newWeight) = tag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledger = new TagWeightLedger
         {
@@ -246,9 +239,7 @@ public class BountyContractExecutor(
 
     private static Result<string> CompleteBountyRemoveTagLedger(ApplicationDbContext dbContext, TaggingRequestEntity contract, string fulfillerUserId, int consumedAssetId, TagRelation relation, int prevWeight, Tag tag)
     {
-        var previousWeight = tag.CachedWeight;
-        tag.CachedWeight -= prevWeight;
-        var newWeight = tag.CachedWeight;
+        var (previousWeight, newWeight) = tag.ApplyWeightDelta(-prevWeight);
 
         var ledger = new TagWeightLedger
         {

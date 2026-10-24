@@ -100,8 +100,13 @@ public sealed class DockerSocketSqlProxy : IAsyncDisposable
                 _ = int.TryParse(dataSource[(commaIndex + 1)..].Trim(), out port);
             }
 
+            if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                host = "127.0.0.1";
+            }
+
             using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
             await client.ConnectAsync(host, port, cts.Token).ConfigureAwait(false);
             return true;
         }

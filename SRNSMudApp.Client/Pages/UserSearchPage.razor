@@ -1,0 +1,167 @@
+@page "/User/WasmSearch"
+@attribute [AllowAnonymous]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+
+@inject IItemListApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>ユーザー検索 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="my-6">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">ユーザー検索 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">ユーザー名で検索し、プロフィールや投稿一覧を確認できます。</MudText>
+            </div>
+        </div>
+    </div>
+
+    <MudCard Class="pa-4 mb-6" Elevation="2">
+        <MudGrid Spacing="2" Class="align-center">
+            <MudItem xs="12" sm="9">
+                <MudTextField @bind-Value="_searchQuery"
+                              Placeholder="ユーザー名で検索..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              OnKeyDown="@HandleKeyDown"
+                              Clearable="true"
+                              OnClearButtonClick="@OnClearSearch"
+                              Margin="Margin.Dense"
+                              Variant="Variant.Outlined"
+                              data-testid="user-search-input" />
+            </MudItem>
+            <MudItem xs="12" sm="3" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           OnClick="@PerformSearchAsync"
+                           FullWidth="true"
+                           Disabled="@_isLoading"
+                           data-testid="user-search-button">
+                    検索
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCard>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8" data-testid="user-search-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_hasSearched && _users.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="my-4" data-testid="user-search-no-results">
+            一致するユーザーが見つかりませんでした。別の検索語を試してください。
+        </MudAlert>
+    }
+    else if (_users.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" Class="mb-3 font-weight-bold">
+            検索結果 (@_users.Count 件)
+        </MudText>
+        <MudGrid Spacing="3" data-testid="user-search-results">
+            @foreach (var user in _users)
+            {
+                <MudItem xs="12" sm="6" md="4" @key="@user.Id">
+                    <MudCard Outlined="true" Class="h-100 d-flex flex-column hover-elevation transition-elevation">
+                        <MudCardContent Class="d-flex align-center gap-3">
+                            <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">
+                                @(string.IsNullOrEmpty(user.UserName) ? "?" : user.UserName[..1].ToUpperInvariant())
+                            </MudAvatar>
+                            <div class="flex-grow-1 text-truncate">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold text-truncate" data-testid="@($"user-name-{user.Id}")">
+                                    @(user.UserName ?? "名称未設定")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">
+                                    ID: @user.Id
+                                </MudText>
+                            </div>
+                        </MudCardContent>
+                        <MudCardActions Class="mt-auto pt-0 justify-end">
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       EndIcon="@Icons.Material.Filled.ArrowForward"
+                                       Href="@($"/User/WasmDetail/{user.Id}")"
+                                       data-testid="@($"user-detail-btn-{user.Id}")">
+                                詳細を見る
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private string _searchQuery = string.Empty;
+    private IReadOnlyList<UserDto> _users = [];
+    private bool _isLoading;
+    private bool _hasSearched;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PerformSearchAsync();
+        }
+    }
+
+    private async Task OnClearSearch()
+    {
+        _searchQuery = string.Empty;
+        await LoadUsersAsync();
+    }
+
+    private async Task PerformSearchAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+
+        _isLoading = true;
+        _hasSearched = true;
+
+        try
+        {
+            _users = await ApiClient.SearchUsersAsync(_searchQuery, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセルは正常動作
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ユーザーの検索に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
+

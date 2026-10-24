@@ -157,6 +157,15 @@ public class ItemReactionService(
             AddTimelineEvent(context, itemId, userId, tagId, TimelineEventType.Delete, now, previousWeight: previousWeight);
             if (existingRelation.CommentItem is not null)
             {
+                var commentItemId = existingRelation.CommentItem.Id;
+                List<TagWeightLedger> linkedLedgers = await context.TagWeightLedgers
+                    .Where(l => l.CommentItemId == commentItemId)
+                    .ToListAsync();
+                foreach (TagWeightLedger l in linkedLedgers)
+                {
+                    l.CommentItemId = null;
+                }
+
                 _ = context.Items.Remove(existingRelation.CommentItem);
             }
             _ = context.TagRelations.Remove(existingRelation);

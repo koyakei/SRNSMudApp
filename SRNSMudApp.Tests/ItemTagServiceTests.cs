@@ -215,6 +215,35 @@ public class ItemTagServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RemoveTagRelationAsync_WhenAlreadyRemoved_ShouldReturnNotFoundWithoutException()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var item = new Item { Content = $"TestItem_{tid}", OwnerId = userId };
+            var tag = new Tag { Name = $"TestTag_{tid}", OwnerId = userId, CachedWeight = 5 };
+            dbContext.Items.Add(item);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            var relation = new TagRelation { ItemId = item.Id, TagId = tag.Id, OwnerId = userId, Weight = 2 };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
+
+            // 1回目の削除
+            var result1 = await service.RemoveTagRelationAsync(relation.Id, userId);
+            Assert.Null(result1);
+
+            // 2回目の削除（既に存在しないレコードに対する再削除の試行）
+            var result2 = await service.RemoveTagRelationAsync(relation.Id, userId);
+            Assert.Equal("タグの関連付けが見つかりません。", result2);
+        }
+    }
+
+    [Fact]
     public async Task AddTagToTagAsync_ShouldIncreaseCachedWeightAndAddLedger()
     {
         var (dbContext, service, tid) = CreateScope();
@@ -339,5 +368,79 @@ public class ItemTagServiceTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task RemoveTagRelationAsync_WhenAlreadyDeletedConcurrently_ReturnsNullGracefully()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
 
+            var item = new Item { Content = $"ConcurrentItem_{tid}", OwnerId = userId };
+            dbContext.Items.Add(item);
+            var tag = new Tag { Name = $"ConcurrentTag_{tid}", OwnerId = userId, CachedWeight = 1 };
+            dbContext.Tags.Add(tag);
+            var relation = new TagRelation { Item = item, Tag = tag, Weight = 1, OwnerId = userId };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
+
+            var relationId = relation.Id;
+
+            // 別のコンテキストで先に削除を実行（並行削除をシミュレート）
+            await using (var otherContext = new ApplicationDbContext(_sharedDb.Options))
+            {
+                var otherRelation = await otherContext.TagRelations.FindAsync(relationId);
+                if (otherRelation is not null)
+                {
+                    otherContext.TagRelations.Remove(otherRelation);
+                    await otherContext.SaveChangesAsync();
+                }
+            }
+
+            // 先に削除された状態で RemoveTagRelationAsync を実行
+            var result = await service.RemoveTagRelationAsync(relationId, userId);
+
+            // 削除済みであれば目的達成として null (成功扱い) が返ること
+            Assert.True(result is null || result == "タグの関連付けが見つかりません。");
+        }
+    }
+
+    [Fact]
+    public async Task UpdateTagWeightAsync_WhenDeletedConcurrently_ReturnsNotFoundGracefully()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var item = new Item { Content = $"ConcurrentWeightItem_{tid}", OwnerId = userId };
+            dbContext.Items.Add(item);
+            var tag = new Tag { Name = $"ConcurrentWeightTag_{tid}", OwnerId = userId, CachedWeight = 1 };
+            dbContext.Tags.Add(tag);
+            var relation = new TagRelation { Item = item, Tag = tag, Weight = 1, OwnerId = userId };
+            dbContext.TagRelations.Add(relation);
+            await dbContext.SaveChangesAsync();
+
+            var relationId = relation.Id;
+
+            // 別のコンテキストで先に削除を実行
+            await using (var otherContext = new ApplicationDbContext(_sharedDb.Options))
+            {
+                var otherRelation = await otherContext.TagRelations.FindAsync(relationId);
+                if (otherRelation is not null)
+                {
+                    otherContext.TagRelations.Remove(otherRelation);
+                    await otherContext.SaveChangesAsync();
+                }
+            }
+
+            // 削除された状態で UpdateTagWeightAsync を実行
+            var result = await service.UpdateTagWeightAsync(relationId, 1, userId);
+
+            // 競合または見つからない場合は NotFound が返ること
+            Assert.Equal(UpdateWeightResult.NotFound, result);
+        }
+    }
 }

@@ -253,6 +253,72 @@ public class ItemCardDataProviderTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task CreateItemAsync_WithInitialTags_RecordsTagWeightLedgers()
+    {
+        var (db, sut, userId, _, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var tag = new Tag { Name = $"initial_tag_{tid}", OwnerId = userId, CachedWeight = 0 };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var newItem = new Item { Content = $"new_item_{tid}", OwnerId = userId };
+            await sut.CreateItemAsync(newItem, [tag.Id]);
+
+            var createdItem = await db.Items
+                .Include(i => i.TagRelations)
+                .FirstOrDefaultAsync(i => i.Id == newItem.Id);
+            Assert.NotNull(createdItem);
+            Assert.Single(createdItem.TagRelations);
+
+            var ledger = await db.TagWeightLedgers
+                .FirstOrDefaultAsync(l => l.ItemId == newItem.Id && l.TagId == tag.Id);
+            Assert.NotNull(ledger);
+            Assert.Equal(1, ledger.Delta);
+            Assert.Equal("タグの新規追加", ledger.Reason);
+            Assert.Equal(tag.Name, ledger.TagNameSnapshot);
+
+            var updatedTag = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tag.Id);
+            Assert.Equal(1, updatedTag!.CachedWeight);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteItemAsync_WithRepliesAndTaggingRequests_DeletesSuccessfully()
+    {
+        var (db, sut, userId, _, itemId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var childItem = new Item { Content = $"reply_{tid}", OwnerId = userId, ParentItemId = itemId };
+            db.Items.Add(childItem);
+
+            var tag = new Tag { Name = $"tag_del_{tid}", OwnerId = userId };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            var targetItem = await db.Items.FindAsync(itemId);
+            var taggingReq = new TaggingRequestEntity
+            {
+                TargetId = targetItem!.TagTargetId,
+                RequestedTagId = tag.Id,
+                OwnerId = userId
+            };
+            db.TaggingRequestEntities.Add(taggingReq);
+            await db.SaveChangesAsync();
+
+            // Act: 削除
+            await sut.DeleteItemAsync(itemId);
+
+            db.ChangeTracker.Clear();
+
+            // Assert: リプライ・リクエストも含めて正常に削除されること
+            Assert.Null(await db.Items.FindAsync(itemId));
+            Assert.Null(await db.Items.FindAsync(childItem.Id));
+            Assert.Null(await db.TaggingRequestEntities.FindAsync(taggingReq.Id));
+        }
+    }
+
     /// <summary>テスト用のシンプルなファクトリ。</summary>
     private sealed class DbContextFactoryStub(DbContextOptions<ApplicationDbContext> options)
         : IDbContextFactory<ApplicationDbContext>

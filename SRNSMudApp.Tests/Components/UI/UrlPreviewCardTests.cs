@@ -123,4 +123,36 @@ public class UrlPreviewCardTests : IAsyncDisposable
         Assert.Contains(redirectedTagName, pill.TextContent);
         Assert.DoesNotContain("Secret", pill.TextContent);
     }
+
+    [Fact]
+    public void UrlPreviewCard_InternalLinkClick_NavigatesUsingNavigationManager()
+    {
+        // Arrange
+        const string targetUrl = "/ItemDetail/789";
+        var previewData = new LinkPreviewData
+        {
+            Url = targetUrl,
+            Title = "Item #789",
+            Description = "アイテムへのリンク",
+            IsSuccess = true
+        };
+
+        NavigationManager navManager = _ctx.Services.GetRequiredService<NavigationManager>();
+        navManager.NavigateTo("http://localhost/");
+
+        IRenderedComponent<UrlPreviewCard> component = _ctx.Render<UrlPreviewCard>(parameters => parameters
+            .Add(p => p.Url, targetUrl)
+            .Add(p => p.LoadPreview, _ => Task.FromResult<LinkPreviewData?>(previewData))
+        );
+
+        // Assert 1: 初期表示時点で自動遷移していないこと
+        Assert.Equal("http://localhost/", navManager.Uri);
+
+        // Act
+        var pill = component.Find("[data-testid='internal-link-preview-pill']");
+        pill.Click();
+
+        // Assert 2: 外部ブラウザウィンドウ open ではなく NavigationManager でクリック時に同一 SPA 内遷移されること
+        Assert.EndsWith("/ItemDetail/789", navManager.Uri, StringComparison.Ordinal);
+    }
 }

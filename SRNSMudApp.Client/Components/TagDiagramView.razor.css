@@ -1,0 +1,42 @@
+.tag-node-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.tag-node-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(89, 74, 226, 0.15) !important;
+    border-color: var(--mud-palette-primary, #594ae2);
+}
+
+.tag-node-card.selected-node {
+    border-color: var(--mud-palette-primary, #594ae2) !important;
+    box-shadow: 0 0 0 3px rgba(89, 74, 226, 0.3), 0 4px 16px rgba(89, 74, 226, 0.2) !important;
+    animation: node-focus-pulse 2s infinite alternate ease-in-out;
+}
+
+.parent-chip {
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.parent-chip:hover {
+    transform: scale(1.05);
+}
+
+.child-chip {
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.child-chip:hover {
+    transform: scale(1.05);
+}
+
+@keyframes node-focus-pulse {
+    0% {
+        box-shadow: 0 0 0 2px rgba(89, 74, 226, 0.3), 0 2px 8px rgba(89, 74, 226, 0.15);
+    }
+    100% {
+        box-shadow: 0 0 0 5px rgba(89, 74, 226, 0.5), 0 6px 20px rgba(89, 74, 226, 0.3);
+    }
+}
+

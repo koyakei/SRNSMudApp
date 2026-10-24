@@ -17,6 +17,13 @@ public class TagWeightLedger : BaseEntity
     public int? SourceId { get; set; }
     public TagRelation? TagRelation { get; set; }
 
+    // タグ履歴に対するコメント・タグ付けの対象となるアイテム
+    public int? CommentItemId { get; set; }
+    public Item? CommentItem { get; set; }
+
+    [NotMapped]
+    public Item? EffectiveCommentItem => CommentItem ?? TagRelation?.CommentItem;
+
     // 対象アイテムのID (TagRelationが削除された後も履歴を保持するため)
     public int? ItemId { get; set; }
 

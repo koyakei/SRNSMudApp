@@ -251,4 +251,86 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
         var result = await provider.GetContextItemsAsync(999999);
         Assert.Empty(result);
     }
+
+    [Fact]
+    public async Task GetContextItemsAsync_MultipleItemIds_ReturnsAllItemsAndTheirTags()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"u_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var tag1 = new Tag { Name = $"Tag1_{tid}", OwnerId = userId };
+            var tag2 = new Tag { Name = $"Tag2_{tid}", OwnerId = userId };
+            dbContext.Tags.AddRange(tag1, tag2);
+            await dbContext.SaveChangesAsync();
+
+            var tt1 = new TaggableTarget { OwnerId = userId };
+            var tt2 = new TaggableTarget { OwnerId = userId };
+            dbContext.TaggableTargets.AddRange(tt1, tt2);
+            await dbContext.SaveChangesAsync();
+
+            var item1 = new Item { Content = "Item 1", OwnerId = userId, TagTargetId = tt1.Id };
+            var item2 = new Item { Content = "Item 2", OwnerId = userId, TagTargetId = tt2.Id };
+            dbContext.Items.AddRange(item1, item2);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.TagRelations.AddRange(
+                new TagRelation { TagId = tag1.Id, ItemId = item1.Id, OwnerId = userId, Weight = 1 },
+                new TagRelation { TagId = tag2.Id, ItemId = item2.Id, OwnerId = userId, Weight = 1 });
+            await dbContext.SaveChangesAsync();
+
+            var result = await provider.GetContextItemsAsync([item1.Id, item2.Id]);
+
+            Assert.Equal(2, result.Count);
+            Assert.Contains(result, i => i.Id == item1.Id);
+            Assert.Contains(result, i => i.Id == item2.Id);
+
+            var tagIds = await provider.GetContextTagIdsForItemsAsync([item1.Id, item2.Id]);
+            Assert.Contains(tag1.Id, tagIds);
+            Assert.Contains(tag2.Id, tagIds);
+        }
+    }
+
+    [Fact]
+    public async Task GetContextItemsAsync_WhenPrivateItemRequested_FiltersOutForUnauthorizedUser()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"uA_{tid}";
+            var userB = $"uB_{tid}";
+            var adminUser = $"uAdmin_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, adminUser);
+
+            var privateItem = new Item
+            {
+                Content = $"PrivateItem_{tid}",
+                OwnerId = userA,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(privateItem);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userB)
+            var itemsForUserB = await provider.GetContextItemsAsync([privateItem.Id], userB, isAdmin: false);
+            Assert.Empty(itemsForUserB);
+
+            // Act 2: 未ログインユーザー (null)
+            var itemsForAnon = await provider.GetContextItemsAsync([privateItem.Id], null, isAdmin: false);
+            Assert.Empty(itemsForAnon);
+
+            // Act 3: 投稿者本人 (userA)
+            var itemsForOwner = await provider.GetContextItemsAsync([privateItem.Id], userA, isAdmin: false);
+            Assert.Single(itemsForOwner);
+            Assert.Equal(privateItem.Id, itemsForOwner[0].Id);
+
+            // Act 4: 管理者 (adminUser)
+            var itemsForAdmin = await provider.GetContextItemsAsync([privateItem.Id], adminUser, isAdmin: true);
+            Assert.Single(itemsForAdmin);
+            Assert.Equal(privateItem.Id, itemsForAdmin[0].Id);
+        }
+    }
 }

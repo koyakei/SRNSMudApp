@@ -1,0 +1,163 @@
+@page "/Tag/WasmImportTagging"
+@attribute [Authorize]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using System.IO
+@using System.Text
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>タグ付け構造インポート (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5 mb-10">
+    <div class="d-flex align-center mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h4" Class="font-weight-bold">タグ付け構造インポート (WASM)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Item、Tag、TagRelation、および Tag間の Edge（タグ付け含む）を JSON 形式から一括インポートします。
+            </MudText>
+        </div>
+    </div>
+
+    <MudPaper Class="pa-6 rounded-xl mb-6" Elevation="2">
+        <MudStack Spacing="4">
+            <div class="d-flex align-center gap-4 flex-wrap">
+                <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".json,.txt">
+                    <SelectedTemplate>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.CloudUpload" data-testid="upload-json-btn">
+                            JSONファイルを選択
+                        </MudButton>
+                    </SelectedTemplate>
+                </MudFileUpload>
+
+                @if (_file != null)
+                {
+                    <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" OnClose="@(() => _file = null)"
+                             data-testid="selected-json-chip">
+                        @_file.Name (@(_file.Size / 1024 > 0 ? $"{_file.Size / 1024} KB" : $"{_file.Size} B"))
+                    </MudChip>
+                }
+            </div>
+
+            <MudTextField T="string" Label="JSONテキストを直接入力または貼り付け" @bind-Value="_jsonText"
+                          Lines="10" Variant="Variant.Outlined"
+                          Placeholder="@PlaceholderJson" data-testid="json-text-input" />
+
+            <div class="d-flex align-center gap-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="StartImportAsync"
+                           Disabled="@(!CanStart)" data-testid="execute-tagging-import-btn">
+                    @if (_isProcessing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <span class="ms-2">インポート実行中...</span>
+                    }
+                    else
+                    {
+                        <span>インポート開始</span>
+                    }
+                </MudButton>
+
+                @if (_importResult != null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               OnClick="@(() => NavigationManager.NavigateTo("/Item/WasmList"))"
+                               StartIcon="@Icons.Material.Filled.List" data-testid="go-to-item-list-btn">
+                        アイテム一覧へ
+                    </MudButton>
+                }
+            </div>
+        </MudStack>
+    </MudPaper>
+
+    @if (_importResult != null)
+    {
+        <MudAlert Severity="Severity.Success" Class="rounded-lg mb-6" Elevation="1" data-testid="tagging-import-success-alert">
+            <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">インポート完了！</MudText>
+            <MudText Typo="Typo.body2">
+                作成されたアイテム: @_importResult.CreatedItemsCount 件<br />
+                新規作成されたタグ: @_importResult.CreatedTagsCount 件<br />
+                作成されたタグリレーション: @_importResult.CreatedRelationsCount 件<br />
+                作成されたエッジ: @_importResult.CreatedEdgesCount 件<br />
+                作成されたエッジタグ付与: @_importResult.CreatedAttachmentsCount 件
+            </MudText>
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private const string PlaceholderJson = """
+    {
+      "TaggingRequestEntity": {
+        "Item": [...],
+        "TagRelations": [...],
+        "TagEdges": [...]
+      }
+    }
+    """;
+
+    private bool _isProcessing;
+    private string _jsonText = string.Empty;
+    private IBrowserFile? _file;
+    private ImportTaggingResponse? _importResult;
+
+    private bool CanStart => !_isProcessing && (!string.IsNullOrWhiteSpace(_jsonText) || _file != null);
+
+    private async Task OnFileSelected(IBrowserFile? file)
+    {
+        _file = file;
+        if (file != null)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(10 * 1024 * 1024);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                _jsonText = await reader.ReadToEndAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"ファイルの読み込みに失敗しました: {ex.Message}", Severity.Error);
+                _file = null;
+            }
+        }
+    }
+
+    private async Task StartImportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_jsonText))
+        {
+            Snackbar.Add("JSONテキストを入力するかファイルを選択してください。", Severity.Warning);
+            return;
+        }
+
+        _isProcessing = true;
+        try
+        {
+            var request = new ImportTaggingJsonRequest(_jsonText);
+            var result = await ApiClient.ImportTaggingJsonAsync(request);
+
+            if (result != null)
+            {
+                _importResult = result;
+                Snackbar.Add("タグ付け構造のインポートが完了しました！", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("インポートに失敗しました。JSONデータを確認してください。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"インポート処理エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}

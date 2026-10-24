@@ -21,7 +21,7 @@ namespace SRNSMudApp.Tests.Services;
 /// </summary>
 public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
 {
-    private static int s_nextRootSegment = 500_000;
+    private static int s_nextRootSegment = Random.Shared.Next(10_000_000, 90_000_000);
     private MsSqlTestDatabase _sharedDb = null!;
 
     public async Task InitializeAsync()
@@ -82,7 +82,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Content = "Public tag description",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(tag);
             await db.SaveChangesAsync();
@@ -112,7 +112,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Content = "Visible parent tag description",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(parentTag);
             await db.SaveChangesAsync();
@@ -126,7 +126,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 ParentTagId = parentTag.Id,
                 IsPrivate = true,
                 TargetUserGroupId = null,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
@@ -160,7 +160,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Content = "Grandparent description",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(grandparentTag);
             await db.SaveChangesAsync();
@@ -173,7 +173,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 OwnerId = authorId,
                 ParentTagId = grandparentTag.Id,
                 IsPrivate = true,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(parentTag);
             await db.SaveChangesAsync();
@@ -186,7 +186,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 OwnerId = authorId,
                 ParentTagId = parentTag.Id,
                 IsPrivate = true,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/1/")
             };
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
@@ -217,7 +217,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Name = $"Parent_{Guid.NewGuid():N}",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(parentTag);
             await db.SaveChangesAsync();
@@ -231,7 +231,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 ParentTagId = parentTag.Id,
                 IsPrivate = true,
                 TargetUserGroupId = null,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
@@ -263,7 +263,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Name = $"Parent_{Guid.NewGuid():N}",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(parentTag);
             await db.SaveChangesAsync();
@@ -276,7 +276,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 ParentTagId = parentTag.Id,
                 IsPrivate = true,
                 IsAdminHidden = true,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
@@ -303,7 +303,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Name = $"PublicParent_{Guid.NewGuid():N}",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(parentTag);
             await db.SaveChangesAsync();
@@ -316,7 +316,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 ParentTagId = parentTag.Id,
                 IsPrivate = true,
                 TargetUserGroupId = null,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(childTag);
             await db.SaveChangesAsync();
@@ -351,7 +351,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 Content = "Visible category description",
                 OwnerId = authorId,
                 IsPrivate = false,
-                Node = HierarchyId.Parse($"/{rootSeg}/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/")
             };
             db.Tags.Add(visibleAncestorTag);
             await db.SaveChangesAsync();
@@ -364,7 +364,7 @@ public class TagLinkPreviewAncestorFallbackTests : IAsyncLifetime
                 ParentTagId = visibleAncestorTag.Id,
                 IsPrivate = true,
                 TargetUserGroupId = null,
-                Node = HierarchyId.Parse($"/{rootSeg}/1/")
+                Node = HierarchyId.Parse($"/999999/999999/{rootSeg}/1/")
             };
             db.Tags.Add(secretChildTag);
             await db.SaveChangesAsync();

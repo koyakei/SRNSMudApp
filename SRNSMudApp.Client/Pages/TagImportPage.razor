@@ -1,0 +1,221 @@
+@page "/Tag/WasmImportTag"
+@attribute [Authorize]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using System.IO
+@using System.Text
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SRNSMudApp.Client.Models
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>タグインポート (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5 mb-10">
+    <div class="d-flex align-center mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h4" Class="font-weight-bold">タグインポート (WASM)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                階層構造を持ったタグをCSV形式から一括インポートします。各行の左から右に向かって親子の階層関係になります。
+            </MudText>
+        </div>
+    </div>
+
+    <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true" Elevation="0">
+        （例: <code>動物,哺乳類,犬,イヌ科の動物,ペットとして広く親しまれている</code> という行は「動物 &gt; 哺乳類 &gt; 犬（内容: イヌ科の動物\nペットとして広く親しまれている）」という構造を作成します）
+    </MudAlert>
+
+    <MudPaper Class="pa-6 rounded-xl" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">インポート先タグ（必須）</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            選択したタグの子としてインポートします。親タグの選択は必須です。
+        </MudText>
+
+        <MudAutocomplete T="TagSuggestion" Label="親タグを検索" @bind-Value="_selectedParentTag" SearchFunc="@SearchTagsAsync"
+                         ToStringFunc="@(tag => tag?.TagName)" Placeholder="タグ名を入力..."
+                         ResetValueOnEmptyText="false" CoerceValue="true"
+                         Clearable="true" Class="mb-4" data-testid="parent-tag-autocomplete">
+            <ItemTemplate Context="tag">
+                <MudText Typo="Typo.body1">@tag.TagName</MudText>
+            </ItemTemplate>
+            <NoItemsTemplate>
+                <MudText Align="Align.Center" Class="px-4 py-2">
+                    一致するタグが見つかりません
+                </MudText>
+            </NoItemsTemplate>
+        </MudAutocomplete>
+
+        @if (_isAdmin)
+        {
+            <MudSwitch T="bool" @bind-Value="_importAsSystem" Label="システムタグとしてインポート (Owner: system)" Color="Color.Warning"
+                       Class="mb-4" data-testid="import-as-system-switch" />
+        }
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">CSV データ</MudText>
+
+        <div class="d-flex align-center gap-4 mb-4 flex-wrap">
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".csv,.tsv,.txt">
+                <SelectedTemplate>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudUpload"
+                               data-testid="upload-csv-btn">
+                        CSVファイルを選択
+                    </MudButton>
+                </SelectedTemplate>
+            </MudFileUpload>
+
+            @if (_file != null)
+            {
+                <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" OnClose="@(() => _file = null)" data-testid="selected-file-chip">
+                    @_file.Name (@(_file.Size / 1024 > 0 ? $"{_file.Size / 1024} KB" : $"{_file.Size} B"))
+                </MudChip>
+            }
+        </div>
+
+        <MudTextField T="string" Label="または CSV テキストを直接入力・貼り付け" @bind-Value="_csvText"
+                      Lines="6" Variant="Variant.Outlined" Class="mb-4"
+                      Placeholder="親カテゴリ,子カテゴリ,孫カテゴリ&#10;技術,クラウド,Azure,Microsoftのクラウドプラットフォーム"
+                      data-testid="csv-text-input" />
+
+        <div class="d-flex align-center gap-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                       OnClick="ImportCsvAsync" Disabled="@(!CanImport)"
+                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                       data-testid="execute-import-btn">
+                @if (_isImporting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <span class="ms-2">インポート実行中...</span>
+                }
+                else
+                {
+                    <span>インポート実行</span>
+                }
+            </MudButton>
+
+            @if (_lastResult != null)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           OnClick="@(() => NavigationManager.NavigateTo("/Tag/WasmTree"))"
+                           StartIcon="@Icons.Material.Filled.AccountTree"
+                           data-testid="go-to-tree-btn">
+                    タグツリーを表示
+                </MudButton>
+            }
+        </div>
+    </MudPaper>
+
+    @if (_lastResult != null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-6 rounded-lg" Elevation="1" data-testid="import-success-alert">
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">インポート完了</MudText>
+            <MudText Typo="Typo.body2">@_lastResult.Message</MudText>
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private bool _isAdmin;
+    private bool _importAsSystem;
+    private bool _isImporting;
+    private TagSuggestion? _selectedParentTag;
+    private IBrowserFile? _file;
+    private string? _csvText;
+    private ImportTagCsvResponse? _lastResult;
+
+    private bool CanImport =>
+        !_isImporting &&
+        _selectedParentTag != null &&
+        (!string.IsNullOrWhiteSpace(_csvText) || _file != null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            _isAdmin = authState.User?.IsInRole("Admin") ?? false;
+        }
+    }
+
+    private async Task<IEnumerable<TagSuggestion>> SearchTagsAsync(string? value, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return await ApiClient.SearchTagsAsync(value, cancellationToken);
+    }
+
+    private async Task OnFileSelected(IBrowserFile? file)
+    {
+        _file = file;
+        if (file != null)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(10 * 1024 * 1024); // max 10MB
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                _csvText = await reader.ReadToEndAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"ファイルの読み込みに失敗しました: {ex.Message}", Severity.Error);
+                _file = null;
+            }
+        }
+    }
+
+    private async Task ImportCsvAsync()
+    {
+        if (_selectedParentTag == null)
+        {
+            Snackbar.Add("親タグを選択してください。", Severity.Warning);
+            return;
+        }
+
+        string contentToImport = _csvText ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(contentToImport))
+        {
+            Snackbar.Add("CSVデータを入力またはファイルを選択してください。", Severity.Warning);
+            return;
+        }
+
+        _isImporting = true;
+        try
+        {
+            var request = new ImportTagCsvRequest(
+                ParentTagName: _selectedParentTag.TagName,
+                CsvContent: contentToImport,
+                AsSystem: _isAdmin && _importAsSystem
+            );
+
+            var result = await ApiClient.ImportTagCsvAsync(request);
+            if (result != null)
+            {
+                _lastResult = result;
+                Snackbar.Add(result.Message, Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("インポートに失敗しました。サーバーエラーが発生しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"インポート中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isImporting = false;
+        }
+    }
+}

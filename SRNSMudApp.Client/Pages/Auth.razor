@@ -1,8 +1,8 @@
-﻿@page "/auth"
+@page "/auth"
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize]
-@rendermode InteractiveAuto
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
 <MudPopoverProvider/>
 <MudDialogProvider/>

@@ -62,7 +62,12 @@ public interface ITaggingContractService
     Task<Result<string>> AcceptContractAsync(int contractId, string currentUserId, int? fulfillerAssetId = null);
 
     /// <summary>
-    ///     指定コントラクトをキャンセル（または拒否）する。
+    ///     指定コントラクトをキャンセル（取り下げ）する。状態は <see cref="TradeStatus.Canceled" /> に遷移する。
     /// </summary>
     Task<Result<string>> CancelContractAsync(int contractId, string currentUserId);
+
+    /// <summary>
+    ///     指定コントラクトを拒否（却下）する。状態は <see cref="TradeStatus.Rejected" /> に遷移する。
+    /// </summary>
+    Task<Result<string>> RejectContractAsync(int contractId, string currentUserId, string? rejectionReason = null);
 }

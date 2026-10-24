@@ -102,6 +102,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             try
             {
                 _msSqlContainer = new MsSqlBuilder()
+                    .WithImage("mcr.microsoft.com/mssql/server:2019-CU18-ubuntu-20.04")
+                    .WithEnvironment("MSSQL_AGENT_ENABLED", "false")
                     .WithCleanUp(false)
                     .WithAutoRemove(true)
                     .Build();
@@ -180,15 +182,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         _host = builder.Build();
         _host.Start();
-
-        // DBスキーマをマイグレーションで初期化はProgram.cs側で行われるため、ここでは削除する
-        // (EnsureCreatedAsync を MigrateAsync に変更したため、重複を避ける)
-        // テスト用ホストのデータベースに対して保留中のマイグレーションを明示的に適用する
-        using (IServiceScope scope = _host.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.Database.Migrate();
-        }
 
         EndpointDataSource endpoints = _host.Services.GetRequiredService<EndpointDataSource>();
         File.WriteAllLines("/tmp/endpoints.txt",

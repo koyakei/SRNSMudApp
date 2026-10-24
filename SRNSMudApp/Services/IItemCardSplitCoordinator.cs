@@ -48,4 +48,80 @@ public interface IItemCardSplitCoordinator
     /// <param name="currentUserId">取り下げを実行するリクエスト作成者のユーザー ID。</param>
     /// <returns>取り下げが成功した場合は true、それ以外は false。</returns>
     Task<bool> CancelSplitRequestAsync(ItemSplitRequest request, string currentUserId);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されている場合に、そのテキストを引用したアイテムを投稿し、
+    ///     その引用アイテムに対して Good / Bad 投票を行った上で、分割リクエストを送信する。
+    /// </summary>
+    /// <param name="item">対象の親アイテム。</param>
+    /// <param name="currentUserId">操作を実行するユーザー ID。</param>
+    /// <param name="goodTagId">ユーザーの good タグ ID（未解決時は null）。</param>
+    /// <param name="isUpvote">Good (true) または Bad (false)。</param>
+    /// <param name="ensureSystemTagsAsync">システムタグ未作成時に作成を保証するコールバック。</param>
+    /// <param name="selectedText">選択されたテキスト。null または空の場合は JS 経由で取得を試みる。</param>
+    /// <returns>処理が完了した場合は作成された分割リクエスト、キャンセルまたは失敗した場合は null。</returns>
+    Task<ItemSplitRequest?> RequestSplitWithVoteAsync(
+        Item item,
+        string currentUserId,
+        int? goodTagId,
+        bool isUpvote,
+        Func<Task>? ensureSystemTagsAsync,
+        string? selectedText = null);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されている場合に、そのテキストを引用したアイテムを投稿し、
+    ///     その引用アイテムに対して指定されたリアクションタグを投票した上で、分割リクエストを送信する。
+    ///     分割リクエスト承認時は、引用アイテムに付与されたリアクションタグや関係ごと新アイテムへ置き換えられる。
+    /// </summary>
+    /// <param name="item">対象の親アイテム。</param>
+    /// <param name="currentUserId">操作を実行するユーザー ID。</param>
+    /// <param name="reactionTagName">投票するリアクションタグ名（例: 真、善、美）。</param>
+    /// <param name="targetWeight">投票するウェイト（1 または -1）。</param>
+    /// <param name="reactionTagId">現在のユーザーの該当リアクションタグ ID（未解決時は null）。</param>
+    /// <param name="allTags">システムタグ等を含む全タグ一覧。</param>
+    /// <param name="ensureSystemTagsAsync">システムタグ未作成時に作成を保証するコールバック。</param>
+    /// <param name="selectedText">選択されたテキスト。null または空の場合は JS 経由で取得を試みる。</param>
+    /// <returns>処理が完了した場合は結果情報、キャンセルまたは失敗した場合は null。</returns>
+    Task<ItemSplitWithReactionResult?> RequestSplitWithReactionAsync(
+        Item item,
+        string currentUserId,
+        string reactionTagName,
+        int targetWeight,
+        int? reactionTagId,
+        IReadOnlyList<Tag> allTags,
+        Func<Task>? ensureSystemTagsAsync,
+        string? selectedText = null);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されているかを検証し、分割対象として有効なテキストを取得する。
+    ///     未ログイン、自身所有アイテム、テキスト未選択、またはアイテム本文に含まれていない場合は null を返す。
+    /// </summary>
+    /// <param name="item">検証対象のアイテム。</param>
+    /// <param name="currentUserId">現在ログイン中のユーザー ID。</param>
+    /// <returns>有効な選択テキスト。無効または対象外の場合は null。</returns>
+    Task<string?> GetValidSelectedTextForSplitAsync(Item item, string? currentUserId);
+
+    /// <summary>
+    ///     他ユーザーのアイテム本文の一部が選択されている場合に、タグ選択ダイアログを表示し、
+    ///     選択されたテキストを引用したアイテムを投稿した上でタグ付与（またはコントラクト提案）と分割リクエスト送信を実行する。
+    /// </summary>
+    /// <param name="item">対象の親アイテム。</param>
+    /// <param name="currentUserId">操作を実行するユーザー ID。</param>
+    /// <param name="selectedText">選択されたテキスト。null または空の場合は JS 経由で取得を試みる。</param>
+    /// <returns>タグ追加操作の結果（<see cref="TagAddOutcome" />）。</returns>
+    Task<TagAddOutcome> RequestSplitWithTagAddAsync(
+        Item item,
+        string currentUserId,
+        string? selectedText = null);
 }
+
+/// <summary>
+///     テキスト選択時のリアクション投票・引用投稿・分割リクエスト送信の結果。
+/// </summary>
+/// <param name="SplitRequest">作成されたアイテム分割リクエスト。</param>
+/// <param name="VoteResult">作成された引用アイテムに対するリアクション投票結果。</param>
+/// <param name="QuoteItem">作成された引用アイテム。</param>
+public sealed record ItemSplitWithReactionResult(
+    ItemSplitRequest SplitRequest,
+    ItemVoteResult VoteResult,
+    Item QuoteItem);

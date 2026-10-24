@@ -185,9 +185,8 @@ public class TaggingImportDataProvider(
 
             // 1. Items の作成
             var itemMap = new Dictionary<string, Item>();
-            for (var i = 0; i < payload.Item.Count; i++)
+            foreach (var (i, itemDto) in payload.Item.Index())
             {
-                ImportItemDto itemDto = payload.Item[i];
                 var content = i < processedItemContents.Count ? processedItemContents[i] : itemDto.Content;
 
                 var item = new Item
@@ -340,8 +339,7 @@ public class TaggingImportDataProvider(
                     };
                     _ = db.TagEdgeTagAttachments.Add(attachment);
 
-                    var prevWeight = appliedTag.CachedWeight;
-                    appliedTag.CachedWeight += 1;
+                    var (prevWeight, newWeight) = appliedTag.ApplyWeightDelta(1);
 
                     _ = db.TagWeightLedgers.Add(new TagWeightLedger
                     {
@@ -352,7 +350,7 @@ public class TaggingImportDataProvider(
                         ConsumedRightAssetId = asset.Id,
                         Delta = 1,
                         PreviousWeight = prevWeight,
-                        NewWeight = appliedTag.CachedWeight,
+                        NewWeight = newWeight,
                         IsOwnerAction = appliedTag.OwnerId == currentUserId,
                         Reason = "Import: Edgeへのタグ付け",
                         OwnerId = currentUserId,

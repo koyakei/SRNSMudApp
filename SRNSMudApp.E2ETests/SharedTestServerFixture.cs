@@ -45,29 +45,70 @@ public class SharedTestServerFixture
         }
     }
 
-    public static CustomWebApplicationFactory Factory { get; private set; } = null!;
+    private static readonly object s_lock = new();
+    private static CustomWebApplicationFactory? s_factory;
 
-    public static string ServerAddress => Factory.ServerAddress;
+    public static CustomWebApplicationFactory Factory
+    {
+        get
+        {
+            EnsureInitialized();
+            return s_factory!;
+        }
+    }
+
+    public static string ServerAddress
+    {
+        get
+        {
+            EnsureInitialized();
+            return s_factory!.ServerAddress;
+        }
+    }
+
+    public static void EnsureInitialized()
+    {
+        if (s_factory != null)
+        {
+            return;
+        }
+
+        lock (s_lock)
+        {
+            if (s_factory != null)
+            {
+                return;
+            }
+
+            SanitizeBrowserEnvironment();
+
+            Environment.SetEnvironmentVariable("Authentication__Google__ClientId",
+                "1234567890-dummy.apps.googleusercontent.com");
+
+            var factory = new CustomWebApplicationFactory();
+            factory.EnsureServer();
+            s_factory = factory;
+
+            Console.WriteLine(
+                $"[SharedTestServerFixture] MSSQL container + Kestrel started once. Address: {s_factory.ServerAddress}");
+        }
+    }
 
     [OneTimeSetUp]
     public void GlobalSetUp()
     {
-        SanitizeBrowserEnvironment();
-
-        Environment.SetEnvironmentVariable("Authentication__Google__ClientId",
-            "1234567890-dummy.apps.googleusercontent.com");
-
-        Factory = new CustomWebApplicationFactory();
-        Factory.EnsureServer();
-
-        Console.WriteLine(
-            $"[SharedTestServerFixture] MSSQL container + Kestrel started once. Address: {Factory.ServerAddress}");
+        EnsureInitialized();
     }
 
     [OneTimeTearDown]
     public void GlobalTearDown()
     {
-        Factory?.Dispose();
+        lock (s_lock)
+        {
+            s_factory?.Dispose();
+            s_factory = null;
+        }
+
         Environment.SetEnvironmentVariable("Authentication__Google__ClientId", null);
     }
 }

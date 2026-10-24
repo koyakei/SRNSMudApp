@@ -168,6 +168,57 @@ public sealed class ItemCardQuoteFocusTests : IAsyncLifetime
         Assert.Equal(initialUri, navManager.Uri);
     }
 
+    [Fact]
+    public void WhenItemHasQuotedItemWithUrl_RendersQuotedItemPreviewWithLinkPreview()
+    {
+        var previewMock = new Mock<ILinkPreviewService>();
+        previewMock.Setup(s => s.GetPreviewAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string url, string? _, bool _, CancellationToken _) => new LinkPreviewData
+            {
+                Url = url,
+                DisplayText = "リンク先プレビュー文字列",
+                IsSuccess = true
+            });
+        previewMock.Setup(s => s.GetPreviewAsync(It.IsAny<string>()))
+            .ReturnsAsync((string url) => new LinkPreviewData
+            {
+                Url = url,
+                DisplayText = "リンク先プレビュー文字列",
+                IsSuccess = true
+            });
+
+        _ctx.Services.RemoveAll<ILinkPreviewService>();
+        _ctx.Services.AddSingleton(previewMock.Object);
+
+        var quotedItem = new SRNSMudApp.Data.Item
+        {
+            Id = 50,
+            Content = "引用元本文 /ItemDetail/99 引用元続き",
+            OwnerId = "other-user"
+        };
+        var itemWithQuote = new SRNSMudApp.Data.Item
+        {
+            Id = 51,
+            Content = "新規アイテム本文",
+            OwnerId = UserId,
+            QuotedItemId = 50,
+            QuotedItem = quotedItem
+        };
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, itemWithQuote)
+            .Add(p => p.CurrentUserId, UserId));
+
+        cut.WaitForAssertion(() =>
+        {
+            var previewContainer = cut.Find("[data-testid='quoted-item-preview-50']");
+            var pill = previewContainer.QuerySelector("[data-testid='internal-link-preview-pill']");
+            Assert.NotNull(pill);
+            Assert.Contains("リンク先プレビュー文字列", pill.TextContent);
+            Assert.Contains("引用元本文", previewContainer.TextContent);
+        });
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

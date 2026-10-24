@@ -13,14 +13,17 @@ namespace SRNSMudApp.Services;
 /// </summary>
 /// <param name="dbFactory">DbContext ファクトリ。</param>
 /// <param name="sourceResolvers">優先順位順に実行する元アイテム解決戦略。</param>
+/// <param name="timeProvider">日時プロバイダー（省略時はシステム日時）。</param>
 public class ItemQuoteService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
-    IEnumerable<IItemSourceResolver> sourceResolvers) : IItemQuoteService
+    IEnumerable<IItemSourceResolver> sourceResolvers,
+    TimeProvider? timeProvider = null) : IItemQuoteService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IReadOnlyList<IItemSourceResolver> _sourceResolvers =
         sourceResolvers?.ToArray() ?? throw new ArgumentNullException(nameof(sourceResolvers));
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <inheritdoc />
     public async Task<Item?> CreateQuoteItemAsync(
@@ -42,20 +45,27 @@ public class ItemQuoteService(
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        // 引用元のアイテムが存在することを確認する
-        var targetExists = await context.Items.AnyAsync(i => i.Id == quotedItemId, cancellationToken);
-        if (!targetExists)
+        // 引用元のアイテムが存在することを確認し、公開範囲（IsPrivate / TargetUserGroupId）を取得する。
+        // （非公開・グループ限定アイテムの引用が公開タイムラインへ流出するのを防ぐため、公開範囲を引き継ぐ）
+        var targetItem = await context.Items
+            .AsNoTracking()
+            .Select(i => new { i.Id, i.IsPrivate, i.TargetUserGroupId })
+            .FirstOrDefaultAsync(i => i.Id == quotedItemId, cancellationToken);
+        if (targetItem is null)
         {
             return null;
         }
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var quoteItem = new Item
         {
             Content = content,
             OwnerId = userId,
             QuotedItemId = quotedItemId,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow,
+            IsPrivate = targetItem.IsPrivate,
+            TargetUserGroupId = targetItem.TargetUserGroupId,
+            CreatedDate = now,
+            UpdatedDate = now,
             ItemKindJson = JsonSerializer.Serialize(new QuoteItem(quotedItemId))
         };
 
@@ -69,8 +79,8 @@ public class ItemQuoteService(
                     TagId = tagId,
                     Weight = 1,
                     OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
+                    CreatedDate = now,
+                    UpdatedDate = now
                 })
                 .ToList();
             quoteItem.TagRelations = relations;
@@ -88,8 +98,16 @@ public class ItemQuoteService(
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
+        int quotedItemId,
+        CancellationToken cancellationToken = default) =>
+        GetQuotedByItemsAsync(quotedItemId, null, false, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
         int quotedItemId,
+        string? currentUserId,
+        bool isAdmin = false,
         CancellationToken cancellationToken = default)
     {
         if (quotedItemId <= 0)
@@ -101,6 +119,7 @@ public class ItemQuoteService(
 
         return await context.Items
             .AsNoTracking()
+            .WhereVisibleToUser(context, currentUserId, isAdmin)
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
                 .ThenInclude(tr => tr.Tag)

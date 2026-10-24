@@ -85,4 +85,45 @@ public static class UrlPreviewCardViewModel
             return part;
         }
     }
+
+    /// <summary>
+    ///     指定された URL が内部ルート（相対パス、または現在のベース URI と同一オリジンのパス）であるかを判定し、
+    ///     内部ルートの場合は遷移先パス（クエリ・フラグメント含む）を出力する。
+    /// </summary>
+    [SuppressMessage("Design", "CA1054:Change the type of parameter from string to System.Uri",
+        Justification = "URL 文字列からの相対パス解析処理のため")]
+    public static bool TryGetInternalRoute(string? url, string? baseUri, [NotNullWhen(true)] out string? internalRoute)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            internalRoute = null;
+            return false;
+        }
+
+        var trimmedUrl = url.Trim();
+
+        // 1. スラッシュから始まる相対パス ("/ItemDetail/123" など)
+        if (trimmedUrl.StartsWith('/', StringComparison.Ordinal) && !trimmedUrl.StartsWith("//", StringComparison.Ordinal))
+        {
+            internalRoute = trimmedUrl;
+            return true;
+        }
+
+        // 2. 絶対 URI の場合、baseUri と同一オリジンかを判定
+        if (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var targetUri) &&
+            !string.IsNullOrEmpty(baseUri) &&
+            Uri.TryCreate(baseUri, UriKind.Absolute, out var baseParsed))
+        {
+            if (string.Equals(targetUri.Scheme, baseParsed.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(targetUri.Authority, baseParsed.Authority, StringComparison.OrdinalIgnoreCase))
+            {
+                // 同一オリジンのため、相対パス部分（PathAndQuery + Fragment）を抽出
+                internalRoute = $"{targetUri.PathAndQuery}{targetUri.Fragment}";
+                return true;
+            }
+        }
+
+        internalRoute = null;
+        return false;
+    }
 }

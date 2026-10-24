@@ -92,6 +92,7 @@ public class TagDetailDataProvider(
         }
 
         List<Item> relatedItems = await context.Items
+            .AsSplitQuery()
             .Include(i => i.Owner)
             .Include(i => i.TargetUserGroup)
             .Include(i => i.TagRelations)
@@ -122,6 +123,11 @@ public class TagDetailDataProvider(
 
         List<TagWeightLedger> weightLedgers = await context.TagWeightLedgers!
             .Include(l => l.Owner)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.Owner)
+            .Include(l => l.TagRelation)
+                .ThenInclude(tr => tr!.CommentItem)
+                    .ThenInclude(ci => ci!.Owner)
             .Where(l => l.TagId == tagId || l.TargetTagId == tagId)
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()
@@ -146,7 +152,7 @@ public class TagDetailDataProvider(
             .ToListAsync();
 
         RightAssetOverviewData? rightAssetOverview =
-            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId);
+            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId, currentUserId, isAdmin);
 
         return new TagDetailPageData(
             tag,

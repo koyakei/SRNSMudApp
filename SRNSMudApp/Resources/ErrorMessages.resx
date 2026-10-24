@@ -113,4 +113,58 @@
   <data name="InsufficientPermissionBalance" xml:space="preserve">
     <value>操作権限の残高が不足しています（必要: {0}, 保有: {1}）。</value>
   </data>
+  <data name="SplitTextRequired" xml:space="preserve">
+    <value>分割するテキストが指定されていません。</value>
+  </data>
+  <data name="SplitRequesterRequired" xml:space="preserve">
+    <value>リクエスト送信ユーザーが指定されていません。</value>
+  </data>
+  <data name="SplitItemNotFound" xml:space="preserve">
+    <value>対象のアイテムが見つかりません。</value>
+  </data>
+  <data name="SplitSelfItemNotAllowed" xml:space="preserve">
+    <value>自分自身のアイテムに対しては分割リクエストではなく直接分割を行ってください。</value>
+  </data>
+  <data name="SplitSelectedTextNotInContent" xml:space="preserve">
+    <value>選択されたテキストが元アイテムの本文に含まれていません。</value>
+  </data>
+  <data name="SplitQuoteItemNotFound" xml:space="preserve">
+    <value>指定された引用アイテムが見つかりません。</value>
+  </data>
+  <data name="SplitDuplicateRequestExists" xml:space="preserve">
+    <value>このテキストに対する分割リクエストは既に申請中です。</value>
+  </data>
+  <data name="SplitTargetItemRequired" xml:space="preserve">
+    <value>分割対象のアイテムが指定されていません。</value>
+  </data>
+  <data name="OwnerUserRequired" xml:space="preserve">
+    <value>所有者ユーザーが指定されていません。</value>
+  </data>
+  <data name="NotAuthorizedToSplit" xml:space="preserve">
+    <value>このアイテムを分割する権限がありません。</value>
+  </data>
+  <data name="SplitRequestNotProposedForApprove" xml:space="preserve">
+    <value>申請中ではないリクエストは承認できません（現在の状態: {0}）。</value>
+  </data>
+  <data name="SplitOriginalItemNotFound" xml:space="preserve">
+    <value>分割対象の元アイテムが見つかりません。</value>
+  </data>
+  <data name="SplitOriginalItemContentChanged" xml:space="preserve">
+    <value>元アイテムの本文が更新されたため、指定されたテキストが見つかりません。</value>
+  </data>
+  <data name="SplitRequestNotProposedForReject" xml:space="preserve">
+    <value>申請中ではないリクエストは却下できません（現在の状態: {0}）。</value>
+  </data>
+  <data name="NotAuthorizedToCancel" xml:space="preserve">
+    <value>このリクエストを取り下げる権限がありません。</value>
+  </data>
+  <data name="SplitRequestNotProposedForCancel" xml:space="preserve">
+    <value>申請中ではないリクエストは取り下げできません（現在の状態: {0}）。</value>
+  </data>
+  <data name="SplitIntersectsExistingLink" xml:space="preserve">
+    <value>既存のリンク文字列の途中で分割することはできません。</value>
+  </data>
+  <data name="SplitResultExceedsMaxLength" xml:space="preserve">
+    <value>分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。</value>
+  </data>
 </root>

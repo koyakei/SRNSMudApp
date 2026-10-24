@@ -125,4 +125,46 @@ public class MoveContractExecutorTests : TaggingContractTestBase
         Assert.NotNull(updatedTag);
         Assert.Equal(rootTag.Id, updatedTag.ParentTagId);
     }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenTargetParentAlreadyHasMultipleChildren_PlacesNewNodeAfterLastChild()
+    {
+        var (context, _, tid) = CreateTestScope();
+        var userOwner = new ApplicationUser { Id = $"owner_{tid}", UserName = $"owner_{tid}" };
+        context.Users.Add(userOwner);
+
+        var parentTag = new Tag { Name = $"Parent_{tid}", OwnerId = userOwner.Id, Node = HierarchyId.Parse("/1/") };
+        var child1 = new Tag { Name = $"Child1_{tid}", OwnerId = userOwner.Id, Node = HierarchyId.Parse("/1/1/") };
+        var child2 = new Tag { Name = $"Child2_{tid}", OwnerId = userOwner.Id, Node = HierarchyId.Parse("/1/2/") };
+        var movingTag = new Tag { Name = $"Moving_{tid}", OwnerId = userOwner.Id, Node = HierarchyId.Parse("/2/") };
+
+        context.Tags.AddRange(parentTag, child1, child2, movingTag);
+        await context.SaveChangesAsync();
+
+        child1.ParentTagId = parentTag.Id;
+        child2.ParentTagId = parentTag.Id;
+        await context.SaveChangesAsync();
+
+        var contract = new TaggingRequestEntity
+        {
+            OwnerId = userOwner.Id,
+            ContractType = ContractTypes.Move,
+            RequesterUserId = userOwner.Id,
+            TagOwnerUserId = userOwner.Id,
+            RequestedTagId = movingTag.Id,
+            RequestType = TaggingRequestType.Move,
+            Payload = new TagMovePayload(parentTag.Id)
+        };
+
+        var executor = new MoveContractExecutor();
+        var result = await executor.ExecuteAsync(context, contract, userOwner.Id);
+
+        Assert.True(result is Success<string>);
+        var updatedTag = await context.Tags.FindAsync(movingTag.Id);
+        Assert.NotNull(updatedTag);
+        Assert.Equal(parentTag.Id, updatedTag.ParentTagId);
+        // 新しい Node は child2 (/1/2/) より大きく、parentTag (/1/) の直下子ノードであること
+        Assert.True(updatedTag.Node.IsDescendantOf(parentTag.Node));
+        Assert.True(updatedTag.Node.CompareTo(child2.Node) > 0);
+    }
 }

@@ -1,9 +1,14 @@
 @page "/Item/WasmList"
 @using SRNSMudApp.Client.Components
 
-@rendermode InteractiveWebAssembly
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
 <PageTitle>アイテム一覧 (WASM)</PageTitle>
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-5">
     <div class="d-flex align-center justify-space-between mb-4">
@@ -13,9 +18,24 @@
                 ブラウザ側 WebAssembly (WASM) から API (/api/item/query) を直接呼び出して動作します。
             </MudText>
         </div>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="Item/ItemList" StartIcon="@Icons.Material.Filled.ArrowBack">
-            サーバー版 ItemList へ戻る
-        </MudButton>
+        <div class="d-flex align-center gap-2 flex-wrap">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Href="/Tag/WasmDiagram"
+                       StartIcon="@Icons.Material.Filled.Hub">
+                ダイアグラム (WASM)
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Href="/UserGroup/WasmList"
+                       StartIcon="@Icons.Material.Filled.Group">
+                ユーザーグループ (WASM)
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Href="/Tag/WasmTree"
+                       StartIcon="@Icons.Material.Filled.AccountTree">
+                タグツリー (WASM)
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small" Href="Item/ItemList"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">
+                サーバー版 ItemList へ戻る
+            </MudButton>
+        </div>
     </div>
 
     <ItemSearchView />

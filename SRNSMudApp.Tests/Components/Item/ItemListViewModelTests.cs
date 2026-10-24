@@ -241,6 +241,36 @@ public sealed class ItemListViewModelTests
     }
 
     [Fact]
+    public void GetTagDiagramUrl_WhenNoItems_ReturnsBaseDiagramPath()
+    {
+        ItemListViewModel vm = CreateViewModel();
+
+        string url = vm.GetTagDiagramUrl();
+
+        Assert.Equal("/tag-diagram", url);
+    }
+
+    [Fact]
+    public async Task GetTagDiagramUrl_WhenItemsExist_ReturnsUrlWithItemIds()
+    {
+        ItemListViewModel vm = CreateViewModel();
+        var item1 = new Item { Id = 10, Content = "Item 1", OwnerId = "owner" };
+        var item2 = new Item { Id = 20, Content = "Item 2", OwnerId = "owner" };
+
+        _listDataMock.Setup(d => d.LoadItemsAndTagsAsync(
+                It.IsAny<IReadOnlyList<ItemListFilter>>(),
+                It.IsAny<IReadOnlyList<ItemListSort>>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(new ItemListPageData([item1, item2], []));
+
+        await vm.LoadDataAsync();
+
+        string url = vm.GetTagDiagramUrl();
+
+        Assert.Equal("/tag-diagram?itemIds=10,20", url);
+    }
+
+    [Fact]
     public void Dispose_UnsubscribesFromTagSearch()
     {
         ItemListViewModel vm = CreateViewModel();

@@ -34,6 +34,20 @@ public interface IItemQuoteService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     指定した元アイテムを引用しているアイテムの一覧を取得する（可視性フィルタ適用）。
+    /// </summary>
+    /// <param name="quotedItemId">元アイテムID。</param>
+    /// <param name="currentUserId">閲覧ユーザーID。</param>
+    /// <param name="isAdmin">管理者フラグ。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>引用しているアイテムのリスト。該当するアイテムがない場合は空のリスト。</returns>
+    Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
+        int quotedItemId,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     指定した元アイテムが引用されている件数を取得する。
     /// </summary>
     /// <param name="quotedItemId">元アイテムID。</param>

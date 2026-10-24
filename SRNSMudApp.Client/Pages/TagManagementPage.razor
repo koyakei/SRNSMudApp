@@ -1,0 +1,299 @@
+@page "/Admin/WasmTagManagement"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using Microsoft.AspNetCore.Authorization
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>タグ管理 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-5 mb-10">
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Class="mr-2" Size="Size.Large" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">タグ管理 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    タグの階層ロックおよび個別ロックを管理します。
+                </MudText>
+            </div>
+        </div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadDataAsync" Disabled="_isLoading" data-testid="refresh-tag-management-btn">
+            再読み込み
+        </MudButton>
+    </div>
+
+    @* 階層ロック設定カード *@
+    <MudCard Outlined="true" Class="mb-5 rounded-xl">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">階層ロック設定</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    n階層目までのタグをロックします。ロックされたタグの兄弟は新規作成・編集・削除が不能となります。
+                </MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                @if (_currentConfiguredLevel > 0)
+                {
+                    <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" data-testid="current-lock-level-chip">
+                        第@(_currentConfiguredLevel) 階層までロック中
+                    </MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" data-testid="current-lock-level-chip">
+                        階層ロック: 無効
+                    </MudChip>
+                }
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <div class="d-flex align-center gap-4 flex-wrap">
+                <MudNumericField @bind-Value="_inputLevel" Label="ロックする階層（n階層目まで）" Min="0" Max="20" Step="1"
+                                 Variant="Variant.Outlined"
+                                 HelperText="0 を指定すると階層ロックは無効になります（個別ロックのみ適用）。1 はルート直下の子タグ、2 はその子タグまでが対象です。"
+                                 Style="max-width: 320px;" Immediate="true" data-testid="input-lock-level" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="SaveHierarchyLockSettingAsync" Disabled="_isSavingSetting"
+                           data-testid="save-lock-level-btn">
+                    設定を保存
+                </MudButton>
+            </div>
+            <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true" Elevation="0">
+                階層設定によりロックされた階層のタグおよびその兄弟タグは、一般ユーザー・管理者問わず作成・編集・削除が制限されます。
+            </MudAlert>
+        </MudCardContent>
+    </MudCard>
+
+    @* タグ一覧とロック状態 *@
+    <MudCard Outlined="true" Class="rounded-xl">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                    <div>
+                        <MudText Typo="Typo.h6">タグ一覧とロック状態</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            タグごとの階層レベル、ロック状態の確認および個別ロックの切り替えを行えます。
+                        </MudText>
+                    </div>
+                    <MudTextField @bind-Value="_searchString" Placeholder="タグ名・親タグ・作成者で検索..."
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                                  Class="mt-0" Immediate="true" Clearable="true" Style="max-width: 300px;"
+                                  data-testid="search-tags-input" />
+                </div>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_isLoading)
+            {
+                <div class="d-flex justify-center pa-8" data-testid="tag-management-loading">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </div>
+            }
+            else
+            {
+                <MudTable Items="@FilteredTags" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0"
+                          RowsPerPage="20" data-testid="wasm-tag-management-table">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>タグ名</MudTh>
+                        <MudTh>階層</MudTh>
+                        <MudTh>親タグ</MudTh>
+                        <MudTh>作成者</MudTh>
+                        <MudTh>ロック状態</MudTh>
+                        <MudTh Style="text-align: right;">操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">@context.Id</MudTd>
+                        <MudTd DataLabel="タグ名">
+                            <div class="d-flex align-center gap-1">
+                                @if (context.IsLockedEffective)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Error" />
+                                }
+                                <MudLink Href="@($"/Tag/WasmDetail/{context.Id}")" Typo="Typo.body2" Class="font-weight-bold">
+                                    @context.Name
+                                </MudLink>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="階層">
+                            @if (context.Level == 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Dark" Variant="Variant.Filled">
+                                    ルート (0)
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
+                                    第 @context.Level 階層
+                                </MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="親タグ">
+                            @(context.ParentTagName ?? (context.Level == 0 ? "-" : "全て∀"))
+                        </MudTd>
+                        <MudTd DataLabel="作成者">@(context.OwnerUserName ?? "-")</MudTd>
+                        <MudTd DataLabel="ロック状態">
+                            <div class="d-flex align-center gap-1 flex-wrap">
+                                @if (context.Name == "全て∀")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Dark" Variant="Variant.Outlined">
+                                        ルート固定
+                                    </MudChip>
+                                }
+                                else if (context.IsDirectlyLocked)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">
+                                        個別ロック
+                                    </MudChip>
+                                }
+                                @if (context.IsLevelLocked && context.Name != "全て∀")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
+                                        階層ロック
+                                    </MudChip>
+                                }
+                                @if (context.IsSiblingLocked && !context.IsDirectlyLocked && !context.IsLevelLocked)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                                        兄弟がロック中
+                                    </MudChip>
+                                }
+                                @if (!context.IsLockedEffective)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                                        未ロック
+                                    </MudChip>
+                                }
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="操作" Style="text-align: right;">
+                            @if (context.Name != "全て∀")
+                            {
+                                @if (context.IsDirectlyLocked)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.LockOpen" Class="mr-1"
+                                               OnClick="@(() => ToggleTagLockAsync(context.Id))"
+                                               Disabled="_isProcessingTagId == context.Id"
+                                               data-testid="@($"toggle-lock-{context.Id}")">
+                                        ロック解除
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Lock" Class="mr-1"
+                                               OnClick="@(() => ToggleTagLockAsync(context.Id))"
+                                               Disabled="_isProcessingTagId == context.Id"
+                                               data-testid="@($"toggle-lock-{context.Id}")">
+                                        個別ロック
+                                    </MudButton>
+                                }
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Color="Color.Primary"
+                                           Href="@($"/Tag/WasmDetail/{context.Id}")" aria-label="詳細を表示"
+                                           data-testid="@($"detail-tag-{context.Id}")" />
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new int[] { 10, 20, 50, 100 }" />
+                    </PagerContent>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private int _currentConfiguredLevel;
+    private int _inputLevel;
+    private bool _isLoading = true;
+    private bool _isSavingSetting;
+    private int? _isProcessingTagId;
+    private string? _searchString;
+    private List<TagLockItemDto> _tags = [];
+
+    private IEnumerable<TagLockItemDto> FilteredTags =>
+        string.IsNullOrWhiteSpace(_searchString)
+            ? _tags
+            : _tags.Where(t =>
+                t.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                (t.ParentTagName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (t.OwnerUserName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _currentConfiguredLevel = await ApiClient.GetTagLockLevelAsync();
+            _inputLevel = _currentConfiguredLevel;
+            var tags = await ApiClient.GetTagLockItemsAsync();
+            _tags = tags.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"データ読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveHierarchyLockSettingAsync()
+    {
+        _isSavingSetting = true;
+        try
+        {
+            bool success = await ApiClient.SetTagLockLevelAsync(_inputLevel);
+            if (success)
+            {
+                Snackbar.Add($"階層ロック設定を {_inputLevel} 階層目までに更新しました。", Severity.Success);
+                await LoadDataAsync();
+            }
+            else
+            {
+                Snackbar.Add("階層ロック設定の保存に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSavingSetting = false;
+        }
+    }
+
+    private async Task ToggleTagLockAsync(int tagId)
+    {
+        _isProcessingTagId = tagId;
+        try
+        {
+            bool isLocked = await ApiClient.ToggleTagLockAsync(tagId);
+            Snackbar.Add(isLocked ? "タグを個別ロックしました。" : "タグの個別ロックを解除しました。", Severity.Success);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ロック操作エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessingTagId = null;
+        }
+    }
+}

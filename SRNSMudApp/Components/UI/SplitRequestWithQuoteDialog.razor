@@ -1,0 +1,76 @@
+@using SRNSMudApp.Components.Item
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.VerticalSplit" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6">アイテム分割リクエストの送信</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @* 分割対象テキストの確認表示 *@
+            <div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">
+                    以下のテキストを別アイテムへ分割するリクエストをアイテムの所有者に送信します。
+                </MudText>
+                <MudPaper Elevation="0" Class="pa-3 rounded"
+                          Style="border-left: 4px solid var(--mud-palette-secondary); background: var(--mud-palette-background-grey);">
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@SelectedText</MudText>
+                </MudPaper>
+            </div>
+
+            @* 引用コメント入力（任意） *@
+            <div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">
+                    引用コメント（任意）: 分割リクエストと同時に、選択テキストの引用アイテムとそれに対するコメントを投稿できます。
+                    リクエストが承認されると、引用アイテムが分割後の新アイテムに置き換わり、コメントも新アイテムに引き継がれます。
+                </MudText>
+                <MudTextField T="string" @bind-Value="_quoteContent"
+                              Label="引用コメントを入力..."
+                              Placeholder="このアイテムについて何か書く（省略可）"
+                              Variant="Variant.Outlined" Lines="3" MaxLines="6" MaxLength="1000"
+                              Counter="1000" Immediate="true"
+                              data-testid="split-request-quote-content-input" />
+            </div>
+
+            @* URL プレビュー *@
+            @if (ExtractedUrls.Count > 0)
+            {
+                <MudStack Spacing="2">
+                    @foreach (var url in ExtractedUrls.Take(3))
+                    {
+                        <UrlPreviewCard Url="@url" LoadPreview="@ViewModel.GetPreviewAsync" />
+                    }
+                </MudStack>
+            }
+
+            @* 引用元のアイテムプレビュー *@
+            <div class="mt-1">
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1 d-block">引用元（分割対象アイテム）:</MudText>
+                <QuotedItemPreview QuotedItemId="QuotedItem.Id" QuotedItem="QuotedItem"
+                                   LoadPreview="@ViewModel.GetPreviewAsync" />
+            </div>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">キャンセル</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled"
+                   OnClick="SubmitAsync" Disabled="@_isSubmitting"
+                   data-testid="confirm-split-request-with-quote-button">
+            @if (_isSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                <span>送信中...</span>
+            }
+            else if (!string.IsNullOrWhiteSpace(_quoteContent))
+            {
+                <span>分割リクエスト送信 & 引用投稿</span>
+            }
+            else
+            {
+                <span>リクエスト送信</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>

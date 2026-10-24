@@ -1,0 +1,123 @@
+using Microsoft.AspNetCore.Components;
+
+using MudBlazor;
+
+using SRNSMudApp.Components.Item;
+using SRNSMudApp.Data;
+using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Services;
+
+namespace SRNSMudApp.Components.UI;
+
+/// <summary>
+///     分割リクエスト確認ダイアログのコードビハインド。
+///     選択テキストの確認と、任意で引用コメントを入力・投稿する機能を提供する。
+///     リクエスト送信と同時に引用Itemを作成できる。
+/// </summary>
+public partial class SplitRequestWithQuoteDialog : ComponentBase
+{
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>分割対象として選択されたテキスト。</summary>
+    [Parameter]
+    public string SelectedText { get; set; } = string.Empty;
+
+    /// <summary>分割リクエスト対象のアイテム（引用元になる）。</summary>
+    [Parameter]
+    public Data.Item QuotedItem { get; set; } = null!;
+
+    /// <summary>現在ログイン中のユーザーID。</summary>
+    [Parameter]
+    public string CurrentUserId { get; set; } = string.Empty;
+
+    [Inject]
+    private IItemQuoteService ItemQuoteService { get; set; } = null!;
+
+    [Inject]
+    private IItemReplyService ItemReplyService { get; set; } = null!;
+
+    [Inject]
+    private IItemCardDataProvider ItemCardDataProvider { get; set; } = null!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = null!;
+
+    [Inject]
+    internal QuoteItemViewModel ViewModel { get; set; } = null!;
+
+    private string _quoteContent = string.Empty;
+    private bool _isSubmitting;
+
+    /// <summary>引用本文から抽出されたプレビュー表示用の URL 一覧。</summary>
+    private IReadOnlyList<string> ExtractedUrls => ItemCardViewModel.ExtractUrls(_quoteContent);
+
+    protected override void OnParametersSet()
+    {
+        ViewModel.QuotedItem = QuotedItem;
+        ViewModel.CurrentUserId = CurrentUserId;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        _isSubmitting = true;
+        try
+        {
+            // 選択テキスト(SelectedText)を本文とした引用アイテムを作成する。
+            // 引用コメントが入力された場合は、その引用アイテムへのリプライとして保存する。
+            // （承認時に引用アイテムが分割後の新アイテムへ置き換わる際、コメントもリプライとして新アイテムへ引き継がれる）
+            string quoteBody = !string.IsNullOrWhiteSpace(SelectedText) ? SelectedText : _quoteContent;
+            if (string.IsNullOrWhiteSpace(quoteBody))
+            {
+                Snackbar.Add("引用するテキストが指定されていません。", Severity.Warning);
+                return;
+            }
+
+            Data.Item? createdQuote = await ItemQuoteService.CreateQuoteItemAsync(
+                QuotedItem.Id, quoteBody, CurrentUserId);
+
+            if (createdQuote is null)
+            {
+                Snackbar.Add("引用の投稿に失敗しました。", Severity.Error);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_quoteContent))
+            {
+                Data.Item? commentReply = await ItemReplyService.AddItemReplyAsync(
+                    createdQuote.Id,
+                    _quoteContent,
+                    CurrentUserId,
+                    isPrivate: QuotedItem.IsPrivate,
+                    targetUserGroupId: QuotedItem.TargetUserGroupId);
+
+                if (commentReply is null)
+                {
+                    await ItemCardDataProvider.DeleteItemAsync(createdQuote.Id);
+                    Snackbar.Add("引用コメントの保存に失敗しました。", Severity.Error);
+                    return;
+                }
+            }
+
+            SplitRequestWithQuoteDialogResult dialogResult = new(createdQuote.Id, createdQuote);
+            MudDialog.Close(DialogResult.Ok(dialogResult));
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
+
+/// <summary>
+///     <see cref="SplitRequestWithQuoteDialog" /> の戻り値。
+/// </summary>
+/// <param name="CreatedQuoteItemId">
+///     作成された引用アイテムのID。
+/// </param>
+/// <param name="CreatedQuoteItem">
+///     作成された引用アイテムのインスタンス。
+/// </param>
+public sealed record SplitRequestWithQuoteDialogResult(int? CreatedQuoteItemId, Data.Item? CreatedQuoteItem = null);

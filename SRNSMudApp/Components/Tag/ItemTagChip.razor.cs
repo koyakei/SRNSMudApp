@@ -37,6 +37,7 @@ public partial class ItemTagChip
     [Parameter] public bool ShowNameAndOwner { get; set; } = true;
 
     private bool _isTreePopoverOpen;
+    private bool _isProcessing;
 
     private async Task ToggleTagTreePopover()
     {
@@ -68,12 +69,25 @@ public partial class ItemTagChip
 
     private async Task RemoveTagRelationAsync()
     {
-        await ((TagRelation.OwnerId == CurrentUserId, TagRelation.Tag != null) switch
+        if (_isProcessing)
         {
-            (false, true) => ProposeRemovalContractAsync(),
-            (true, _) => ExecuteRemovalAsync(),
-            _ => Task.CompletedTask
-        });
+            return;
+        }
+
+        _isProcessing = true;
+        try
+        {
+            await ((TagRelation.OwnerId == CurrentUserId, TagRelation.Tag != null) switch
+            {
+                (false, true) => ProposeRemovalContractAsync(),
+                (true, _) => ExecuteRemovalAsync(),
+                _ => Task.CompletedTask
+            });
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
     }
 
     private Task ProposeRemovalContractAsync() =>

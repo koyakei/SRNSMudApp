@@ -31,6 +31,8 @@ public partial class TagCard : IAsyncDisposable
     [Parameter] public EventCallback OnDataChanged { get; set; }
     [Parameter] public bool IsFocused { get; set; }
     [Parameter] public EventCallback<int> OnFocus { get; set; }
+    /// <summary>カードクリック時のコールバック。未指定時は OnFocus にフォールバックする。</summary>
+    [Parameter] public EventCallback<int> OnCardClick { get; set; }
     [Parameter] public IReadOnlyList<Data.Tag> AllTags { get; set; } = [];
     [Parameter] public string CurrentUserId { get; set; } = "";
     [Parameter] public int? CurrentUserGoodTagId { get; set; }
@@ -50,6 +52,18 @@ public partial class TagCard : IAsyncDisposable
         if (elementId == $"tag-card-{Tag.Id}")
         {
             _ = OnFocus.InvokeAsync(Tag.Id);
+        }
+    }
+
+    private async Task HandleCardClickAsync()
+    {
+        if (OnCardClick.HasDelegate)
+        {
+            await OnCardClick.InvokeAsync(Tag.Id);
+        }
+        else if (OnFocus.HasDelegate)
+        {
+            await OnFocus.InvokeAsync(Tag.Id);
         }
     }
 

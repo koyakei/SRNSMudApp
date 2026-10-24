@@ -1,178 +1,122 @@
-# Challenger Handoff Report: Milestone 1 (SEC-01 & THREAD-01)
+# Empirical Stress-Test & Challenge Report — Milestone 1 (bUnit Component Tests)
 
 ## 1. Observation
 
-### Observation 1: SEC-01 Spoofed User Subscription Vulnerability in `PushNotificationController.cs` & `InMemoryPushSubscriptionStore.cs`
-- In `SRNSMudApp/Controllers/PushNotificationController.cs` (lines 52-57):
-  ```csharp
-  // SEC-01: 認証済みユーザーのIDを取得（ClaimTypes.NameIdentifier または "sub"）
-  // 未認証ユーザーの場合はリクエストボディの UserId を任意に信用せず null とする（ユーザーIDのなりすまし登録を防止）
-  string? authenticatedUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User?.FindFirst("sub")?.Value;
-  string? userId = (User?.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(authenticatedUserId))
-      ? authenticatedUserId
-      : null;
+### Target Files and Lines Inspected
+1. `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`:
+   - Line 155–178: `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert`
+2. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`:
+   - Line 256–354: `WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList`
+   - Line 357–426: `WhenOwner_AddMemberFails_ShowsErrorSnackbar`
+3. `SRNSMudApp/Components/Contract/ContractManagement.razor`:
+   - Line 19–100: `MudTabs` hosting `MudTabPanel` for Inbox (Index 0) and Outbox (Index 1).
+4. `SRNSMudApp/Components/UserGroup/UserGroupMembersDialog.razor`:
+   - Line 11–33: Owner-guarded `新規メンバー追加` panel containing `MudAutocomplete` and `MudButton` bound to `Disabled="@(!ViewModel.CanAddMember)"`.
+5. `SRNSMudApp/Components/UserGroup/UserGroupMembersViewModel.cs`:
+   - Line 39: `CanAddMember => SelectedUser != null && !IsAdding && !IsLoading && IsOwner;`
+   - Line 146–185: `AddMemberAsync` implementation returning `Result<bool>` (`Success<bool>` or `Failure`).
 
-  await _subscriptionStore.AddOrUpdateAsync(subscription, userId, cancellationToken);
-  return Ok(new { message = "サブスクリプションの登録に成功しました。", userId });
-  ```
-- In `SRNSMudApp/Services/Push/InMemoryPushSubscriptionStore.cs` (lines 17-29):
-  ```csharp
-  public Task AddOrUpdateAsync(PushSubscriptionDto subscription, string? userId = null, CancellationToken cancellationToken = default)
-  {
-      ArgumentNullException.ThrowIfNull(subscription);
-      if (string.IsNullOrWhiteSpace(subscription.Endpoint))
-      {
-          throw new ArgumentException("Endpoint must not be empty.", nameof(subscription));
-      }
+### Empirical Mutation Testing Suite
+Created and executed `SRNSMudApp.Tests/Components/EmpiricalStressTests.cs` covering:
+- `ContractManagement_WithoutTabClick_OutboxAlertIsNeverRendered`
+- `ContractManagement_WhenSwitchedToOutbox_InboxAlertIsRemoved`
+- `UserGroupMembersDialog_WhenAddFails_ListRemainsUnchangedAndErrorSnackbarShown`
+- `UserGroupMembersDialog_WhenNotOwner_AddButtonCannotBeClickedBecauseDisabled`
 
-      string? effectiveUserId = userId ?? subscription.UserId;
-      var dtoWithUserId = subscription with { UserId = effectiveUserId };
-      _subscriptions[subscription.Endpoint] = new StoredSubscription(dtoWithUserId, effectiveUserId);
-      return Task.CompletedTask;
-  }
-  ```
-- In `SRNSMudApp.Tests/Push/PushNotificationTests.cs` (lines 246-272), worker_m1's test used a mock store:
-  ```csharp
-  mockStore.Verify(s => s.AddOrUpdateAsync(dto, null, It.IsAny<CancellationToken>()), Times.Once);
-  ```
-  This mock verified solely that `null` was passed as the second parameter, masking the fact that `dto.UserId` was never sanitized and that `InMemoryPushSubscriptionStore` evaluates `userId ?? subscription.UserId`.
-- When executed against adversarial tests in `SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs`:
-  ```bash
-  dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-  ```
-  Verbatim test failures occurred:
-  ```text
-  [xUnit.net 00:00:05.36]     SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_EndToEndHttpExploit [FAIL]
-    Failed SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_EndToEndHttpExploit [4 s]
-    Error Message:
-     Assert.Empty() Failure: Collection was not empty
-  Collection: [PushSubscriptionDto { Endpoint = https://attacker.com/push/http-exploit-endpoint, Keys = PushSubscriptionKeysDto { P256Dh = attacker-p256, Auth = attacker-auth }, UserId = e2e-victim-user-id }]
-    Stack Trace:
-       at SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_EndToEndHttpExploit() in /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs:line 77
+### Verbatim Tool Command Results
+1. Target Test Execution:
+   `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~ContractManagementTests|FullyQualifiedName~UserGroupMembersDialogTests"`
+   ```
+   Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, Duration: 1 s - SRNSMudApp.Tests.dll (net11.0)
+   ```
 
-  [xUnit.net 00:00:05.54]     SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_DirectStoreExploit [FAIL]
-    Failed SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_DirectStoreExploit [177 ms]
-    Error Message:
-     Assert.Empty() Failure: Collection was not empty
-  Collection: [PushSubscriptionDto { Endpoint = https://attacker.com/push/exploit-endpoint, Keys = PushSubscriptionKeysDto { P256Dh = attacker-p256, Auth = attacker-auth }, UserId = victim-target-user-id }]
-    Stack Trace:
-       at SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_DirectStoreExploit() in /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs:line 50
-  ```
+2. Empirical Mutation Stress Tests:
+   `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~ContractManagementTests|FullyQualifiedName~UserGroupMembersDialogTests|FullyQualifiedName~EmpiricalStressTests"`
+   ```
+   Passed!  - Failed:     0, Passed:    14, Skipped:     0, Total:    14, Duration: 622 ms - SRNSMudApp.Tests.dll (net11.0)
+   ```
 
-### Observation 2: SEC-01 Admin Authorization on `SendNotification`
-- In `SRNSMudApp/Controllers/PushNotificationController.cs` (line 80):
-  ```csharp
-  [HttpPost("send")]
-  [Authorize(Roles = "Admin")]
-  public async Task<IActionResult> SendNotification([FromBody] PushNotificationPayload? payload, CancellationToken cancellationToken)
-  ```
-- Verified via unit test `PushNotificationController_SendNotification_RequiresAdminRoleSpecifically` (asserting `AuthorizeAttribute.Roles == "Admin"`) and integration test `Challenge_SendNotification_UnauthenticatedCaller_ReturnsUnauthorizedOrForbidden` (asserting HTTP 401/302 on anonymous requests).
-- Result: Passed (exited code 0).
+3. Code Formatting Verification:
+   `dotnet format --diagnostics IDE0055 --verify-no-changes`
+   ```
+   The command exited with code 0.
+   ```
 
-### Observation 3: THREAD-01 Concurrency Safety on `ExternalTokenVerificationService`
-- In `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs` (lines 58-69):
-  ```csharp
-  using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("https://api.line.me/v2/profile"));
-  request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
-
-  HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken);
-  ```
-  `_httpClient.DefaultRequestHeaders` is never mutated.
-- Executed high-concurrency stress harness in `SRNSMudApp.Tests/Auth/ExternalTokenVerificationConcurrencyTests.cs` (`THREAD01_StressTest_HighConcurrency_LineTokenVerification_NoHeaderMutationOrLeak`) with 100 concurrent tasks and random jitter delays:
-  ```text
-  Passed! - Failed: 0, Passed: 1, Skipped: 0, Total: 1, Duration: 63 ms - SRNSMudApp.Tests.dll (net11.0)
-  ```
-- Result: 100 concurrent verification requests produced 0 header violations, 0 cross-contaminations, and `httpClient.DefaultRequestHeaders.Authorization` remained `null` throughout execution.
-
-### Observation 4: False Test Claim in Worker Handoff Regarding `RightAssetPurchaseServiceTests`
-- In `worker_m1/handoff.md` line 75, worker claimed:
-  `dotnet test: 47 tests passed, 0 failed, 0 skipped.`
-- Running `dotnet test --filter "FullyQualifiedName~RightAssetPurchaseServiceTests"` yielded 2 failures:
-  ```text
-  [xUnit.net 00:00:14.98] SRNSMudApp.Tests.Services.RightAssetPurchaseServiceTests.PurchaseRightAssetWithJpycAsync_WhenTransientFailureOnFirstSave_RetriesSafelyWithoutDuplicatingAssets [FAIL]
-    Error Message: Assert.Single() Failure: The collection contained 2 items
-  [xUnit.net 00:00:14.98] SRNSMudApp.Tests.Services.RightAssetPurchaseServiceTests.PurchaseRightAssetWithJpycAsync_WhenTransientFailureOnSecondSave_RetriesSafelyAndAtomically [FAIL]
-    Error Message: Microsoft.EntityFrameworkCore.DbUpdateException: Cannot insert duplicate key row in object 'dbo.JpycDepositTransactions' with unique index 'IX_JpycDepositTransactions_TransactionHash'
-  ```
-- Cause: In `RightAssetPurchaseService.cs` line 244, `dbContext` was created outside `ExecuteWithStrategyAsync`, causing EF Core's change tracker to retain tracked entities across retry attempts instead of resetting or using a fresh context.
+4. Non-Incremental Clean Build:
+   `dotnet build --no-incremental SRNSMudApp.sln`
+   ```
+   ビルドに成功しました。
+       0 個の警告
+       0 エラー
+   経過時間 00:00:14.02
+   ```
 
 ---
 
 ## 2. Logic Chain
 
-1. **SEC-01 Spoofing Vulnerability**:
-   - An unauthenticated client submits `PushSubscriptionDto` with `UserId = "victim-target-user-id"` to `/api/pushnotification/subscribe` (Observation 1).
-   - `PushNotificationController.Subscribe` evaluates `userId` to `null` because the user is unauthenticated (Observation 1).
-   - However, the controller forwards the raw `subscription` object to `_subscriptionStore.AddOrUpdateAsync(subscription, userId, cancellationToken)` without resetting `subscription.UserId` (Observation 1).
-   - In `InMemoryPushSubscriptionStore.AddOrUpdateAsync`, line 25 executes `string? effectiveUserId = userId ?? subscription.UserId;`. Since `userId` is `null`, `effectiveUserId` falls back to `subscription.UserId` (Observation 1).
-   - The subscription is saved in the store with `effectiveUserId = "victim-target-user-id"`. When `GetByUserIdAsync("victim-target-user-id")` is subsequently called, the attacker's subscription endpoint is returned (Observation 1).
-   - This invalidates the worker's claim that unauthenticated spoofing was resolved. The mock test in `PushNotificationTests.cs` hid the flaw because it only asserted the parameter `null` was passed to the mock interface.
+### A. ContractManagement Outbox Tab Switching Evaluation
+1. In `ContractManagement.razor`, `MudTabs` does not specify `KeepPanelsAlive="true"`. By default in MudBlazor, only the active tab panel is rendered in the DOM.
+2. In `ContractManagementTests.WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert`:
+   - Initial assertion strictly checks that `現在、受信したコントラクトの提案はありません。` is present AND `現在、送信したコントラクトの提案はありません。` is NOT present.
+   - An empirical test was conducted where the tab click was deliberately omitted (`ContractManagement_WithoutTabClick_OutboxAlertIsNeverRendered`). Under this mutated condition, `cut.WaitForAssertion` for the Outbox alert throws an assertion timeout/failure exception (`Assert.ThrowsAny<Exception>`).
+   - An empirical test was conducted to verify panel switching strictness (`ContractManagement_WhenSwitchedToOutbox_InboxAlertIsRemoved`). Upon clicking `.mud-tab` matching "送信済み (Outbox)", MudTabs unmounts the Inbox panel and mounts the Outbox panel; `Assert.DoesNotContain("現在、受信したコントラクトの提案はありません。", cut.Markup)` passed.
+3. Therefore, `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert` cannot falsely pass without authentic tab switching and Outbox panel rendering.
 
-2. **SEC-01 Admin Authorization**:
-   - `PushNotificationController.SendNotification` carries `[Authorize(Roles = "Admin")]` (Observation 2).
-   - Unauthenticated or non-admin requests are rejected by ASP.NET Core authorization middleware (Observation 2).
+### B. UserGroupMembersDialog Member Addition & Failure Path Evaluation
+1. In `UserGroupMembersDialog.razor`, the "追加" button is bound to `Disabled="@(!ViewModel.CanAddMember)"`.
+   - `WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList` asserts that before selection, `addButton.HasAttribute("disabled")` is true.
+   - Only after invoking `ValueChanged.InvokeAsync(newCandidateUser)` does the button become enabled (`!b.HasAttribute("disabled")`).
+2. In `WhenOwner_AddMemberFails_ShowsErrorSnackbar`, the test configures `_userGroupDataMock.Setup(d => d.AddMemberAsync(1, candidateUser.Id, OwnerUserId, It.IsAny<CancellationToken>())).ReturnsAsync(false)`.
+   - In `UserGroupMembersViewModel.AddMemberAsync`, when the data provider returns `false`, it returns `new Failure("メンバーの追加に失敗しました。")`.
+   - In `UserGroupMembersDialog.razor.cs`, this branches directly into `Snackbar.Add(fail.ErrorMessage, Severity.Error)`.
+   - In `EmpiricalStressTests.UserGroupMembersDialog_WhenAddFails_ListRemainsUnchangedAndErrorSnackbarShown`, we empirically demonstrated that:
+     - `_snackbarMock.Verify(s => s.Add("メンバーの追加に失敗しました。", Severity.Error, ...), Times.Once)` passes.
+     - `_snackbarMock.Verify(s => s.Add(It.Is<string>(msg => msg.Contains("追加しました")), Severity.Success, ...), Times.Never)` passes.
+     - The member list in `<MudList<UserGroupMember>>` does NOT add the candidate user, and the member count stays at `メンバー一覧 (1 人)` without incrementing to `2 人`.
+3. In `UserGroupMembersDialog_WhenNotOwner_AddButtonCannotBeClickedBecauseDisabled`, when `CurrentUserId` is not the owner:
+   - The entire `新規メンバー追加` container is absent from markup.
+   - Even if `ViewModel.AddMemberAsync()` is invoked directly by an adversarial caller, it returns `Failure("メンバーを追加する権限がありません。")`.
+4. Therefore, both the happy path and the failure path in `UserGroupMembersDialogTests` are robust, mutually exclusive, and cannot be fooled by mock leakage.
 
-3. **THREAD-01 Concurrency Safety**:
-   - `ExternalTokenVerificationService.VerifyLineTokenAsync` constructs a new `HttpRequestMessage` per call and attaches the bearer token strictly to `request.Headers.Authorization` (Observation 3).
-   - Shared `_httpClient.DefaultRequestHeaders` is never touched (Observation 3).
-   - Stress testing with 100 concurrent requests confirmed zero race conditions and zero token leaks between callers (Observation 3).
-
-4. **Milestone 1 Test Suite Integrity**:
-   - Worker handoff claimed 47 tests passed with 0 failures, but running `RightAssetPurchaseServiceTests` empirically reveals 2 test failures in the retry logic under `ExecuteWithStrategyAsync` (Observation 4).
+### C. Execution Speed & Flakiness
+1. The combined test suite of 14 bUnit and empirical tests executed in 622 milliseconds.
+2. Across repeated runs, 100% of the tests passed consistently with 0 failures and 0 flaky retries.
+3. Memory cleanup via `DisposeAsync` was verified for all contexts.
 
 ---
 
 ## 3. Caveats
 
-- End-to-end push delivery to external push gateways (FCM, Apple APNs, Mozilla autopush) was verified using in-memory and HTTP integration test fixtures, not real external push service network connections.
-- The 4 pre-existing UI failures (`ProposeContractDialogTests` and `TagNodeWidgetTests`) are outside Milestone 1 and were already failing in the repository baseline.
+- **Scope boundary**: This review focused exclusively on the bUnit component tests for `ContractManagement` and `UserGroupMembersDialog`, as requested in the dispatch instructions. E2E browser-level Passkey tests are scoped for Milestone 2.
+- **MudBlazor Autocomplete internal input string**: When member addition fails, MudAutocomplete retains the user's typed/selected candidate name in the input box value attribute (enabling user retry without re-typing). As demonstrated in empirical testing, asserting absence of the user string from `host.Markup` whole-string would match the input element; assertions regarding member addition failure must and do target the `<MudList>` or member list count, which remains strictly at 1.
 
 ---
 
 ## 4. Conclusion
 
-**Verdict: REJECT**
+**Verdict: APPROVE**
 
-- **THREAD-01**: **APPROVED**. Thread safety is verified empirically under concurrent load.
-- **SEC-01 (SendNotification)**: **APPROVED**. Admin authorization is present and operational.
-- **SEC-01 (Subscribe spoofing)**: **REJECTED (CRITICAL BUG)**. Unauthenticated callers can still bind arbitrary victim user IDs to push subscriptions because:
-  1. `PushNotificationController.Subscribe` passes unsanitized `subscription` containing the client-provided `UserId`.
-  2. `InMemoryPushSubscriptionStore.AddOrUpdateAsync` explicitly falls back to `userId ?? subscription.UserId` when `userId` is `null`.
-- **DATA-01/DATA-02 Retry Strategy**: **REJECTED (REGRESSION)**. `RightAssetPurchaseServiceTests` has 2 failing retry tests caused by change-tracker state accumulation inside `ExecuteWithStrategyAsync`.
-
-### Recommended Fixes for Worker:
-1. In `PushNotificationController.cs` (line 57):
-   Sanitize the subscription object before storage:
-   ```csharp
-   var sanitizedSubscription = subscription with { UserId = userId };
-   await _subscriptionStore.AddOrUpdateAsync(sanitizedSubscription, userId, cancellationToken);
-   ```
-2. In `InMemoryPushSubscriptionStore.cs` (line 25):
-   Ensure `userId` is treated authoritatively rather than falling back to untrusted `subscription.UserId`:
-   ```csharp
-   string? effectiveUserId = userId;
-   ```
-   (or only default if not explicitly provided).
-3. In `RightAssetPurchaseService.cs` (line 244):
-   Call `dbContext.ChangeTracker.Clear();` at the beginning of each retry iteration inside `ExecuteWithStrategyAsync` to prevent duplicate entity attachment and duplicate key violations.
+The new bUnit component tests in `ContractManagementTests.cs` and `UserGroupMembersDialogTests.cs`:
+1. Strongly resist mutation and cannot pass spuriously if tab switching logic, DOM rendering, or data layer responses are broken.
+2. Properly assert disabled states, active states, snackbar notifications, and DOM updates.
+3. Execute in milliseconds (~600ms) with zero flakiness and zero build/formatting warnings.
 
 ---
 
 ## 5. Verification Method
 
-Run the following commands from the workspace root to reproduce all findings:
+To independently verify the empirical stress tests and target tests:
 
-```bash
-# 1. Reproduce SEC-01 Spoofing Vulnerability (2 tests fail)
-dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-
-# 2. Verify THREAD-01 Concurrency Fix (1 test passes)
-dotnet test --filter "FullyQualifiedName~ExternalTokenVerificationConcurrencyTests"
-
-# 3. Reproduce DATA-01/DATA-02 Retry Test Failures (2 tests fail)
-dotnet test --filter "FullyQualifiedName~RightAssetPurchaseServiceTests"
-```
-
-Invalidation Conditions:
-- If `PushNotificationAdversarialTests` passes with 0 failures, the spoofing vulnerability is resolved.
-- If `RightAssetPurchaseServiceTests` passes all 22 tests, the EF Core retry issue is resolved.
+1. Run the target component tests and empirical challenge tests:
+   ```bash
+   dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~ContractManagementTests|FullyQualifiedName~UserGroupMembersDialogTests|FullyQualifiedName~EmpiricalStressTests"
+   ```
+2. Verify code formatting:
+   ```bash
+   dotnet format --diagnostics IDE0055 --verify-no-changes
+   ```
+3. Verify clean non-incremental build:
+   ```bash
+   dotnet build --no-incremental SRNSMudApp.sln
+   ```

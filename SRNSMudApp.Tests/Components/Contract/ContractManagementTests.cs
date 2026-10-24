@@ -131,7 +131,7 @@ public class ContractManagementTests : IAsyncDisposable
             .ReturnsAsync(new ContractManagementPageData([sampleContract], []));
 
         _contractServiceMock
-            .Setup(s => s.CancelContractAsync(43, CurrentUserId))
+            .Setup(s => s.RejectContractAsync(43, CurrentUserId, It.IsAny<string?>()))
             .ReturnsAsync(new Success<string>("Contract rejected"));
 
         IRenderedComponent<ContractManagement> cut = _ctx.Render<ContractManagement>();
@@ -142,14 +142,38 @@ public class ContractManagementTests : IAsyncDisposable
         Assert.NotNull(rejectButton);
         rejectButton.Click();
 
-        // Assert: 契約キャンセル処理が呼ばれ、スナックバーが表示されたことを検証
+        // Assert: 契約拒否処理が呼ばれ、スナックバーが表示されたことを検証
         _contractServiceMock.Verify(
-            s => s.CancelContractAsync(43, CurrentUserId),
+            s => s.RejectContractAsync(43, CurrentUserId, It.IsAny<string?>()),
             Times.Once);
 
         _snackbarMock.Verify(
             s => s.Add("コントラクトを拒否しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()),
             Times.Once);
+    }
+
+    [Fact]
+    public void WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert()
+    {
+        // Arrange: 送信済み・受信済みともに空のコントラクトデータをセットアップ
+        _contractDataMock
+            .Setup(d => d.GetContractsAsync(CurrentUserId))
+            .ReturnsAsync(new ContractManagementPageData([], []));
+
+        // Act: コンポーネントを描画
+        IRenderedComponent<ContractManagement> cut = _ctx.Render<ContractManagement>();
+
+        // Assert (初期状態): 初期表示は受信トレイ（Inbox）であり、送信済みの空アラートが表示されていないことを検証
+        Assert.Contains("現在、受信したコントラクトの提案はありません。", cut.Markup);
+        Assert.DoesNotContain("現在、送信したコントラクトの提案はありません。", cut.Markup);
+
+        // Act: 「送信済み (Outbox)」タブヘッダーをクリックしてタブを切り替え
+        var outboxTab = cut.FindAll(".mud-tab").First(t => t.TextContent.Contains("送信済み (Outbox)"));
+        outboxTab.Click();
+
+        // Assert (切り替え後): 送信トレイ（Outbox）の空メッセージが表示されていることを検証
+        cut.WaitForAssertion(() =>
+            Assert.Contains("現在、送信したコントラクトの提案はありません。", cut.Markup));
     }
 
     public async ValueTask DisposeAsync()

@@ -6,12 +6,14 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging;
 
+using SRNSMudApp.Tests.TestSupport;
+
 #endregion
 
 namespace SRNSMudApp.Tests;
 
-public class MudPopoverIntegrationTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class MudPopoverIntegrationTests(TestWebApplicationFactory factory)
+    : IClassFixture<TestWebApplicationFactory>
 {
     [Fact]
     public async Task NavigateToInteractivePages_ShouldNotLogPopoverError()

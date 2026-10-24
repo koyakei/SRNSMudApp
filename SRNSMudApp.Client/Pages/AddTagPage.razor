@@ -1,0 +1,142 @@
+@page "/Tag/WasmAddTag"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@inject IItemListApiClient ApiClient
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>新規タグ作成 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8 mb-10">
+    <div class="d-flex align-center mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+        <div>
+            <MudText Typo="Typo.h4" Class="font-weight-bold">新規タグ作成 (WASM)</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                管理者として新しいタグを登録します。
+            </MudText>
+        </div>
+    </div>
+
+    <MudCard Class="rounded-xl shadow-sm">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">タグ情報入力</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudTextField @bind-Value="_model.Name"
+                          Label="タグ名 *"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="タグ名は必須です。"
+                          MaxLength="100"
+                          Class="mb-4"
+                          data-testid="tag-name-input" />
+
+            <MudTextField @bind-Value="_model.Content"
+                          Label="説明・定義 (任意)"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          Immediate="true"
+                          Class="mb-4"
+                          data-testid="tag-content-input" />
+
+            <MudSwitch T="bool"
+                       @bind-Value="_model.IsPrivate"
+                       Label="非公開タグとして登録"
+                       Color="Color.Warning"
+                       data-testid="tag-is-private-switch" />
+        </MudCardContent>
+
+        <MudCardActions Class="pa-4 pt-0 d-flex justify-end gap-3">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="@(() => NavigationManager.NavigateTo("/Tag/WasmList"))"
+                       data-testid="cancel-btn">
+                キャンセル
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="CreateTagAsync"
+                       Disabled="@(!CanSubmit)"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       data-testid="create-tag-submit-btn">
+                @if (_isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <span class="ms-2">作成中...</span>
+                }
+                else
+                {
+                    <span>作成</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private readonly TagFormModel _model = new();
+    private bool _isSubmitting;
+
+    private bool CanSubmit => !_isSubmitting && !string.IsNullOrWhiteSpace(_model.Name);
+
+    private async Task CreateTagAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            Snackbar.Add("タグ名を入力してください。", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var request = new CreateTagRequest(
+                Name: _model.Name.Trim(),
+                Content: _model.Content?.Trim(),
+                IsPrivate: _model.IsPrivate
+            );
+
+            var created = await ApiClient.CreateTagAsync(request);
+            if (created != null)
+            {
+                Snackbar.Add($"タグ「{created.Name}」を作成しました。", Severity.Success);
+                NavigationManager.NavigateTo($"/Tag/WasmDetail/{created.Id}");
+            }
+            else
+            {
+                Snackbar.Add("タグの作成に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private sealed class TagFormModel
+    {
+        [Required(ErrorMessage = "タグ名は必須です。")]
+        public string Name { get; set; } = string.Empty;
+
+        public string? Content { get; set; }
+
+        public bool IsPrivate { get; set; }
+    }
+}
+

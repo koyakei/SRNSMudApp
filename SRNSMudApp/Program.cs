@@ -145,11 +145,10 @@ if (!builder.Environment.IsEnvironment("Testing"))
                 sqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
+                    errorNumbersToAdd: [2, -2, 10053, 10054, 10060]);
             });
             // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
-            var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
-            if (interceptor != null)
+            if (sp.GetService<ApplicationDbSaveChangesInterceptor>() is { } interceptor)
             {
                 options.AddInterceptors(interceptor);
             }
@@ -167,11 +166,10 @@ if (!builder.Environment.IsEnvironment("Testing"))
             sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorNumbersToAdd: null);
+                errorNumbersToAdd: [2, -2, 10053, 10054, 10060]);
         });
         // INTERCEPT-01: DI に登録された ApplicationDbSaveChangesInterceptor (TimeProvider 注入済み) を統合
-        var interceptor = sp.GetService<ApplicationDbSaveChangesInterceptor>();
-        if (interceptor != null)
+        if (sp.GetService<ApplicationDbSaveChangesInterceptor>() is { } interceptor)
         {
             options.AddInterceptors(interceptor);
         }
@@ -206,6 +204,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
+builder.Services.AddHttpContextAccessor();
+
 // Register LinkPreview providers and services (Strategy Pattern)
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient(ExternalOgpLinkPreviewProvider.HttpClientName, client =>
@@ -214,13 +214,16 @@ builder.Services.AddHttpClient(ExternalOgpLinkPreviewProvider.HttpClientName, cl
 });
 builder.Services.AddHttpClient<SRNSMudApp.Client.Services.IItemListApiClient, SRNSMudApp.Client.Services.ItemListApiClient>((sp, client) =>
 {
-    var httpContextAccessor = sp.GetService<IHttpContextAccessor>();
-    var request = httpContextAccessor?.HttpContext?.Request;
-    if (request != null)
+    if (sp.GetService<IHttpContextAccessor>()?.HttpContext?.Request is { } request)
     {
         client.BaseAddress = new Uri($"{request.Scheme}://{request.Host}");
     }
 });
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagProposalApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagLedgerApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddScoped<SRNSMudApp.Client.Services.ITaggingRequestApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddSingleton<ITagDiagramDtoMapper, TagDiagramDtoMapper>();
 builder.Services.AddSingleton<ILinkPreviewProvider, ItemLinkPreviewProvider>();
 builder.Services.AddSingleton<ILinkPreviewProvider, TagLinkPreviewProvider>();
 builder.Services.AddSingleton<ILinkPreviewProvider, UserLinkPreviewProvider>();
@@ -309,7 +312,7 @@ using (IServiceScope scope = app.Services.CreateScope())
 
             if (!await db.Tags.AnyAsync(t => t.Name == Tag.RootTagName))
             {
-                var rootTag = new Tag
+                Tag rootTag = new()
                 {
                     Name = Tag.RootTagName,
                     Content = "全てのタグの頂点となるルートタグ",
@@ -325,7 +328,11 @@ using (IServiceScope scope = app.Services.CreateScope())
             }
 
             // 公式システム分類タグツリーのシード（未投入の場合に自動投入）
-            _ = await SystemTagSeedService.SeedSystemTagsAsync(db, systemUser.Id, app.Logger);
+            // Testing 環境では起動高速化のため、明示的に有効化されていない限りスキップする
+            if (!app.Environment.IsEnvironment("Testing") || string.Equals(Environment.GetEnvironmentVariable("SEED_SYSTEM_TAGS"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = await SystemTagSeedService.SeedSystemTagsAsync(db, systemUser.Id, app.Logger);
+            }
         }
         finally
         {

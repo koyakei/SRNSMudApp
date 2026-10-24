@@ -16,6 +16,9 @@ public interface INotificationsDataProvider
     /// <summary>通知に関連付けられたアイテムを関連データ込みで取得する。</summary>
     Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default);
 
+    /// <summary>通知に関連付けられたアイテムを可視性フィルタを考慮して取得する。</summary>
+    Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, string? currentUserId, bool isAdmin = false, CancellationToken cancellationToken = default);
+
     /// <summary>ユーザー向けの各種通知生成に必要な未加工エンティティ群を取得する。</summary>
     Task<NotificationRawData> GetNotificationRawDataAsync(string userId, CancellationToken cancellationToken = default);
 
@@ -37,7 +40,15 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
 
     /// <inheritdoc />
-    public async Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default)
+    public Task<List<Item>> GetAssociatedItemsAsync(IReadOnlyList<int> itemIds, CancellationToken cancellationToken = default)
+        => GetAssociatedItemsAsync(itemIds, null, false, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<List<Item>> GetAssociatedItemsAsync(
+        IReadOnlyList<int> itemIds,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default)
     {
         switch (itemIds.Count)
         {
@@ -49,7 +60,8 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
         return await context.Database.ExecuteWithStrategyAsync(async () =>
-            await context.Items
+        {
+            IQueryable<Item> query = context.Items
                 .AsNoTracking()
                 .Include(i => i.Owner)
                 .Include(i => i.TagRelations)
@@ -60,8 +72,12 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 .ThenInclude(t => t.Item)
                 .Include(i => i.AsRequestOf)
                 .ThenInclude(r => r.RequestedTag)
-                .Where(i => itemIds.Contains(i.Id))
-                .ToListAsync(cancellationToken));
+                .Where(i => itemIds.Contains(i.Id));
+
+            query = query.WhereVisibleToUser(context, currentUserId, isAdmin);
+
+            return await query.ToListAsync(cancellationToken);
+        });
     }
 
     /// <inheritdoc />
@@ -83,10 +99,11 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 .Include(r => r.Target).ThenInclude(t => t.Item)
                 .Include(r => r.RequestedTag)
                 .Where(r => r.RequesterUserId != userId &&
+                            r.Status == TradeStatus.Proposed &&
                             (r.Target.OwnerId == userId || r.RequestedTag.OwnerId == userId))
                 .ToListAsync(cancellationToken);
 
-            // 2. Item Replies targeting the user
+            // 2. Item Replies targeting the user (Issue 4-2: 会話からオプトアウトしたスレッドの通知は除外)
             List<Item> itemReplies = await context.Items!
                 .AsNoTracking()
                 .Include(i => i.ParentItem)
@@ -96,6 +113,7 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                             (i.NotificationRecipients.Any(r => r.RecipientUserId == userId) ||
                              (!i.NotificationRecipients.Any() && i.ParentItem!.OwnerId == userId)) &&
                             i.OwnerId != userId &&
+                            !context.ConversationOptOuts.Any(o => o.UserId == userId && o.RootItemId == (i.RootItemId ?? i.ParentItemId)) &&
                             !i.Content.StartsWith("【タグ操作権限リクエスト】") &&
                             !i.ItemKindJson.Contains("TagPermissionRequestPayload"))
                 .ToListAsync(cancellationToken);
@@ -134,12 +152,12 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
                 .Where(r => r.OwnerId == userId && r.Status != ReportStatus.Pending && r.HandledDate != null)
                 .ToListAsync(cancellationToken);
 
-            // 8. Split requests targeting the user (as item owner)
+            // 8. Split requests targeting the user (as item owner, only proposed/pending requests)
             List<ItemSplitRequest> splitRequests = await context.ItemSplitRequests!
                 .AsNoTracking()
                 .Include(r => r.RequesterUser)
                 .Include(r => r.OriginalItem)
-                .Where(r => r.OwnerUserId == userId && r.RequesterUserId != userId)
+                .Where(r => r.OwnerUserId == userId && r.RequesterUserId != userId && r.Status == TradeStatus.Proposed)
                 .ToListAsync(cancellationToken);
 
             // 9. Resolved split requests (approved/rejected) for the requester

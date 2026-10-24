@@ -732,4 +732,71 @@ public sealed class TagDiagramPageViewModelTests
         Assert.DoesNotContain(2, _sut.HiddenTagIds);
         Assert.Contains(2, _sut.PinnedTagIds);
     }
+
+    [Fact]
+    public async Task ReloadDiagramForItemsAsync_PopulatesTagsEdgesAndContext_WhenQueryItemIdsProvided()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        TagEntity tag2 = CreateTag(2, "Tag 2");
+        TagEdge edge = CreateEdge(10, 1, 2);
+        var item1 = CreateItem(100, "Item 100");
+        var item2 = CreateItem(200, "Item 200");
+
+        _dataProviderMock.Setup(p => p.LoadAllTagsAsync()).ReturnsAsync([tag1, tag2]);
+        _dataProviderMock.Setup(p => p.LoadAllEdgesAsync()).ReturnsAsync([edge]);
+        _dataProviderMock.Setup(p => p.GetContextTagIdsForItemsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 100, 200 }))))
+            .ReturnsAsync([1, 2]);
+        _dataProviderMock.Setup(p => p.GetContextItemsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 100, 200 }))))
+            .ReturnsAsync([item1, item2]);
+
+        // Act
+        await _sut.ReloadDiagramForItemsAsync([100, 200]);
+
+        // Assert
+        Assert.False(_sut.IsLoading);
+        Assert.Equal(2, _sut.Tags.Count);
+        Assert.Single(_sut.Edges);
+        Assert.Equal(2, _sut.ContextItems.Count);
+        Assert.Contains(1, _sut.PinnedTagIds);
+        Assert.Contains(2, _sut.PinnedTagIds);
+        Assert.Equal(2, _sut.LoadedContextItemIds.Count);
+        Assert.Equal(100, _sut.LoadedContextItemId);
+    }
+
+    [Fact]
+    public async Task UpdateContextItemsAsync_WhenSameItemIds_ReturnsFalseWithoutCallingDataProvider()
+    {
+        // Arrange
+        await _sut.UpdateContextItemsAsync([10, 20]);
+        _dataProviderMock.Invocations.Clear();
+
+        // Act
+        bool changed = await _sut.UpdateContextItemsAsync([10, 20]);
+
+        // Assert
+        Assert.False(changed);
+        _dataProviderMock.Verify(p => p.GetContextTagIdsForItemsAsync(It.IsAny<IEnumerable<int>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetTagsToDisplay_IncludesContextItems_WhenMultipleItemsLoadedAndContextOnly()
+    {
+        // Arrange
+        TagEntity tag1 = CreateTag(1, "Tag 1");
+        TagEntity tag2 = CreateTag(2, "Tag 2");
+        _sut.Tags.AddRange([tag1, tag2]);
+        _dataProviderMock.Setup(p => p.GetContextTagIdsForItemsAsync(It.IsAny<IEnumerable<int>>())).ReturnsAsync([1]);
+        _dataProviderMock.Setup(p => p.GetContextItemsAsync(It.IsAny<IEnumerable<int>>())).ReturnsAsync([CreateItem(100)]);
+
+        await _sut.UpdateContextItemsAsync([100, 200]);
+        _sut.ContextOnly = true;
+
+        // Act
+        IReadOnlyList<TagEntity> displayed = _sut.GetTagsToDisplay((IReadOnlyList<int>?)null);
+
+        // Assert
+        Assert.Single(displayed);
+        Assert.Equal(1, displayed[0].Id);
+    }
 }

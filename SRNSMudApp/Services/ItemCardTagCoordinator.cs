@@ -15,7 +15,8 @@ namespace SRNSMudApp.Services;
 public class ItemCardTagCoordinator(
     IItemCardDataProvider itemCardData,
     IDialogLauncher dialogLauncher,
-    ISnackbar snackbar) : IItemCardTagCoordinator
+    ISnackbar snackbar,
+    Microsoft.Extensions.Logging.ILogger<ItemCardTagCoordinator>? logger = null) : IItemCardTagCoordinator
 {
     private readonly IItemCardDataProvider _itemCardData =
         itemCardData ?? throw new ArgumentNullException(nameof(itemCardData));
@@ -23,50 +24,62 @@ public class ItemCardTagCoordinator(
         dialogLauncher ?? throw new ArgumentNullException(nameof(dialogLauncher));
     private readonly ISnackbar _snackbar =
         snackbar ?? throw new ArgumentNullException(nameof(snackbar));
+    private readonly Microsoft.Extensions.Logging.ILogger<ItemCardTagCoordinator>? _logger = logger;
 
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "データベース一時切断時にUIがクラッシュするのを防ぐため")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1848:Use the LoggerMessage delegates", Justification = "エラー発生時のみのフォールバックログのため")]
     public async Task<TagAddOutcome> PromptAndAddTagAsync(Item item, string currentUserId)
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
-        IDialogReference dialog = await _dialogLauncher.ShowAsync<TagAddDialog>("タグの追加", options);
-        DialogResult? result = await dialog.Result;
-
-        if (result is not { Canceled: false, Data: Tag selectedTag })
+        try
         {
+            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+            IDialogReference dialog = await _dialogLauncher.ShowAsync<TagAddDialog>("タグの追加", options);
+            DialogResult? result = await dialog.Result;
+
+            if (result is not { Canceled: false, Data: Tag selectedTag })
+            {
+                return TagAddOutcome.None;
+            }
+
+            Tag? tagFromDb = await _itemCardData.GetTagWithOwnerAsync(selectedTag.Id);
+            if (tagFromDb is null)
+            {
+                return TagAddOutcome.None;
+            }
+
+            var canAttachDirectly = await _itemCardData.CanUserAttachTagDirectlyAsync(tagFromDb.Id, currentUserId);
+            if (!canAttachDirectly)
+            {
+                return await ProposeTaggingContractAsync(item, tagFromDb);
+            }
+
+            var alreadyExists = item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
+            if (alreadyExists)
+            {
+                _ = _snackbar.Add(ErrorMessages.TagAlreadyAdded, Severity.Warning);
+                return TagAddOutcome.None;
+            }
+
+            TagRelation? newRelation = await _itemCardData.AddFreeTagRelationAsync(item.Id, selectedTag.Id, currentUserId);
+            if (newRelation is not null)
+            {
+                item.TagRelations ??= [];
+                newRelation.Tag = tagFromDb;
+                item.TagRelations.Add(newRelation);
+            }
+
+            _ = _snackbar.Add("タグを追加しました。", Severity.Success);
+            return TagAddOutcome.AddedDirectly;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "タグ追加処理中にエラーが発生しました (ItemId: {ItemId})", item.Id);
+            _ = _snackbar.Add("データベースとの通信に失敗しました。時間をおいて再試行してください。", Severity.Error);
             return TagAddOutcome.None;
         }
-
-        Tag? tagFromDb = await _itemCardData.GetTagWithOwnerAsync(selectedTag.Id);
-        if (tagFromDb is null)
-        {
-            return TagAddOutcome.None;
-        }
-
-        var canAttachDirectly = await _itemCardData.CanUserAttachTagDirectlyAsync(tagFromDb.Id, currentUserId);
-        if (!canAttachDirectly)
-        {
-            return await ProposeTaggingContractAsync(item, tagFromDb);
-        }
-
-        var alreadyExists = item.TagRelations?.Any(tr => tr.TagId == selectedTag.Id) ?? false;
-        if (alreadyExists)
-        {
-            _ = _snackbar.Add(ErrorMessages.TagAlreadyAdded, Severity.Warning);
-            return TagAddOutcome.None;
-        }
-
-        TagRelation? newRelation = await _itemCardData.AddFreeTagRelationAsync(item.Id, selectedTag.Id, currentUserId);
-        if (newRelation is not null)
-        {
-            item.TagRelations ??= [];
-            newRelation.Tag = tagFromDb;
-            item.TagRelations.Add(newRelation);
-        }
-
-        _ = _snackbar.Add("タグを追加しました。", Severity.Success);
-        return TagAddOutcome.AddedDirectly;
     }
 
     private async Task<TagAddOutcome> ProposeTaggingContractAsync(Item item, Tag tagFromDb)

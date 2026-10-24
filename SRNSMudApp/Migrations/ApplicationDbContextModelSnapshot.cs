@@ -601,6 +601,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(500)
                     .HasColumnType("nvarchar(500)");
 
+                b.Property<int?>("RequesterQuoteItemId")
+                    .HasColumnType("int");
+
                 b.Property<string>("RequesterUserId")
                     .IsRequired()
                     .HasMaxLength(450)
@@ -626,6 +629,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("OwnerId");
 
                 b.HasIndex("OwnerUserId");
+
+                b.HasIndex("RequesterQuoteItemId");
 
                 b.HasIndex("RequesterUserId");
 
@@ -1250,6 +1255,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Property<int?>("ConsumedRightAssetId")
                     .HasColumnType("int");
 
+                b.Property<int?>("CommentItemId")
+                    .HasColumnType("int");
+
                 b.Property<DateTime>("CreatedDate")
                     .HasColumnType("datetime2");
 
@@ -1301,6 +1309,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.HasKey("Id");
 
                 b.HasIndex("ConsumedRightAssetId");
+
+                b.HasIndex("CommentItemId");
 
                 b.HasIndex("OwnerId");
 
@@ -1893,6 +1903,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .OnDelete(DeleteBehavior.Restrict)
                     .IsRequired();
 
+                b.HasOne("SRNSMudApp.Data.Item", "RequesterQuoteItem")
+                    .WithMany()
+                    .HasForeignKey("RequesterQuoteItemId")
+                    .OnDelete(DeleteBehavior.SetNull);
+
                 b.Navigation("CreatedItem");
 
                 b.Navigation("OriginalItem");
@@ -1900,6 +1915,8 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Owner");
 
                 b.Navigation("OwnerUser");
+
+                b.Navigation("RequesterQuoteItem");
 
                 b.Navigation("RequesterUser");
             });
@@ -2208,6 +2225,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
 
         modelBuilder.Entity("SRNSMudApp.Data.TagWeightLedger", b =>
             {
+                b.HasOne("SRNSMudApp.Data.Item", "CommentItem")
+                    .WithMany()
+                    .HasForeignKey("CommentItemId")
+                    .OnDelete(DeleteBehavior.NoAction);
+
                 b.HasOne("SRNSMudApp.Data.RightAsset", "ConsumedRightAsset")
                     .WithMany()
                     .HasForeignKey("ConsumedRightAssetId")

@@ -101,13 +101,9 @@ public class TagPrivateModeTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // 1. WhereVisibleToUser クエリの検証
-            var visibleAnonymous = await db.Tags.WhereVisibleToUser(db, null).ToListAsync();
-            var visibleStranger = await db.Tags.WhereVisibleToUser(db, strangerId).ToListAsync();
-            var visibleFollower = await db.Tags.WhereVisibleToUser(db, followerId).ToListAsync();
-
-            Assert.Contains(visibleAnonymous, t => t.Id == tag.Id);
-            Assert.Contains(visibleStranger, t => t.Id == tag.Id);
-            Assert.Contains(visibleFollower, t => t.Id == tag.Id);
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, null).AnyAsync());
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, strangerId).AnyAsync());
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, followerId).AnyAsync());
 
             // 2. TagTableDataProvider での取得検証
             var tableAnonymous = await tagTableProvider.GetAllTagsAsync(null);
@@ -140,10 +136,8 @@ public class TagPrivateModeTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // 1. 未ログイン・見知らぬ人には非表示
-            var visibleAnonymous = await db.Tags.WhereVisibleToUser(db, null).ToListAsync();
-            var visibleStranger = await db.Tags.WhereVisibleToUser(db, strangerId).ToListAsync();
-            Assert.DoesNotContain(visibleAnonymous, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleStranger, t => t.Id == tag.Id);
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, null).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, strangerId).AnyAsync());
 
             var tableAnonymous = await tagTableProvider.GetAllTagsAsync(null);
             var tableStranger = await tagTableProvider.GetAllTagsAsync(strangerId);
@@ -154,10 +148,8 @@ public class TagPrivateModeTests : IAsyncLifetime
             Assert.Null(await tagDetailProvider.GetTagDetailAsync(tag.Id, strangerId));
 
             // 2. 作成者本人およびフォロワーには表示
-            var visibleAuthor = await db.Tags.WhereVisibleToUser(db, authorId).ToListAsync();
-            var visibleFollower = await db.Tags.WhereVisibleToUser(db, followerId).ToListAsync();
-            Assert.Contains(visibleAuthor, t => t.Id == tag.Id);
-            Assert.Contains(visibleFollower, t => t.Id == tag.Id);
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, authorId).AnyAsync());
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, followerId).AnyAsync());
 
             var tableAuthor = await tagTableProvider.GetAllTagsAsync(authorId);
             var tableFollower = await tagTableProvider.GetAllTagsAsync(followerId);
@@ -186,22 +178,17 @@ public class TagPrivateModeTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // 1. 未ログイン、見知らぬ人、およびグループ外のフォロワーには非表示
-            var visibleAnonymous = await db.Tags.WhereVisibleToUser(db, null).ToListAsync();
-            var visibleStranger = await db.Tags.WhereVisibleToUser(db, strangerId).ToListAsync();
-            var visibleFollower = await db.Tags.WhereVisibleToUser(db, followerId).ToListAsync();
-            Assert.DoesNotContain(visibleAnonymous, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleStranger, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleFollower, t => t.Id == tag.Id);
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, null).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, strangerId).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, followerId).AnyAsync());
 
             Assert.Null(await tagDetailProvider.GetTagDetailAsync(tag.Id, null));
             Assert.Null(await tagDetailProvider.GetTagDetailAsync(tag.Id, strangerId));
             Assert.Null(await tagDetailProvider.GetTagDetailAsync(tag.Id, followerId));
 
             // 2. 作成者本人およびグループメンバーには表示
-            var visibleAuthor = await db.Tags.WhereVisibleToUser(db, authorId).ToListAsync();
-            var visibleMember = await db.Tags.WhereVisibleToUser(db, groupMemberId).ToListAsync();
-            Assert.Contains(visibleAuthor, t => t.Id == tag.Id);
-            Assert.Contains(visibleMember, t => t.Id == tag.Id);
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, authorId).AnyAsync());
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, groupMemberId).AnyAsync());
 
             Assert.NotNull(await tagDetailProvider.GetTagDetailAsync(tag.Id, authorId));
             Assert.NotNull(await tagDetailProvider.GetTagDetailAsync(tag.Id, groupMemberId));
@@ -230,17 +217,11 @@ public class TagPrivateModeTests : IAsyncLifetime
             await db.SaveChangesAsync();
 
             // 1. WhereVisibleToUser クエリの検証 (通常ユーザー vs 管理者)
-            var visibleAnonymous = await db.Tags.WhereVisibleToUser(db, null, isAdmin: false).ToListAsync();
-            var visibleAuthor = await db.Tags.WhereVisibleToUser(db, authorId, isAdmin: false).ToListAsync();
-            var visibleFollower = await db.Tags.WhereVisibleToUser(db, followerId, isAdmin: false).ToListAsync();
-            var visibleStranger = await db.Tags.WhereVisibleToUser(db, strangerId, isAdmin: false).ToListAsync();
-            var visibleAdmin = await db.Tags.WhereVisibleToUser(db, adminId, isAdmin: true).ToListAsync();
-
-            Assert.DoesNotContain(visibleAnonymous, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleAuthor, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleFollower, t => t.Id == tag.Id);
-            Assert.DoesNotContain(visibleStranger, t => t.Id == tag.Id);
-            Assert.Contains(visibleAdmin, t => t.Id == tag.Id);
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, null, isAdmin: false).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, authorId, isAdmin: false).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, followerId, isAdmin: false).AnyAsync());
+            Assert.False(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, strangerId, isAdmin: false).AnyAsync());
+            Assert.True(await db.Tags.Where(t => t.Id == tag.Id).WhereVisibleToUser(db, adminId, isAdmin: true).AnyAsync());
 
             // 2. TagDetailDataProvider での検証
             Assert.Null(await tagDetailProvider.GetTagDetailAsync(tag.Id, authorId, isAdmin: false));

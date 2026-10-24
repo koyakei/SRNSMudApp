@@ -266,4 +266,38 @@ public class ItemReplyThreadTests : BunitContext, IAsyncLifetime
         Assert.NotNull(toggledValue);
         Assert.False(toggledValue.Value);
     }
+
+    [Fact]
+    public void Expanded_WithTagActionInfo_RendersTagActionHeaderAboveReply()
+    {
+        var tagCommentItem = CreateItem(100, "タグ履歴のコメントです");
+        tagCommentItem.TagActionInfo = new TagActionMetadata("プログラミング", "TagOwnerAlice", 5);
+
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.ItemId, 1)
+            .Add(p => p.IsExpanded, true)
+            .Add(p => p.Replies, new[] { tagCommentItem })
+            .Add(p => p.ReplyTemplate, reply => b => b.AddContent(0, reply.Content)));
+
+        Assert.NotEmpty(cut.FindAll("[data-testid='tag-action-header-100']"));
+        Assert.Contains("プログラミング", cut.Markup);
+        Assert.Contains("タグオーナー: TagOwnerAlice", cut.Markup);
+        Assert.Contains("付与ウェイト: +5", cut.Markup);
+        Assert.Contains("タグ履歴のコメントです", cut.Markup);
+    }
+
+    [Fact]
+    public void Expanded_WithoutTagActionInfo_DoesNotRenderTagActionHeader()
+    {
+        var normalReply = CreateItem(200, "通常のリプライです");
+
+        IRenderedComponent<ItemReplyThread> cut = Render<ItemReplyThread>(parameters => parameters
+            .Add(p => p.ItemId, 1)
+            .Add(p => p.IsExpanded, true)
+            .Add(p => p.Replies, new[] { normalReply })
+            .Add(p => p.ReplyTemplate, reply => b => b.AddContent(0, reply.Content)));
+
+        Assert.Empty(cut.FindAll("[data-testid='tag-action-header-200']"));
+        Assert.Contains("通常のリプライです", cut.Markup);
+    }
 }

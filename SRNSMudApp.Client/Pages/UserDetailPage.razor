@@ -1,0 +1,232 @@
+@page "/User/WasmDetail/{UserId}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    <div class="d-flex align-center gap-2 mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                       OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="アイテム一覧に戻る" />
+        <MudText Typo="Typo.h5" Class="font-weight-bold">ユーザー詳細 (WASM)</MudText>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (User == null)
+    {
+        <MudAlert Severity="Severity.Warning">ユーザーが見つかりませんでした。</MudAlert>
+    }
+    else
+    {
+        <MudCard Outlined="true" Class="rounded-xl mb-4">
+            <MudCardContent Class="pa-5">
+                <div class="d-flex align-start justify-space-between flex-wrap gap-4">
+                    <div class="d-flex align-center gap-3">
+                        <MudAvatar Color="Color.Primary" Size="Size.Large">
+                            @(string.IsNullOrEmpty(User.UserName) ? "?" : User.UserName[0].ToString().ToUpperInvariant())
+                        </MudAvatar>
+                        <div>
+                            <div class="d-flex align-center gap-2">
+                                <MudText Typo="Typo.h5" Class="font-weight-bold">@User.UserName</MudText>
+                                @if (User.IsBanned)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">利用停止中</MudChip>
+                                }
+                            </div>
+                            <div class="d-flex gap-4 mt-1">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    <strong>@User.FollowingCount</strong> フォロー中
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    <strong>@User.FollowersCount</strong> フォロワー
+                                </MudText>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-center gap-2">
+                        <MudButton Variant="@(User.IsFollowing ? Variant.Outlined : Variant.Filled)"
+                                   Color="@(User.IsFollowing ? Color.Default : Color.Primary)"
+                                   StartIcon="@(User.IsFollowing ? Icons.Material.Filled.PersonRemove : Icons.Material.Filled.PersonAdd)"
+                                   OnClick="ToggleFollowAsync" Disabled="IsTogglingFollow">
+                            @(User.IsFollowing ? "フォロー解除" : "フォロー")
+                        </MudButton>
+                    </div>
+                </div>
+            </MudCardContent>
+        </MudCard>
+
+        <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" KeepPanelsAlive="true">
+            <MudTabPanel Text="@($"投稿アイテム ({User.Items.Count})")" Icon="@Icons.Material.Filled.Article">
+                @if (User.Items.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        投稿されたアイテムはありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        @foreach (var item in User.Items)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                <div class="d-flex justify-space-between align-center mb-1">
+                                    <MudLink Href="@($"/Item/WasmDetail/{item.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
+                                        #@item.Id - @(item.OwnerUserName ?? "匿名")
+                                    </MudLink>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @item.UpdatedDate.ToLocalTime().ToString("g")
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="mb-2" Style="white-space: pre-wrap;">@item.Content</MudText>
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        @foreach (var tr in item.TagRelations)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
+                                                @tr.TagName (+@tr.Weight)
+                                            </MudChip>
+                                        }
+                                    </div>
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                               Href="@($"/Item/WasmDetail/{item.Id}")" EndIcon="@Icons.Material.Filled.ArrowForward">
+                                        詳細を見る
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"作成タグ ({User.Tags.Count})")" Icon="@Icons.Material.Filled.LocalOffer">
+                @if (User.Tags.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        作成したタグはありません。
+                    </MudText>
+                }
+                else
+                {
+                    <MudGrid Spacing="2">
+                        @foreach (var tag in User.Tags)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                    <div class="d-flex align-center justify-space-between mb-1">
+                                        <MudLink Href="@($"/Tag/WasmDetail/{tag.Id}")" Color="Color.Primary" Typo="Typo.subtitle2" Class="font-weight-bold">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Class="mr-1" />
+                                            @tag.Name
+                                        </MudLink>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">スコア: @tag.Score</MudText>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(tag.Content))
+                                    {
+                                        <MudText Typo="Typo.caption" Class="d-block text-truncate mb-1">@tag.Content</MudText>
+                                    }
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    [Parameter]
+    public string UserId { get; set; } = string.Empty;
+
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; set; }
+
+    public UserDetailDto? User { get; private set; }
+
+    public bool IsLoading { get; private set; } = true;
+
+    public bool IsTogglingFollow { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadUserAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UserId))
+        {
+            IsLoading = false;
+            return;
+        }
+
+        IsLoading = true;
+        try
+        {
+            User = await ApiClient.GetUserDetailAsync(UserId, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"ユーザー情報の取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ToggleFollowAsync()
+    {
+        if (User == null || IsTogglingFollow)
+        {
+            return;
+        }
+
+        IsTogglingFollow = true;
+        try
+        {
+            bool isFollowing = await ApiClient.ToggleUserFollowAsync(UserId, _cts.Token);
+            int delta = isFollowing ? 1 : -1;
+            User = User with
+            {
+                IsFollowing = isFollowing,
+                FollowersCount = Math.Max(0, User.FollowersCount + delta)
+            };
+            Snackbar.Add(isFollowing ? "ユーザーをフォローしました。" : "フォローを解除しました。", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"フォロー状態の変更に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsTogglingFollow = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
+

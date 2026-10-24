@@ -1,0 +1,196 @@
+@namespace SRNSMudApp.Client.Components
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+
+<MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Group" Color="Color.Primary" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.h6">ユーザーグループ管理 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    API経由でユーザーグループの作成、更新、削除およびメンバー管理を行います。
+                </MudText>
+            </div>
+        </div>
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadGroupsAsync" Disabled="IsLoading">
+                更新
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="ToggleCreateForm">
+                @(ShowCreateForm ? "キャンセル" : "新規グループ作成")
+            </MudButton>
+        </div>
+    </div>
+
+    @* 新規グループ作成フォーム *@
+    @if (ShowCreateForm)
+    {
+        <MudCard Elevation="2" Class="mt-4 pa-4 rounded-lg border-solid border-2 mud-border-primary">
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">新規グループ作成</MudText>
+            <div class="d-flex flex-column gap-3">
+                <MudTextField @bind-Value="NewGroupName" Label="グループ名 *" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Placeholder="例: 開発チーム, デザインレビュー" />
+                <MudTextField @bind-Value="NewGroupDescription" Label="説明" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="2" Placeholder="グループの目的や権限についてのメモ" />
+                <div class="d-flex justify-end gap-2">
+                    <MudButton Variant="Variant.Text" OnClick="ToggleCreateForm">キャンセル</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateGroupAsync"
+                               Disabled="@(string.IsNullOrWhiteSpace(NewGroupName) || IsCreating)">
+                        @if (IsCreating)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>作成中...</span>
+                        }
+                        else
+                        {
+                            <span>作成</span>
+                        }
+                    </MudButton>
+                </div>
+            </div>
+        </MudCard>
+    }
+</MudPaper>
+
+@* グループ一覧 *@
+@if (IsLoading)
+{
+    <div class="d-flex justify-center align-center pa-8">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Class="ml-3">グループを読み込み中...</MudText>
+    </div>
+}
+else if (Groups.Count == 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="pa-8 text-center rounded-xl">
+        <MudIcon Icon="@Icons.Material.Filled.GroupOff" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+        <MudText Typo="Typo.h6">所属しているグループはありません</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            「新規グループ作成」から新しいグループを作成できます。
+        </MudText>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        @foreach (var group in Groups)
+        {
+            <MudItem xs="12" md="6" lg="4" @key="group.Id">
+                <MudCard Elevation="2" Class="rounded-lg h-100 d-flex flex-column">
+                    <MudCardHeader>
+                        <CardHeaderAvatar>
+                            <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                @(group.Name.FirstOrDefault().ToString().ToUpperInvariant())
+                            </MudAvatar>
+                        </CardHeaderAvatar>
+                        <CardHeaderContent>
+                            <MudLink Href="@($"/UserGroup/WasmMembers/{group.Id}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@group.Name</MudText>
+                            </MudLink>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">ID: @group.Id</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default"
+                                           OnClick="@(() => StartEditGroup(group))" aria-label="グループを編集" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => DeleteGroupAsync(group.Id))" aria-label="グループを削除" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+
+                    <MudCardContent Class="flex-grow-1">
+                        @if (EditingGroupId == group.Id)
+                        {
+                            <div class="d-flex flex-column gap-2">
+                                <MudTextField @bind-Value="EditGroupName" Label="グループ名" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudTextField @bind-Value="EditGroupDescription" Label="説明" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                                <div class="d-flex justify-end gap-1 mt-2">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CancelEdit">キャンセル</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => SaveEditGroupAsync(group.Id))">保存</MudButton>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="text-secondary mb-3">
+                                @(string.IsNullOrWhiteSpace(group.Description) ? "説明はありません" : group.Description)
+                            </MudText>
+                        }
+
+                        @* 選択中グループの詳細 & メンバー一覧 *@
+                        @if (SelectedGroupId == group.Id)
+                        {
+                            <MudDivider Class="my-3" />
+                            <div class="d-flex align-center justify-space-between mb-2">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                                    メンバー一覧 (@(SelectedGroupDetail?.Members.Count ?? 0)人)
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseDetail" aria-label="閉じる" />
+                            </div>
+
+                            @if (IsLoadingDetail)
+                            {
+                                <div class="d-flex justify-center pa-2">
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                </div>
+                            }
+                            else if (SelectedGroupDetail != null)
+                            {
+                                <MudList T="string" Dense="true" Class="pa-0 mb-3">
+                                    @foreach (var member in SelectedGroupDetail.Members)
+                                    {
+                                        <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                                            <div class="d-flex align-center justify-space-between w-100">
+                                                <div>
+                                                    <MudText Typo="Typo.body2">
+                                                        @(string.IsNullOrEmpty(member.UserName) ? member.UserId : member.UserName)
+                                                        @if (member.UserId == SelectedGroupDetail.OwnerUserId)
+                                                        {
+                                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">オーナー</MudChip>
+                                                        }
+                                                    </MudText>
+                                                </div>
+                                                @if (member.UserId != SelectedGroupDetail.OwnerUserId)
+                                                {
+                                                    <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Size="Size.Small" Color="Color.Error"
+                                                                   OnClick="@(() => RemoveMemberAsync(group.Id, member.UserId))" aria-label="メンバー削除" />
+                                                }
+                                            </div>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+
+                                @* メンバー追加入力 *@
+                                <div class="d-flex align-center gap-1 mt-2">
+                                    <MudTextField @bind-Value="NewMemberUserId" Label="ユーザーID追加" Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" Placeholder="User ID..." Class="flex-grow-1" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="@(() => AddMemberAsync(group.Id))"
+                                               Disabled="@(string.IsNullOrWhiteSpace(NewMemberUserId) || IsAddingMember)">
+                                        追加
+                                    </MudButton>
+                                </div>
+                            }
+                        }
+                    </MudCardContent>
+
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@(SelectedGroupId == group.Id ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.People)"
+                                   OnClick="@(() => ToggleDetailAsync(group.Id))">
+                            @(SelectedGroupId == group.Id ? "メンバーを隠す" : "インライン管理")
+                        </MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.OpenInNew"
+                                   Href="@($"/UserGroup/WasmMembers/{group.Id}")">
+                            メンバー詳細ページ
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+

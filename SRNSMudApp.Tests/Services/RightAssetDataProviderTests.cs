@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
 using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
 using SRNSMudApp.Services;
 
 #endregion
@@ -116,6 +117,50 @@ public class RightAssetDataProviderTests : IAsyncLifetime
 
             // 個別アセット明細の検証 (該当タグの全4件)
             Assert.Equal(4, overview.Assets.Count);
+        }
+    }
+
+    [Fact]
+    public async Task GetRightAssetOverviewByTagIdAsync_WhenTagIsPrivate_ReturnsNullForUnauthorizedUser()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var privateTag = new Tag
+            {
+                Name = $"PrivateTag_{tid}",
+                OwnerId = userA,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            db.Tags.Add(privateTag);
+            await db.SaveChangesAsync();
+
+            db.RightAssets.Add(new RightAsset
+            {
+                TargetTagId = privateTag.Id,
+                OwnerId = userA,
+                Amount = 50,
+                IsBurned = false,
+                CreatedDate = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userB) は null
+            RightAssetOverviewData? forUserB = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userB, isAdmin: false);
+            Assert.Null(forUserB);
+
+            // Act 2: 未ログインユーザーは null
+            RightAssetOverviewData? forAnon = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, null, isAdmin: false);
+            Assert.Null(forAnon);
+
+            // Act 3: オーナー本人 (userA) は取得可能
+            RightAssetOverviewData? forOwner = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userA, isAdmin: false);
+            Assert.NotNull(forOwner);
+
+            // Act 4: 管理者は取得可能
+            RightAssetOverviewData? forAdmin = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userB, isAdmin: true);
+            Assert.NotNull(forAdmin);
         }
     }
 
@@ -701,6 +746,341 @@ public class RightAssetDataProviderTests : IAsyncLifetime
 
         // Assert
         Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task ApprovePermissionRequestAsync_WithMultipleApproverAssets_DeductsCorrectlyAndBurnsDepletedAssets()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var creatorUser = $"creator_{tid}";
+            await db.SeedUsersAsync(creatorUser);
+
+            // タグ作成者は別の第三者（userA がオーナー自動発行されないようにするため）
+            var tag = new Tag { Name = $"MultiAssetTag_{tid}", OwnerId = creatorUser, CachedWeight = 10 };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+
+            // userA が 3 つの RightAsset を保有 (2, 3, 5 -> 計10)
+            var asset1 = new RightAsset { TargetTagId = tag.Id, OwnerId = userA, Amount = 2, IsBurned = false };
+            var asset2 = new RightAsset { TargetTagId = tag.Id, OwnerId = userA, Amount = 3, IsBurned = false };
+            var asset3 = new RightAsset { TargetTagId = tag.Id, OwnerId = userA, Amount = 5, IsBurned = false };
+            db.RightAssets.AddRange(asset1, asset2, asset3);
+            await db.SaveChangesAsync();
+
+            // userB が 6 をリクエスト
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tag.Id,
+                TargetUserId: userA,
+                RequestedAmount: 6
+            );
+            var submitResult = await sut.SubmitPermissionRequestAsync(userB, request);
+            Assert.True(submitResult is Success<bool>);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB && i.NotificationRecipients.Any(r => r.RecipientUserId == userA));
+            Assert.NotNull(requestItem);
+
+            // Act: userA が承認
+            var approveResult = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(approveResult is Success<bool>);
+
+            // Assert: 別コンテキストで検証
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var updatedAsset1 = await verifyDb.RightAssets.FindAsync(asset1.Id);
+            var updatedAsset2 = await verifyDb.RightAssets.FindAsync(asset2.Id);
+            var updatedAsset3 = await verifyDb.RightAssets.FindAsync(asset3.Id);
+
+            // asset1(2) と asset2(3) は全量消費されて Burn される
+            Assert.NotNull(updatedAsset1);
+            Assert.Equal(0, updatedAsset1.Amount);
+            Assert.True(updatedAsset1.IsBurned);
+
+            Assert.NotNull(updatedAsset2);
+            Assert.Equal(0, updatedAsset2.Amount);
+            Assert.True(updatedAsset2.IsBurned);
+
+            // asset3(5) は 1 消費され、残り 4 で有効のまま
+            Assert.NotNull(updatedAsset3);
+            Assert.Equal(4, updatedAsset3.Amount);
+            Assert.False(updatedAsset3.IsBurned);
+
+            // userB に 6 の新規アセットが付与される
+            var userBAssets = await verifyDb.RightAssets
+                .Where(a => a.OwnerId == userB && a.TargetTagId == tag.Id && !a.IsBurned)
+                .ToListAsync();
+            Assert.Single(userBAssets);
+            Assert.Equal(6, userBAssets[0].Amount);
+        }
+    }
+
+    [Fact]
+    public async Task ApprovePermissionRequestAsync_WithOfferedAsset_TransfersBothWays()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var creator = $"creator_{tid}";
+            await db.SeedUsersAsync(creator);
+
+            var tagReq = new Tag { Name = $"TagReq_{tid}", OwnerId = creator, CachedWeight = 10 };
+            var tagOff = new Tag { Name = $"TagOff_{tid}", OwnerId = creator, CachedWeight = 10 };
+            db.Tags.AddRange(tagReq, tagOff);
+            await db.SaveChangesAsync();
+
+            // userA が要求対象 tagReq のアセット 10 を保有
+            var assetA = new RightAsset { TargetTagId = tagReq.Id, OwnerId = userA, Amount = 10, IsBurned = false };
+            // userB が対価 tagOff のアセット 5 を保有
+            var assetB = new RightAsset { TargetTagId = tagOff.Id, OwnerId = userB, Amount = 5, IsBurned = false };
+            db.RightAssets.AddRange(assetA, assetB);
+            await db.SaveChangesAsync();
+
+            // userB が tagReq の 4 をリクエストし、tagOff の 3 を対価として提供
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagReq.Id,
+                TargetUserId: userA,
+                RequestedAmount: 4,
+                OfferedRightAssetId: assetB.Id,
+                OfferedAmount: 3
+            );
+            var submitResult = await sut.SubmitPermissionRequestAsync(userB, request);
+            Assert.True(submitResult is Success<bool>);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // Act: userA が承認
+            var approveResult = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(approveResult is Success<bool>);
+
+            // Assert
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+
+            // userA の tagReq は 10 - 4 = 6
+            var updatedAssetA = await verifyDb.RightAssets.FindAsync(assetA.Id);
+            Assert.NotNull(updatedAssetA);
+            Assert.Equal(6, updatedAssetA.Amount);
+            Assert.False(updatedAssetA.IsBurned);
+
+            // userB に tagReq の 4 が付与される
+            var userBReqAsset = await verifyDb.RightAssets
+                .FirstOrDefaultAsync(a => a.OwnerId == userB && a.TargetTagId == tagReq.Id && !a.IsBurned);
+            Assert.NotNull(userBReqAsset);
+            Assert.Equal(4, userBReqAsset.Amount);
+
+            // userB の対価アセット tagOff は 5 - 3 = 2
+            var updatedAssetB = await verifyDb.RightAssets.FindAsync(assetB.Id);
+            Assert.NotNull(updatedAssetB);
+            Assert.Equal(2, updatedAssetB.Amount);
+            Assert.False(updatedAssetB.IsBurned);
+
+            // userA に対価 tagOff の 3 が付与される
+            var userAOffAsset = await verifyDb.RightAssets
+                .FirstOrDefaultAsync(a => a.OwnerId == userA && a.TargetTagId == tagOff.Id && !a.IsBurned);
+            Assert.NotNull(userAOffAsset);
+            Assert.Equal(3, userAOffAsset.Amount);
+        }
+    }
+
+    [Fact]
+    public async Task ApprovePermissionRequestAsync_WithOfferedAssetFullyDepleted_BurnsOfferedAsset()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var creator = $"creator_{tid}";
+            await db.SeedUsersAsync(creator);
+
+            var tagReq = new Tag { Name = $"TagReq_{tid}", OwnerId = creator, CachedWeight = 10 };
+            var tagOff = new Tag { Name = $"TagOff_{tid}", OwnerId = creator, CachedWeight = 10 };
+            db.Tags.AddRange(tagReq, tagOff);
+            await db.SaveChangesAsync();
+
+            var assetA = new RightAsset { TargetTagId = tagReq.Id, OwnerId = userA, Amount = 5, IsBurned = false };
+            // 全量提供 (Amount == OfferedAmount == 2)
+            var assetB = new RightAsset { TargetTagId = tagOff.Id, OwnerId = userB, Amount = 2, IsBurned = false };
+            db.RightAssets.AddRange(assetA, assetB);
+            await db.SaveChangesAsync();
+
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagReq.Id,
+                TargetUserId: userA,
+                RequestedAmount: 2,
+                OfferedRightAssetId: assetB.Id,
+                OfferedAmount: 2
+            );
+            var submitResult = await sut.SubmitPermissionRequestAsync(userB, request);
+            Assert.True(submitResult is Success<bool>);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // Act
+            var approveResult = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(approveResult is Success<bool>);
+
+            // Assert
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var updatedAssetB = await verifyDb.RightAssets.FindAsync(assetB.Id);
+            Assert.NotNull(updatedAssetB);
+            Assert.Equal(0, updatedAssetB.Amount);
+            Assert.True(updatedAssetB.IsBurned);
+
+            var userAOffAsset = await verifyDb.RightAssets
+                .FirstOrDefaultAsync(a => a.OwnerId == userA && a.TargetTagId == tagOff.Id && !a.IsBurned);
+            Assert.NotNull(userAOffAsset);
+            Assert.Equal(2, userAOffAsset.Amount);
+        }
+    }
+
+    [Fact]
+    public async Task ApprovePermissionRequestAsync_WhenOfferedAssetBecameInvalidOrInsufficient_FailsAndDoesNotTransfer()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var creator = $"creator_{tid}";
+            await db.SeedUsersAsync(creator);
+
+            var tagReq = new Tag { Name = $"TagReq_{tid}", OwnerId = creator, CachedWeight = 10 };
+            var tagOff = new Tag { Name = $"TagOff_{tid}", OwnerId = creator, CachedWeight = 10 };
+            db.Tags.AddRange(tagReq, tagOff);
+            await db.SaveChangesAsync();
+
+            var assetA = new RightAsset { TargetTagId = tagReq.Id, OwnerId = userA, Amount = 5, IsBurned = false };
+            var assetB = new RightAsset { TargetTagId = tagOff.Id, OwnerId = userB, Amount = 3, IsBurned = false };
+            db.RightAssets.AddRange(assetA, assetB);
+            await db.SaveChangesAsync();
+
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagReq.Id,
+                TargetUserId: userA,
+                RequestedAmount: 2,
+                OfferedRightAssetId: assetB.Id,
+                OfferedAmount: 3
+            );
+            var submitResult = await sut.SubmitPermissionRequestAsync(userB, request);
+            Assert.True(submitResult is Success<bool>);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // 申請後に userB の対価アセットが他で消費されて残高 1 に減少
+            assetB.Amount = 1;
+            await db.SaveChangesAsync();
+
+            // Act: userA が承認を試みる
+            var approveResult = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+
+            // Assert: エラーとなり、userA のアセットは減算されないこと
+            Assert.True(approveResult is Failure fail && fail.ErrorMessage.Contains("対価アセット"));
+
+            await using var verifyDb = new ApplicationDbContext(_sharedDb.Options);
+            var updatedAssetA = await verifyDb.RightAssets.FindAsync(assetA.Id);
+            Assert.NotNull(updatedAssetA);
+            Assert.Equal(5, updatedAssetA.Amount); // 減算されていないこと
+        }
+    }
+
+    [Fact]
+    public async Task ApprovePermissionRequestAsync_WhenCallerNotRecipient_ReturnsNotAuthorized()
+    {
+        var (db, sut, userA, userB, tagId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var userC = $"userC_{tid}";
+            await db.SeedUsersAsync(userC);
+
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagId,
+                TargetUserId: userA,
+                RequestedAmount: 2
+            );
+            await sut.SubmitPermissionRequestAsync(userB, request);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // Act: 宛先ではない userC が承認を試みる
+            var result = await sut.ApprovePermissionRequestAsync(requestItem.Id, userC);
+
+            // Assert
+            Assert.True(result is Failure fail && fail.ErrorMessage == ErrorMessages.NotAuthorizedToApprove);
+        }
+    }
+
+    [Fact]
+    public async Task RejectPermissionRequestAsync_WhenCallerNotRecipient_ReturnsNotAuthorized()
+    {
+        var (db, sut, userA, userB, tagId, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var userC = $"userC_{tid}";
+            await db.SeedUsersAsync(userC);
+
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagId,
+                TargetUserId: userA,
+                RequestedAmount: 2
+            );
+            await sut.SubmitPermissionRequestAsync(userB, request);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // Act: 宛先ではない userC が却下を試みる
+            var result = await sut.RejectPermissionRequestAsync(requestItem.Id, userC);
+
+            // Assert
+            Assert.True(result is Failure fail && fail.ErrorMessage == ErrorMessages.NotAuthorizedToReject);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveAndRejectPermissionRequestAsync_WhenAlreadyProcessed_ReturnsRequestAlreadyProcessed()
+    {
+        var (db, sut, userA, userB, tagId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var request = new TagPermissionRequestDto(
+                RequestedTagId: tagId,
+                TargetUserId: userA,
+                RequestedAmount: 1
+            );
+            await sut.SubmitPermissionRequestAsync(userB, request);
+
+            var requestItem = await db.Items.FirstOrDefaultAsync(i => i.OwnerId == userB);
+            Assert.NotNull(requestItem);
+
+            // 1回目の承認 -> 成功
+            var firstApprove = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(firstApprove is Success<bool>);
+
+            // 2回目の承認試行 -> 既に処理済みエラー
+            var secondApprove = await sut.ApprovePermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(secondApprove is Failure f1 && f1.ErrorMessage == ErrorMessages.RequestAlreadyProcessed);
+
+            // 処理済みリクエストに対する却下試行 -> 既に処理済みエラー
+            var rejectAttempt = await sut.RejectPermissionRequestAsync(requestItem.Id, userA);
+            Assert.True(rejectAttempt is Failure f2 && f2.ErrorMessage == ErrorMessages.RequestAlreadyProcessed);
+        }
+    }
+
+    [Fact]
+    public void ParsePermissionPayload_LegacyRegexFallback_ParsesCorrectly()
+    {
+        var legacyItem = new Item
+        {
+            OwnerId = "legacyOwner",
+            Content = "【タグ操作権限リクエスト】\nタグ「LegacyTag」の操作権限 7 をリクエストしました。（無償リクエスト）\n\nメッセージ:\nおねがいします"
+        };
+
+        var payload = RightAssetDataProvider.ParsePermissionPayload(legacyItem);
+
+        Assert.NotNull(payload);
+        Assert.Equal("LegacyTag", payload.RequestedTagName);
+        Assert.Equal(7, payload.RequestedAmount);
+        Assert.Equal(TradeStatus.Proposed, payload.Status);
     }
 
 

@@ -1,0 +1,498 @@
+@page "/Contract/WasmManagement"
+@attribute [AllowAnonymous]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+@using System.Threading
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Services
+
+@inject IItemListApiClient ApiClient
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>コントラクト管理 (WASM) - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Mail" Size="Size.Large" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">コントラクト管理 (WASM)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    受信したタグ付け契約の提案や、自分が他者に送信した契約提案の確認・承認・取り下げができます。
+                </MudText>
+            </div>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@(_showProposePanel ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                       OnClick="@(() => _showProposePanel = !_showProposePanel)"
+                       data-testid="toggle-propose-contract-btn">
+                @(_showProposePanel ? "閉じる" : "契約を提案する")
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           OnClick="@LoadContractsAsync"
+                           aria-label="再読み込み"
+                           Disabled="@_isLoading"
+                           data-testid="refresh-contracts-btn" />
+        </div>
+    </div>
+
+    @* 新規コントラクト提案パネル *@
+    @if (_showProposePanel)
+    {
+        <MudCard Class="pa-4 mb-6" Elevation="2" data-testid="propose-contract-panel">
+            <MudText Typo="Typo.h6" Class="mb-3 font-weight-bold">新しいタグ付け契約を提案</MudText>
+            <MudRadioGroup @bind-Value="_proposeContractType" Class="mb-3">
+                <MudRadio Value="@("Gratis")" Color="Color.Primary" Dense="true">無償提案 (Gratis)</MudRadio>
+                <MudRadio Value="@("Mutual")" Color="Color.Secondary" Dense="true">相互タグ付け (Mutual)</MudRadio>
+            </MudRadioGroup>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeTargetItemId"
+                                     Label="対象アイテム ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="タグを付けたい相手のアイテムID"
+                                     data-testid="propose-item-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeRequestedTagId"
+                                     Label="申請タグ ID"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     HelperText="付与を提案するタグのID"
+                                     data-testid="propose-tag-id-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_proposeWeight"
+                                     Label="提案ウェイト (重み)"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1"
+                                     Max="100"
+                                     data-testid="propose-weight-input" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_proposeMessage"
+                                  Label="メッセージ (任意)"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="提案理由や依頼メッセージ"
+                                  data-testid="propose-message-input" />
+                </MudItem>
+
+                @if (_proposeContractType == "Mutual")
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">相互提供条件</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeOfferedItemId"
+                                         Label="見返りアイテム ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="相手にタグ付けを許可する自分のアイテムID"
+                                         data-testid="propose-offered-item-id-input" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeOfferedTagId"
+                                         Label="見返りタグ ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="相手が付けるタグのID"
+                                         data-testid="propose-offered-tag-id-input" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_proposeConsumedAssetId"
+                                         Label="消費ライトアセット ID"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Min="1"
+                                         HelperText="消費する権利アセットのID"
+                                         data-testid="propose-consumed-asset-id-input" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12" Class="d-flex justify-end gap-2 mt-2">
+                    <MudButton Variant="Variant.Outlined"
+                               OnClick="@(() => _showProposePanel = false)">
+                        キャンセル
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="@SubmitProposalAsync"
+                               Disabled="@(_isProposing || _proposeTargetItemId <= 0 || _proposeRequestedTagId <= 0 || (_proposeContractType == "Mutual" && (_proposeOfferedItemId <= 0 || _proposeOfferedTagId <= 0 || _proposeConsumedAssetId <= 0)))"
+                               data-testid="submit-propose-contract-btn">
+                        @if (_isProposing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>送信中...</span>
+                        }
+                        else
+                        {
+                            <span>提案を送信</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCard>
+    }
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center my-8" data-testid="contracts-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else
+    {
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mt-2" KeepPanelsAlive="true">
+            @* 受信トレイ (Inbox) *@
+            <MudTabPanel Text="@($"受信トレイ ({_incomingContracts.Count})")" Icon="@Icons.Material.Filled.Inbox" data-testid="inbox-tab">
+                <div class="pa-4">
+                    @if (_incomingContracts.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info" data-testid="empty-inbox-alert">
+                            現在、受信したコントラクトの提案はありません。
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="3" data-testid="inbox-list">
+                            @foreach (var contract in _incomingContracts)
+                            {
+                                <MudItem xs="12" sm="6" md="4" @key="@contract.Id">
+                                    <MudCard Outlined="true" Class="h-100 d-flex flex-column hover-elevation transition-elevation" data-testid="@($"incoming-card-{contract.Id}")">
+                                        <MudCardHeader>
+                                            <CardHeaderContent>
+                                                <div class="d-flex align-center justify-space-between">
+                                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                                                             Href="@($"/Tag/WasmDetail/{contract.RequestedTagId}")">
+                                                        #@contract.RequestedTagName
+                                                    </MudChip>
+                                                    <MudChip T="string" Color="@GetStatusColor(contract.Status)" Variant="Variant.Outlined" Size="Size.Small">
+                                                        @GetStatusDisplayText(contract.Status)
+                                                    </MudChip>
+                                                </div>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                                    提案者: 
+                                                    <MudLink Href="@($"/User/WasmDetail/{contract.RequesterUserId}")" Typo="Typo.body2">
+                                                        @(contract.RequesterUserName ?? contract.RequesterUserId)
+                                                    </MudLink>
+                                                </MudText>
+                                            </CardHeaderContent>
+                                        </MudCardHeader>
+
+                                        <MudCardContent Class="flex-grow-1">
+                                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">対象アイテム #@contract.TargetItemId</MudText>
+                                            <MudPaper Elevation="0" Class="pa-2 rounded bg-surface mb-2" Outlined="true">
+                                                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-height: 4.5em; overflow: hidden;">
+                                                    @(string.IsNullOrWhiteSpace(contract.TargetItemContent) ? "(本文なし)" : contract.TargetItemContent)
+                                                </MudText>
+                                                <div class="mt-1">
+                                                    <MudLink Href="@($"/Item/WasmDetail/{contract.TargetItemId}")" Typo="Typo.caption">
+                                                        アイテム詳細を見る &rarr;
+                                                    </MudLink>
+                                                </div>
+                                            </MudPaper>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                契約種別: @contract.ContractType | 申請日: @contract.CreatedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
+                                            </MudText>
+                                        </MudCardContent>
+
+                                        <MudCardActions Class="mt-auto pt-0 justify-end gap-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => AcceptContractAsync(contract.Id))"
+                                                       data-testid="@($"accept-contract-btn-{contract.Id}")">
+                                                承認する
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RejectContractAsync(contract.Id))"
+                                                       data-testid="@($"reject-contract-btn-{contract.Id}")">
+                                                拒否する
+                                            </MudButton>
+                                        </MudCardActions>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* 送信済み (Outbox) *@
+            <MudTabPanel Text="@($"送信済み ({_outgoingContracts.Count})")" Icon="@Icons.Material.Filled.Outbox" data-testid="outbox-tab">
+                <div class="pa-4">
+                    @if (_outgoingContracts.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info" data-testid="empty-outbox-alert">
+                            現在、送信したコントラクトの提案はありません。
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="3" data-testid="outbox-list">
+                            @foreach (var contract in _outgoingContracts)
+                            {
+                                <MudItem xs="12" sm="6" md="4" @key="@contract.Id">
+                                    <MudCard Outlined="true" Class="h-100 d-flex flex-column hover-elevation transition-elevation" data-testid="@($"outgoing-card-{contract.Id}")">
+                                        <MudCardHeader>
+                                            <CardHeaderContent>
+                                                <div class="d-flex align-center justify-space-between">
+                                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                                                             Href="@($"/Tag/WasmDetail/{contract.RequestedTagId}")">
+                                                        #@contract.RequestedTagName
+                                                    </MudChip>
+                                                    <MudChip T="string" Color="@GetStatusColor(contract.Status)" Variant="Variant.Outlined" Size="Size.Small">
+                                                        @GetStatusDisplayText(contract.Status)
+                                                    </MudChip>
+                                                </div>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                                    タグ所有者: 
+                                                    <MudLink Href="@($"/User/WasmDetail/{contract.TagOwnerUserId}")" Typo="Typo.body2">
+                                                        @(contract.TagOwnerUserName ?? contract.TagOwnerUserId)
+                                                    </MudLink>
+                                                </MudText>
+                                            </CardHeaderContent>
+                                        </MudCardHeader>
+
+                                        <MudCardContent Class="flex-grow-1">
+                                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">対象アイテム #@contract.TargetItemId</MudText>
+                                            <MudPaper Elevation="0" Class="pa-2 rounded bg-surface mb-2" Outlined="true">
+                                                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-height: 4.5em; overflow: hidden;">
+                                                    @(string.IsNullOrWhiteSpace(contract.TargetItemContent) ? "(本文なし)" : contract.TargetItemContent)
+                                                </MudText>
+                                                <div class="mt-1">
+                                                    <MudLink Href="@($"/Item/WasmDetail/{contract.TargetItemId}")" Typo="Typo.caption">
+                                                        アイテム詳細を見る &rarr;
+                                                    </MudLink>
+                                                </div>
+                                            </MudPaper>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                契約種別: @contract.ContractType | 申請日: @contract.CreatedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
+                                            </MudText>
+                                        </MudCardContent>
+
+                                        <MudCardActions Class="mt-auto pt-0 justify-end">
+                                            @if (contract.CanCancel)
+                                            {
+                                                <MudButton Variant="Variant.Outlined"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => CancelContractAsync(contract.Id))"
+                                                           data-testid="@($"cancel-contract-btn-{contract.Id}")">
+                                                    取り下げる
+                                                </MudButton>
+                                            }
+                                        </MudCardActions>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </div>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    private IReadOnlyList<ContractDto> _incomingContracts = [];
+    private IReadOnlyList<ContractDto> _outgoingContracts = [];
+    private bool _isLoading = true;
+    private CancellationTokenSource? _cts;
+
+    private bool _showProposePanel;
+    private string _proposeContractType = "Gratis";
+    private int _proposeTargetItemId;
+    private int _proposeRequestedTagId;
+    private int _proposeWeight = 1;
+    private string? _proposeMessage;
+    private int _proposeOfferedItemId;
+    private int _proposeOfferedTagId;
+    private int _proposeConsumedAssetId;
+    private bool _isProposing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContractsAsync();
+    }
+
+    private async Task SubmitProposalAsync()
+    {
+        _isProposing = true;
+        try
+        {
+            ContractDto? result;
+            if (_proposeContractType == "Mutual")
+            {
+                var req = new ProposeMutualContractRequest(
+                    TargetItemId: _proposeTargetItemId,
+                    RequestedTagId: _proposeRequestedTagId,
+                    OfferedTargetItemId: _proposeOfferedItemId,
+                    OfferedTagId: _proposeOfferedTagId,
+                    ConsumedRightAssetId: _proposeConsumedAssetId,
+                    ProposedWeight: _proposeWeight);
+                result = await ApiClient.ProposeMutualContractAsync(req, _cts?.Token ?? default);
+            }
+            else
+            {
+                var req = new ProposeGratisContractRequest(
+                    TargetItemId: _proposeTargetItemId,
+                    RequestedTagId: _proposeRequestedTagId,
+                    ProposedWeight: _proposeWeight,
+                    Message: _proposeMessage);
+                result = await ApiClient.ProposeGratisContractAsync(req, _cts?.Token ?? default);
+            }
+
+            if (result != null)
+            {
+                Snackbar.Add("契約提案を送信しました。", Severity.Success);
+                _showProposePanel = false;
+                _proposeTargetItemId = 0;
+                _proposeRequestedTagId = 0;
+                _proposeMessage = null;
+                _proposeOfferedItemId = 0;
+                _proposeOfferedTagId = 0;
+                _proposeConsumedAssetId = 0;
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("契約提案の送信に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProposing = false;
+        }
+    }
+
+    private async Task LoadContractsAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+
+        _isLoading = true;
+        try
+        {
+            ContractPageResponse? response = await ApiClient.GetContractsAsync(_cts.Token);
+            _incomingContracts = response?.IncomingContracts ?? [];
+            _outgoingContracts = response?.OutgoingContracts ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"コントラクトの取得に失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AcceptContractAsync(int contractId)
+    {
+        try
+        {
+            bool success = await ApiClient.AcceptContractAsync(contractId, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("コントラクトを承認しました。", Severity.Success);
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("コントラクトの承認に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RejectContractAsync(int contractId)
+    {
+        try
+        {
+            bool success = await ApiClient.RejectContractAsync(contractId, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("コントラクトを拒否しました。", Severity.Info);
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("コントラクトの拒否に失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CancelContractAsync(int contractId)
+    {
+        try
+        {
+            bool success = await ApiClient.CancelContractAsync(contractId, _cts?.Token ?? default);
+            if (success)
+            {
+                Snackbar.Add("コントラクトを取り下げました。", Severity.Info);
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Snackbar.Add("コントラクトの取り下げに失敗しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string GetStatusDisplayText(string status) => status switch
+    {
+        "Proposed" => "提案中",
+        "Executed" => "承認済み",
+        "Rejected" => "拒否",
+        "Canceled" => "キャンセル",
+        _ => status
+    };
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Proposed" => Color.Info,
+        "Executed" => Color.Success,
+        "Rejected" => Color.Error,
+        "Canceled" => Color.Default,
+        _ => Color.Default
+    };
+}
+

@@ -128,6 +128,25 @@ public sealed class CreatePublicOfferViewModelTests
     }
 
     [Fact]
+    public async Task SubmitAsync_WhenNotTagOwner_ReturnsFailure()
+    {
+        // Arrange
+        _sut.CurrentUserId = "attacker";
+        _sut.SelectedTag = new TagEntity { Id = 1, Name = "Tag", OwnerId = "real-owner" };
+        _sut.RequiredAssetAmount = 5;
+
+        // Act
+        var result = await _sut.SubmitAsync();
+
+        // Assert
+        Assert.True(result is Failure);
+        if (result is Failure failure)
+        {
+            Assert.Contains("自身が所有していないタグ", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
     public async Task SubmitAsync_WhenValid_DispatchesCommandSuccessfully()
     {
         // Arrange

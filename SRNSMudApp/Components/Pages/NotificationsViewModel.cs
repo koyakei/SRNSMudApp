@@ -50,6 +50,7 @@ public class NotificationsViewModel
     }
 
     public string? CurrentUserId { get; private set; }
+    public bool IsAdmin { get; private set; }
     public IReadOnlyList<NotificationDto> Notifications { get; private set; } = [];
     public bool IsLoading { get; private set; } = true;
 
@@ -65,9 +66,10 @@ public class NotificationsViewModel
     public int? CurrentUserZenTagId { get; private set; }
     public int? CurrentUserBiTagId { get; private set; }
 
-    public async Task InitializeAsync(string? userId)
+    public async Task InitializeAsync(string? userId, bool isAdmin = false)
     {
         CurrentUserId = userId;
+        IsAdmin = isAdmin;
         if (!string.IsNullOrEmpty(userId))
         {
             Notifications = await _notificationService.GetUserNotificationsAsync(userId);
@@ -79,6 +81,15 @@ public class NotificationsViewModel
         }
 
         IsLoading = false;
+    }
+
+    public async Task RefreshNotificationsAsync()
+    {
+        if (!string.IsNullOrEmpty(CurrentUserId))
+        {
+            Notifications = await _notificationService.GetUserNotificationsAsync(CurrentUserId);
+            await FetchAssociatedItemsAsync();
+        }
     }
 
     public async Task FetchTagsAsync()
@@ -108,7 +119,7 @@ public class NotificationsViewModel
             return;
         }
 
-        List<Data.Item> items = await _notificationsData.GetAssociatedItemsAsync(itemIds);
+        List<Data.Item> items = await _notificationsData.GetAssociatedItemsAsync(itemIds, CurrentUserId, IsAdmin);
         MapAssociatedItems(Notifications, items);
     }
 
@@ -152,6 +163,7 @@ public class NotificationsViewModel
         }
 
         UpdateNotificationStatus(notification, TradeStatus.Executed);
+        await FetchAssociatedItemsAsync();
         return TagCardActionResult.Success(shouldNotifyChanged: true);
     }
 
@@ -165,8 +177,9 @@ public class NotificationsViewModel
 
         try
         {
-            _ = await _taggingContractService.CancelContractAsync(notification.SourceId, CurrentUserId);
+            _ = await _taggingContractService.RejectContractAsync(notification.SourceId, CurrentUserId);
             UpdateNotificationStatus(notification, TradeStatus.Rejected);
+            await FetchAssociatedItemsAsync();
             return TagCardActionResult.Success("リクエストを却下しました。");
         }
         catch (Exception ex)
@@ -211,6 +224,7 @@ public class NotificationsViewModel
             {
                 case Success<bool>:
                     UpdateNotificationStatus(notification, TradeStatus.Rejected);
+                    await FetchAssociatedItemsAsync();
                     return TagCardActionResult.Success("分割リクエストを却下しました。");
                 case Failure fail:
                     return TagCardActionResult.Error(fail.ErrorMessage);
@@ -386,13 +400,29 @@ public class NotificationsViewModel
 
         if (updated != null)
         {
-            Notifications = [.. Notifications.Select(n => ReferenceEquals(n, notification) ? updated : n)];
+            Notifications = [.. Notifications.Select(n =>
+                (n.SourceId == notification.SourceId && n.Kind.SourceType == notification.Kind.SourceType)
+                    ? updated
+                    : n)];
         }
     }
 
     // ============================================================
     // 純粋静的ヘルパーメソッド群
     // ============================================================
+
+    /// <summary>
+    ///     通知に対応するステータス（TradeStatus）を取得する。該当しない場合は null。
+    /// </summary>
+    public static TradeStatus? GetNotificationStatus(NotificationDto notification) => notification.Kind switch
+    {
+        TagRequestNotification r => r.Status,
+        ItemSplitRequestNotification s => s.Status,
+        TagContentProposalNotification p => p.Status,
+        TagNameProposalNotification n => n.Status,
+        TagPermissionRequestNotification perm => perm.Status,
+        _ => null
+    };
 
     /// <summary>
     ///     通知に関連付けられたアイテム ID の一覧（重複なし、ID 0 は除外）を返す。

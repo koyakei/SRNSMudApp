@@ -118,6 +118,7 @@ public static class BunitTestSetup
             .AddScoped(_ => new Mock<IItemTagService>().Object)
             .AddScoped(_ => new Mock<IItemReplyService>().Object)
             .AddScoped(_ => new Mock<IItemReactionService>().Object)
+            .AddScoped(_ => new Mock<ITagWeightLedgerService>().Object)
             .AddScoped(_ => new Mock<IItemQuoteService>().Object)
             .AddScoped(_ => new Mock<IItemSplitService>().Object)
             .AddScoped(_ => new Mock<ITagContentProposalService>().Object)

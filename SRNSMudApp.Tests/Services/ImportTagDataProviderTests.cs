@@ -88,7 +88,7 @@ public class ImportTagDataProviderTests : IAsyncLifetime
             _ = await dbContext.SaveChangesAsync();
         }
 
-        IReadOnlyList<Tag> results = await _provider.SearchUserTagsAsync(testUser, "");
+        IReadOnlyList<Tag> results = await _provider.SearchUserTagsAsync(testUser, tid);
 
         Assert.Contains(results, t => t.Name == $"UserTag1_{tid}");
         Assert.Contains(results, t => t.Name == $"SystemRootTag_{tid}");

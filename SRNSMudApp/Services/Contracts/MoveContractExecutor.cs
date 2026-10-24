@@ -10,19 +10,17 @@ namespace SRNSMudApp.Services.Contracts;
 ///     タグ位置変更（Move）コントラクトの承認・実行処理を担当する <see cref="IContractExecutor" /> 実装。
 ///     タグオーナーが位置変更リクエストを承認した際に、階層ツリー上の親ノード・HierarchyId を更新する。
 /// </summary>
-public class MoveContractExecutor : IContractExecutor
+/// <param name="timeProvider">日時プロバイダー（省略時はシステム日時）。</param>
+public class MoveContractExecutor(TimeProvider? timeProvider = null) : ContractExecutorBase(timeProvider)
 {
-    public string ContractType => ContractTypes.Move;
+    public override string ContractType => ContractTypes.Move;
 
-    public async Task<Result<string>> ExecuteAsync(
+    protected override async Task<Result<string>> ExecuteCoreAsync(
         ApplicationDbContext dbContext,
         TaggingRequestEntity contract,
         string currentUserId,
         int? fulfillerAssetId = null)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
-        ArgumentNullException.ThrowIfNull(contract);
-
         if (contract.Payload is not TagMovePayload payload)
         {
             return new Failure("無効なコントラクトペイロードです。");
@@ -65,9 +63,30 @@ public class MoveContractExecutor : IContractExecutor
             .Select(t => (HierarchyId?)t.Node)
             .FirstOrDefaultAsync();
 
-        tagToUpdate.Node = parentNode.GetDescendant(lastChild, null);
+        HierarchyId oldNode = tagToUpdate.Node;
+        HierarchyId newNode = parentNode.GetDescendant(lastChild, null);
+
+        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        tagToUpdate.Node = newNode;
         tagToUpdate.ParentTagId = newParentTagId;
-        tagToUpdate.UpdatedDate = DateTime.UtcNow;
+        tagToUpdate.UpdatedDate = now;
+
+        // 子孫タグの HierarchyId ノードを再計算してツリー整合性を維持する
+        if (oldNode != null)
+        {
+            List<Tag> descendants = await dbContext.Tags
+                .Where(t => t.Id != tagToUpdate.Id && t.Node.IsDescendantOf(oldNode))
+                .ToListAsync();
+
+            foreach (Tag descendant in descendants)
+            {
+                if (descendant.Node.GetReparentedValue(oldNode, newNode) is { } reparented)
+                {
+                    descendant.Node = reparented;
+                    descendant.UpdatedDate = now;
+                }
+            }
+        }
 
         contract.Execute();
 

@@ -1,65 +1,62 @@
-# BRIEFING — 2026-10-02T14:43:00Z
+# BRIEFING — 2026-10-23T21:59:00Z
 
 ## Mission
-Adversarial and quality review of Milestone 1 changes (SEC-01, THREAD-01, DATA-01, DATA-02) focusing on concurrency safety, EF Core transaction semantics, security boundaries, and test assertions.
+Review Milestone 1 for completeness, integrity, and regression risk (InteractivePageDialogE2ETests and ItemSplitE2ETests replacement).
 
 ## 🔒 My Identity
-- Archetype: reviewer & critic
+- Archetype: reviewer_critic
 - Roles: reviewer, critic
 - Working directory: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_2
-- Original parent: 077cc920-cc9e-40bc-99e6-163a40d89fa9
+- Original parent: 8417fc9a-1777-4cd7-aa91-1012c46c67e3
 - Milestone: Milestone 1
 - Instance: 2 of 2
 
 ## 🔒 Key Constraints
 - Review-only — do NOT modify implementation code
-- Special focus on concurrency safety, EF Core transaction semantics, security boundaries, and test assertions
-- Explicit verdict: APPROVE or REQUEST_CHANGES
-- Strict integrity violation detection (fail immediately on hardcoded tests, facades, shortcuts, fake logs)
+- Actively check for integrity violations (hardcoded test results, facade implementations, shortcuts, fake verifications, self-certifying work)
+- Verify that dotnet build, dotnet format --diagnostics IDE0055 --verify-no-changes, and dotnet test pass cleanly
 
 ## Current Parent
-- Conversation ID: 077cc920-cc9e-40bc-99e6-163a40d89fa9
-- Updated: not yet
+- Conversation ID: 8417fc9a-1777-4cd7-aa91-1012c46c67e3
+- Updated: 2026-10-23T21:59:00Z
 
 ## Review Scope
-- **Files to review**:
-  - `SRNSMudApp/Controllers/PushNotificationController.cs`
-  - `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`
-  - `SRNSMudApp/Services/RightAssetPurchaseService.cs`
-  - `SRNSMudApp/Data/ExecutionStrategyExtensions.cs`
-  - `SRNSMudApp.Tests/Push/PushNotificationTests.cs`
-  - `SRNSMudApp.Tests/Auth/ExternalTokenVerificationServiceTests.cs`
-  - `SRNSMudApp.Tests/Services/RightAssetPurchaseServiceTests.cs`
-- **Interface contracts**: PROJECT.md, ORIGINAL_REQUEST.md
-- **Review criteria**: Correctness, concurrency safety, EF Core transaction semantics, security boundaries, test assertions, adversarial robustness
+- **Files to review**: Work products from worker_m1 (tests replacing InteractivePageDialogE2ETests and ItemSplitE2ETests):
+  - `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`
+  - `SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`
+  - `SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`
+- **Interface contracts**: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/orchestrator_4/PROJECT.md
+- **Review criteria**: 100% equivalent/superior bUnit coverage, 0 build warnings/errors, clean IDE0055 formatting, unit test success, no integrity violations
 
 ## Review Checklist
 - **Items reviewed**:
-  - `PushNotificationController.cs` (SEC-01)
-  - `ExternalTokenVerificationService.cs` (THREAD-01)
-  - `RightAssetPurchaseService.cs` & `ExecutionStrategyExtensions.cs` (DATA-01, DATA-02)
-  - `PushNotificationTests.cs`, `ExternalTokenVerificationServiceTests.cs`, `RightAssetPurchaseServiceTests.cs`
-- **Verdict**: REQUEST_CHANGES
-- **Unverified claims**:
-  - Claim that unauthenticated requests cannot spoof `userId` in push subscriptions is disproven: `InMemoryPushSubscriptionStore` falls back to `subscription.UserId` because `subscription` DTO is passed unsanitized.
+  - `ContractManagementTests.cs`: WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert
+  - `ItemCardSplitRequestTests.cs`: ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar
+  - `UserGroupMembersDialogTests.cs`: WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList, WhenOwner_AddMemberFails_ShowsErrorSnackbar
+  - `UserGroupMembersViewModelTests.cs`: CanAddMember permutations
+  - `IOwnableUnitTests.cs`: IsOwnedBy boundary and entity tests
+  - All Playwright scenarios in `InteractivePageDialogE2ETests.cs` and `ItemSplitE2ETests.cs`
+- **Verdict**: APPROVE
+- **Unverified claims**: None. All claims independently verified through tool execution and source inspection.
 
 ## Attack Surface
 - **Hypotheses tested**:
-  - Push subscription spoofing with unauthenticated client payload: FAILED (Vulnerability survives via `effectiveUserId = userId ?? subscription.UserId`).
-  - Concurrent LINE token verification race condition: PASSED (Per-request `HttpRequestMessage` isolates auth headers).
-  - Multi-save rollback on failure in `RightAssetPurchaseService`: PASSED (Rollback verified with interceptor).
-  - Transient retry with dirty `ChangeTracker` in `ExecuteWithStrategyAsync`: FAILED (Lack of `ChangeTracker.Clear()` causes tracking collisions on retry).
-- **Vulnerabilities found**:
-  - Critical: Push subscription user ID spoofing bypass in SEC-01.
-  - Major: ChangeTracker entity retention during `ExecuteWithStrategyAsync` retries.
-  - Minor: Unhandled `FormatException` for malformed bearer tokens in `ExternalTokenVerificationService`.
-- **Untested angles**:
-  - Real browser push dispatch with expired push subscriptions.
+  - Empty text selection handling for both owner (direct split) and non-owner (split request) paths
+  - MudAutocomplete selection change dynamically enabling disabled Add Member button
+  - Ownership guard (`IOwnable.IsOwnedBy`) under null/empty/whitespace target IDs
+  - Tab switching in MudTabs without KeepPanelsAlive strictly swapping rendered markup
+  - Mutation sensitivity confirmed by empirical challenger tests
+- **Vulnerabilities found**: 0 integrity violations, 0 regressions in target files.
+- **Untested angles**: None within Milestone 1 scope.
 
 ## Key Decisions Made
-- Verdict: REQUEST_CHANGES due to Critical security bypass in SEC-01 and shallow mock masking the flaw in tests.
+- Confirmed 100% equivalent or superior coverage in bUnit and unit test suites compared to the Playwright E2E tests.
+- Independently verified `dotnet build --no-incremental`, `dotnet format --diagnostics IDE0055 --verify-no-changes`, and `dotnet test`.
+- Issued verdict: APPROVE.
 
 ## Artifact Index
-- `.agents/teamwork/reviewer_m1_2/BRIEFING.md` — persistent working memory
-- `.agents/teamwork/reviewer_m1_2/progress.md` — heartbeat
-- `.agents/teamwork/reviewer_m1_2/handoff.md` — handoff review report
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_2/BRIEFING.md — Working memory
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_2/progress.md — Liveness & progress tracking
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_2/handoff.md — Final review report

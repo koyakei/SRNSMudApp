@@ -320,6 +320,10 @@ public class ComponentInjectedDependenciesTests
         services.AddSingleton<ILinkPreviewService>(sp => sp.GetRequiredService<LinkPreviewService>());
         services.AddSingleton<ITagEmbeddingService>(new Mock<ITagEmbeddingService>().Object);
         services.AddScoped<SRNSMudApp.Client.Services.IItemListApiClient>(sp => new Mock<SRNSMudApp.Client.Services.IItemListApiClient>().Object);
+        services.AddScoped<SRNSMudApp.Client.Services.ITagApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+        services.AddScoped<SRNSMudApp.Client.Services.ITagProposalApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+        services.AddScoped<SRNSMudApp.Client.Services.ITagLedgerApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+        services.AddScoped<SRNSMudApp.Client.Services.ITaggingRequestApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
 
         // JS Runtime & NavigationManager
         services.AddSingleton(Mock.Of<IJSRuntime>());

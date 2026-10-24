@@ -58,6 +58,7 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
 
     private static IQueryable<Item> IncludeItemDetails(IQueryable<Item> query) =>
         query
+            .AsSplitQuery()
             .Include(i => i.Owner)
             .Include(i => i.TargetUserGroup)
             .Include(i => i.QuotedItem)
@@ -70,6 +71,8 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .ThenInclude(t => t.TargetTagRelations)
             .ThenInclude(ttr => ttr.Tag)
             .ThenInclude(t => t.Owner)
+            .Include(i => i.TagRelations)
+            .ThenInclude(tr => tr.Owner)
             .Include(i => i.AsRequestOf)
             .ThenInclude(r => r.Target)
             .ThenInclude(t => t.Item)
@@ -163,6 +166,12 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
 
         List<TagWeightLedger> ledgers = await context.TagWeightLedgers
             .Include(l => l.Owner)
+            .Include(l => l.Tag)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.Owner)
+            .Include(l => l.CommentItem)
+                .ThenInclude(ci => ci!.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
             .Include(l => l.TagRelation)
                 .ThenInclude(tr => tr!.Tag)
             .Include(l => l.TagRelation)
@@ -176,6 +185,51 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
             .OrderByDescending(l => l.CreatedDate)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        // 既存の TagRelation に対する元帳 (TagWeightLedger) が存在しない場合（アイテム作成時の初期タグ付与など）、
+        // 付与されたタグの履歴として表示できるよう補完する
+        if (item.TagRelations is { Count: > 0 })
+        {
+            var existingLedgerRelationIds = ledgers
+                .Where(l => l.SourceId.HasValue)
+                .Select(l => l.SourceId!.Value)
+                .ToHashSet();
+
+            var existingLedgerTagIds = ledgers
+                .Where(l => l.ItemId == itemId)
+                .Select(l => l.TagId)
+                .ToHashSet();
+
+            foreach (TagRelation tr in item.TagRelations)
+            {
+                if (!existingLedgerRelationIds.Contains(tr.Id) && !existingLedgerTagIds.Contains(tr.TagId))
+                {
+                    ledgers.Add(new TagWeightLedger
+                    {
+                        TagId = tr.TagId,
+                        Tag = tr.Tag!,
+                        TagNameSnapshot = tr.Tag?.Name ?? string.Empty,
+                        ItemId = itemId,
+                        SourceType = "TagRelationInsert",
+                        SourceId = tr.Id,
+                        TagRelation = tr,
+                        CommentItemId = tr.CommentItemId,
+                        CommentItem = tr.CommentItem,
+                        Delta = tr.Weight,
+                        PreviousWeight = 0,
+                        NewWeight = tr.Tag?.CachedWeight ?? tr.Weight,
+                        IsOwnerAction = tr.OwnerId == item.OwnerId,
+                        Reason = "タグの新規追加",
+                        OwnerId = tr.OwnerId,
+                        Owner = tr.Owner ?? tr.Tag?.Owner ?? item.Owner,
+                        CreatedDate = tr.CreatedDate,
+                        UpdatedDate = tr.UpdatedDate
+                    });
+                }
+            }
+
+            ledgers = [.. ledgers.OrderByDescending(l => l.CreatedDate)];
+        }
 
         List<Tag> allTags = await context.Tags
             .Include(t => t.TargetUserGroup)

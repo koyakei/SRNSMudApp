@@ -92,6 +92,9 @@ public interface IUserDataProvider
 
     /// <summary>ユーザーの内部リンク自動変換設定を更新する。</summary>
     Task UpdateLinkConversionSettingsAsync(string userId, bool isEnabled, float threshold);
+
+    /// <summary>指定したユーザーのメール確認（EmailConfirmed）状態を反転する。</summary>
+    Task<IdentityResult> ToggleUserEmailConfirmationAsync(string userId);
 }
 
 public class UserDataProvider(
@@ -450,5 +453,22 @@ public class UserDataProvider(
             user.LinkConversionThreshold = threshold;
             _ = await dbContext.SaveChangesAsync();
         }
+    }
+
+    public async Task<IdentityResult> ToggleUserEmailConfirmationAsync(string userId)
+    {
+        if (_userManager is null)
+        {
+            throw new InvalidOperationException("UserManager is not configured.");
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+        {
+            return IdentityResult.Failed(new IdentityError { Description = "ユーザーが見つかりません。" });
+        }
+
+        user.EmailConfirmed = !user.EmailConfirmed;
+        return await _userManager.UpdateAsync(user);
     }
 }

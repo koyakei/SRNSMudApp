@@ -1,0 +1,906 @@
+@page "/Tag/WasmDetail/{TagId:int}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
+@using MudBlazor
+@using SRNSMudApp.Client.Components.Tag
+@using SRNSMudApp.Client.Models.Api
+@using SRNSMudApp.Client.Resources
+@using SRNSMudApp.Client.Services
+@implements IDisposable
+
+<PageTitle>@(Tag != null ? $"{Tag.Name} - タグ詳細 (WASM)" : "タグ詳細 (WASM)") - SRNS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5 mb-10">
+    <div class="d-flex align-center gap-2 mb-4 flex-wrap">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                       OnClick="@(() => NavigationManager.NavigateTo("Item/WasmList"))" title="一覧に戻る" />
+        <MudText Typo="Typo.h5" Class="font-weight-bold">タグ詳細 (WASM)</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.AccountTree"
+                   OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmTree"))">
+            タグツリー
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Hub"
+                   OnClick="@(() => NavigationManager.NavigateTo("Tag/WasmDiagram"))">
+            ダイアグラム
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Tertiary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.AccountBalanceWallet"
+                   OnClick="@(() => NavigationManager.NavigateTo($"/RightAsset/WasmOverview/{TagId}"))"
+                   data-testid="right-asset-overview-btn">
+            RightAsset
+        </MudButton>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-center pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (Tag == null)
+    {
+        <MudAlert Severity="Severity.Warning">@ClientMessages.TagNotFound</MudAlert>
+    }
+    else
+    {
+        @if (Tag.IsLocked)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4 rounded-lg" Dense="true" Elevation="1">
+                @ClientMessages.TagLockedAlert
+            </MudAlert>
+        }
+
+        <MudCard Outlined="true" Class="rounded-xl mb-4">
+            <MudCardContent Class="pa-5">
+                @if (_isEditing)
+                {
+                    <div class="d-flex flex-column gap-3" data-testid="tag-edit-form">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">タグ情報の編集</MudText>
+                        <MudTextField @bind-Value="_editName" Label="タグ名 *" Variant="Variant.Outlined" Required="true"
+                                      data-testid="edit-tag-name-input" />
+                        <MudTextField @bind-Value="_editContent" Label="説明・定義" Variant="Variant.Outlined" Lines="3"
+                                      data-testid="edit-tag-content-input" />
+                        <MudSwitch T="bool" @bind-Value="_editIsPrivate" Label="非公開タグ" Color="Color.Warning"
+                                   data-testid="edit-tag-private-switch" />
+                        <div class="d-flex justify-end gap-2 mt-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CancelEdit"
+                                       data-testid="cancel-edit-btn">
+                                キャンセル
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveEditAsync"
+                                       Disabled="_isSaving" data-testid="save-edit-btn">
+                                @if (_isSaving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                    <span class="ms-2">保存中...</span>
+                                }
+                                else
+                                {
+                                    <span>保存</span>
+                                }
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+                else if (_isProposing && _currentProposalStrategy != null)
+                {
+                    <div class="d-flex flex-column gap-3" data-testid="tag-proposal-form">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @_currentProposalStrategy.Title
+                        </MudText>
+                        <MudTextField @bind-Value="_proposedValue" Label="@_currentProposalStrategy.ValueLabel" Variant="Variant.Outlined"
+                                      Lines="@_currentProposalStrategy.Lines" Required="true"
+                                      data-testid="@_currentProposalStrategy.TestId" />
+                        <MudTextField @bind-Value="_proposalReason" Label="提案理由や補足（任意）" Variant="Variant.Outlined" Lines="2"
+                                      data-testid="proposal-reason-input" />
+                        <div class="d-flex justify-end gap-2 mt-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="@(() => _isProposing = false)"
+                                       data-testid="cancel-proposal-btn">
+                                キャンセル
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitProposalAsync"
+                                       Disabled="_isSubmittingProposal" data-testid="submit-proposal-btn">
+                                @if (_isSubmittingProposal)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                    <span class="ms-2">送信中...</span>
+                                }
+                                else
+                                {
+                                    <span>提案を送信</span>
+                                }
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-start justify-space-between flex-wrap gap-3">
+                        <div class="d-flex align-start gap-3">
+                            @* 投票スコア *@
+                            <div class="d-flex flex-column align-center vote-container">
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                               OnClick="@(() => VoteTagAsync(true))" title="Upvote" data-testid="tag-upvote-btn" />
+                                <MudText Typo="Typo.body2" Class="vote-score font-weight-bold">@Tag.Score</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Color="Color.Default" Class="pa-1"
+                                               OnClick="@(() => VoteTagAsync(false))" title="Downvote" data-testid="tag-downvote-btn" />
+                            </div>
+
+                            <div>
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">@Tag.Name</MudText>
+                                    @if (Tag.IsPrivate)
+                                    {
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">非公開</MudChip>
+                                    }
+                                    @if (!string.IsNullOrEmpty(Tag.TargetUserGroupName))
+                                    {
+                                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">@Tag.TargetUserGroupName</MudChip>
+                                    }
+                                    @if (Tag.IsLocked)
+                                    {
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />ロック中
+                                        </MudChip>
+                                    }
+                                    @if (Tag.AutoAcceptIncomingTaggingRequests)
+                                    {
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">自動承認</MudChip>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(Tag.Content))
+                                {
+                                    <MudText Typo="Typo.body1" Class="mt-2" Style="white-space: pre-wrap;">@Tag.Content</MudText>
+                                }
+
+                                <div class="d-flex align-center gap-3 mt-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        作成者:
+                                        @if (!string.IsNullOrEmpty(Tag.OwnerUserId))
+                                        {
+                                            <MudLink Href="@($"/User/WasmDetail/{Tag.OwnerUserId}")" Color="Color.Inherit" Underline="Underline.Hover">
+                                                @(Tag.OwnerUserName ?? "不明")
+                                            </MudLink>
+                                        }
+                                        else
+                                        {
+                                            @(Tag.OwnerUserName ?? "不明")
+                                        }
+                                    </MudText>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-center gap-2 flex-wrap">
+                            @if (_isAdmin)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="@(Tag.IsLocked ? Color.Success : Color.Error)"
+                                           Size="Size.Small"
+                                           StartIcon="@(Tag.IsLocked ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                                           OnClick="ToggleLockAsync"
+                                           data-testid="toggle-tag-lock-btn">
+                                    @(Tag.IsLocked ? "ロック解除" : "ロック")
+                                </MudButton>
+                            }
+
+                            @if (CanEditOrDelete && (!Tag.IsLocked || _isAdmin))
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Edit"
+                                           OnClick="StartEdit"
+                                           data-testid="start-edit-btn">
+                                    編集
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Delete"
+                                           OnClick="StartDelete"
+                                           data-testid="delete-tag-btn">
+                                    削除
+                                </MudButton>
+                            }
+                            else if (!string.IsNullOrEmpty(_currentUserId) && !Tag.IsLocked)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.DriveFileRenameOutline"
+                                           OnClick="@(() => StartProposal(new TagNameProposalStrategy()))"
+                                           data-testid="propose-name-btn">
+                                    名前を提案
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.EditNote"
+                                           OnClick="@(() => StartProposal(new TagContentProposalStrategy()))"
+                                           data-testid="propose-content-btn">
+                                    説明を提案
+                                </MudButton>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_currentUserId))
+                            {
+                                <MudButton Variant="@(Tag.IsFollowing ? Variant.Outlined : Variant.Filled)"
+                                           Color="@(Tag.IsFollowing ? Color.Default : Color.Primary)"
+                                           Size="Size.Small"
+                                           StartIcon="@(Tag.IsFollowing ? Icons.Material.Filled.FavoriteBorder : Icons.Material.Filled.Favorite)"
+                                           OnClick="ToggleFollowAsync" Disabled="IsTogglingFollow"
+                                           data-testid="toggle-follow-btn">
+                                    @(Tag.IsFollowing ? "フォロー解除" : "フォロー")
+                                </MudButton>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_showDeleteConfirm)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4 rounded-lg" data-testid="delete-confirm-box">
+                        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                            <MudText Typo="Typo.body2">
+                                @ClientMessages.FormatTagDeleteConfirm(Tag.Name)
+                            </MudText>
+                            <div class="d-flex gap-2">
+                                <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                                           OnClick="@(() => _showDeleteConfirm = false)" data-testid="cancel-delete-btn">
+                                    キャンセル
+                                </MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                           OnClick="ConfirmDeleteAsync" Disabled="_isDeleting"
+                                           data-testid="confirm-delete-btn">
+                                    @if (_isDeleting)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                                        <span class="ms-1">削除中...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>削除実行</span>
+                                    }
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+
+        <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" panelClass="pa-4" KeepPanelsAlive="true">
+            <MudTabPanel Text="@($"関連アイテム ({Tag.RelatedItems.Count})")" Icon="@Icons.Material.Filled.Article">
+                <TagRelatedItemsList Items="Tag.RelatedItems" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"関連タグ ({Tag.RelatedTags.Count})")" Icon="@Icons.Material.Filled.Tag">
+                <TagRelatedTagsGrid Tags="Tag.RelatedTags" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"タグ付け提案 ({Tag.PendingRequests.Count})")" Icon="@Icons.Material.Filled.PendingActions">
+                @if (Tag.PendingRequests.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">
+                        @ClientMessages.NoPendingTaggingRequests
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var req in Tag.PendingRequests)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg">
+                                <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                                            アイテム #@req.TargetItemId へのタグ付け提案 (@req.RequestedTagName)
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            提案者: @(req.RequesterUserName ?? req.RequesterUserId) | 提案ウェイト: @req.ProposedWeight
+                                        </MudText>
+                                    </div>
+                                    @if (CanEditOrDelete)
+                                    {
+                                        <div class="d-flex gap-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       OnClick="@(() => ApproveRequestAsync(req.Id))">承認</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                       OnClick="@(() => RejectRequestAsync(req.Id))">却下</MudButton>
+                                        </div>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"変更提案 ({TotalPendingProposals})")" Icon="@Icons.Material.Filled.Feedback"
+                         data-testid="proposals-tab">
+                <TagProposalsTab PendingProposals="_pendingProposals"
+                                 CanEditOrDelete="CanEditOrDelete"
+                                 CurrentUserId="_currentUserId"
+                                 OnApproveName="ApproveNameProposalAsync"
+                                 OnRejectName="RejectNameProposalAsync"
+                                 OnCancelName="CancelNameProposalAsync"
+                                 OnApproveContent="ApproveContentProposalAsync"
+                                 OnRejectContent="RejectContentProposalAsync"
+                                 OnCancelContent="CancelContentProposalAsync" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="@($"台帳履歴 ({_weightLedgers.Count})")" Icon="@Icons.Material.Filled.History"
+                         data-testid="ledger-tab">
+                <TagWeightLedgerTable Items="_weightLedgers" />
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    /// <summary>
+    /// 表示対象のタグ ID。
+    /// </summary>
+    [Parameter]
+    public int TagId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    /// <summary>
+    /// Web API クライアント。
+    /// </summary>
+    [Inject]
+    public required IItemListApiClient ApiClient { get; set; }
+
+    /// <summary>
+    /// 通知スナックバーサービス。
+    /// </summary>
+    [Inject]
+    public required ISnackbar Snackbar { get; set; }
+
+    /// <summary>
+    /// ナビゲーションマネージャー。
+    /// </summary>
+    [Inject]
+    public required NavigationManager NavigationManager { get; set; }
+
+    /// <summary>
+    /// ロガー。
+    /// </summary>
+    [Inject]
+    public ILogger<TagDetailPage>? Logger { get; set; }
+
+    /// <summary>
+    /// 現在読み込まれているタグ詳細 DTO。
+    /// </summary>
+    public TagDetailDto? Tag { get; private set; }
+
+    /// <summary>
+    /// 読み込み中フラグ。
+    /// </summary>
+    public bool IsLoading { get; private set; } = true;
+
+    /// <summary>
+    /// フォロー切替処理中フラグ。
+    /// </summary>
+    public bool IsTogglingFollow { get; private set; }
+
+    private string? _currentUserId;
+    private bool _isAdmin;
+    private bool CanEditOrDelete => _isAdmin || (!string.IsNullOrEmpty(_currentUserId) && _currentUserId == Tag?.OwnerUserId);
+
+    private bool _isEditing;
+    private bool _isSaving;
+    private string _editName = string.Empty;
+    private string? _editContent;
+    private bool _editIsPrivate;
+
+    private bool _showDeleteConfirm;
+    private bool _isDeleting;
+
+    private TagPendingProposalsDto? _pendingProposals;
+    private int TotalPendingProposals => (_pendingProposals?.NameProposals.Count ?? 0) + (_pendingProposals?.ContentProposals.Count ?? 0);
+
+    private IReadOnlyList<TagWeightLedgerDto> _weightLedgers = [];
+
+    private bool _isProposing;
+    private ITagProposalStrategy? _currentProposalStrategy;
+    private string _proposedValue = string.Empty;
+    private string? _proposalReason;
+    private bool _isSubmittingProposal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            _currentUserId = authState.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _isAdmin = authState.User?.IsInRole("Admin") ?? false;
+        }
+
+        await LoadTagAsync();
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task LoadTagAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            // 並列 I/O 実行によるレスポンス遅延短縮 (Task.WhenAll)
+            var tagTask = ApiClient.GetTagDetailAsync(TagId, _cts.Token);
+            var proposalsTask = ApiClient.GetPendingProposalsForTagAsync(TagId, _cts.Token);
+            var ledgersTask = ApiClient.GetTagWeightLedgersAsync(TagId, _cts.Token);
+
+            await Task.WhenAll(tagTask, proposalsTask, ledgersTask);
+
+            Tag = await tagTask;
+            _pendingProposals = await proposalsTask;
+            _weightLedgers = await ledgersTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は無視
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ情報 (TagId: {TagId}) の読み込み中にエラーが発生しました。", TagId);
+            Snackbar.Add(ClientMessages.FormatTagLoadFailed(ex.Message), Severity.Error);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void StartEdit()
+    {
+        if (Tag == null) return;
+        _editName = Tag.Name;
+        _editContent = Tag.Content;
+        _editIsPrivate = Tag.IsPrivate;
+        _isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        _isEditing = false;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task SaveEditAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName))
+        {
+            Snackbar.Add(ClientMessages.TagNameRequired, Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            var request = new UpdateTagRequest(_editName.Trim(), _editContent?.Trim(), _editIsPrivate);
+            bool ok = await ApiClient.UpdateTagAsync(TagId, request, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.TagUpdateSuccess, Severity.Success);
+                _isEditing = false;
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TagUpdateFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ更新 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
+            Snackbar.Add($"更新エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void StartDelete()
+    {
+        _showDeleteConfirm = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ConfirmDeleteAsync()
+    {
+        _isDeleting = true;
+        try
+        {
+            bool ok = await ApiClient.DeleteTagAsync(TagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.TagDeleteSuccess, Severity.Success);
+                NavigationManager.NavigateTo("Tag/WasmList");
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TagDeleteFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ削除 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
+            Snackbar.Add($"削除エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isDeleting = false;
+            _showDeleteConfirm = false;
+        }
+    }
+
+    private void StartProposal(ITagProposalStrategy strategy)
+    {
+        _currentProposalStrategy = strategy;
+        _proposedValue = strategy is TagNameProposalStrategy
+            ? (Tag?.Name ?? string.Empty)
+            : (Tag?.Content ?? string.Empty);
+        _proposalReason = string.Empty;
+        _isProposing = true;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task SubmitProposalAsync()
+    {
+        if (_currentProposalStrategy == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_proposedValue))
+        {
+            Snackbar.Add(_currentProposalStrategy.ValidationErrorMessage, Severity.Warning);
+            return;
+        }
+
+        _isSubmittingProposal = true;
+        try
+        {
+            bool ok = await _currentProposalStrategy.SubmitAsync(ApiClient, TagId, _proposedValue.Trim(), _proposalReason?.Trim(), _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(_currentProposalStrategy.SuccessMessage, Severity.Success);
+                _isProposing = false;
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.ProposalSubmitFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "提案送信中にエラーが発生しました。");
+            Snackbar.Add($"提案送信エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingProposal = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTagNameProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalApproveNameSuccess, Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.ProposalApproveFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 承認中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTagNameProposalAsync(proposalId, cancellationToken: _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalRejectNameSuccess, Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.ProposalRejectFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 却下中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CancelNameProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.CancelTagNameProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalCancelNameSuccess, Severity.Info);
+                await LoadTagAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "提案 (Id: {ProposalId}) 取り下げ中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTagContentProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalApproveContentSuccess, Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.ProposalApproveFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 承認中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTagContentProposalAsync(proposalId, cancellationToken: _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalRejectContentSuccess, Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.ProposalRejectFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 却下中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task CancelContentProposalAsync(int proposalId)
+    {
+        try
+        {
+            bool ok = await ApiClient.CancelTagContentProposalAsync(proposalId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.ProposalCancelContentSuccess, Severity.Info);
+                await LoadTagAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "説明文提案 (Id: {ProposalId}) 取り下げ中にエラーが発生しました。", proposalId);
+            Snackbar.Add($"取り下げエラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ToggleLockAsync()
+    {
+        try
+        {
+            bool ok = await ApiClient.ToggleTagLockAsync(TagId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.TagLockToggleSuccess, Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TagLockToggleFailed, Severity.Error);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグロック状態切替 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
+            Snackbar.Add($"ロックエラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ToggleFollowAsync()
+    {
+        if (Tag == null || IsTogglingFollow)
+        {
+            return;
+        }
+
+        IsTogglingFollow = true;
+        try
+        {
+            bool isFollowing = await ApiClient.ToggleTagFollowAsync(TagId, _cts.Token);
+            Tag = Tag with { IsFollowing = isFollowing };
+            Snackbar.Add(isFollowing ? ClientMessages.TagFollowSuccess : ClientMessages.TagUnfollowSuccess, Severity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグフォロー切替 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
+            Snackbar.Add(ClientMessages.FormatTagFollowFailed(ex.Message), Severity.Error);
+        }
+        finally
+        {
+            IsTogglingFollow = false;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task VoteTagAsync(bool isUpvote)
+    {
+        if (Tag == null)
+        {
+            return;
+        }
+
+        try
+        {
+            bool ok = await ApiClient.VoteTagAsync(TagId, isUpvote, _cts.Token);
+            if (ok)
+            {
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TagVoteFailed, Severity.Warning);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ投票 (TagId: {TagId}) 中にエラーが発生しました。", TagId);
+            Snackbar.Add($"投票エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task ApproveRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.ApproveTaggingRequestAsync(requestId, _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.TaggingRequestApproveSuccess, Severity.Success);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TaggingRequestApproveFailed, Severity.Warning);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ付けリクエスト (Id: {RequestId}) 承認中にエラーが発生しました。", requestId);
+            Snackbar.Add($"承認エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
+    private async Task RejectRequestAsync(int requestId)
+    {
+        try
+        {
+            bool ok = await ApiClient.RejectTaggingRequestAsync(requestId, new RejectTaggingRequest("タグオーナーによる却下"), _cts.Token);
+            if (ok)
+            {
+                Snackbar.Add(ClientMessages.TaggingRequestRejectSuccess, Severity.Info);
+                await LoadTagAsync();
+            }
+            else
+            {
+                Snackbar.Add(ClientMessages.TaggingRequestRejectFailed, Severity.Warning);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // キャンセル時は通知しない
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "タグ付けリクエスト (Id: {RequestId}) 却下中にエラーが発生しました。", requestId);
+            Snackbar.Add($"却下エラー: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

@@ -364,4 +364,49 @@ public class UserGroupMembersViewModelTests
         Assert.False(_sut.IsOwner);
         Assert.False(_sut.IsLoading);
     }
+
+    [Fact]
+    public async Task CanAddMember_WhenSelectedUserProvidedAndIsOwner_ReturnsTrue()
+    {
+        // Arrange
+        var group = new UserGroupEntity { Id = 1, Name = "Alpha", OwnerId = "owner-1" };
+        _userGroupDataProviderMock.Setup(p => p.GetUserGroupByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(group);
+
+        await _sut.InitializeAsync(group, "owner-1");
+        _sut.SelectedUser = new ApplicationUser { Id = "u2", UserName = "Bob" };
+
+        // Assert
+        Assert.True(_sut.CanAddMember);
+    }
+
+    [Fact]
+    public async Task CanAddMember_WhenNotOwner_ReturnsFalseEvenWithSelectedUser()
+    {
+        // Arrange
+        var group = new UserGroupEntity { Id = 1, Name = "Alpha", OwnerId = "owner-1" };
+        _userGroupDataProviderMock.Setup(p => p.GetUserGroupByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(group);
+
+        await _sut.InitializeAsync(group, "non-owner-user");
+        _sut.SelectedUser = new ApplicationUser { Id = "u2", UserName = "Bob" };
+
+        // Assert
+        Assert.False(_sut.CanAddMember);
+    }
+
+    [Fact]
+    public async Task CanAddMember_WhenSelectedUserIsNull_ReturnsFalse()
+    {
+        // Arrange
+        var group = new UserGroupEntity { Id = 1, Name = "Alpha", OwnerId = "owner-1" };
+        _userGroupDataProviderMock.Setup(p => p.GetUserGroupByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(group);
+
+        await _sut.InitializeAsync(group, "owner-1");
+        _sut.SelectedUser = null;
+
+        // Assert
+        Assert.False(_sut.CanAddMember);
+    }
 }

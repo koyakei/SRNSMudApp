@@ -543,6 +543,7 @@ public class NotificationServiceTests
 
         NotificationDto approvedDto = dtos[0];
         Assert.Equal(51, approvedDto.SourceId);
+        Assert.Equal(201, approvedDto.AssociatedItemId);
         Assert.False(approvedDto.IsRead);
         Assert.Equal("Bob", approvedDto.ActorName);
         Assert.Equal("/ItemDetail/201", approvedDto.TargetUrl.ToHref());
@@ -551,6 +552,7 @@ public class NotificationServiceTests
 
         NotificationDto rejectedDto = dtos[1];
         Assert.Equal(52, rejectedDto.SourceId);
+        Assert.Equal(102, rejectedDto.AssociatedItemId);
         Assert.False(rejectedDto.IsRead);
         Assert.Equal("Bob", rejectedDto.ActorName);
         Assert.Equal("/ItemDetail/102", rejectedDto.TargetUrl.ToHref());

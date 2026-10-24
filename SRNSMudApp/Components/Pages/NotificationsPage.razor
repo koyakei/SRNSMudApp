@@ -29,7 +29,7 @@
             <MudList T="NotificationDto" Clickable="false" Class="pa-0">
                 @foreach (var notification in _notifications)
                 {
-                    <MudListItem T="NotificationDto" Class="px-0 py-3"
+                    <MudListItem T="NotificationDto" @key="@($"{notification.Kind.SourceType}-{notification.SourceId}")" Class="px-0 py-3"
                                  Style="@(notification.IsRead ? "" : "background-color: var(--mud-palette-action-default); border-radius: 8px;")">
                         <div class="d-flex flex-column w-100 px-4">
                             <div class="d-flex flex-row align-center mb-2 cursor-pointer"
@@ -341,6 +341,10 @@
                                                                                 <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">却下済み
                                                                                 </MudChip>
                                                                                 break;
+                                                                            case TradeStatus.Canceled:
+                                                                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">取り下げ済み
+                                                                                </MudChip>
+                                                                                break;
                                                                         }
                                                                     </MudText>
                                                                 </div>
@@ -361,12 +365,15 @@
                                                     @{
                                                         var highlightEvents = NotificationsViewModel.CreateHighlightEvents(notification, _userId);
                                                     }
-                                                    <SRNSMudApp.Components.UI.ItemCard Item="@notification.AssociatedItem" AllTags="@_allTags"
+                                                    <SRNSMudApp.Components.UI.ItemCard @key="@($"itemcard-{notification.SourceId}-{notification.Kind.SourceType}-{NotificationsViewModel.GetNotificationStatus(notification)}")"
+                                                                                       Item="@notification.AssociatedItem" AllTags="@_allTags"
                                                                                        AllTagRelationsToTags="@_allTagRelationsToTags" CurrentUserId="@_userId"
                                                                                        CurrentUserGoodTagId="@_currentUserGoodTagId" CurrentUserBadTagId="@_currentUserBadTagId"
                                                                                        CurrentUserShinjiTagId="@_currentUserShinjiTagId"
                                                                                        CurrentUserZenTagId="@_currentUserZenTagId" CurrentUserBiTagId="@_currentUserBiTagId"
-                                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" HighlightEvents="highlightEvents" />
+                                                                                       OnEnsureSystemTags="EnsureSystemTagsExistAsync" HighlightEvents="highlightEvents"
+                                                                                       OnCardClick="NavigateToItemDetail"
+                                                                                       OnDataChanged="OnItemCardDataChangedAsync" />
                                                 </div>
                                             }
                                         </div>

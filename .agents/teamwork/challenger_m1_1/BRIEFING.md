@@ -1,7 +1,7 @@
-# BRIEFING — 2026-10-02T14:48:00Z
+# BRIEFING — 2026-10-23T21:56:00Z
 
 ## Mission
-Empirically challenge and test SEC-01 (PushNotificationController authorization & spoofing prevention) and THREAD-01 (ExternalTokenVerificationService concurrent header safety).
+Empirically stress-test the new bUnit component tests in `ContractManagementTests.cs` (outbox tab switching & empty alert) and `UserGroupMembersDialogTests.cs` (member addition & failure paths), verifying mutation killing, strict DOM assertions, execution speed, and flakiness.
 
 ## 🔒 My Identity
 - Archetype: empirical-challenger
@@ -10,6 +10,7 @@ Empirically challenge and test SEC-01 (PushNotificationController authorization 
 - Original parent: 077cc920-cc9e-40bc-99e6-163a40d89fa9
 - Milestone: M1
 - Instance: 1 of 2
+- Current Parent (2026-10-23): 8417fc9a-1777-4cd7-aa91-1012c46c67e3 (orchestrator_4)
 
 ## 🔒 Key Constraints
 - Review-only — do NOT modify implementation code (production code)
@@ -17,45 +18,47 @@ Empirically challenge and test SEC-01 (PushNotificationController authorization 
 - Run verification code directly — do not trust worker claims or logs
 - Explicit verdict required: APPROVE or REJECT
 - Output handoff report to /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/challenger_m1_1/handoff.md
+- Empirical Challenger M1 (2026-10-23): Stress-test `ContractManagementTests.cs` and `UserGroupMembersDialogTests.cs` for mutation resistance and flakiness; issue APPROVE or REQUEST_CHANGES.
 
 ## Current Parent
-- Conversation ID: 077cc920-cc9e-40bc-99e6-163a40d89fa9
-- Updated: not yet
+- Conversation ID: 8417fc9a-1777-4cd7-aa91-1012c46c67e3
+- Updated: 2026-10-23T21:56:00Z
 
 ## Review Scope
 - **Files reviewed**:
-  - `SRNSMudApp/Controllers/PushNotificationController.cs`
-  - `SRNSMudApp/Services/Push/InMemoryPushSubscriptionStore.cs`
-  - `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`
-  - `SRNSMudApp.Tests/Push/PushNotificationTests.cs`
-  - `SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs`
-  - `SRNSMudApp.Tests/Auth/ExternalTokenVerificationServiceTests.cs`
-  - `SRNSMudApp.Tests/Auth/ExternalTokenVerificationConcurrencyTests.cs`
-  - `SRNSMudApp.Tests/Services/RightAssetPurchaseServiceTests.cs`
-- **Interface contracts**: PROJECT.md SEC-01 and THREAD-01
-- **Review criteria**: Correctness, concurrency safety, security authorization & spoofing prevention, test quality and empirical reproduction
+  - `SRNSMudApp/Components/Contract/ContractManagement.razor`
+  - `SRNSMudApp/Components/UserGroup/UserGroupMembersDialog.razor`
+  - `SRNSMudApp/Components/UserGroup/UserGroupMembersDialog.razor.cs`
+  - `SRNSMudApp/Components/UserGroup/UserGroupMembersViewModel.cs`
+  - `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`
+  - `SRNSMudApp.Tests/Components/EmpiricalStressTests.cs`
+- **Interface contracts**: PROJECT.md (orchestrator_4) M1: BUNIT-UG-01, BUNIT-TAB-01
+- **Review criteria**: Mutation resilience, strict DOM assertions, flakiness/race condition absence, test execution speed
 
 ## Attack Surface
 - **Hypotheses tested**:
-  - [H1] PushNotificationController.SendNotification missing Admin authorization or bypassable -> PASSED (Protected with [Authorize(Roles = "Admin")]).
-  - [H2] PushNotificationController.Subscribe allows unauthenticated users to spoof another user's ID -> FAILED / CONFIRMED VULNERABLE.
-  - [H3] ExternalTokenVerificationService.VerifyLineTokenAsync mutates shared HttpClient headers under concurrency -> PASSED (100 concurrent requests without mutations or leakage).
-- **Vulnerabilities found**:
-  - VULN-01 (High): Unauthenticated caller can spoof any target `userId` in `PushNotificationController.Subscribe` because `subscription.UserId` is not sanitized before being passed to `_subscriptionStore.AddOrUpdateAsync`, and `InMemoryPushSubscriptionStore.cs` line 25 defaults to `userId ?? subscription.UserId`. Mock test in `PushNotificationTests.cs` masked the bug by not testing the store implementation.
-  - REGRESS-01: In Milestone 1 DATA-01/DATA-02, `RightAssetPurchaseServiceTests` has 2 failing retry tests (`WhenTransientFailureOnFirstSave` and `WhenTransientFailureOnSecondSave`) due to EF Core change tracker state reuse across retry iterations.
-- **Untested angles**: Full end-to-end WebPush VAPID network delivery (depends on real push servers).
+  - [H1] `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert`: Does it fail if tab click is omitted or if Outbox panel fails to render?
+    - Result: PASSED. Without clicking outbox tab, `cut.Markup` never contains the Outbox alert, and `WaitForAssertion` throws a timeout/failure exception. Tab switching also unmounts the Inbox panel.
+  - [H2] `UserGroupMembersDialogTests`: Do the new member addition tests fail if `AddMemberAsync` returns false or `CanAddMember` is false?
+    - Result: PASSED. When `AddMemberAsync` returns false, success snackbar verification fails, error snackbar is displayed, member count remains 1, and the candidate is not added to the member list. When not owner, `CanAddMember` is false, add button does not exist in UI, and direct invocation returns `Failure`.
+  - [H3] Execution speed and flakiness:
+    - Result: PASSED. All tests execute deterministically in sub-second time (~600ms - 1s). Zero flakiness.
+- **Vulnerabilities found**: None. Tests are robust and cannot pass spuriously.
+- **Untested angles**: Full Playwright browser rendering (covered under M2 E2E).
 
 ## Loaded Skills
 - None
 
 ## Key Decisions Made
-- Empirically reproduced spoofing vulnerability via `PushNotificationAdversarialTests` (both direct store and HTTP integration test failed).
-- Verified thread safety of `ExternalTokenVerificationService` via 100-concurrency stress test (`ExternalTokenVerificationConcurrencyTests`).
-- Issued explicit verdict: REJECT due to VULN-01 in SEC-01 and REGRESS-01 in M1 test suite.
+- Confirmed mutation resilience via `EmpiricalStressTests.cs`.
+- Verified non-incremental build passes with 0 warnings, 0 errors.
+- Verified formatting passes `dotnet format --diagnostics IDE0055 --verify-no-changes`.
+- Verdict: APPROVE.
 
 ## Artifact Index
 - `.agents/teamwork/challenger_m1_1/BRIEFING.md`
 - `.agents/teamwork/challenger_m1_1/progress.md`
 - `.agents/teamwork/challenger_m1_1/handoff.md`
-- `SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs`
-- `SRNSMudApp.Tests/Auth/ExternalTokenVerificationConcurrencyTests.cs`
+- `SRNSMudApp.Tests/Components/EmpiricalStressTests.cs`

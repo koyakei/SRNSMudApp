@@ -357,7 +357,9 @@ public class NotificationService(
                 TargetUrl = targetUrl,
                 IsRead = IsRead(readStates, request.Id, sourceType),
                 ActorName = ownerName,
-                AssociatedItemId = request.OriginalItemId
+                AssociatedItemId = isApproved && request.CreatedItemId.HasValue
+                    ? request.CreatedItemId.Value
+                    : request.OriginalItemId
             };
         });
     }

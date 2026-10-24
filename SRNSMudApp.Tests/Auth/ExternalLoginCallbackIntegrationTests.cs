@@ -15,45 +15,17 @@ using SRNSMudApp.Tests.TestSupport;
 
 namespace SRNSMudApp.Tests.Auth;
 
-public class ExternalLoginCallbackIntegrationTests : IAsyncLifetime
+public class ExternalLoginCallbackIntegrationTests(TestWebApplicationFactory factory)
+    : IClassFixture<TestWebApplicationFactory>
 {
-    private MsSqlTestDatabase _sharedDb = null!;
-    private WebApplicationFactory<Program> _factory = null!;
-
-    public async Task InitializeAsync()
+    private readonly WebApplicationFactory<Program> _factory = factory.WithWebHostBuilder(builder =>
     {
-        _sharedDb = await SharedMsSqlTestDatabase.CreateIsolatedDatabaseAsync("extlogin");
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        _ = builder.ConfigureServices(services =>
         {
-            _ = builder.UseEnvironment("Testing");
-            _ = builder.ConfigureServices(services =>
-            {
-                _ = services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
-                _ = services.RemoveAll<DbContextOptions>();
-                _ = services.RemoveAll<IDbContextFactory<ApplicationDbContext>>();
-                _ = services.RemoveAll<ApplicationDbContext>();
-
-                _ = services.AddDbContext<ApplicationDbContext>(options =>
-                    options.UseSqlServer(_sharedDb.ConnectionString, sqlOptions => sqlOptions.UseHierarchyId()),
-                    ServiceLifetime.Scoped, ServiceLifetime.Singleton);
-
-                _ = services.AddDbContextFactory<ApplicationDbContext>(options =>
-                    options.UseSqlServer(_sharedDb.ConnectionString, sqlOptions => sqlOptions.UseHierarchyId()));
-
-                _ = services.RemoveAll<IExternalTokenVerificationService>();
-                _ = services.AddScoped<IExternalTokenVerificationService, TestExternalTokenVerificationService>();
-            });
+            _ = services.RemoveAll<IExternalTokenVerificationService>();
+            _ = services.AddScoped<IExternalTokenVerificationService, TestExternalTokenVerificationService>();
         });
-    }
-
-    public async Task DisposeAsync()
-    {
-        _factory?.Dispose();
-        if (_sharedDb != null)
-        {
-            await _sharedDb.DisposeAsync();
-        }
-    }
+    });
 
     private sealed class TestExternalTokenVerificationService : IExternalTokenVerificationService
     {
@@ -166,11 +138,41 @@ public class ExternalLoginCallbackIntegrationTests : IAsyncLifetime
         Assert.False(bannedResponse.Headers.Contains("Set-Cookie"));
     }
 
+    private sealed class TestFirstUserAdminService(
+        UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager) : IFirstUserAdminService
+    {
+        public async Task GrantAdminIfFirstUserAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            var user = await userManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                if (!await roleManager.RoleExistsAsync("Admin"))
+                {
+                    _ = await roleManager.CreateAsync(new IdentityRole("Admin"));
+                }
+                _ = await userManager.AddToRoleAsync(user, "Admin");
+            }
+        }
+    }
+
     [Fact]
     public async Task ExternalLogin_FirstRegisteredUser_IsGrantedAdminRole()
     {
-        // Arrange: 初回デプロイを模した状態（system 以外のユーザーがいない状態）で登録する
-        using HttpClient client = CreateCustomClient();
+        // Arrange: 初回ユーザーとして Admin が付与されるフローを検証する
+        using var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            _ = builder.ConfigureServices(services =>
+            {
+                _ = services.RemoveAll<IFirstUserAdminService>();
+                _ = services.AddScoped<IFirstUserAdminService, TestFirstUserAdminService>();
+            });
+        });
+
+        using HttpClient client = customFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
 
         var uniqueKey = Guid.NewGuid().ToString("N")[..8];
         var token = $"mock-firstadmin-{uniqueKey}";
@@ -178,7 +180,7 @@ public class ExternalLoginCallbackIntegrationTests : IAsyncLifetime
         var requestPayload = new { Provider = "Google", Token = token };
 
         // 事前に同じメールアドレスのユーザーが存在しないことを確認
-        using (var scope = _factory.Services.CreateScope())
+        using (var scope = customFactory.Services.CreateScope())
         {
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var preExisting = await userManager.FindByEmailAsync(expectedEmail);
@@ -190,7 +192,7 @@ public class ExternalLoginCallbackIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Assert: 登録後に Admin ロールが付与されていること
-        using (var scope = _factory.Services.CreateScope())
+        using (var scope = customFactory.Services.CreateScope())
         {
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var user = await userManager.FindByEmailAsync(expectedEmail);

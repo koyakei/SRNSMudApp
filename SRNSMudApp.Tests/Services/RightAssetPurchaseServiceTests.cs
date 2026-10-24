@@ -622,6 +622,54 @@ public class RightAssetPurchaseServiceTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task PurchaseRightAssetWithJpycAsync_ConcurrentSameTxHash_OnlyOneSucceeds()
+    {
+        var (db, sut, userId, tagId, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var amount = 5;
+            var unitPrice = 100;
+            var totalJpyc = amount * unitPrice;
+            var txHash = await sut.SimulateDepositAsync(userId, "polygon-amoy", totalJpyc);
+
+            var request = new JpycPurchaseRequestDto(
+                RequestedTagId: tagId,
+                Amount: amount,
+                UnitPriceJpyc: unitPrice,
+                NetworkName: "polygon-amoy",
+                TransactionHash: txHash
+            );
+
+            // Act: 同一 TxHash で2つの購入リクエストを並行実行
+            var task1 = sut.PurchaseRightAssetWithJpycAsync(userId, request);
+            var task2 = sut.PurchaseRightAssetWithJpycAsync(userId, request);
+            var results = await Task.WhenAll(task1, task2);
+
+            // Assert: 1つは成功、もう1つは重複検出で失敗すること
+            var successCount = results.Count(r => r is Success<RightAsset>);
+            var failureCount = results.Count(r => r is Failure);
+
+            Assert.Equal(1, successCount);
+            Assert.Equal(1, failureCount);
+
+            var failedResult = results.First(r => r is Failure) switch
+            {
+                Failure f => f,
+                _ => throw new InvalidOperationException("Expected Failure")
+            };
+            Assert.Contains("使用されています", failedResult.ErrorMessage);
+
+            // DB にアセットとトランザクションが重複登録されていないこと
+            var assets = await db.RightAssets.Where(a => a.OwnerId == userId).ToListAsync();
+            Assert.Single(assets);
+            Assert.Equal(amount, assets[0].Amount);
+
+            var transactions = await db.JpycDepositTransactions.Where(t => t.TransactionHash == txHash).ToListAsync();
+            Assert.Single(transactions);
+        }
+    }
+
     private sealed class TransientTimeoutOnFirstSaveInterceptor : SaveChangesInterceptor
     {
         private int _attempt;

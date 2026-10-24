@@ -48,8 +48,9 @@ public partial class NotificationsPage
         string? userId = user.Identity?.IsAuthenticated == true
             ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value
             : null;
+        bool isAdmin = user.IsInRole("Admin");
 
-        await ViewModel.InitializeAsync(userId);
+        await ViewModel.InitializeAsync(userId, isAdmin);
     }
 
     public Task EnsureSystemTagsExistAsync() => ViewModel.EnsureSystemTagsExistAsync();
@@ -58,6 +59,11 @@ public partial class NotificationsPage
     {
         await ViewModel.MarkAsReadAsync(notification);
         NavigationManager.NavigateTo(notification.TargetUrl.ToHref());
+    }
+
+    private void NavigateToItemDetail(int itemId)
+    {
+        NavigationManager.NavigateTo($"/ItemDetail/{itemId}");
     }
 
     private static string GetRelativeTime(DateTimeOffset dateTime) => NotificationsViewModel.GetRelativeTime(dateTime);
@@ -217,6 +223,14 @@ public partial class NotificationsPage
             var comment = dialogResult.Data as string;
             TagCardActionResult result = await ViewModel.RejectPermissionRequestAsync(notification, comment);
             ApplyResult(result);
+        }
+    }
+
+    private async Task OnItemCardDataChangedAsync()
+    {
+        if (_userId != null)
+        {
+            await ViewModel.RefreshNotificationsAsync();
         }
     }
 }

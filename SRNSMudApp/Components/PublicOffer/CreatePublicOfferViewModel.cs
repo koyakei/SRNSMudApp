@@ -60,6 +60,12 @@ public class CreatePublicOfferViewModel
             return Result.Fail<bool>("要求するアセット量は0以上を指定してください。");
         }
 
+        // 所有権チェック: 自身が所有するタグのみオファー作成可能 (Issue 5-4)
+        if (SelectedTag.OwnerId != CurrentUserId)
+        {
+            return Result.Fail<bool>("自身が所有していないタグのオファーは作成できません。");
+        }
+
         try
         {
             var offer = new PublicTradeOffer

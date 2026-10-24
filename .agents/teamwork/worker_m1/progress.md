@@ -1,22 +1,16 @@
-# Progress: Worker M1 (Milestone 1)
+# Progress
 
-**Last visited**: 2026-10-02T14:35:30Z
-**Status**: Completed and verified
+Last visited: 2026-10-23T21:42:30Z
 
-## Steps
-- [x] Initialized DISPATCH.md, BRIEFING.md, and local skill dumps
-- [x] Investigate existing implementations and tests
-  - [x] PushNotificationController.cs & tests analyzed
-  - [x] ExternalTokenVerificationService.cs & tests analyzed
-  - [x] RightAssetPurchaseService.cs & ExecutionStrategyExtensions.cs & tests analyzed
-- [x] Run baseline `dotnet test` (49/49 milestone-relevant tests passing)
-- [x] Implement SEC-01 in PushNotificationController.cs
-- [x] Implement THREAD-01 in ExternalTokenVerificationService.cs
-- [x] Implement DATA-01 & DATA-02 in RightAssetPurchaseService.cs & ExecutionStrategyExtensions.cs
-- [x] Add/update unit tests for all fixes:
-  - [x] 4 new tests in PushNotificationTests.cs
-  - [x] 4 new tests in ExternalTokenVerificationServiceTests.cs
-  - [x] 1 new atomic rollback test in RightAssetPurchaseServiceTests.cs
-- [x] Run `dotnet build` (0 errors) & `dotnet test` (all 47 tests passed)
-- [x] Run formatting verification (`dotnet format --diagnostics IDE0055 --verify-no-changes` passed)
-- [x] Write handoff report and notify parent
+- [x] Initialized DISPATCH.md and BRIEFING.md
+- [x] Read ORIGINAL_REQUEST.md, PROJECT.md, and explorer reports 1, 2, 3
+- [x] Investigate existing test files and implementation contracts
+- [x] Implement Task 1: ContractManagementTests.cs (`WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert`)
+- [x] Implement Task 2: ItemCardSplitRequestTests.cs (`ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar`)
+- [x] Implement Task 3: UserGroupMembersDialogTests.cs (`WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList`, `WhenOwner_AddMemberFails_ShowsErrorSnackbar`)
+- [x] Implement Task 4: UserGroupMembersViewModelTests.cs (3 `CanAddMember` unit tests)
+- [x] Implement Task 5: IOwnableUnitTests.cs (created new pure unit tests)
+- [x] Verify build: `dotnet build --no-incremental SRNSMudApp.sln` (0 warnings, 0 errors)
+- [x] Verify tests: `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj` (3205 passed, 0 failed, 0 skipped)
+- [x] Verify formatting: `dotnet format --diagnostics IDE0055 --verify-no-changes` (PASSED cleanly)
+- [x] Write handoff.md and send completion message to parent

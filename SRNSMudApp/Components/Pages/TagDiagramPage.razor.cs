@@ -43,10 +43,31 @@ public partial class TagDiagramPage : ComponentBase
     [SupplyParameterFromQuery(Name = "t2")] public int? QueryTag2 { get; set; }
     [SupplyParameterFromQuery(Name = "e")] public int? QueryEdge { get; set; }
     [SupplyParameterFromQuery(Name = "itemId")] public int? QueryItemId { get; set; }
+    [SupplyParameterFromQuery(Name = "itemIds")] public string? QueryItemIds { get; set; }
 
     private BlazorDiagram _diagram = null!;
     private bool _isUpdatingUrl;
     private bool _isProgrammaticSelection;
+
+    private List<int> GetEffectiveItemIds()
+    {
+        var result = new List<int>();
+        if (QueryItemId.HasValue)
+        {
+            result.Add(QueryItemId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(QueryItemIds))
+        {
+            foreach (var part in QueryItemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(part, out int id) && !result.Contains(id))
+                {
+                    result.Add(id);
+                }
+            }
+        }
+        return result;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -68,7 +89,7 @@ public partial class TagDiagramPage : ComponentBase
             return;
         }
 
-        bool contextChanged = await ViewModel.UpdateContextItemAsync(QueryItemId);
+        bool contextChanged = await ViewModel.UpdateContextItemsAsync(GetEffectiveItemIds());
         bool queryChanged = ViewModel.ApplyQueryParameters(QueryTag1, QueryTag2, QueryEdge);
 
         if (contextChanged || queryChanged)
@@ -109,7 +130,7 @@ public partial class TagDiagramPage : ComponentBase
     {
         try
         {
-            await ViewModel.ReloadDiagramAsync(QueryItemId, preserveExtraVisibleTags);
+            await ViewModel.ReloadDiagramForItemsAsync(GetEffectiveItemIds(), preserveExtraVisibleTags);
             BuildDiagramElements();
         }
         catch (Exception ex)
@@ -147,7 +168,7 @@ public partial class TagDiagramPage : ComponentBase
         _diagram.Nodes.Clear();
         _diagram.Links.Clear();
 
-        IReadOnlyList<TagEntity> displayList = ViewModel.GetTagsToDisplay(QueryItemId);
+        IReadOnlyList<TagEntity> displayList = ViewModel.GetTagsToDisplay(GetEffectiveItemIds());
         var nodeMap = new Dictionary<int, TagNode>();
         int columns = Math.Max(3, (int)Math.Ceiling(Math.Sqrt(displayList.Count * 1.5)));
         var childOffsets = new Dictionary<int, int>();
@@ -208,11 +229,14 @@ public partial class TagDiagramPage : ComponentBase
             .ToList();
         var itemNodes = new List<ItemNode>();
 
+        int itemCols = Math.Max(3, columns);
         for (int i = 0; i < childItems.Count; i++)
         {
             ItemEntity item = childItems[i];
-            double x = 80 + (i * 280);
-            double y = tagMaxY + 140;
+            int col = i % itemCols;
+            int row = i / itemCols;
+            double x = 80 + (col * 280);
+            double y = tagMaxY + 140 + (row * 240);
             var node = new ItemNode(item, ViewModel.ContextItems, new Blazor.Diagrams.Core.Geometry.Point(x, y))
             {
                 RequestHideNode = HandleHideItemNode
@@ -223,8 +247,10 @@ public partial class TagDiagramPage : ComponentBase
 
         if (parentItem != null && !ViewModel.HiddenItemIds.Contains(parentItem.Id))
         {
-            double x = 80 + (childItems.Count > 0 ? (childItems.Count - 1) * 280 / 2.0 : 0);
-            double y = tagMaxY + 300;
+            int parentRow = childItems.Count > 0 ? ((childItems.Count - 1) / itemCols) + 1 : 0;
+            int displayCols = Math.Min(childItems.Count, itemCols);
+            double x = 80 + (displayCols > 0 ? (displayCols - 1) * 280 / 2.0 : 0);
+            double y = tagMaxY + 140 + (parentRow * 240);
             var node = new ItemNode(parentItem, ViewModel.ContextItems, new Blazor.Diagrams.Core.Geometry.Point(x, y))
             {
                 RequestHideNode = HandleHideItemNode
@@ -249,6 +275,14 @@ public partial class TagDiagramPage : ComponentBase
             {
                 ItemNode parentNode = itemNodes.First(n => n.Item.Id == parentItem.Id);
                 _diagram.Links.Add(new LinkModel(parentNode, node));
+            }
+            else if (parentItem == null && node.Item.QuotedItemId.HasValue)
+            {
+                ItemNode? quotedNode = itemNodes.FirstOrDefault(n => n.Item.Id == node.Item.QuotedItemId.Value);
+                if (quotedNode != null)
+                {
+                    _diagram.Links.Add(new LinkModel(quotedNode, node));
+                }
             }
         }
 
@@ -825,6 +859,10 @@ public partial class TagDiagramPage : ComponentBase
         if (QueryItemId.HasValue)
         {
             queryParams["itemId"] = QueryItemId.Value;
+        }
+        else if (!string.IsNullOrWhiteSpace(QueryItemIds))
+        {
+            queryParams["itemIds"] = QueryItemIds;
         }
 
         string uri = NavigationManager.GetUriWithQueryParameters(queryParams);

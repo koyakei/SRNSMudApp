@@ -55,7 +55,8 @@ public interface ITagCommandService
         IEnumerable<int>? allowedUserGroupIds = null,
         bool isAdmin = false,
         bool? isPrivate = null,
-        int? targetUserGroupId = null);
+        int? targetUserGroupId = null,
+        string? currentUserId = null);
 
     /// <summary>タグを削除する。</summary>
     /// <param name="tagId">削除対象のタグID。</param>
@@ -127,7 +128,8 @@ public class TagCommandService(
         IEnumerable<int>? allowedUserGroupIds = null,
         bool isAdmin = false,
         bool? isPrivate = null,
-        int? targetUserGroupId = null)
+        int? targetUserGroupId = null,
+        string? currentUserId = null)
     {
         if (_tagLockService != null && !isAdmin)
         {
@@ -147,6 +149,13 @@ public class TagCommandService(
                 .FirstOrDefaultAsync(t => t.Id == tagId);
             if (tagToUpdate is null)
             {
+                return false;
+            }
+
+            // IDOR防止: 管理者以外は自身が所有するタグのみ更新可能
+            if (!isAdmin && !string.IsNullOrEmpty(currentUserId) && tagToUpdate.OwnerId != currentUserId)
+            {
+                _logger.LogWarning("ユーザー {UserId} はタグ ID {TagId} の所有者ではないため更新できません。", currentUserId, tagId);
                 return false;
             }
 

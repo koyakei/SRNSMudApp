@@ -1,11 +1,13 @@
 #region
 
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 using Moq;
 
 using SRNSMudApp.Data;
 using SRNSMudApp.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 #endregion
 
@@ -406,6 +408,118 @@ public class ItemListDataProviderTests : IAsyncLifetime
             var resultNoUser = await sut.LoadItemsAndTagsAsync(filterNoUser, []);
             Assert.Contains(resultNoUser.Items, i => i.Id == item1.Id);
             Assert.Contains(resultNoUser.Items, i => i.Id == item2.Id);
+        }
+    }
+
+    /// <summary>
+    /// ItemListDataProvider.LoadItemsAndTagsAsync (AsSplitQuery + 多数の階層 Include) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadItemsAndTagsAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, user1Id, _, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var tagEmbeddingMock = new Mock<ITagEmbeddingService>();
+            var sut = new ItemListDataProvider(new DbContextFactoryStub(options), tagEmbeddingMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadItemsAndTagsAsync([], [], user1Id));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// ItemListDataProvider.LoadItemsByAncestorTagAsync (AsSplitQuery + HierarchyId 階層クエリ) 実行時に
+    /// SQL Server のリソースプールメモリ枯渇 (SqlException 701) が発生するシナリオを検証するテスト。
+    /// </summary>
+    [Fact]
+    public async Task LoadItemsByAncestorTagAsync_WhenInsufficientSystemMemoryInResourcePool_ThrowsSqlException()
+    {
+        // Arrange
+        var (db, _, user1Id, _, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var interceptor = new SqlMemoryExhaustionInterceptor();
+            var options = SqlMemoryExhaustionInterceptor.CreateOptions(_sharedDb.ConnectionString, interceptor);
+            var tagEmbeddingMock = new Mock<ITagEmbeddingService>();
+            var sut = new ItemListDataProvider(new DbContextFactoryStub(options), tagEmbeddingMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<SqlException>(() =>
+                sut.LoadItemsByAncestorTagAsync(1, user1Id, false));
+
+            Assert.Equal(701, ex.Number);
+            Assert.Contains("There is insufficient system memory in resource pool 'default' to run this query.", ex.Message);
+        }
+    }
+
+    [Fact]
+    public async Task GetReplyAndQuoteCountsAsync_ReturnsAccurateCounts()
+    {
+        // Arrange
+        var (db, sut, user1Id, _, _, _, _) = await CreateScopeAsync();
+        await using (db)
+        {
+            var parentItem = new Item
+            {
+                Content = "Parent item",
+                OwnerId = user1Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            var quotedTargetItem = new Item
+            {
+                Content = "Quoted target item",
+                OwnerId = user1Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            db.Items.AddRange(parentItem, quotedTargetItem);
+            await db.SaveChangesAsync();
+
+            var reply1 = new Item
+            {
+                Content = "Reply 1",
+                OwnerId = user1Id,
+                ParentItemId = parentItem.Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            var reply2 = new Item
+            {
+                Content = "Reply 2",
+                OwnerId = user1Id,
+                ParentItemId = parentItem.Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            var quoter = new Item
+            {
+                Content = "Quoter item",
+                OwnerId = user1Id,
+                QuotedItemId = quotedTargetItem.Id,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            db.Items.AddRange(reply1, reply2, quoter);
+            await db.SaveChangesAsync();
+
+            // Act
+            var (replyCounts, quoteCounts) = await sut.GetReplyAndQuoteCountsAsync([parentItem.Id, quotedTargetItem.Id]);
+
+            // Assert
+            Assert.Equal(2, replyCounts[parentItem.Id]);
+            Assert.False(replyCounts.ContainsKey(quotedTargetItem.Id));
+            Assert.Equal(1, quoteCounts[quotedTargetItem.Id]);
+            Assert.False(quoteCounts.ContainsKey(parentItem.Id));
         }
     }
 
