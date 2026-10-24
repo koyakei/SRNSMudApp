@@ -24,7 +24,8 @@ public sealed record TagRelationDto(
     int TagId,
     string TagName,
     int? Weight,
-    string? OwnerUserName
+    string? OwnerUserName,
+    int RelationId = 0
 );
 
 /// <summary>

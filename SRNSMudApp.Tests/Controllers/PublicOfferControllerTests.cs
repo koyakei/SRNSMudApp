@@ -123,6 +123,26 @@ public class PublicOfferControllerTests
     }
 
     [Fact]
+    public async Task CreateOffer_WhenNotTagOwner_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "attacker")], "test"));
+        var controller = CreateController(user);
+
+        var tag = new Tag { Id = 10, Name = "TestTag", OwnerId = "real-owner" };
+        _tagDetailDataProviderMock
+            .Setup(p => p.GetTagDetailAsync(10, "attacker"))
+            .ReturnsAsync(new TagDetailPageData(tag, false, [], [], [], [], []));
+
+        // Act
+        ActionResult result = await controller.CreateOffer(new CreatePublicOfferRequest(10, 0), CancellationToken.None);
+
+        // Assert
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("自身が所有していないタグ", badRequest.Value?.ToString());
+    }
+
+    [Fact]
     public async Task DeactivateOffer_Unauthorized_ReturnsUnauthorized()
     {
         // Arrange

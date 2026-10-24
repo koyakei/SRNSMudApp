@@ -49,6 +49,9 @@ public sealed class TagDiagramController(
         [FromQuery] string? itemIds,
         CancellationToken cancellationToken)
     {
+        string? currentUserId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+
         List<Tag> allTags = await _diagramDataProvider.LoadAllTagsAsync();
         IReadOnlyList<TagEdge> allEdges = await _diagramDataProvider.LoadAllEdgesAsync();
 
@@ -65,7 +68,7 @@ public sealed class TagDiagramController(
 
             if (parsedIds.Count > 0)
             {
-                contextItems = await _diagramDataProvider.GetContextItemsAsync(parsedIds);
+                contextItems = await _diagramDataProvider.GetContextItemsAsync(parsedIds, currentUserId, isAdmin);
             }
         }
 

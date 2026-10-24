@@ -1,0 +1,21 @@
+# Progress Heartbeat - Domain 1 Investigator
+
+- **Current Task**: Detailed analysis and documentation of Domain 1 findings
+- **Status**: Audit completed, synthesizing findings into analysis.md and handoff.md
+- **Last visited**: 2026-10-23T12:22:45Z
+- **Completed Steps**:
+  - Initialized DISPATCH.md and BRIEFING.md
+  - Inspected Item, ItemSplitRequest, TagRelation, TagWeightLedger, TimelineEvent entities and migrations
+  - Inspected EF Core relationship mappings in ApplicationDbContext.cs and ApplicationDbSaveChangesInterceptor.cs
+  - Audited Item lifecycle: ItemCardDataProvider, ItemController, ItemListDataProvider, ItemDetailDataProvider, ItemVisibilityExtensions
+  - Audited Quote mechanics: ItemQuoteService, ItemController, QuoteItemViewModel, QuotedItemPreview, QuotedItemListDialog
+  - Audited Split mechanics: ItemSplitService, ItemSplitController, ItemCardSplitCoordinator, SplitRequestWithQuoteDialog
+  - Audited Cascade integrity and foreign key constraints across deletes and splits
+  - Audited Transaction boundaries and rollback handling
+  - Audited Concurrency, race conditions, and ownership guards
+  - Identified 20 distinct specification inconsistencies, cascade flaws, transaction rollback gaps, concurrency flaws, and edge-case contradictions
+- **Next Steps**:
+  - Write comprehensive analysis.md report in working directory
+  - Write 5-component handoff.md report
+  - Update BRIEFING.md
+  - Send message to parent orchestrator_3

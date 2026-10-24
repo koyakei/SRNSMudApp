@@ -90,16 +90,7 @@ public class TriggerContractExecutor(
 
     private Task<int> UpdateTriggerConsumedAssetAsync(ApplicationDbContext dbContext, RightAsset asset, int assetId, int requiredAmount)
     {
-        if (asset.Amount <= requiredAmount)
-        {
-            asset.Amount = 0;
-            asset.IsBurned = true;
-            asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
-        }
-        else
-        {
-            asset.Amount -= requiredAmount;
-        }
+        asset.Consume(requiredAmount, _timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult(assetId);
     }

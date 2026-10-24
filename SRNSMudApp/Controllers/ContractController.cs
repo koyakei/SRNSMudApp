@@ -80,10 +80,15 @@ public sealed class ContractController(
     /// <summary>
     /// コントラクトを拒否します。
     /// </summary>
+    /// <param name="id">拒否対象のコントラクト ID。</param>
+    /// <param name="request">拒否理由を含むリクエスト DTO（任意）。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>処理結果を表す <see cref="ActionResult"/>。</returns>
     [HttpPost("{id:int}/reject")]
     public async Task<ActionResult> RejectContract(
         int id,
-        CancellationToken cancellationToken)
+        [FromBody] RejectContractRequest? request = null,
+        CancellationToken cancellationToken = default)
     {
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(currentUserId))
@@ -91,7 +96,7 @@ public sealed class ContractController(
             return Unauthorized("コントラクトを拒否するにはログインが必要です。");
         }
 
-        Result<string> result = await _taggingContractService.CancelContractAsync(id, currentUserId);
+        Result<string> result = await _taggingContractService.RejectContractAsync(id, currentUserId, request?.Reason);
         return result switch
         {
             Success<string> => Ok(),
@@ -99,6 +104,16 @@ public sealed class ContractController(
             _ => BadRequest("コントラクトの拒否に失敗しました。")
         };
     }
+
+    /// <summary>
+    /// 引数に CancellationToken のみを受け取る後方互換用オーバーロード。
+    /// </summary>
+    /// <param name="id">拒否対象のコントラクト ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>処理結果を表す <see cref="ActionResult"/>。</returns>
+    [NonAction]
+    public Task<ActionResult> RejectContract(int id, CancellationToken cancellationToken) =>
+        RejectContract(id, null, cancellationToken);
 
     /// <summary>
     /// 自分が送信したコントラクトを取り下げ（キャンセル）します。

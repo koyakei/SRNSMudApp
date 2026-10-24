@@ -131,13 +131,13 @@ public class TagContentProposalService(
             return Result.Fail<Tag>("編集提案が見つかりません。");
         }
 
-        if (proposal.OwnerUserId != ownerUserId)
+        if (!proposal.CanBeApprovedBy(ownerUserId))
         {
-            return Result.Fail<Tag>("この提案を承認する権限がありません。");
-        }
+            if (proposal.OwnerUserId != ownerUserId)
+            {
+                return Result.Fail<Tag>("この提案を承認する権限がありません。");
+            }
 
-        if (proposal.Status != TradeStatus.Proposed)
-        {
             return Result.Fail<Tag>($"申請中ではない提案は承認できません（現在の状態: {proposal.Status}）。");
         }
 
@@ -172,8 +172,7 @@ public class TagContentProposalService(
         }
 
         // 3. 提案ステータス更新
-        proposal.Status = TradeStatus.Executed;
-        proposal.UpdatedDate = DateTime.UtcNow;
+        _ = proposal.Approve();
 
         _ = await context.SaveChangesAsync(cancellationToken);
 
@@ -199,19 +198,17 @@ public class TagContentProposalService(
             return Result.Fail("編集提案が見つかりません。");
         }
 
-        if (proposal.OwnerUserId != ownerUserId)
+        if (!proposal.CanBeRejectedBy(ownerUserId))
         {
-            return Result.Fail("この提案を却下する権限がありません。");
-        }
+            if (proposal.OwnerUserId != ownerUserId)
+            {
+                return Result.Fail("この提案を却下する権限がありません。");
+            }
 
-        if (proposal.Status != TradeStatus.Proposed)
-        {
             return Result.Fail($"申請中ではない提案は却下できません（現在の状態: {proposal.Status}）。");
         }
 
-        proposal.Status = TradeStatus.Rejected;
-        proposal.RejectReason = rejectReason;
-        proposal.UpdatedDate = DateTime.UtcNow;
+        _ = proposal.Reject(rejectReason);
 
         _ = await context.SaveChangesAsync(cancellationToken);
 
@@ -236,18 +233,17 @@ public class TagContentProposalService(
             return Result.Fail("編集提案が見つかりません。");
         }
 
-        if (proposal.RequesterUserId != requesterUserId)
+        if (!proposal.CanBeCanceledBy(requesterUserId))
         {
-            return Result.Fail("この提案を取り下げる権限がありません。");
-        }
+            if (proposal.RequesterUserId != requesterUserId)
+            {
+                return Result.Fail("この提案を取り下げる権限がありません。");
+            }
 
-        if (proposal.Status != TradeStatus.Proposed)
-        {
             return Result.Fail($"申請中ではない提案は取り下げできません（現在の状態: {proposal.Status}）。");
         }
 
-        proposal.Status = TradeStatus.Canceled;
-        proposal.UpdatedDate = DateTime.UtcNow;
+        _ = proposal.Cancel();
 
         _ = await context.SaveChangesAsync(cancellationToken);
 

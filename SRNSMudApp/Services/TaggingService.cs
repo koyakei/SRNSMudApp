@@ -108,7 +108,7 @@ public class TaggingService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             _ => throw new InvalidOperationException("このリクエストは既に処理されています。")
         };
 
-        RejectAuthorization authState = (request.TagOwnerUserId == rejectUserId || request.RequesterUserId == rejectUserId || request.ContractType == "Trigger" || request.ContractType == "Bounty") switch
+        RejectAuthorization authState = (request.TagOwnerUserId == rejectUserId || request.RequesterUserId == rejectUserId || request.OwnerId == rejectUserId) switch
         {
             true => new AuthorizedToReject(),
             false => new UnauthorizedToReject()

@@ -85,7 +85,7 @@ public class TagControllerTests
         var controller = CreateController(user);
 
         _tagCommandMock
-            .Setup(c => c.UpdateTagAsync(10, "NewName", "NewContent", false, null, false, false, null))
+            .Setup(c => c.UpdateTagAsync(10, "NewName", "NewContent", false, null, false, false, null, "user-abc"))
             .ReturnsAsync(true);
 
         // Act
@@ -93,6 +93,25 @@ public class TagControllerTests
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateTag_WhenUpdateFails_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "attacker-user")], "test"));
+        var controller = CreateController(user);
+
+        _tagCommandMock
+            .Setup(c => c.UpdateTagAsync(10, "NewName", "NewContent", false, null, false, false, null, "attacker-user"))
+            .ReturnsAsync(false);
+
+        // Act
+        ActionResult result = await controller.UpdateTag(10, new UpdateTagRequest("NewName", "NewContent"), CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("タグの更新に失敗しました。", badRequestResult.Value);
     }
 
     [Fact]

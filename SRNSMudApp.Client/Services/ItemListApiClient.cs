@@ -578,7 +578,8 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/item/create", request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
         }
 
         return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
@@ -597,7 +598,8 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync($"api/item/{itemId}/replies", request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
         }
 
         return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
@@ -614,13 +616,25 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         ArgumentNullException.ThrowIfNull(request);
 
         using HttpResponseMessage response = await _httpClient.PutAsJsonAsync($"api/item/{itemId}", request, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> DeleteItemAsync(int itemId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.DeleteAsync(new Uri($"api/item/{itemId}", UriKind.Relative), cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> AddTagToItemAsync(int itemId, AddTagRelationRequest request, CancellationToken cancellationToken = default)
@@ -672,7 +686,8 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/tag/create", request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
         }
 
         return await response.Content.ReadFromJsonAsync<TagDto>(cancellationToken);
@@ -683,7 +698,13 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         ArgumentNullException.ThrowIfNull(request);
 
         using HttpResponseMessage response = await _httpClient.PutAsJsonAsync($"api/tag/{tagId}", request, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> DeleteTagAsync(int tagId, CancellationToken cancellationToken = default)
@@ -932,7 +953,13 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         ArgumentNullException.ThrowIfNull(request);
 
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/bounty", request, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> FulfillBountyAsync(int bountyId, FulfillBountyRequest? request = null, CancellationToken cancellationToken = default)
@@ -959,7 +986,13 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
         ArgumentNullException.ThrowIfNull(request);
 
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/public-offer", request, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> DeactivatePublicOfferAsync(int offerId, CancellationToken cancellationToken = default)
@@ -991,19 +1024,37 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     public async Task<bool> AcceptContractAsync(int contractId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/contract/{contractId}/accept", UriKind.Relative), null, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> RejectContractAsync(int contractId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/contract/{contractId}/reject", UriKind.Relative), null, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<bool> CancelContractAsync(int contractId, CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response = await _httpClient.PostAsync(new Uri($"api/contract/{contractId}/cancel", UriKind.Relative), null, cancellationToken);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ExtractErrorMessageAsync(response, cancellationToken);
+            throw new HttpRequestException(error, null, response.StatusCode);
+        }
+
+        return true;
     }
 
     public async Task<IReadOnlyList<RightAssetDto>?> GetAvailableRightAssetsAsync(CancellationToken cancellationToken = default)
@@ -1538,5 +1589,68 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
     {
         using HttpResponseMessage response = await _httpClient.DeleteAsync(new Uri($"api/tag-diagram/attachments/{attachmentId}", UriKind.Relative), cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>
+    /// API レスポンスから ProblemDetails やテキスト等の詳細エラーメッセージを抽出し、
+    /// UI に具体的かつ正確なエラー理由を伝達するためのヘルパーメソッド。
+    /// </summary>
+    /// <param name="response">エラーレスポンス。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>抽出されたエラーメッセージ。</returns>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "レスポンス本文のパース失敗時はステータスコードに応じた既定メッセージにフォールバックするため")]
+    [SuppressMessage("Style", "IDE0072:Add missing cases to switch expression",
+        Justification = "主要な HTTP エラーコードのみ個別メッセージを割り当て、その他は共通フォーマットで処理するため")]
+    private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(content))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(content);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("detail", out var detailProp) && detailProp.GetString() is { Length: > 0 } detail)
+                    {
+                        return detail;
+                    }
+                    if (root.TryGetProperty("title", out var titleProp) && titleProp.GetString() is { Length: > 0 } title)
+                    {
+                        return title;
+                    }
+                    if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
+                    {
+                        var firstError = errorsProp.EnumerateObject().FirstOrDefault();
+                        if (firstError.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            var firstMsg = firstError.Value.EnumerateArray().FirstOrDefault().GetString();
+                            if (!string.IsNullOrWhiteSpace(firstMsg))
+                            {
+                                return firstMsg;
+                            }
+                        }
+                    }
+                }
+                catch (JsonException)
+                {
+                    return content.Trim('"', ' ', '\r', '\n');
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // エラー抽出失敗時はステータスコードに応じた既定メッセージへフォールバック
+        }
+
+        return response.StatusCode switch
+        {
+            System.Net.HttpStatusCode.Unauthorized => "ログインが必要です。",
+            System.Net.HttpStatusCode.Forbidden => "この操作を実行する権限がありません。",
+            System.Net.HttpStatusCode.NotFound => "対象のリソースが見つかりません。",
+            _ => $"リクエストに失敗しました ({(int)response.StatusCode} {response.ReasonPhrase})。"
+        };
     }
 }

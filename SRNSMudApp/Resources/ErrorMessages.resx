@@ -161,4 +161,10 @@
   <data name="SplitRequestNotProposedForCancel" xml:space="preserve">
     <value>申請中ではないリクエストは取り下げできません（現在の状態: {0}）。</value>
   </data>
+  <data name="SplitIntersectsExistingLink" xml:space="preserve">
+    <value>既存のリンク文字列の途中で分割することはできません。</value>
+  </data>
+  <data name="SplitResultExceedsMaxLength" xml:space="preserve">
+    <value>分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。</value>
+  </data>
 </root>

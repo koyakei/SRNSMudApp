@@ -1,5 +1,9 @@
+// CA1508: union 型 (Result<T>) の網羅的パターンマッチにおける解析器の誤検知のため抑制する。
+#pragma warning disable CA1508
+
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -43,6 +47,9 @@ public partial class ItemSplitService(
     [LoggerMessage(EventId = 3005, Level = LogLevel.Information, Message = "Split request canceled: RequestId={RequestId}, Requester={RequesterUserId}")]
     private static partial void LogSplitCanceled(ILogger logger, int requestId, string requesterUserId);
 
+    [LoggerMessage(EventId = 3006, Level = LogLevel.Warning, Message = "分割承認後の通知送信に失敗しました（アイテム分割自体はコミット完了しています）: {Message}")]
+    private static partial void LogSplitNotificationFailed(ILogger logger, Exception ex, string message);
+
     /// <inheritdoc />
     public async Task<Result<ItemSplitRequest>> RequestSplitAsync(
         int originalItemId,
@@ -77,22 +84,18 @@ public partial class ItemSplitService(
             return Result.Fail<ItemSplitRequest>(ErrorMessages.SplitSelfItemNotAllowed);
         }
 
-        (int index, string textToReplace) = FindSelectedText(originalItem.Content ?? string.Empty, selectedText);
-        if (index < 0)
+        Result<ItemSplitTextMatch> textMatchResult = ItemSplitTextPolicy.ValidateAndLocate(originalItem.Content ?? string.Empty, selectedText);
+        if (textMatchResult is Failure f)
         {
-            return Result.Fail<ItemSplitRequest>(ErrorMessages.SplitSelectedTextNotInContent);
+            return f;
         }
 
-        if (IntersectsExistingLink(originalItem.Content!, index, textToReplace.Length))
+        ItemSplitTextMatch match = textMatchResult switch
         {
-            return Result.Fail<ItemSplitRequest>("既存のリンク文字列の途中で分割することはできません。");
-        }
-
-        const int maxReplacementLength = 22; // "/ItemDetail/2147483647".Length
-        if (originalItem.Content!.Length - textToReplace.Length + maxReplacementLength > 1000)
-        {
-            return Result.Fail<ItemSplitRequest>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
-        }
+            Success<ItemSplitTextMatch> s => s.Value,
+            _ => throw new InvalidOperationException()
+        };
+        var (index, textToReplace) = match;
 
         // requesterQuoteItemId が指定された場合、その引用アイテムが requesterUserId 所有であり、
         // かつ元アイテムの引用であるかを確認する（他アイテムの誤削除や権限昇格を防ぐ）
@@ -109,8 +112,7 @@ public partial class ItemSplitService(
             }
         }
 
-        string crlf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-        string lf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var (lf, crlf) = ItemSplitTextPolicy.NormalizeLineEndings(selectedText);
 
         // 同一アイテム・同一テキスト・同一送信者による重複リクエスト（申請中）を防止（改行コードの差を吸収）
         bool duplicateExists = await context.ItemSplitRequests
@@ -194,41 +196,38 @@ public partial class ItemSplitService(
             return Result.Fail<Item>(ErrorMessages.NotAuthorizedToSplit);
         }
 
-        (int index, string textToReplace) = FindSelectedText(originalItem.Content, selectedText);
-        if (index < 0)
+        Result<ItemSplitTextMatch> textMatchResult = ItemSplitTextPolicy.ValidateAndLocate(originalItem.Content, selectedText);
+        if (textMatchResult is Failure f)
         {
-            return Result.Fail<Item>(ErrorMessages.SplitSelectedTextNotInContent);
+            return f;
         }
 
-        if (IntersectsExistingLink(originalItem.Content, index, textToReplace.Length))
+        ItemSplitTextMatch match = textMatchResult switch
         {
-            return Result.Fail<Item>("既存のリンク文字列の途中で分割することはできません。");
-        }
-
-        const int maxReplacementLength = 22;
-        if (originalItem.Content.Length - textToReplace.Length + maxReplacementLength > 1000)
-        {
-            return Result.Fail<Item>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
-        }
+            Success<ItemSplitTextMatch> s => s.Value,
+            _ => throw new InvalidOperationException()
+        };
+        var (index, textToReplace) = match;
 
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        Item newItem;
         try
         {
-            Item newItem = await CreateSplitItemAsync(context, originalItem, textToReplace, index, cancellationToken);
+            newItem = await CreateSplitItemAsync(context, originalItem, textToReplace, index, cancellationToken);
             originalItem.UpdatedDate = DateTime.UtcNow;
             _ = await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-
-            _notificationService.NotifyNotificationsChanged();
-            LogSplitDirectly(_logger, originalItemId, newItem.Id, ownerUserId);
-
-            return Result.Ok(newItem);
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+
+        _notificationService.NotifyNotificationsChanged();
+        LogSplitDirectly(_logger, originalItemId, newItem.Id, ownerUserId);
+
+        return Result.Ok(newItem);
     }
 
     /// <inheritdoc />
@@ -248,13 +247,13 @@ public partial class ItemSplitService(
             return Result.Fail<Item>(ErrorMessages.RequestNotFound);
         }
 
-        if (request.OwnerUserId != ownerUserId)
+        if (!request.CanBeApprovedBy(ownerUserId))
         {
-            return Result.Fail<Item>(ErrorMessages.NotAuthorizedToApprove);
-        }
+            if (request.OwnerUserId != ownerUserId)
+            {
+                return Result.Fail<Item>(ErrorMessages.NotAuthorizedToApprove);
+            }
 
-        if (request.Status != TradeStatus.Proposed)
-        {
             return Result.Fail<Item>(ErrorMessages.FormatSplitRequestNotProposedForApprove(request.Status));
         }
 
@@ -264,39 +263,36 @@ public partial class ItemSplitService(
             return Result.Fail<Item>(ErrorMessages.SplitOriginalItemNotFound);
         }
 
-        (int index, string requestTextToReplace) = FindSelectedText(originalItem.Content, request.SelectedText);
-        if (index < 0)
+        Result<ItemSplitTextMatch> textMatchResult = ItemSplitTextPolicy.ValidateAndLocateForApprove(originalItem.Content, request.SelectedText);
+        if (textMatchResult is Failure f)
         {
-            return Result.Fail<Item>(ErrorMessages.SplitOriginalItemContentChanged);
+            return f;
         }
 
-        if (IntersectsExistingLink(originalItem.Content, index, requestTextToReplace.Length))
+        ItemSplitTextMatch match = textMatchResult switch
         {
-            return Result.Fail<Item>("既存のリンク文字列の途中で分割することはできません。");
-        }
+            Success<ItemSplitTextMatch> s => s.Value,
+            _ => throw new InvalidOperationException()
+        };
+        var (index, requestTextToReplace) = match;
 
-        const int maxReplacementLength = 22;
-        if (originalItem.Content.Length - requestTextToReplace.Length + maxReplacementLength > 1000)
-        {
-            return Result.Fail<Item>("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。");
-        }
+        int? quoteItemId = request.RequesterQuoteItemId;
+        Item newItem;
 
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            Item newItem = await CreateSplitItemAsync(context, originalItem, requestTextToReplace, index, cancellationToken);
+            newItem = await CreateSplitItemAsync(context, originalItem, requestTextToReplace, index, cancellationToken);
 
             // 元アイテム本文の該当テキストを /ItemDetail/{newItem.Id} リンクに置換
             originalItem.UpdatedDate = DateTime.UtcNow;
 
             // リクエスト状態更新
-            request.Status = TradeStatus.Executed;
-            request.CreatedItemId = newItem.Id;
+            _ = request.Approve(newItem.Id);
             request.UpdatedDate = DateTime.UtcNow;
 
             // 引用アイテムの移行: リクエスト者が同時に投稿した引用Itemがあれば、
             // そのタグ・被引用情報を新しく作成されたアイテムへ引き継ぎ、引用Item自体を削除する
-            int? quoteItemId = request.RequesterQuoteItemId;
             if (quoteItemId.HasValue)
             {
                 request.RequesterQuoteItemId = null;
@@ -305,37 +301,42 @@ public partial class ItemSplitService(
 
             _ = await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-
-            _notificationService.NotifyNotificationsChanged();
-
-            LogSplitApproved(_logger, splitRequestId, request.OriginalItemId, newItem.Id, ownerUserId, quoteItemId);
-
-            // 分割リクエストの申請者に承認を通知
-            await _notificationService.NotifyUserAsync(
-                request.RequesterUserId,
-                "分割リクエストが承認されました",
-                "あなたの分割リクエストが承認され、新しいアイテムが作成されました。",
-                "/notifications", cancellationToken);
-
-            return Result.Ok(newItem);
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+
+        _notificationService.NotifyNotificationsChanged();
+
+        LogSplitApproved(_logger, splitRequestId, request.OriginalItemId, newItem.Id, ownerUserId, quoteItemId);
+
+        // 分割リクエストの申請者に承認を通知 (自己承認時は通知を抑制: Issue 1-11)
+        if (request.RequesterUserId != ownerUserId)
+        {
+            try
+            {
+                await _notificationService.NotifyUserAsync(
+                    request.RequesterUserId,
+                    "分割リクエストが承認されました",
+                    "あなたの分割リクエストが承認され、新しいアイテムが作成されました。",
+                    "/notifications", cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogSplitNotificationFailed(_logger, ex, ex.Message);
+            }
+        }
+
+        return Result.Ok(newItem);
     }
 
     /// <summary>
-    ///     分割リクエスト申請者が同時に投稿した引用アイテムを、
-    ///     承認によって新しく作成されたアイテムへ移行する。
-    ///     引用アイテムに付いていた TagRelation（タグ）、TagWeightLedger（監査履歴ログ）、
-    ///     被引用（QuotedByItems）、リプライツリー（ParentItem/RootItem）、バウンティ（TaggingRequest）、
-    ///     通報（ContentReport）、オプトアウト（ConversationOptOut）、通知受取人、タイムラインなど、
-    ///     ApplicationDbContextModelSnapshot に定義されたすべてのエンティティリレーションを漏れなく新アイテムへ引き継ぎ、
-    ///     引用アイテム自体を削除する。
+    ///     リクエスト送信者が作成した引用アイテムに付随する各種リレーション（タグ、監査ログ、被引用、
+    ///     リプライ、コントラクト、通報、オプトアウト等）を、分割により新設されたアイテムへ引き継ぎ、
+    ///     不要となった引用アイテムを削除する。
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1508:Avoid dead code", Justification = "Payload is deserialized from JSON and must be type-checked at runtime")]
     private static async Task MigrateRequesterQuoteItemAsync(
         ApplicationDbContext context,
         int quoteItemId,
@@ -352,9 +353,32 @@ public partial class ItemSplitService(
             return;
         }
 
+        int targetItemId = targetItem.Id;
+        int newRootId = targetItem.RootItemId ?? targetItemId;
+
+        await MigrateTagRelationsAndLedgersAsync(context, quoteItem, targetItem, cancellationToken);
+        await MigrateQuotingItemsAndLinksAsync(context, quoteItemId, targetItemId, cancellationToken);
+        await MigrateRepliesAndDescendantsAsync(context, quoteItemId, targetItem, cancellationToken);
+        await MigrateTaggingRequestsAndContractsAsync(context, quoteItem, targetItem, cancellationToken);
+        await MigrateReportsAndOptOutsAsync(context, quoteItemId, newRootId, targetItemId, cancellationToken);
+        await MigrateRecipientsAndTimelineEventsAsync(context, quoteItemId, targetItemId, cancellationToken);
+
+        // 12. 引用アイテム自体を削除する（引用アイテムの TagRelations は Cascade で削除）
+        _ = context.Items.Remove(quoteItem);
+    }
+
+    /// <summary>
+    ///     引用アイテムのタグ関連付け（TagRelation）およびタグ監査ログ（TagWeightLedger）を新アイテムへ移行・マージする。
+    /// </summary>
+    private static async Task MigrateTagRelationsAndLedgersAsync(
+        ApplicationDbContext context,
+        Item quoteItem,
+        Item targetItem,
+        CancellationToken cancellationToken)
+    {
         // 1. TagRelation（タグ付け情報）を新アイテムへ付け替える
         //    新アイテムに同一タグが既にある場合は Weight を加算、なければ新規作成
-        var existingRelationsOnTarget = await context.TagRelations
+        List<TagRelation> existingRelationsOnTarget = await context.TagRelations
             .Include(tr => tr.CommentItem)
             .Where(x => x.ItemId == targetItem.Id)
             .ToListAsync(cancellationToken);
@@ -399,7 +423,7 @@ public partial class ItemSplitService(
 
         // 2. TagWeightLedger（タグ監査・履歴ログ）の ItemId, CommentItemId, SourceId を更新
         List<TagWeightLedger> itemLedgers = await context.TagWeightLedgers
-            .Where(l => l.ItemId == quoteItemId)
+            .Where(l => l.ItemId == quoteItem.Id)
             .ToListAsync(cancellationToken);
 
         foreach (TagWeightLedger ledger in itemLedgers)
@@ -413,7 +437,7 @@ public partial class ItemSplitService(
         }
 
         List<TagWeightLedger> commentLedgers = await context.TagWeightLedgers
-            .Where(l => l.CommentItemId == quoteItemId)
+            .Where(l => l.CommentItemId == quoteItem.Id)
             .ToListAsync(cancellationToken);
 
         foreach (TagWeightLedger ledger in commentLedgers)
@@ -422,9 +446,9 @@ public partial class ItemSplitService(
             ledger.UpdatedDate = DateTime.UtcNow;
         }
 
-        // 3. 外部の TagRelation で quoteItemId を CommentItemId として参照しているものを新アイテムへ付け替える
+        // 3. 外部の TagRelation で quoteItem.Id を CommentItemId として参照しているものを新アイテムへ付け替える
         List<TagRelation> externalTagRelations = await context.TagRelations
-            .Where(tr => tr.CommentItemId == quoteItemId)
+            .Where(tr => tr.CommentItemId == quoteItem.Id)
             .ToListAsync(cancellationToken);
 
         foreach (TagRelation tr in externalTagRelations)
@@ -432,53 +456,67 @@ public partial class ItemSplitService(
             tr.CommentItemId = targetItem.Id;
             tr.UpdatedDate = DateTime.UtcNow;
         }
+    }
+
+    /// <summary>
+    ///     引用アイテムを引用している他アイテム（被引用）および他アイテム本文内のリンクを新アイテムへ付け替える。
+    /// </summary>
+    private static async Task MigrateQuotingItemsAndLinksAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        int targetItemId,
+        CancellationToken cancellationToken)
+    {
+        string oldServerLink = $"/ItemDetail/{quoteItemId}";
+        string newServerLink = $"/ItemDetail/{targetItemId}";
+        string oldWasmLink = $"/Item/WasmDetail/{quoteItemId}";
+        string newWasmLink = $"/Item/WasmDetail/{targetItemId}";
+
+        string ReplaceItemLinks(string content) =>
+            content
+                .Replace(oldServerLink, newServerLink, StringComparison.Ordinal)
+                .Replace(oldWasmLink, newWasmLink, StringComparison.Ordinal);
 
         // 4. 引用アイテムを引用していたItem（被引用）の QuotedItemId, ItemKindJson, 本文リンクを新アイテムへ付け替える
         List<Item> quotedByItems = await context.Items
             .Where(i => i.QuotedItemId == quoteItemId)
             .ToListAsync(cancellationToken);
 
-        string oldServerLink = $"/ItemDetail/{quoteItemId}";
-        string newServerLink = $"/ItemDetail/{targetItem.Id}";
-        string oldWasmLink = $"/Item/WasmDetail/{quoteItemId}";
-        string newWasmLink = $"/Item/WasmDetail/{targetItem.Id}";
-
         foreach (Item quotingItem in quotedByItems)
         {
-            quotingItem.QuotedItemId = targetItem.Id;
-            quotingItem.ItemKindJson = JsonSerializer.Serialize(new QuoteItem(targetItem.Id));
+            quotingItem.QuotedItemId = targetItemId;
+            quotingItem.ItemKindJson = JsonSerializer.Serialize(new QuoteItem(targetItemId));
             if (!string.IsNullOrEmpty(quotingItem.Content))
             {
-                if (quotingItem.Content.Contains(oldServerLink, StringComparison.Ordinal))
-                {
-                    quotingItem.Content = quotingItem.Content.Replace(oldServerLink, newServerLink, StringComparison.Ordinal);
-                }
-                if (quotingItem.Content.Contains(oldWasmLink, StringComparison.Ordinal))
-                {
-                    quotingItem.Content = quotingItem.Content.Replace(oldWasmLink, newWasmLink, StringComparison.Ordinal);
-                }
+                quotingItem.Content = ReplaceItemLinks(quotingItem.Content);
             }
             quotingItem.UpdatedDate = DateTime.UtcNow;
         }
 
-        // 他アイテムの本文内に含まれる引用アイテムへのリンク（/ItemDetail/{quoteItemId} および /Item/WasmDetail/{quoteItemId}）を新アイテムへ置換してデッドリンクを防止
+        // 他アイテムの本文内に含まれる引用アイテムへのリンクを新アイテムへ置換してデッドリンクを防止
         List<Item> linkReferencingItems = await context.Items
             .Where(i => (i.Content.Contains(oldServerLink) || i.Content.Contains(oldWasmLink)) && i.Id != quoteItemId)
             .ToListAsync(cancellationToken);
 
         foreach (Item linkItem in linkReferencingItems)
         {
-            if (linkItem.Content.Contains(oldServerLink, StringComparison.Ordinal))
+            if (!string.IsNullOrEmpty(linkItem.Content))
             {
-                linkItem.Content = linkItem.Content.Replace(oldServerLink, newServerLink, StringComparison.Ordinal);
-            }
-            if (linkItem.Content.Contains(oldWasmLink, StringComparison.Ordinal))
-            {
-                linkItem.Content = linkItem.Content.Replace(oldWasmLink, newWasmLink, StringComparison.Ordinal);
+                linkItem.Content = ReplaceItemLinks(linkItem.Content);
             }
             linkItem.UpdatedDate = DateTime.UtcNow;
         }
+    }
 
+    /// <summary>
+    ///     引用アイテムに対するリプライおよび子孫ツリーの参照階層を新アイテムへ付け替える。
+    /// </summary>
+    private static async Task MigrateRepliesAndDescendantsAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        Item targetItem,
+        CancellationToken cancellationToken)
+    {
         // 5. 引用アイテムに対するリプライがあれば新アイテムへ付け替える
         List<Item> replyItems = await context.Items
             .Where(i => i.ParentItemId == quoteItemId)
@@ -505,10 +543,22 @@ public partial class ItemSplitService(
             rootItem.RootItemId = newRootId;
             rootItem.UpdatedDate = DateTime.UtcNow;
         }
+    }
 
+    /// <summary>
+    ///     引用アイテムを要求アイテムまたは対象アイテムとして参照するタグ付けリクエスト（TaggingRequestEntity）、
+    ///     成果物リレーション、および相互タグ付けコントラクト（MutualPayload）の対価アイテム参照を新アイテムへ移行する。
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1508:Avoid dead code", Justification = "Payload is deserialized from JSON and must be type-checked at runtime")]
+    private static async Task MigrateTaggingRequestsAndContractsAsync(
+        ApplicationDbContext context,
+        Item quoteItem,
+        Item targetItem,
+        CancellationToken cancellationToken)
+    {
         // 6. TaggingRequestEntity（バウンティ依頼）の RequestItemId や TargetId、成果物リレーションを新アイテムへ付け替える
         List<TaggingRequestEntity> taggingRequests = await context.TaggingRequestEntities
-            .Where(t => t.RequestItemId == quoteItemId)
+            .Where(t => t.RequestItemId == quoteItem.Id)
             .ToListAsync(cancellationToken);
 
         foreach (TaggingRequestEntity taggingReq in taggingRequests)
@@ -536,20 +586,31 @@ public partial class ItemSplitService(
         }
 
         // 相互タグ付けコントラクト (Mutual) で quoteItem が対価アイテム (OfferedTargetItemId) に指定されている場合、新アイテムへ移行する
-        string quoteItemIdStr = quoteItemId.ToString(CultureInfo.InvariantCulture);
+        string quoteItemOfferedKey = $"\"OfferedTargetItemId\":{quoteItem.Id}";
         List<TaggingRequestEntity> mutualRequests = await context.TaggingRequestEntities
-            .Where(t => t.ContractType == ContractTypes.Mutual && t.ContractPayloadJson.Contains(quoteItemIdStr))
+            .Where(t => t.ContractType == ContractTypes.Mutual && t.ContractPayloadJson.Contains(quoteItemOfferedKey))
             .ToListAsync(cancellationToken);
 
         foreach (TaggingRequestEntity mutualReq in mutualRequests)
         {
-            if (mutualReq.Payload is MutualPayload mutual && mutual.OfferedTargetItemId == quoteItemId)
+            if (mutualReq.Payload is MutualPayload mutual && mutual.OfferedTargetItemId == quoteItem.Id)
             {
                 mutualReq.Payload = mutual with { OfferedTargetItemId = targetItem.Id };
                 mutualReq.UpdatedDate = DateTime.UtcNow;
             }
         }
+    }
 
+    /// <summary>
+    ///     引用アイテム宛ての通報（ContentReport）および会話オプトアウト（ConversationOptOut）を新アイテムへ移行する。
+    /// </summary>
+    private static async Task MigrateReportsAndOptOutsAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        int newRootId,
+        int targetItemId,
+        CancellationToken cancellationToken)
+    {
         // 7. ContentReport（通報）の ItemId を新アイテムへ付け替える
         List<ContentReport> contentReports = await context.ContentReports
             .Where(r => r.ItemId == quoteItemId)
@@ -557,7 +618,7 @@ public partial class ItemSplitService(
 
         foreach (ContentReport report in contentReports)
         {
-            report.ItemId = targetItem.Id;
+            report.ItemId = targetItemId;
             report.UpdatedDate = DateTime.UtcNow;
         }
 
@@ -586,7 +647,18 @@ public partial class ItemSplitService(
                 }
             }
         }
+    }
 
+    /// <summary>
+    ///     リプライ通知受取人（ItemReplyNotificationRecipient）、他分割リクエスト、およびタイムラインイベントの参照を新アイテムへ移行する。
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1508:Avoid dead code", Justification = "TimelineTarget is deserialized from JSON and must be type-checked at runtime")]
+    private static async Task MigrateRecipientsAndTimelineEventsAsync(
+        ApplicationDbContext context,
+        int quoteItemId,
+        int targetItemId,
+        CancellationToken cancellationToken)
+    {
         // 9. ItemReplyNotificationRecipient（リプライ通知受取人）の ReplyItemId を付け替える
         List<ItemReplyNotificationRecipient> notificationRecipients = await context.ItemReplyNotificationRecipients
             .Where(r => r.ReplyItemId == quoteItemId)
@@ -595,7 +667,7 @@ public partial class ItemSplitService(
         if (notificationRecipients.Count > 0)
         {
             List<string> existingRecipientsOnTarget = await context.ItemReplyNotificationRecipients
-                .Where(r => r.ReplyItemId == targetItem.Id)
+                .Where(r => r.ReplyItemId == targetItemId)
                 .Select(r => r.RecipientUserId)
                 .ToListAsync(cancellationToken);
 
@@ -607,7 +679,7 @@ public partial class ItemSplitService(
                 }
                 else
                 {
-                    recipient.ReplyItemId = targetItem.Id;
+                    recipient.ReplyItemId = targetItemId;
                     existingRecipientsOnTarget.Add(recipient.RecipientUserId);
                 }
             }
@@ -622,15 +694,15 @@ public partial class ItemSplitService(
         {
             if (req.CreatedItemId == quoteItemId)
             {
-                req.CreatedItemId = targetItem.Id;
+                req.CreatedItemId = targetItemId;
             }
             if (req.OriginalItemId == quoteItemId)
             {
-                req.OriginalItemId = targetItem.Id;
+                req.OriginalItemId = targetItemId;
             }
             if (req.RequesterQuoteItemId == quoteItemId)
             {
-                req.RequesterQuoteItemId = targetItem.Id;
+                req.RequesterQuoteItemId = targetItemId;
             }
             req.UpdatedDate = DateTime.UtcNow;
         }
@@ -643,49 +715,21 @@ public partial class ItemSplitService(
 
         foreach (TimelineEvent te in timelineEvents)
         {
-            switch (te.Target)
+            if (te.Target is ItemTarget it && it.TargetItemId == quoteItemId)
             {
-                case ItemTarget it when it.TargetItemId == quoteItemId:
-                    te.Target = new ItemTarget(targetItem.Id);
-                    te.UpdatedDate = DateTime.UtcNow;
-                    break;
-                default:
-                    break;
+                te.Target = new ItemTarget(targetItemId);
+                te.UpdatedDate = DateTime.UtcNow;
             }
         }
-
-        // 12. 引用アイテム自体を削除する（引用アイテムの TagRelations は Cascade で削除）
-        _ = context.Items.Remove(quoteItem);
     }
 
-    private static bool IntersectsExistingLink(string content, int targetIndex, int targetLength)
-    {
-        int targetEnd = targetIndex + targetLength;
-        foreach (System.Text.RegularExpressions.Match match in ContentParser.UrlRegex().Matches(content))
-        {
-            int matchEnd = match.Index + match.Length;
-            if (Math.Max(targetIndex, match.Index) < Math.Min(targetEnd, matchEnd))
-            {
-                if (targetIndex > match.Index || targetEnd < matchEnd)
-                {
-                    return true;
-                }
-            }
-        }
-        foreach (System.Text.RegularExpressions.Match match in ContentParser.InternalLinkRegex().Matches(content))
-        {
-            int matchEnd = match.Index + match.Length;
-            if (Math.Max(targetIndex, match.Index) < Math.Min(targetEnd, matchEnd))
-            {
-                if (targetIndex > match.Index || targetEnd < matchEnd)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
+    /// <summary>
+    ///     却下または取り下げとなった分割リクエストに連動する引用アイテムと、
+    ///     それに紐づく未決リクエストやリプライを先行クリーンアップして安全に削除する。
+    /// </summary>
+    /// <param name="context">データベースコンテキスト。</param>
+    /// <param name="quoteItemId">削除対象の引用アイテム ID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
     private static async Task DeleteRequesterQuoteItemAsync(
         ApplicationDbContext context,
         int quoteItemId,
@@ -734,24 +778,15 @@ public partial class ItemSplitService(
         _ = context.Items.Remove(quoteItem);
     }
 
-    private static (int Index, string TextToReplace) FindSelectedText(string content, string selectedText)
-    {
-        string crlf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
-        string lf = selectedText.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-        ReadOnlySpan<string> candidates = [selectedText, crlf, lf];
-        foreach (string candidate in candidates)
-        {
-            int index = content.IndexOf(candidate, StringComparison.Ordinal);
-            if (index >= 0)
-            {
-                return (index, candidate);
-            }
-        }
-
-        return (-1, selectedText);
-    }
-
+    /// <summary>
+    ///     分割テキストを保持する新しいアイテムを作成し、元アイテム本文の該当部分を新規アイテムへのリンクに置換する。
+    /// </summary>
+    /// <param name="context">データベースコンテキスト。</param>
+    /// <param name="originalItem">分割元アイテム。</param>
+    /// <param name="selectedText">分割して新アイテムとするテキスト。</param>
+    /// <param name="selectedTextIndex">元アイテム本文内での開始位置。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成された新しい分割アイテム。</returns>
     private static async Task<Item> CreateSplitItemAsync(
         ApplicationDbContext context,
         Item originalItem,
@@ -798,18 +833,17 @@ public partial class ItemSplitService(
             return Result.Fail(ErrorMessages.RequestNotFound);
         }
 
-        if (request.OwnerUserId != ownerUserId)
+        if (!request.CanBeRejectedBy(ownerUserId))
         {
-            return Result.Fail(ErrorMessages.NotAuthorizedToReject);
-        }
+            if (request.OwnerUserId != ownerUserId)
+            {
+                return Result.Fail(ErrorMessages.NotAuthorizedToReject);
+            }
 
-        if (request.Status != TradeStatus.Proposed)
-        {
             return Result.Fail(ErrorMessages.FormatSplitRequestNotProposedForReject(request.Status));
         }
 
-        request.Status = TradeStatus.Rejected;
-        request.RejectReason = rejectReason;
+        _ = request.Reject(rejectReason);
         request.UpdatedDate = DateTime.UtcNow;
 
         // 却下時、連動して作成された引用アイテムを自動削除する（案A）
@@ -825,12 +859,22 @@ public partial class ItemSplitService(
 
         LogSplitRejected(_logger, splitRequestId, ownerUserId, rejectReason);
 
-        // 分割リクエストの申請者に却下を通知
-        await _notificationService.NotifyUserAsync(
-            request.RequesterUserId,
-            "分割リクエストが却下されました",
-            "あなたの分割リクエストが却下されました。",
-            "/notifications", cancellationToken);
+        // 分割リクエストの申請者に却下を通知 (自己却下時は通知を抑制: Issue 1-11)
+        if (request.RequesterUserId != ownerUserId)
+        {
+            try
+            {
+                await _notificationService.NotifyUserAsync(
+                    request.RequesterUserId,
+                    "分割リクエストが却下されました",
+                    "あなたの分割リクエストが却下されました。",
+                    "/notifications", cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogSplitNotificationFailed(_logger, ex, ex.Message);
+            }
+        }
 
         return Result.Ok();
     }
@@ -851,17 +895,17 @@ public partial class ItemSplitService(
             return Result.Fail(ErrorMessages.RequestNotFound);
         }
 
-        if (request.RequesterUserId != requesterUserId)
+        if (!request.CanBeCanceledBy(requesterUserId))
         {
-            return Result.Fail(ErrorMessages.NotAuthorizedToCancel);
-        }
+            if (request.RequesterUserId != requesterUserId)
+            {
+                return Result.Fail(ErrorMessages.NotAuthorizedToCancel);
+            }
 
-        if (request.Status != TradeStatus.Proposed)
-        {
             return Result.Fail(ErrorMessages.FormatSplitRequestNotProposedForCancel(request.Status));
         }
 
-        request.Status = TradeStatus.Canceled;
+        _ = request.Cancel();
         request.UpdatedDate = DateTime.UtcNow;
 
         // 取り下げ時、連動して作成された引用アイテムを自動削除する（案A）

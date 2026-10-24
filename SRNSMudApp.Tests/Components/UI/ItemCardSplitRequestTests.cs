@@ -884,6 +884,64 @@ public sealed class ItemCardSplitRequestTests : IAsyncLifetime
         Assert.Contains("引用投稿: #555", cut.Markup);
     }
 
+    [Theory]
+    [InlineData(true)]  // 所有者: 直接分割ボタン
+    [InlineData(false)] // 非所有者: 分割リクエストボタン
+    public async Task ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar(bool isOwner)
+    {
+        // Arrange
+        var item = new DataItem
+        {
+            Id = isOwner ? 201 : 202,
+            Content = isOwner ? "自分のアイテム本文" : "他ユーザーのアイテム本文",
+            OwnerId = isOwner ? CurrentUserId : OtherUserId,
+            TagRelations = []
+        };
+
+        _itemSplitServiceMock.Setup(s => s.GetPendingSplitRequestsForOriginalItemAsync(item.Id, default))
+            .ReturnsAsync([]);
+
+        // JSInterop: 空文字列（テキスト未選択状態）を返すよう設定
+        _ctx.JSInterop.Setup<string>("selectionHelper.getSelectedText")
+            .SetResult(string.Empty);
+
+        // 実 ItemCardSplitCoordinator を初期化し、モック経由で呼び出しを実ロジックへ委譲
+        var realCoordinator = new ItemCardSplitCoordinator(
+            _itemSplitServiceMock.Object,
+            _ctx.Services.GetRequiredService<IItemQuoteService>(),
+            _voteCoordinatorMock.Object,
+            _itemCardDataMock.Object,
+            _dialogLauncherMock.Object,
+            _ctx.Services.GetRequiredService<ISnackbar>(),
+            _ctx.JSInterop.JSRuntime);
+
+        _splitCoordinatorMock
+            .Setup(c => c.SplitSelectionAsync(It.IsAny<DataItem>(), It.IsAny<string>()))
+            .Returns((DataItem targetItem, string userId) => realCoordinator.SplitSelectionAsync(targetItem, userId));
+
+        _splitCoordinatorMock
+            .Setup(c => c.RequestSplitSelectionAsync(It.IsAny<DataItem>(), It.IsAny<string>()))
+            .Returns((DataItem targetItem, string userId) => realCoordinator.RequestSplitSelectionAsync(targetItem, userId));
+
+        IRenderedComponent<ItemCard> cut = _ctx.Render<ItemCard>(parameters => parameters
+            .Add(p => p.Item, item)
+            .Add(p => p.CurrentUserId, CurrentUserId));
+
+        // Act: 所有権に応じた分割ボタンをクリック
+        string buttonTitle = isOwner
+            ? "選択テキストを別アイテムに分割"
+            : "選択テキストを別アイテムに分割するリクエストを送信";
+
+        var splitBtn = cut.Find($"button[title='{buttonTitle}']");
+        await cut.InvokeAsync(() => splitBtn.Click());
+
+        // Assert: 未選択の警告スナックバーが表示されていること
+        ISnackbar snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        Assert.Contains(snackbar.ShownSnackbars, s =>
+            s.Severity == Severity.Warning &&
+            s.Message.ToString().Contains("分割するテキストが選択されていません。"));
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

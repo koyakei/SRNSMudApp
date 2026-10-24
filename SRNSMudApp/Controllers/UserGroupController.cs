@@ -35,7 +35,7 @@ public sealed class UserGroupController(
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(currentUserId))
         {
-            return Ok(Array.Empty<UserGroupDto>());
+            return Ok((IReadOnlyList<UserGroupDto>)[]);
         }
 
         IReadOnlyList<UserGroup> groups = await _userGroupDataProvider
@@ -54,7 +54,7 @@ public sealed class UserGroupController(
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(currentUserId))
         {
-            return Ok(Array.Empty<UserGroupDto>());
+            return Ok((IReadOnlyList<UserGroupDto>)[]);
         }
 
         IReadOnlyList<UserGroup> groups = await _userGroupDataProvider
@@ -240,7 +240,7 @@ public sealed class UserGroupController(
     {
         if (_userDataProvider == null || string.IsNullOrWhiteSpace(q))
         {
-            return Ok(Array.Empty<UserDto>());
+            return Ok((IReadOnlyList<UserDto>)[]);
         }
 
         List<ApplicationUser> users = await _userDataProvider.SearchUsersAsync(q.Trim(), cancellationToken);

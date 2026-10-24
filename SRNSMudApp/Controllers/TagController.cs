@@ -115,7 +115,8 @@ public sealed class TagController(
             content: request.Content?.Trim(),
             isAdmin: isAdmin,
             isPrivate: request.IsPrivate,
-            targetUserGroupId: request.TargetUserGroupId);
+            targetUserGroupId: request.TargetUserGroupId,
+            currentUserId: currentUserId);
 
         if (!success)
         {
@@ -248,7 +249,7 @@ public sealed class TagController(
     {
         if (_tagTreeDataProvider == null)
         {
-            return Ok(Array.Empty<TagTreeNodeDto>());
+            return Ok((IReadOnlyList<TagTreeNodeDto>)[]);
         }
 
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -432,7 +433,7 @@ public sealed class TagController(
 
         if (string.IsNullOrWhiteSpace(request.Content))
         {
-            return Ok(Array.Empty<SuggestedTagDto>());
+            return Ok((IReadOnlyList<SuggestedTagDto>)[]);
         }
 
         float minScore = request.MinScore ?? SRNSMudApp.Models.SuggestedTag.DefaultCandidateThreshold;
@@ -502,7 +503,7 @@ public sealed class TagController(
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Ok(Array.Empty<SimilarTagCandidateDto>());
+            return Ok((IReadOnlyList<SimilarTagCandidateDto>)[]);
         }
 
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;

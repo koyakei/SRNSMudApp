@@ -94,8 +94,16 @@ public class ItemQuoteService(
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
+        int quotedItemId,
+        CancellationToken cancellationToken = default) =>
+        GetQuotedByItemsAsync(quotedItemId, null, false, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<Item>> GetQuotedByItemsAsync(
         int quotedItemId,
+        string? currentUserId,
+        bool isAdmin = false,
         CancellationToken cancellationToken = default)
     {
         if (quotedItemId <= 0)
@@ -107,6 +115,7 @@ public class ItemQuoteService(
 
         return await context.Items
             .AsNoTracking()
+            .WhereVisibleToUser(context, currentUserId, isAdmin)
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
                 .ThenInclude(tr => tr.Tag)

@@ -114,53 +114,59 @@
                             <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
                                 W: @(tr.Weight ?? 1)
                             </MudChip>
-                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
-                                           OnClick="@(() => ChangeWeightAsync(tr.TagId, 1))" aria-label="ウェイト加算" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
-                                           OnClick="@(() => ChangeWeightAsync(tr.TagId, -1))" aria-label="ウェイト減算" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
-                                           OnClick="@(() => RemoveTagAsync(tr.TagId))" aria-label="タグ削除" />
+                            @if (!string.IsNullOrEmpty(_currentUserId))
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                               OnClick="@(() => ChangeWeightAsync(tr.RelationId != 0 ? tr.RelationId : tr.TagId, 1))" aria-label="ウェイト加算" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                               OnClick="@(() => ChangeWeightAsync(tr.RelationId != 0 ? tr.RelationId : tr.TagId, -1))" aria-label="ウェイト減算" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => RemoveTagAsync(tr.RelationId != 0 ? tr.RelationId : tr.TagId))" aria-label="タグ削除" />
+                            }
                         </MudPaper>
                     }
                 </div>
 
                 @* 新規タグ追加オートコンプリート & AI推論 *@
-                <div class="d-flex align-center gap-2 mb-2">
-                    <MudAutocomplete T="TagSuggestion" @bind-Value="SelectedTagToAdd" SearchFunc="SearchTagsAsync"
-                                     ToStringFunc="@(t => t?.TagName ?? string.Empty)" Label="タグを追加"
-                                     Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Class="flex-grow-1"
-                                     Placeholder="タグ名で検索..." />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                               OnClick="AddTagAsync" Disabled="@(SelectedTagToAdd == null || IsAddingTag)">
-                        追加
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.AutoAwesome"
-                               OnClick="LoadTagSuggestionsAsync" Disabled="@IsLoadingSuggestions">
-                        AI推論
-                    </MudButton>
-                </div>
+                @if (!string.IsNullOrEmpty(_currentUserId))
+                {
+                    <div class="d-flex align-center gap-2 mb-2">
+                        <MudAutocomplete T="TagSuggestion" @bind-Value="SelectedTagToAdd" SearchFunc="SearchTagsAsync"
+                                         ToStringFunc="@(t => t?.TagName ?? string.Empty)" Label="タグを追加"
+                                         Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Class="flex-grow-1"
+                                         Placeholder="タグ名で検索..." />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="AddTagAsync" Disabled="@(SelectedTagToAdd == null || IsAddingTag)">
+                            追加
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                   OnClick="LoadTagSuggestionsAsync" Disabled="@IsLoadingSuggestions">
+                            AI推論
+                        </MudButton>
+                    </div>
 
-                @if (IsLoadingSuggestions)
-                {
-                    <div class="d-flex align-center gap-2 mb-3">
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">関連タグを推論中...</MudText>
-                    </div>
-                }
-                else if (SuggestedTags.Count > 0)
-                {
-                    <div class="d-flex flex-wrap align-center gap-1 mb-3">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-1">推論タグ:</MudText>
-                        @foreach (var suggestion in SuggestedTags)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined"
-                                     Icon="@Icons.Material.Filled.Add"
-                                     OnClick="@(() => AddSuggestedTagAsync(suggestion))">
-                                @suggestion.TagName (@(suggestion.Score.ToString("P0")))
-                            </MudChip>
-                        }
-                    </div>
+                    @if (IsLoadingSuggestions)
+                    {
+                        <div class="d-flex align-center gap-2 mb-3">
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">関連タグを推論中...</MudText>
+                        </div>
+                    }
+                    else if (SuggestedTags.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap align-center gap-1 mb-3">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-1">推論タグ:</MudText>
+                            @foreach (var suggestion in SuggestedTags)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined"
+                                         Icon="@Icons.Material.Filled.Add"
+                                         OnClick="@(() => AddSuggestedTagAsync(suggestion))">
+                                    @suggestion.TagName (@(suggestion.Score.ToString("P0")))
+                                </MudChip>
+                            }
+                        </div>
+                    }
                 }
 
                 @if (TaggingRequests.Count > 0)
@@ -183,14 +189,24 @@
                                     </MudText>
                                 </div>
                                 <div class="d-flex align-center gap-2">
-                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                               OnClick="@(() => ApproveRequestAsync(req.Id))">
-                                        承認
-                                    </MudButton>
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                               OnClick="@(() => RejectRequestAsync(req.Id))">
-                                        却下
-                                    </MudButton>
+                                    @if (!string.IsNullOrEmpty(_currentUserId) && (IsOwner || req.TagOwnerUserId == _currentUserId))
+                                    {
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                   OnClick="@(() => ApproveRequestAsync(req.Id))">
+                                            承認
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                   OnClick="@(() => RejectRequestAsync(req.Id))">
+                                            却下
+                                        </MudButton>
+                                    }
+                                    else if (!string.IsNullOrEmpty(_currentUserId) && req.RequesterUserId == _currentUserId)
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                                   OnClick="@(() => RejectRequestAsync(req.Id))">
+                                            取り下げ
+                                        </MudButton>
+                                    }
                                 </div>
                             </MudPaper>
                         }
@@ -487,11 +503,11 @@
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
-    private async Task ChangeWeightAsync(int tagId, int delta)
+    private async Task ChangeWeightAsync(int relationId, int delta)
     {
         try
         {
-            bool ok = await ApiClient.UpdateTagWeightAsync(ItemId, tagId, delta, _cts.Token);
+            bool ok = await ApiClient.UpdateTagWeightAsync(ItemId, relationId, delta, _cts.Token);
             if (ok)
             {
                 Snackbar.Add("ウェイトを更新しました。", Severity.Success);
@@ -509,11 +525,11 @@
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
-    private async Task RemoveTagAsync(int tagId)
+    private async Task RemoveTagAsync(int relationId)
     {
         try
         {
-            bool ok = await ApiClient.RemoveTagFromItemAsync(ItemId, tagId, _cts.Token);
+            bool ok = await ApiClient.RemoveTagFromItemAsync(ItemId, relationId, _cts.Token);
             if (ok)
             {
                 Snackbar.Add("タグを削除しました。", Severity.Info);

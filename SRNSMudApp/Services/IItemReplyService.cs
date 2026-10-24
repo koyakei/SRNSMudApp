@@ -8,7 +8,7 @@ namespace SRNSMudApp.Services;
 public interface IItemReplyService
 {
     Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message);
-    Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId);
+    Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId, string? currentUserId = null, bool isAdmin = false);
     /// <summary>
     ///     アイテムに対するリプライの件数を取得する。
     /// </summary>

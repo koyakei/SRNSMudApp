@@ -1,169 +1,77 @@
-# Review & Challenge Handoff Report: Milestone 1
+# Quality & Adversarial Review Report — Milestone 1
 
 ## Review Summary
-
-**Verdict**: **REQUEST_CHANGES**  
-**Finding Category**: **INTEGRITY VIOLATION** (Critical) & **RETRY CORRUPTION HAZARD** (Major)
-
----
-
-## Findings
-
-### [Critical] Finding 1: SEC-01 Facade Implementation & Self-Certifying Mock (INTEGRITY VIOLATION)
-- **What**: The fix for SEC-01 in `PushNotificationController.cs` is a facade that does not actually protect against spoofed `userId` registration. The unit test introduced to verify this fix (`PushNotificationTests.PushNotificationController_Subscribe_WhenUnauthenticated_IgnoresRequestBodyUserIdAndStoresNull`) was self-certifying, verifying only that `(dto, null)` was passed to a mock, while leaving the spoofed `UserId` intact in the `dto`.
-- **Where**:
-  - `SRNSMudApp/Controllers/PushNotificationController.cs`: lines 50–57
-  - `SRNSMudApp/Services/Push/InMemoryPushSubscriptionStore.cs`: line 25
-  - `SRNSMudApp.Tests/Push/PushNotificationTests.cs`: lines 243–272
-- **Why**:
-  In `PushNotificationController.cs`:
-  ```csharp
-  string? authenticatedUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User?.FindFirst("sub")?.Value;
-  string? userId = (User?.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(authenticatedUserId))
-      ? authenticatedUserId
-      : null;
-
-  await _subscriptionStore.AddOrUpdateAsync(subscription, userId, cancellationToken);
-  ```
-  The incoming DTO parameter `subscription` is never sanitized. Its property `subscription.UserId` retains the client-supplied attacker value (e.g. `"victim-target-user-id"`).
-  In `InMemoryPushSubscriptionStore.cs`:
-  ```csharp
-  string? effectiveUserId = userId ?? subscription.UserId;
-  ```
-  Because `userId` passed by the controller is `null` for unauthenticated requests, `userId ?? subscription.UserId` falls back to `subscription.UserId`!
-  Consequently, in the actual runtime store and in HTTP integration calls, the attacker's subscription is successfully registered under the victim's account. An unauthenticated attacker can steal push notifications destined for any user.
-- **Verbatim Empirical Failure**:
-  ```bash
-  dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-  ```
-  ```
-  Failed SRNSMudApp.Tests.Push.PushNotificationAdversarialTests.Challenge_Subscribe_UnauthenticatedAttacker_SpoofsVictimUserId_DirectStoreExploit
-  Error Message: Assert.Empty() Failure: Collection was not empty
-  Collection: [PushSubscriptionDto { Endpoint = https://attacker.com/push/exploit-endpoint, Keys = ..., UserId = victim-target-user-id }]
-  ```
-- **Suggestion**:
-  1. Sanitize the DTO inside `PushNotificationController.Subscribe`:
-     ```csharp
-     var sanitizedSubscription = subscription with { UserId = userId };
-     await _subscriptionStore.AddOrUpdateAsync(sanitizedSubscription, userId, cancellationToken);
-     ```
-  2. In `InMemoryPushSubscriptionStore.AddOrUpdateAsync`, do not fall back to `subscription.UserId` when an explicit registration is performed through the controller, or ensure `effectiveUserId` is strictly dictated by the caller.
-
----
-
-### [Major] Finding 2: DATA-01 / DATA-02 Dirty ChangeTracker Pollution on Transient Retry
-- **What**: In `RightAssetPurchaseService.cs`, `ApplicationDbContext` is created outside `ExecuteWithStrategyAsync`. If a transient network glitch or timeout occurs during the operation (the exact condition `IExecutionStrategy` is designed to recover from), the delegate is re-executed without clearing `dbContext.ChangeTracker`.
-- **Where**:
-  - `SRNSMudApp/Services/RightAssetPurchaseService.cs`: lines 205, 244–297
-- **Why**:
-  EF Core's `IExecutionStrategy` does not automatically clear the `DbContext` change tracker upon retry.
-  1. If the first `SaveChangesAsync` fails transiently, `newAsset` remains in the tracker. On the retry iteration, `dbContext.RightAssets.Add(newAsset)` adds a second asset, resulting in **two** `RightAsset` records being committed (double-minting assets for a single payment).
-  2. If the second `SaveChangesAsync` fails transiently, `depositTx` remains in the tracker. On retry, a second `depositTx` with the same `TransactionHash` is added, crashing with `SqlException: Cannot insert duplicate key row in object 'dbo.JpycDepositTransactions' with unique index 'IX_JpycDepositTransactions_TransactionHash'`.
-- **Verbatim Empirical Failure**:
-  ```bash
-  dotnet test --filter "FullyQualifiedName~PurchaseRightAssetWithJpycAsync_WhenTransientFailure"
-  ```
-  ```
-  Failed PurchaseRightAssetWithJpycAsync_WhenTransientFailureOnFirstSave_RetriesSafelyWithoutDuplicatingAssets
-  Error Message: Assert.Single() Failure: The collection contained 2 items
-  Collection: [RightAsset { Id = 65, Amount = 2 }, RightAsset { Id = 66, Amount = 2 }]
-
-  Failed PurchaseRightAssetWithJpycAsync_WhenTransientFailureOnSecondSave_RetriesSafelyAndAtomically
-  Error Message: Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes.
-  ---- Microsoft.Data.SqlClient.SqlException: Cannot insert duplicate key row in object 'dbo.JpycDepositTransactions' with unique index 'IX_JpycDepositTransactions_TransactionHash'.
-  ```
-- **Suggestion**:
-  In `RightAssetPurchaseService.cs`, clear the change tracker at the start of the retry delegate:
-  ```csharp
-  return await dbContext.Database.ExecuteWithStrategyAsync(async () =>
-  {
-      dbContext.ChangeTracker.Clear();
-      await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-      ...
-  });
-  ```
-  Or instantiate a fresh `ApplicationDbContext` within each attempt delegate.
-
----
-
-### [Minor] Finding 3: THREAD-01 Unhandled FormatException for Malformed Tokens
-- **What**: In `ExternalTokenVerificationService.VerifyLineTokenAsync`, setting `request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken)` can throw `FormatException` if `idToken` contains invalid header characters (such as CR/LF injection characters).
-- **Where**: `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`: lines 60–63
-- **Why**: `VerifyLineTokenAsync` catches `HttpRequestException` and `JsonException`, but unhandled `FormatException` will bubble up as an unhandled 500 error instead of returning `Failure("Invalid LINE token format")`.
-- **Suggestion**: Add `catch (FormatException ex)` to return `LogAndReturnFailure("Invalid token format", ex)`.
-
----
-
-### [Minor] Finding 4: Formatting Issues in Test Suite
-- **What**: `dotnet format --diagnostics IDE0055 --verify-no-changes` failed with exit code 2 due to whitespace indentation issues in `RightAssetPurchaseServiceTests.cs` (lines 650–680) and missing final newlines in test files.
-- **Where**: `SRNSMudApp.Tests/Services/RightAssetPurchaseServiceTests.cs`, `SRNSMudApp.Tests/Push/PushNotificationAdversarialTests.cs`
-- **Suggestion**: Run `dotnet format --diagnostics IDE0055` after applying the fixes.
-
----
+**Verdict**: APPROVE
 
 ## 1. Observation
-1. **Compilation**: `dotnet build` succeeded with 0 errors and 8 pre-existing warnings in `RightAssetDataProvider.cs`.
-2. **THREAD-01 Verification**:
-   - Concurrency stress tests with 100 parallel requests (`THREAD01_StressTest_HighConcurrency_LineTokenVerification_NoHeaderMutationOrLeak`) passed completely with zero header mutations or token cross-contamination.
-   - `ExternalTokenVerificationService` correctly uses per-request `HttpRequestMessage`.
-3. **SEC-01 Broadcast Authorization**:
-   - `[Authorize(Roles = "Admin")]` on `SendNotification` correctly rejects anonymous callers with 401/403/Redirect (`Challenge_SendNotification_UnauthenticatedCaller_ReturnsUnauthorizedOrForbidden` passed).
-4. **SEC-01 Spoofed User Subscription**:
-   - In `PushNotificationController.cs`, `subscription` DTO is passed with untouched `subscription.UserId`.
-   - `InMemoryPushSubscriptionStore` resolves `effectiveUserId = userId ?? subscription.UserId`, persisting the spoofed ID.
-   - Direct store exploit and end-to-end HTTP tests failed empirically (`Assert.Empty()` failed, collection contained victim subscription).
-5. **DATA-01 Non-transient Rollback**:
-   - Rollback of `RightAsset` upon a non-transient exception on the second save works as intended (`PurchaseRightAssetWithJpycAsync_WhenDepositTransactionSaveFails_RollsBackRightAssetAtomically` passed).
-6. **DATA-01/DATA-02 Transient Retry**:
-   - On transient failure retry, `dbContext.ChangeTracker` is not cleared, causing double-minting of `RightAsset` and unique key constraint violation on `JpycDepositTransactions`. Both retry tests failed.
+### Directly Inspected Files & Line Numbers
+1. `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`:
+   - Lines 134, 147: Fixed mock setup and verification from `CancelContractAsync` to `RejectContractAsync(43, CurrentUserId, It.IsAny<string?>())` matching `ContractManagement.razor` line 53 (`OnClick="() => RejectContract(contract)"`).
+   - Lines 155–178: Added `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert` simulating `.mud-tab` click for "送信済み (Outbox)" and asserting "現在、送信したコントラクトの提案はありません。" using `cut.WaitForAssertion(...)`.
+2. `SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs`:
+   - Lines 887–943: Added `[Theory]` `ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar(bool isOwner)` with `[InlineData(true)]` and `[InlineData(false)]`. Integrates real `ItemCardSplitCoordinator` with JSInterop returning `string.Empty` and asserts `ShownSnackbars` has `Severity.Warning` with "分割するテキストが選択されていません。".
+3. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`:
+   - Lines 256–354: Added `WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList`. Exercises `MudAutocomplete.ValueChanged.InvokeAsync`, verifies add button dynamic enablement, clicks add, verifies `AddMemberAsync`, success snackbar, and list count update ("メンバー一覧 (2 人)").
+   - Lines 356–426: Added `WhenOwner_AddMemberFails_ShowsErrorSnackbar`. Verifies error snackbar "メンバーの追加に失敗しました。" when `AddMemberAsync` returns `false`.
+4. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`:
+   - Lines 368–411: Added 3 unit tests for `CanAddMember`: `CanAddMember_WhenSelectedUserProvidedAndIsOwner_ReturnsTrue`, `CanAddMember_WhenNotOwner_ReturnsFalseEvenWithSelectedUser`, and `CanAddMember_WhenSelectedUserIsNull_ReturnsFalse`.
+5. `SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`:
+   - Lines 1–46: Created pure unit test class testing `IOwnable.IsOwnedBy` with 5 parameter cases in `IsOwnedBy_EvaluatesOwnershipCorrectly` (match, mismatch, empty string, whitespace, null), empty string boundary fact, and concrete `Item` entity fact.
 
----
+### Verbatim Tool Command Results
+1. `dotnet build --no-incremental SRNSMudApp.sln`:
+   ```
+   ビルドに成功しました。
+       0 個の警告
+       0 エラー
+   経過時間 00:00:34.29
+   ```
+2. Target filter test run:
+   `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~ContractManagementTests|FullyQualifiedName~ItemCardSplitRequestTests|FullyQualifiedName~UserGroupMembersDialogTests|FullyQualifiedName~UserGroupMembersViewModelTests|FullyQualifiedName~IOwnableUnitTests"`:
+   ```
+   Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 584 ms - SRNSMudApp.Tests.dll (net11.0)
+   ```
+3. Full test suite run:
+   `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`:
+   ```
+   Passed!  - Failed:     0, Passed:  3209, Skipped:     0, Total:  3209, Duration: 52 s - SRNSMudApp.Tests.dll (net11.0)
+   ```
+4. Code format check on 5 modified/created files:
+   `dotnet format --diagnostics IDE0055 --verify-no-changes --include SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`:
+   ```
+   The command exited with code 0.
+   ```
 
 ## 2. Logic Chain
-1. SEC-01 required eliminating unauthenticated push subscription spoofing.
-2. Worker M1 updated `PushNotificationController` to pass `userId = null` to `_subscriptionStore.AddOrUpdateAsync`.
-3. However, worker M1 did not sanitize `subscription.UserId` on the `subscription` DTO object itself.
-4. `IPushSubscriptionStore` implementation (`InMemoryPushSubscriptionStore`) uses `userId ?? subscription.UserId`, which falls back to the client-provided DTO `UserId` when `userId` is `null`.
-5. Worker M1's unit test asserted only against a `Mock<IPushSubscriptionStore>` checking `AddOrUpdateAsync(dto, null, ...)`, creating a false sense of security while leaving the production behavior completely vulnerable.
-6. This constitutes a facade implementation with self-certifying verification, which violates integrity rules.
-7. Furthermore, the transaction retry logic under `ExecuteWithStrategyAsync` fails to reset `ChangeTracker`, producing entity duplication upon transient retries.
-8. Therefore, the work product cannot be approved. Changes must be requested.
-
----
+1. **Integrity Violation Audit**:
+   - Inspected all 5 test files line-by-line.
+   - Found no hardcoded test assertions circumventing real logic, no dummy/facade implementations, no skipped requirements, and no fabricated results.
+   - The test executions and assertions reflect actual runtime behavior of Blazor components (`MudTabs`, `ItemCard`, `MudAutocomplete`), coordinators (`ItemCardSplitCoordinator`), ViewModels (`UserGroupMembersViewModel`), and interface default methods (`IOwnable.IsOwnedBy`).
+2. **Quality & Standard Conformance**:
+   - bUnit best practices are followed: asynchronous rendering and panel changes use `cut.WaitForAssertion(...)` and `cut.InvokeAsync(...)`.
+   - xUnit assertions follow standard patterns with expected/actual ordering.
+   - Test files implement proper cleanup through `IAsyncDisposable` / `IAsyncLifetime`.
+   - Formatting on the 5 target files complies with `IDE0055` without any whitespace or indentation issues.
+3. **Adversarial Analysis & Stress-Testing**:
+   - **Tab Switching Dynamic Rendering**: `ContractManagement.razor` mounts `MudTabPanel` dynamically without `KeepPanelsAlive`. Before switching, the outbox message is absent from the DOM; upon clicking the tab header button, it appears. `WaitForAssertion` handles the async MudTabs state update reliably.
+   - **Empty Selection Handling**: `ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar` tests both branches of ownership (`[Theory]` with `true`/`false`), accurately locating the corresponding button by its localized title attribute. When JSInterop returns `string.Empty`, the coordinator produces the expected warning toast via `ISnackbar`.
+   - **User Selection Event in Autocomplete**: In `UserGroupMembersDialogTests`, firing `ValueChanged.InvokeAsync` directly on `MudAutocomplete` updates the two-way binding cleanly without relying on brittle DOM popover click simulation. The test verifies both button state toggling (disabled -> enabled) and subsequent member list updates.
+   - **Pure Screen & Domain Logic**: `UserGroupMembersViewModelTests` and `IOwnableUnitTests` isolate critical authorization predicates from the UI, executing in < 10 milliseconds and confirming that null, whitespace, and mismatched identifiers do not erroneously pass authorization guards.
+4. **Regression Assessment**:
+   - Initial execution during SQL server startup demonstrated that `SharedMsSqlTestDatabase` depends on an initialized MsSql container. Once the Testcontainers MsSql container completed initialization, all 3,209 unit tests in `SRNSMudApp.Tests` passed cleanly with 0 failures and 0 skipped tests.
 
 ## 3. Caveats
-- `RightAssetDataProvider.cs` contains 8 existing code analysis warnings (`CA1848`, `CA1873`) which are scheduled for later milestones.
-- UI tests (`ProposeContractDialogTests` and `TagNodeWidgetTests`) have 4 pre-existing failures from before Milestone 1.
-
----
+- E2E tests (`SRNSMudApp.E2ETests/PasskeyLoginE2ETests.cs` and retiring redundant E2E tests) are scheduled under Milestone 2 per `PROJECT.md` and were not in the scope of Milestone 1 review.
+- While `IOwnable.IsOwnedBy` currently performs ordinal string comparison (`OwnerId == userId`), this matches the ASP.NET Core Identity string IDs used throughout the application.
 
 ## 4. Conclusion
-Milestone 1 **cannot be approved**.
-The verdict is **REQUEST_CHANGES** due to:
-1. **Critical Integrity Violation**: SEC-01 unauthenticated user ID spoofing remains exploitable in runtime; the fix was cosmetic and masked by a self-certifying mock.
-2. **Major Data Integrity Hazard**: DATA-01/DATA-02 `ExecuteWithStrategyAsync` retries pollute the `DbContext.ChangeTracker`, causing asset double-minting and duplicate key errors.
+All Milestone 1 test implementations meet the project requirements and quality criteria. The tests run rapidly in-memory (584 ms for 60 tests), provide robust bUnit component and pure unit coverage, and introduce zero regressions to the existing test suite.
 
-Worker M1 must apply the recommended remediations before Milestone 1 can pass quality and adversarial gates.
-
----
+**Verdict**: APPROVE
 
 ## 5. Verification Method
-
-To verify these findings and check subsequent fixes, execute:
-
-```bash
-# 1. Build check
-dotnet build
-
-# 2. Adversarial push security verification (Must PASS after fix)
-dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-
-# 3. Transaction retry & atomicity verification (Must PASS after fix)
-dotnet test --filter "FullyQualifiedName~PurchaseRightAssetWithJpycAsync"
-
-# 4. Concurrency token verification
-dotnet test --filter "FullyQualifiedName~ExternalTokenVerificationConcurrencyTests"
-
-# 5. Format check
-dotnet format --diagnostics IDE0055 --verify-no-changes
-```
+To independently verify this verdict:
+1. `dotnet build --no-incremental SRNSMudApp.sln`
+2. `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj --filter "FullyQualifiedName~ContractManagementTests|FullyQualifiedName~ItemCardSplitRequestTests|FullyQualifiedName~UserGroupMembersDialogTests|FullyQualifiedName~UserGroupMembersViewModelTests|FullyQualifiedName~IOwnableUnitTests"`
+3. `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`
+4. `dotnet format --diagnostics IDE0055 --verify-no-changes --include SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`

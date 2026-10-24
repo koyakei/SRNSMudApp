@@ -539,4 +539,47 @@ public class TaggingContractBountyTests : TaggingContractTestBase
         var fail = acceptResult switch { Failure f => f, _ => throw new InvalidOperationException() };
         Assert.Equal("提供されたアセットの残量が不足しています。", fail.ErrorMessage);
     }
+
+    [Fact]
+    public async Task Bounty_SelfFulfillment_ShouldBeRejected()
+    {
+        // Arrange: 依頼者自身によるバウンティ達成は拒否される
+        await using var scope = CreateTestScope();
+        var (dbContext, service, tid) = scope;
+
+        var userA = $"ua_{tid}";
+        var userB = $"ub_{tid}";
+        await dbContext.SeedUsersAsync(userA, userB);
+
+        var targetItemA = new Item { Content = $"TargetItemA_{tid}", OwnerId = userA };
+        var tagB = new Tag { Name = $"TagB_{tid}", OwnerId = userB, CachedWeight = 10 };
+        dbContext.Items.Add(targetItemA);
+        dbContext.Tags.Add(tagB);
+        await dbContext.SaveChangesAsync();
+
+        var fulfillerAsset = new RightAsset { Amount = 1, OwnerId = userA, TargetTagId = tagB.Id, IsBurned = false };
+        dbContext.RightAssets.Add(fulfillerAsset);
+        await dbContext.SaveChangesAsync();
+
+        var contract = new TaggingRequestEntity
+        {
+            ContractType = "Bounty",
+            RequesterUserId = userA,
+            TagOwnerUserId = userB,
+            TargetItemId = targetItemA.Id,
+            RequestedTagId = tagB.Id,
+            Payload = new BountyPayload(0),
+            OwnerId = userA
+        };
+        dbContext.TaggingRequestEntities.Add(contract);
+        await dbContext.SaveChangesAsync();
+
+        // Act: 依頼者自身が達成を試みる
+        var acceptResult = await service.AcceptContractAsync(contract.Id, userA, fulfillerAsset.Id);
+
+        // Assert
+        Assert.True(acceptResult is Failure);
+        var fail = acceptResult switch { Failure f => f, _ => throw new InvalidOperationException() };
+        Assert.Equal("自身が作成したバウンティは達成できません。", fail.ErrorMessage);
+    }
 }

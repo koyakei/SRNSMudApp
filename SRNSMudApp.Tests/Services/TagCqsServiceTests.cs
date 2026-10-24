@@ -273,6 +273,40 @@ public class TagCqsServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdateTagAsync_WhenNonOwnerAndNotAdmin_ReturnsFalseAndDoesNotModifyTag()
+    {
+        var (dbContext, _, commandService, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"u_owner_{tid}";
+            var attackerId = $"u_attacker_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, attackerId);
+            var tag = new Tag { Name = $"Original_{tid}", Content = "OriginalContent", OwnerId = ownerId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 非所有者（非管理者）による更新試行
+            bool result = await commandService.UpdateTagAsync(tag.Id, $"Hacked_{tid}", "HackedContent", currentUserId: attackerId, isAdmin: false);
+
+            // Assert: 更新拒否され、DBの内容が変更されていないこと
+            Assert.False(result);
+            dbContext.ChangeTracker.Clear();
+            var unchangedTag = await dbContext.Tags.FindAsync(tag.Id);
+            Assert.NotNull(unchangedTag);
+            Assert.Equal($"Original_{tid}", unchangedTag.Name);
+            Assert.Equal("OriginalContent", unchangedTag.Content);
+
+            // Act 2: 所有者自身による更新試行
+            bool ownerResult = await commandService.UpdateTagAsync(tag.Id, $"OwnerUpdated_{tid}", "OwnerContent", currentUserId: ownerId, isAdmin: false);
+            Assert.True(ownerResult);
+
+            // Act 3: 管理者による更新試行（所有者でなくても成功する）
+            bool adminResult = await commandService.UpdateTagAsync(tag.Id, $"AdminUpdated_{tid}", "AdminContent", currentUserId: attackerId, isAdmin: true);
+            Assert.True(adminResult);
+        }
+    }
+
+    [Fact]
     public async Task GetTagsWithDetailsAsync_WhenUserIsOwnerOfPrivateTag_ReturnsPrivateTagForOwner()
     {
         var (dbContext, queryService, _, _, tid) = CreateScope();

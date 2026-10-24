@@ -433,6 +433,11 @@ public class ApplicationDbSaveChangesInterceptor(TimeProvider? timeProvider = nu
                             ? (localLastChild > remoteLastChild ? localLastChild : remoteLastChild)
                             : (localLastChild ?? remoteLastChild);
 
+                        if (lastChildNode != null && lastChildNode.GetAncestor(1) != rootNode)
+                        {
+                            lastChildNode = null;
+                        }
+
                         entry.Entity.Node = rootNode.GetDescendant(lastChildNode, null);
                     }
                     else

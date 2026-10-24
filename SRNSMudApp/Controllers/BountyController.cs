@@ -121,6 +121,8 @@ public sealed class BountyController(
             OwnerId = currentUserId,
             RequesterUserId = currentUserId,
             TagOwnerUserId = tagData.Tag.OwnerId,
+            TargetId = item.TagTargetId,
+            TargetItem = item,
             TargetItemId = request.TargetItemId,
             RequestedTagId = request.RequestedTagId,
             Payload = new BountyPayload(request.OfferedRewardAssetId ?? 0)

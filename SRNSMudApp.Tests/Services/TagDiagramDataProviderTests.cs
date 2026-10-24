@@ -292,4 +292,45 @@ public class TagDiagramDataProviderTests : IAsyncLifetime
             Assert.Contains(tag2.Id, tagIds);
         }
     }
+
+    [Fact]
+    public async Task GetContextItemsAsync_WhenPrivateItemRequested_FiltersOutForUnauthorizedUser()
+    {
+        var (dbContext, provider, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"uA_{tid}";
+            var userB = $"uB_{tid}";
+            var adminUser = $"uAdmin_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, adminUser);
+
+            var privateItem = new Item
+            {
+                Content = $"PrivateItem_{tid}",
+                OwnerId = userA,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(privateItem);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userB)
+            var itemsForUserB = await provider.GetContextItemsAsync([privateItem.Id], userB, isAdmin: false);
+            Assert.Empty(itemsForUserB);
+
+            // Act 2: 未ログインユーザー (null)
+            var itemsForAnon = await provider.GetContextItemsAsync([privateItem.Id], null, isAdmin: false);
+            Assert.Empty(itemsForAnon);
+
+            // Act 3: 投稿者本人 (userA)
+            var itemsForOwner = await provider.GetContextItemsAsync([privateItem.Id], userA, isAdmin: false);
+            Assert.Single(itemsForOwner);
+            Assert.Equal(privateItem.Id, itemsForOwner[0].Id);
+
+            // Act 4: 管理者 (adminUser)
+            var itemsForAdmin = await provider.GetContextItemsAsync([privateItem.Id], adminUser, isAdmin: true);
+            Assert.Single(itemsForAdmin);
+            Assert.Equal(privateItem.Id, itemsForAdmin[0].Id);
+        }
+    }
 }

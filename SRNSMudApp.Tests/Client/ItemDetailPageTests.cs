@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using Bunit;
 
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
@@ -17,6 +18,7 @@ using MudBlazor.Services;
 using SRNSMudApp.Client.Models.Api;
 using SRNSMudApp.Client.Pages;
 using SRNSMudApp.Client.Services;
+using SRNSMudApp.Tests.TestSupport;
 
 using Xunit;
 
@@ -131,6 +133,7 @@ public class ItemDetailPageTests : IAsyncDisposable
             IsPrivate: false,
             TagRelations: [],
             ItemKindJson: "{}",
+            OwnerUserId: "alice",
             Score: 10
         );
         var taggingRequest = new TaggingRequestDto(
@@ -159,8 +162,12 @@ public class ItemDetailPageTests : IAsyncDisposable
             .Setup(c => c.GetTaggingRequestsAsync(42, It.IsAny<CancellationToken>()))
             .ReturnsAsync([taggingRequest]);
 
+        var authState = BunitTestSetup.CreateAuthState("alice");
+
         // Act
-        IRenderedComponent<ItemDetailPage> cut = _ctx.Render<ItemDetailPage>(p => p.Add(x => x.ItemId, 42));
+        IRenderedComponent<ItemDetailPage> cut = _ctx.Render<ItemDetailPage>(p => p
+            .Add(x => x.ItemId, 42)
+            .AddCascadingValue(Task.FromResult(authState)));
 
         // Assert
         Assert.Contains("タグ付けリクエスト (1)", cut.Markup);
@@ -171,7 +178,7 @@ public class ItemDetailPageTests : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenPendingSplitRequestsExist_RendersSplitRequestCards()
+    public void WhenPendingSplitRequestsExist_WhenUserIsOwner_RendersApproveRejectAndDirectSplitButtons()
     {
         // Arrange
         var item = new ItemDto(
@@ -182,6 +189,7 @@ public class ItemDetailPageTests : IAsyncDisposable
             IsPrivate: false,
             TagRelations: [],
             ItemKindJson: "{}",
+            OwnerUserId: "owner-alice",
             Score: 10
         );
         var splitRequest = new ItemSplitRequestDto(
@@ -190,7 +198,131 @@ public class ItemDetailPageTests : IAsyncDisposable
             SelectedText: "分割したい抜粋文",
             RequesterUserId: "req-user",
             RequesterUserName: "requester_bob",
-            OwnerUserId: "alice",
+            OwnerUserId: "owner-alice",
+            Status: "Proposed",
+            RejectReason: null,
+            CreatedDate: DateTime.UtcNow
+        );
+
+        _apiClientMock
+            .Setup(c => c.GetItemByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+        _apiClientMock
+            .Setup(c => c.GetRepliesAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetQuotedByItemsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetTaggingRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetPendingSplitRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([splitRequest]);
+
+        var authState = BunitTestSetup.CreateAuthState("owner-alice");
+
+        // Act
+        IRenderedComponent<ItemDetailPage> cut = _ctx.Render<ItemDetailPage>(p => p
+            .Add(x => x.ItemId, 42)
+            .AddCascadingValue(Task.FromResult(authState)));
+
+        // Assert
+        Assert.Contains("保留中の分割リクエスト (1)", cut.Markup);
+        Assert.Contains("分割したい抜粋文", cut.Markup);
+        Assert.Contains("requester_bob", cut.Markup);
+        Assert.Contains("テキストを新規アイテムに分割", cut.Markup);
+        Assert.Contains("直接分割（所有者）", cut.Markup);
+        Assert.Contains("承認", cut.Markup);
+        Assert.Contains("却下", cut.Markup);
+        Assert.DoesNotContain("取り下げ", cut.Markup);
+        Assert.DoesNotContain(">分割リクエスト<", cut.Markup);
+    }
+
+    [Fact]
+    public void WhenPendingSplitRequestsExist_WhenUserIsRequester_RendersCancelAndSplitRequestButtons()
+    {
+        // Arrange
+        var item = new ItemDto(
+            Id: 42,
+            Content: "分割リクエストテスト",
+            OwnerUserName: "alice",
+            UpdatedDate: DateTimeOffset.UtcNow,
+            IsPrivate: false,
+            TagRelations: [],
+            ItemKindJson: "{}",
+            OwnerUserId: "owner-alice",
+            Score: 10
+        );
+        var splitRequest = new ItemSplitRequestDto(
+            Id: 88,
+            OriginalItemId: 42,
+            SelectedText: "分割したい抜粋文",
+            RequesterUserId: "req-user",
+            RequesterUserName: "requester_bob",
+            OwnerUserId: "owner-alice",
+            Status: "Proposed",
+            RejectReason: null,
+            CreatedDate: DateTime.UtcNow
+        );
+
+        _apiClientMock
+            .Setup(c => c.GetItemByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(item);
+        _apiClientMock
+            .Setup(c => c.GetRepliesAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetQuotedByItemsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetTaggingRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _apiClientMock
+            .Setup(c => c.GetPendingSplitRequestsAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([splitRequest]);
+
+        var authState = BunitTestSetup.CreateAuthState("req-user");
+
+        // Act
+        IRenderedComponent<ItemDetailPage> cut = _ctx.Render<ItemDetailPage>(p => p
+            .Add(x => x.ItemId, 42)
+            .AddCascadingValue(Task.FromResult(authState)));
+
+        // Assert
+        Assert.Contains("保留中の分割リクエスト (1)", cut.Markup);
+        Assert.Contains("分割したい抜粋文", cut.Markup);
+        Assert.Contains("requester_bob", cut.Markup);
+        Assert.Contains("テキストを新規アイテムに分割", cut.Markup);
+        Assert.Contains("分割リクエスト", cut.Markup);
+        Assert.Contains("取り下げ", cut.Markup);
+        Assert.DoesNotContain("直接分割（所有者）", cut.Markup);
+        Assert.DoesNotContain("承認", cut.Markup);
+        Assert.DoesNotContain("却下", cut.Markup);
+    }
+
+    [Fact]
+    public void WhenPendingSplitRequestsExist_WhenUserIsAnonymous_RendersSplitRequestButtonWithoutActionButtons()
+    {
+        // Arrange
+        var item = new ItemDto(
+            Id: 42,
+            Content: "分割リクエストテスト",
+            OwnerUserName: "alice",
+            UpdatedDate: DateTimeOffset.UtcNow,
+            IsPrivate: false,
+            TagRelations: [],
+            ItemKindJson: "{}",
+            OwnerUserId: "owner-alice",
+            Score: 10
+        );
+        var splitRequest = new ItemSplitRequestDto(
+            Id: 88,
+            OriginalItemId: 42,
+            SelectedText: "分割したい抜粋文",
+            RequesterUserId: "req-user",
+            RequesterUserName: "requester_bob",
+            OwnerUserId: "owner-alice",
             Status: "Proposed",
             RejectReason: null,
             CreatedDate: DateTime.UtcNow
@@ -220,8 +352,11 @@ public class ItemDetailPageTests : IAsyncDisposable
         Assert.Contains("分割したい抜粋文", cut.Markup);
         Assert.Contains("requester_bob", cut.Markup);
         Assert.Contains("テキストを新規アイテムに分割", cut.Markup);
-        Assert.Contains("直接分割（所有者）", cut.Markup);
         Assert.Contains("分割リクエスト", cut.Markup);
+        Assert.DoesNotContain("直接分割（所有者）", cut.Markup);
+        Assert.DoesNotContain("承認", cut.Markup);
+        Assert.DoesNotContain("却下", cut.Markup);
+        Assert.DoesNotContain("取り下げ", cut.Markup);
     }
 
     public async ValueTask DisposeAsync()

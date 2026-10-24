@@ -26,36 +26,34 @@ public class MutualContractExecutor(
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(contract);
 
+        int requiredAmount = contract.RequestType == TaggingRequestType.Add ? Math.Max(1, contract.ProposedWeight) : 1;
+
         Result<RightAsset> assetValidation = contract.ConsumedRightAsset switch
         {
             null => new Failure("相互タグ付けには対価のアセットが必要です。"),
             { OwnerId: var o } when o != contract.RequesterUserId => new Failure("指定された RightAsset を所有していません。"),
             { IsBurned: true } => new Failure("指定された RightAsset は既に消費済みです。"),
             var a when a.TargetTagId != contract.RequestedTagId => new Failure("指定された RightAsset は対象タグの権利ではありません。"),
-            var a when a.Amount < 1 => new Failure("指定された RightAsset の残量が不足しています。"),
+            var a when a.Amount < requiredAmount => new Failure("指定された RightAsset の残量が不足しています。"),
             _ => new Success<RightAsset>(contract.ConsumedRightAsset)
         };
 
         return await (assetValidation switch
         {
             Failure f => Task.FromResult<Result<string>>(f),
-            Success<RightAsset> s => ProcessMutualWithAssetAsync(dbContext, contract, s.Value, currentUserId)
+            Success<RightAsset> s => ProcessMutualWithAssetAsync(dbContext, contract, s.Value, currentUserId, requiredAmount)
         });
     }
 
-    private async Task<Result<string>> ProcessMutualWithAssetAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, RightAsset consumedAsset, string executorUserId)
+    private async Task<Result<string>> ProcessMutualWithAssetAsync(
+        ApplicationDbContext dbContext,
+        TaggingRequestEntity contract,
+        RightAsset consumedAsset,
+        string executorUserId,
+        int weightToConsume)
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
-        if (consumedAsset.Amount <= 1)
-        {
-            consumedAsset.Amount = 0;
-            consumedAsset.IsBurned = true;
-            consumedAsset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
-        }
-        else
-        {
-            consumedAsset.Amount -= 1;
-        }
+        consumedAsset.Consume(weightToConsume, _timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(consumedAsset);
 
         Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
@@ -192,6 +190,11 @@ public class MutualContractExecutor(
         if (contract.Payload is not MutualPayload mutualPayload)
         {
             return new Failure("Mutual payload is missing");
+        }
+
+        if (offeredTag.OwnerId != contract.RequesterUserId)
+        {
+            return new Failure("提供されたタグの所有者ではありません。");
         }
 
         var offeredTagAsset = new RightAsset

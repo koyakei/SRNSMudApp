@@ -297,9 +297,10 @@ public class ItemCardDataProviderTests : IAsyncLifetime
             db.Tags.Add(tag);
             await db.SaveChangesAsync();
 
+            var targetItem = await db.Items.FindAsync(itemId);
             var taggingReq = new TaggingRequestEntity
             {
-                TargetId = itemId,
+                TargetId = targetItem!.TagTargetId,
                 RequestedTagId = tag.Id,
                 OwnerId = userId
             };

@@ -71,6 +71,18 @@ public class Tag : BaseEntity
                     ? new SystemClassificationTag(Name)
                     : new UserCustomTag(Name, OwnerId);
 
+    /// <summary>
+    ///     タグの CachedWeight に指定された差分（delta）を適用し、更新前の値と更新後の値をタプルで返す。
+    /// </summary>
+    /// <param name="delta">増減値。</param>
+    /// <returns>更新前の CachedWeight と更新後の CachedWeight のタプル。</returns>
+    public (int PreviousWeight, int NewWeight) ApplyWeightDelta(int delta)
+    {
+        int prevWeight = CachedWeight;
+        CachedWeight += delta;
+        return (prevWeight, CachedWeight);
+    }
+
     // ReSharper disable once EntityFramework.ModelValidation.UnlimitedStringLength
     public string Content { get; set; } = "";
 

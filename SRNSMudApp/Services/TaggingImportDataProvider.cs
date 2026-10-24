@@ -185,9 +185,8 @@ public class TaggingImportDataProvider(
 
             // 1. Items の作成
             var itemMap = new Dictionary<string, Item>();
-            for (var i = 0; i < payload.Item.Count; i++)
+            foreach (var (i, itemDto) in payload.Item.Index())
             {
-                ImportItemDto itemDto = payload.Item[i];
                 var content = i < processedItemContents.Count ? processedItemContents[i] : itemDto.Content;
 
                 var item = new Item

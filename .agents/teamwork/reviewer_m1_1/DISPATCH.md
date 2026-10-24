@@ -1,43 +1,26 @@
-# Dispatch: Reviewer M1 (Instance 1)
+## 2026-10-23T21:43:59Z
 
-## Objective
-Review Milestone 1 changes (SEC-01, THREAD-01, DATA-01, DATA-02) implemented by worker_m1.
-Examine correctness, completeness, robustness, interface conformance, and adherence to project rules.
-
-## Modified Files
-- `SRNSMudApp/Controllers/PushNotificationController.cs`
-- `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`
-- `SRNSMudApp/Services/RightAssetPurchaseService.cs`
-- `SRNSMudApp/Data/ExecutionStrategyExtensions.cs`
-- `SRNSMudApp.Tests/Push/PushNotificationTests.cs`
-- `SRNSMudApp.Tests/Auth/ExternalTokenVerificationServiceTests.cs`
-- `SRNSMudApp.Tests/Services/RightAssetPurchaseServiceTests.cs`
-
-## Worker Handoff
-`/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md`
-
-## Instructions
-1. Run `dotnet build` to ensure 0 errors.
-2. Run `dotnet test --filter "FullyQualifiedName~PushNotificationTests|FullyQualifiedName~ExternalTokenVerificationServiceTests|FullyQualifiedName~RightAssetPurchaseServiceTests"` to verify all Milestone 1 tests pass.
-3. Verify that `SendNotification` requires Admin authorization and `Subscribe` does not accept spoofed userId.
-4. Verify that `VerifyLineTokenAsync` does not mutate `DefaultRequestHeaders`.
-5. Verify that `RightAssetPurchaseService` commits atomically.
-6. Provide an explicit verdict: APPROVE or REQUEST_CHANGES.
-Write report to: `/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_1/handoff.md`.
-
-
-## 2026-10-02T14:36:45Z
 You are reviewer_m1_1.
 Your working directory is: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_1
-Read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md before starting work.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/PROJECT.md.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_1/DISPATCH.md.
-Also read worker handoff: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md.
 
-Review Milestone 1 changes (SEC-01, THREAD-01, DATA-01, DATA-02) implemented by worker_m1.
-Verify code correctness, completeness, robustness, and adherence to project rules.
-Run dotnet build and relevant dotnet test commands.
-Write your handoff report to:
-/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/reviewer_m1_1/handoff.md
-State an explicit verdict: APPROVE or REQUEST_CHANGES.
-Send a message to orchestrator parent when complete.
+MANDATORY FIRST STEP: Read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md completely (especially under ## 2026-10-23T21:13:45Z).
+Also read:
+- Project Plan: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/orchestrator_4/PROJECT.md
+- Worker Handoff: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md
+
+Objective:
+Review the Milestone 1 changes across:
+1. `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`
+2. `SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs`
+3. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`
+4. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`
+5. `SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`
+
+Examine:
+- Correctness and adherence to bUnit & xUnit standards.
+- Verification commands: Run `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj` and check execution times and test passes.
+- Code quality, absence of regressions, proper async handling, and adherence to project rules.
+
+Deliverable:
+Write your review report and handoff.md with a clear verdict: APPROVE or REQUEST_CHANGES.
+Send a message back with your verdict.

@@ -118,6 +118,45 @@ public class LinkPreviewServiceTests : IAsyncLifetime
         Assert.Empty(preview.Tags);
     }
 
+    [Fact]
+    public async Task GetPreviewAsync_InternalItemDetail_WhenItemIsPrivate_FiltersOutForUnauthorizedUser()
+    {
+        // Arrange
+        var (db, sut, tid) = CreateScope();
+        var userA = $"owner_{tid}";
+        var userB = $"viewer_{tid}";
+        var adminUser = $"admin_{tid}";
+        await db.SeedUsersAsync(userA, userB, adminUser);
+
+        var privateItem = new Item
+        {
+            Content = $"Secret private content {tid}",
+            OwnerId = userA,
+            IsPrivate = true,
+            TargetUserGroupId = null
+        };
+        db.Items.Add(privateItem);
+        await db.SaveChangesAsync();
+
+        // Act 1: 権限のない第三者 (userB)
+        LinkPreviewData previewUserB = await sut.GetPreviewAsync($"/ItemDetail/{privateItem.Id}", userB, isAdmin: false, CancellationToken.None);
+        Assert.False(previewUserB.IsSuccess);
+
+        // Act 2: 未ログインユーザー (null)
+        LinkPreviewData previewAnon = await sut.GetPreviewAsync($"/ItemDetail/{privateItem.Id}", null, isAdmin: false, CancellationToken.None);
+        Assert.False(previewAnon.IsSuccess);
+
+        // Act 3: 投稿者本人 (userA)
+        LinkPreviewData previewOwner = await sut.GetPreviewAsync($"/ItemDetail/{privateItem.Id}", userA, isAdmin: false, CancellationToken.None);
+        Assert.True(previewOwner.IsSuccess);
+        Assert.Equal($"Secret private content {tid}", previewOwner.Description);
+
+        // Act 4: 管理者 (adminUser)
+        LinkPreviewData previewAdmin = await sut.GetPreviewAsync($"/ItemDetail/{privateItem.Id}", adminUser, isAdmin: true, CancellationToken.None);
+        Assert.True(previewAdmin.IsSuccess);
+        Assert.Equal($"Secret private content {tid}", previewAdmin.Description);
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

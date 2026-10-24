@@ -1,5 +1,6 @@
 @page "/User/WasmManagement"
 @attribute [Authorize(Roles = "Admin")]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using Microsoft.AspNetCore.Authorization
 @using SRNSMudApp.Client.Models.Api
 @using SRNSMudApp.Client.Services

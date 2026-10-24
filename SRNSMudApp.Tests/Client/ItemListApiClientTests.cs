@@ -285,6 +285,47 @@ public class ItemListApiClientTests
     }
 
     [Fact]
+    public async Task CreateItemAsync_WhenBadRequestWithProblemDetails_ThrowsHttpRequestExceptionWithDetail()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            var json = "{\"detail\":\"Content は1000文字以内で入力してください。\"}";
+            return new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            apiClient.CreateItemAsync(new CreateItemRequest("Too long content")));
+
+        Assert.Contains("Content は1000文字以内で入力してください。", ex.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateTagAsync_WhenUnauthorized_ThrowsHttpRequestExceptionWithFriendlyMessage()
+    {
+        // Arrange
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.com/") };
+        var apiClient = new ItemListApiClient(client);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            apiClient.CreateTagAsync(new CreateTagRequest("SampleTag")));
+
+        Assert.Equal("ログインが必要です。", ex.Message);
+        Assert.Equal(HttpStatusCode.Unauthorized, ex.StatusCode);
+    }
+
+    [Fact]
     public async Task GetRepliesAsync_ReturnsReplies()
     {
         // Arrange

@@ -3,6 +3,7 @@ namespace SRNSMudApp.Controllers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,14 +32,22 @@ public sealed class RightAssetController(
     /// <summary>
     /// RightAsset が発行されている代表的なタグ一覧を取得します。
     /// </summary>
+    /// <param name="count">取得最大件数（既定値: 10）。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>代表タグ概要の DTO 一覧。</returns>
     [HttpGet("top-tags")]
     [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<TagRightAssetSummaryDto>>> GetTopTags(
         [FromQuery] int count = 10,
         CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<TagRightAssetSummary> summaries =
-            await _rightAssetDataProvider.GetTopTagsWithRightAssetsAsync(count, cancellationToken);
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
+        // 非公開タグは閲覧権限のあるユーザーにのみ返却する (Issue 2-8)
+        IReadOnlyList<TagRightAssetSummary> summaries = string.IsNullOrEmpty(currentUserId) && !isAdmin
+            ? await _rightAssetDataProvider.GetTopTagsWithRightAssetsAsync(count, cancellationToken)
+            : await _rightAssetDataProvider.GetTopTagsWithRightAssetsAsync(count, currentUserId, isAdmin, cancellationToken);
 
         var dtos = summaries.Select(s => new TagRightAssetSummaryDto(
             TagId: s.TagId,
@@ -54,14 +63,22 @@ public sealed class RightAssetController(
     /// <summary>
     /// 指定されたタグの RightAsset 保有状況および詳細アセット一覧を取得します。
     /// </summary>
+    /// <param name="tagId">対象タグID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>RightAsset 概要レスポンス DTO。タグが存在しないか権限がない場合は NotFound。</returns>
     [HttpGet("overview/{tagId:int}")]
     [AllowAnonymous]
     public async Task<ActionResult<RightAssetOverviewResponse>> GetOverview(
         int tagId,
         CancellationToken cancellationToken = default)
     {
-        RightAssetOverviewData? overview =
-            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId, cancellationToken);
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
+        // 非公開タグの認可チェック: 権限がない場合は 404 NotFound を返却し存在漏洩を防ぐ (Issue 2-8)
+        RightAssetOverviewData? overview = string.IsNullOrEmpty(currentUserId) && !isAdmin
+            ? await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId, cancellationToken)
+            : await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId, currentUserId, isAdmin, cancellationToken);
 
         if (overview is null)
         {

@@ -37,7 +37,10 @@ public class ItemReplyService(
             .FirstOrDefaultAsync(r => r.Id == reply.Id);
     }
 
-    public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(int parentItemId)
+    public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(
+        int parentItemId,
+        string? currentUserId = null,
+        bool isAdmin = false)
     {
         if (parentItemId <= 0)
         {
@@ -46,8 +49,9 @@ public class ItemReplyService(
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
 
-        // 1. 通常のリプライを取得
+        // 1. 通常のリプライを取得 (可視性フィルタ適用)
         List<Item> regularReplies = await context.Items!
+            .WhereVisibleToUser(context, currentUserId, isAdmin)
             .Include(i => i.Owner)
             .Include(i => i.TagRelations)
                 .ThenInclude(tr => tr.Tag)
@@ -101,6 +105,7 @@ public class ItemReplyService(
             Item? commentItem = ledger.EffectiveCommentItem;
             if (commentItem is not null &&
                 !string.IsNullOrWhiteSpace(commentItem.Content) &&
+                await commentItem.IsItemVisibleToUserAsync(context, currentUserId, isAdmin) &&
                 processedCommentItemIds.Add(commentItem.Id))
             {
                 var tagName = ledger.Tag?.Name
@@ -137,6 +142,7 @@ public class ItemReplyService(
             Item? commentItem = tr.CommentItem;
             if (commentItem is not null &&
                 !string.IsNullOrWhiteSpace(commentItem.Content) &&
+                await commentItem.IsItemVisibleToUserAsync(context, currentUserId, isAdmin) &&
                 processedCommentItemIds.Add(commentItem.Id))
             {
                 var tagName = tr.Tag?.Name ?? "タグ";
@@ -260,6 +266,18 @@ public class ItemReplyService(
                 .Distinct()!];
         }
 
+        // Issue 4-2: 会話からオプトアウト（ConversationOptOut）したユーザーを通知対象から除外する
+        int threadRootId = replyItem.RootItemId ?? parentItemId;
+        List<string> optedOutUserIds = await context.ConversationOptOuts
+            .Where(o => o.RootItemId == threadRootId)
+            .Select(o => o.UserId)
+            .ToListAsync();
+
+        if (optedOutUserIds.Count > 0)
+        {
+            recipientIds = recipientIds.Where(id => !optedOutUserIds.Contains(id)).ToList();
+        }
+
         if (recipientIds.Count > 0)
         {
             var recipients = recipientIds.Select(rid => new ItemReplyNotificationRecipient
@@ -273,12 +291,16 @@ public class ItemReplyService(
 
             if (_notificationService != null)
             {
+                string notificationBody = replyItem.IsPrivate
+                    ? "非公開の返信が届きました。"
+                    : (replyItem.Content.Length > 100 ? replyItem.Content[..97] + "..." : replyItem.Content);
+
                 foreach (string rid in recipientIds)
                 {
                     _ = _notificationService.NotifyUserAsync(
                         rid,
                         "新しい返信",
-                        replyItem.Content,
+                        notificationBody,
                         $"/items/{parentItemId}");
                 }
             }

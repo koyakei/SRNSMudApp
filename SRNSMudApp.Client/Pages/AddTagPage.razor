@@ -1,5 +1,6 @@
 @page "/Tag/WasmAddTag"
 @attribute [Authorize(Roles = "Admin")]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
 @using System.Threading
 @using Microsoft.AspNetCore.Authorization

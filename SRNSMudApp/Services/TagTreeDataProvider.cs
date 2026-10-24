@@ -279,9 +279,29 @@ public class TagTreeDataProvider(
             .Select(t => (HierarchyId?)t.Node)
             .FirstOrDefaultAsync();
 
-        tagToUpdate.Node = parentNode.GetDescendant(lastChild, null);
+        HierarchyId oldNode = tagToUpdate.Node;
+        HierarchyId newNode = parentNode.GetDescendant(lastChild, null);
+
+        tagToUpdate.Node = newNode;
         tagToUpdate.ParentTagId = parentTagId;
         tagToUpdate.UpdatedDate = DateTime.UtcNow;
+
+        // 子孫タグの HierarchyId ノードを再計算してツリー整合性を維持する
+        if (oldNode != null)
+        {
+            List<Tag> descendants = await context.Tags
+                .Where(t => t.Id != tagToUpdate.Id && t.Node.IsDescendantOf(oldNode))
+                .ToListAsync();
+
+            foreach (Tag descendant in descendants)
+            {
+                if (descendant.Node.GetReparentedValue(oldNode, newNode) is { } reparented)
+                {
+                    descendant.Node = reparented;
+                    descendant.UpdatedDate = DateTime.UtcNow;
+                }
+            }
+        }
 
         try
         {

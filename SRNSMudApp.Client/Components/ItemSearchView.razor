@@ -266,7 +266,7 @@ else
                                         {
                                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
                                                      Href="@($"/TagDetail/{rel.TagId}")"
-                                                     OnClose="@(() => RemoveTagFromItemAsync(item.Id, rel.TagId))">
+                                                     OnClose="@(() => RemoveTagFromItemAsync(item.Id, rel.RelationId != 0 ? rel.RelationId : rel.TagId))">
                                                 #@rel.TagName
                                                 @if (rel.Weight.HasValue && rel.Weight.Value != 0)
                                                 {

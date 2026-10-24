@@ -299,12 +299,12 @@ public class TaggingContractMutualTests : TaggingContractTestBase
         var acceptResult = await service.AcceptContractAsync(contract.Id, userB);
         Assert.True(acceptResult is Success<string>, acceptResult switch { Failure f => f.ErrorMessage, _ => "Expected Success" });
 
-        // Assert: 5 - 1 = 4 が手元に残り、IsBurned == false
+        // Assert: 5 - 2 = 3 が手元に残り、IsBurned == false
         dbContext.ChangeTracker.Clear();
         var updatedAsset = await dbContext.RightAssets.FindAsync(rightAssetA.Id);
         Assert.NotNull(updatedAsset);
         Assert.False(updatedAsset!.IsBurned);
-        Assert.Equal(4, updatedAsset.Amount);
+        Assert.Equal(3, updatedAsset.Amount);
     }
 
     [Fact]

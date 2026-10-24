@@ -121,6 +121,50 @@ public class RightAssetDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetRightAssetOverviewByTagIdAsync_WhenTagIsPrivate_ReturnsNullForUnauthorizedUser()
+    {
+        var (db, sut, userA, userB, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var privateTag = new Tag
+            {
+                Name = $"PrivateTag_{tid}",
+                OwnerId = userA,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            db.Tags.Add(privateTag);
+            await db.SaveChangesAsync();
+
+            db.RightAssets.Add(new RightAsset
+            {
+                TargetTagId = privateTag.Id,
+                OwnerId = userA,
+                Amount = 50,
+                IsBurned = false,
+                CreatedDate = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userB) は null
+            RightAssetOverviewData? forUserB = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userB, isAdmin: false);
+            Assert.Null(forUserB);
+
+            // Act 2: 未ログインユーザーは null
+            RightAssetOverviewData? forAnon = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, null, isAdmin: false);
+            Assert.Null(forAnon);
+
+            // Act 3: オーナー本人 (userA) は取得可能
+            RightAssetOverviewData? forOwner = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userA, isAdmin: false);
+            Assert.NotNull(forOwner);
+
+            // Act 4: 管理者は取得可能
+            RightAssetOverviewData? forAdmin = await sut.GetRightAssetOverviewByTagIdAsync(privateTag.Id, userB, isAdmin: true);
+            Assert.NotNull(forAdmin);
+        }
+    }
+
+    [Fact]
     public async Task GetTopTagsWithRightAssetsAsync_ReturnsTagsOrderedByActiveAmount()
     {
         var (db, sut, userA, _, tag1Id, tid) = await CreateScopeAsync();

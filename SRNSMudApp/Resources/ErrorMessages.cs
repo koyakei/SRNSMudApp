@@ -136,4 +136,10 @@ public static class ErrorMessages
 
     public static string FormatSplitRequestNotProposedForCancel(object status) =>
         string.Format(CultureInfo.CurrentCulture, SplitRequestNotProposedForCancel, status);
+
+    public static string SplitIntersectsExistingLink =>
+        GetString(nameof(SplitIntersectsExistingLink));
+
+    public static string SplitResultExceedsMaxLength =>
+        GetString(nameof(SplitResultExceedsMaxLength));
 }

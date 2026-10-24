@@ -144,7 +144,7 @@ public class ContractManagementViewModelTests
         var pageData = new ContractManagementPageData([], []);
 
         _contractServiceMock
-            .Setup(x => x.CancelContractAsync(contractId, userId))
+            .Setup(x => x.RejectContractAsync(contractId, userId, It.IsAny<string?>()))
             .ReturnsAsync(new Success<string>("Contract rejected"));
 
         _contractDataMock
@@ -158,7 +158,7 @@ public class ContractManagementViewModelTests
 
         // Assert
         Assert.True(result is Success<string>);
-        _contractServiceMock.Verify(x => x.CancelContractAsync(contractId, userId), Times.Once);
+        _contractServiceMock.Verify(x => x.RejectContractAsync(contractId, userId, It.IsAny<string?>()), Times.Once);
         _contractDataMock.Verify(x => x.GetContractsAsync(userId), Times.Once);
         Assert.True(vm.PageState is Loaded<ContractManagementData>);
     }
@@ -171,7 +171,7 @@ public class ContractManagementViewModelTests
         var contractId = 42;
 
         _contractServiceMock
-            .Setup(x => x.CancelContractAsync(contractId, userId))
+            .Setup(x => x.RejectContractAsync(contractId, userId, It.IsAny<string?>()))
             .ReturnsAsync(new Failure("Not allowed"));
 
         var vm = CreateViewModel();
@@ -181,7 +181,7 @@ public class ContractManagementViewModelTests
 
         // Assert
         Assert.True(result is Failure f && f.ErrorMessage == "Not allowed");
-        _contractServiceMock.Verify(x => x.CancelContractAsync(contractId, userId), Times.Once);
+        _contractServiceMock.Verify(x => x.RejectContractAsync(contractId, userId, It.IsAny<string?>()), Times.Once);
         _contractDataMock.Verify(x => x.GetContractsAsync(It.IsAny<string>()), Times.Never);
     }
 

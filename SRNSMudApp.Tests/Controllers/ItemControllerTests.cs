@@ -462,7 +462,7 @@ public class ItemControllerTests
         // Arrange
         var controller = CreateController();
         var quoteItem = new Item { Id = 201, Content = "Quote 1", QuotedItemId = 1, OwnerId = "user-abc" };
-        _itemQuoteMock.Setup(q => q.GetQuotedByItemsAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync([quoteItem]);
+        _itemQuoteMock.Setup(q => q.GetQuotedByItemsAsync(1, It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync([quoteItem]);
 
         // Act
         ActionResult<IReadOnlyList<ItemDto>> result = await controller.GetQuotes(1, CancellationToken.None);
@@ -739,7 +739,7 @@ public class ItemControllerTests
             ItemKindJson = "{}",
             QuotedItemId = 1
         };
-        _itemQuoteMock.Setup(m => m.GetQuotedByItemsAsync(1, It.IsAny<CancellationToken>()))
+        _itemQuoteMock.Setup(m => m.GetQuotedByItemsAsync(1, It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([item]);
 
         // Act

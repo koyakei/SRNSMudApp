@@ -78,7 +78,7 @@ public sealed class ItemController(
     {
         if (string.IsNullOrWhiteSpace(q))
         {
-            return Ok(Array.Empty<TagSuggestion>());
+            return Ok((IReadOnlyList<TagSuggestion>)[]);
         }
 
         IReadOnlyList<TagSuggestion> results = await _itemListDataProvider
@@ -183,9 +183,21 @@ public sealed class ItemController(
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var isAdmin = User?.IsInRole("Admin") ?? false;
 
+        // 非公開アイテムの認可判定 (Issue 3-9: Blazor Server と同一の可視性拡張ロジックを適用)
         if (item.IsPrivate && item.OwnerId != currentUserId && !isAdmin)
         {
-            return Forbid();
+            if (_itemDetailDataProvider != null)
+            {
+                ItemDetailPageData? detail = await _itemDetailDataProvider.GetItemDetailAsync(id, currentUserId, isAdmin, cancellationToken);
+                if (detail == null)
+                {
+                    return Forbid();
+                }
+            }
+            else
+            {
+                return Forbid();
+            }
         }
 
         int replyCount = await _itemReplyService.GetItemReplyCountAsync(id);
@@ -201,7 +213,8 @@ public sealed class ItemController(
                 TagId: tr.TagId,
                 TagName: tr.Tag?.Name ?? string.Empty,
                 Weight: tr.Weight,
-                OwnerUserName: tr.Owner?.UserName ?? tr.Tag?.Owner?.UserName
+                OwnerUserName: tr.Owner?.UserName ?? tr.Tag?.Owner?.UserName,
+                RelationId: tr.Id
             ))
             .ToList();
 
@@ -362,6 +375,11 @@ public sealed class ItemController(
             return BadRequest("Content は必須です。");
         }
 
+        if (request.Content.Length > 1000)
+        {
+            return BadRequest("Content は1000文字以内で入力してください。");
+        }
+
         var item = new Item
         {
             Content = request.Content.Trim(),
@@ -387,8 +405,10 @@ public sealed class ItemController(
         int id,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<Item> replies = await _itemReplyService.GetItemRepliesAsync(id);
-        var replyDtos = replies.Select(r => MapToItemDto(r, 0, 0)).ToList();
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        IReadOnlyList<Item> replies = await _itemReplyService.GetItemRepliesAsync(id, currentUserId, isAdmin);
+        var replyDtos = (replies ?? []).Select(r => MapToItemDto(r, 0, 0)).ToList();
         return Ok(replyDtos);
     }
 
@@ -410,6 +430,11 @@ public sealed class ItemController(
         if (string.IsNullOrWhiteSpace(request.Content))
         {
             return BadRequest("Content は必須です。");
+        }
+
+        if (request.Content.Length > 1000)
+        {
+            return BadRequest("Content は1000文字以内で入力してください。");
         }
 
         Item? parentItem = await _itemCardDataProvider.GetItemByIdAsync(id);
@@ -445,8 +470,10 @@ public sealed class ItemController(
         int id,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<Item> quotes = await _itemQuoteService.GetQuotedByItemsAsync(id, cancellationToken);
-        var quoteDtos = quotes.Select(q => MapToItemDto(q, 0, 0)).ToList();
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        IReadOnlyList<Item> quotes = await _itemQuoteService.GetQuotedByItemsAsync(id, currentUserId, isAdmin, cancellationToken);
+        var quoteDtos = (quotes ?? []).Select(q => MapToItemDto(q, 0, 0)).ToList();
         return Ok(quoteDtos);
     }
 
@@ -468,6 +495,11 @@ public sealed class ItemController(
         if (string.IsNullOrWhiteSpace(request.Content))
         {
             return BadRequest("Content は必須です。");
+        }
+
+        if (request.Content.Length > 1000)
+        {
+            return BadRequest("Content は1000文字以内で入力してください。");
         }
 
         Item? item = await _itemCardDataProvider.GetItemByIdAsync(id);
@@ -612,7 +644,7 @@ public sealed class ItemController(
         string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(currentUserId))
         {
-            return Ok(Array.Empty<UserGroupDto>());
+            return Ok((IReadOnlyList<UserGroupDto>)[]);
         }
 
         IReadOnlyList<UserGroup> groups = await _userGroupDataProvider.GetUserGroupsForUserAsync(currentUserId, cancellationToken);
@@ -654,8 +686,10 @@ public sealed class ItemController(
         int id,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<Item> items = await _itemQuoteService.GetQuotedByItemsAsync(id, cancellationToken);
-        var dtos = items.Select(i => MapToItemDto(i)).ToList();
+        string? currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = User?.IsInRole("Admin") ?? false;
+        IReadOnlyList<Item> items = await _itemQuoteService.GetQuotedByItemsAsync(id, currentUserId, isAdmin, cancellationToken);
+        var dtos = (items ?? []).Select(i => MapToItemDto(i)).ToList();
         return Ok(dtos);
     }
 

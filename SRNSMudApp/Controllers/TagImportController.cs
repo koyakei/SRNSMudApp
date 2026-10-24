@@ -117,12 +117,15 @@ public sealed class TagImportController(
         TaggingImportPayload payload = root.TaggingRequestEntity;
         Dictionary<string, int> relationIdToTagMap = [];
 
+        // 管理者のみシステムタグとしてインポート可能 (Issue 3-7)
+        bool isAdmin = User?.IsInRole("Admin") ?? false;
+
         // 1. TagRelations のタグを検索または自動作成
         foreach (var relDto in payload.TagRelations)
         {
             if (string.IsNullOrWhiteSpace(relDto.Tag?.Name)) continue;
 
-            bool isSystem = string.Equals(relDto.Tag.TagKind, "SystemClassificationTag", StringComparison.OrdinalIgnoreCase);
+            bool isSystem = isAdmin && string.Equals(relDto.Tag.TagKind, "SystemClassificationTag", StringComparison.OrdinalIgnoreCase);
             // 非同期 null 合体演算子 (?? await) によるタグ取得または自動生成の集約
             var tag = await _taggingImportDataProvider.FindExistingTagAsync(
                 relDto.Tag.Name, currentUserId, isSystem, cancellationToken)

@@ -1,74 +1,62 @@
-# BRIEFING — 2026-10-14T14:20:00Z
+# BRIEFING — 2026-10-23T21:42:30Z
 
 ## Mission
-Implement Milestone 1: Modern C# language features and declarative LINQ modernization across Controllers, Middleware, SitemapEndpoints, and Program.cs with zero warnings and zero test regression.
+Implement high-value bUnit and pure unit tests across ContractManagement, ItemCard split requests, UserGroup dialog & ViewModel, and IOwnable predicate.
 
 ## 🔒 My Identity
 - Archetype: worker
 - Roles: implementer, qa, specialist
-- Working directory: /workspaces/SRNSWebApp/.agents/teamwork/worker_m1
-- Original parent: f3f1e0a9-f165-4200-8f34-f761aec7f48c
-- Milestone: Milestone 1: Controllers & Middleware Modernization
+- Working directory: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1
+- Original parent: 8417fc9a-1777-4cd7-aa91-1012c46c67e3
+- Milestone: milestone_1
 
 ## 🔒 Key Constraints
-- Exclusive write ownership: `SRNSMudApp/Controllers/`, `SRNSMudApp/Middlewares/AntiforgeryCookieCleanupMiddleware.cs`, `SRNSMudApp/Endpoints/SitemapEndpoints.cs`, `SRNSMudApp/Program.cs`
-- DO NOT edit Razor component files (reserved for Milestone 2)
-- Zero warnings under `dotnet build SRNSMudApp.sln`
-- Zero formatting violations with `dotnet format --diagnostics IDE0055 --verify-no-changes`
-- Zero test regressions on unit and E2E test suites
-- Integrity mandate: genuine logic only, Japanese comments for design rationale
+- Exclusive write ownership over:
+  1. `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`
+  2. `SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs`
+  3. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`
+  4. `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`
+  5. `SRNSMudApp.Tests/Data/IOwnableUnitTests.cs` (create new)
+- Genuine implementations only: no hardcoded outputs, facades, or test bypassing
+- 0 warnings, 0 errors on `dotnet build SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`
+- All tests pass on `dotnet test SRNSMudApp.Tests/SRNSMudApp.Tests.csproj`
+- Format check `dotnet format --diagnostics IDE0055 --verify-no-changes` must pass with no changes needed
+- Follow AGENTS.md and .agents/rules/mainRules.md (Japanese design rationale comments, minimal diffs)
 
 ## Current Parent
-- Conversation ID: f3f1e0a9-f165-4200-8f34-f761aec7f48c
-- Updated: 2026-10-14T14:20:00Z
+- Conversation ID: 8417fc9a-1777-4cd7-aa91-1012c46c67e3
+- Updated: 2026-10-23T21:33:27Z
 
 ## Task Summary
-- **What to build**: Modern C# syntax and declarative LINQ modernization across 18 target controller/middleware/program files as cataloged in explorer survey.
-- **Success criteria**: Zero build errors/warnings, zero formatting violations, all tests pass (2,849 unit + 3 E2E).
-- **Interface contracts**: /workspaces/SRNSWebApp/.agents/teamwork/orchestrator_2/PROJECT.md
-- **Code layout**: /workspaces/SRNSWebApp/.agents/teamwork/orchestrator_2/PROJECT.md § Code Layout
+- **What to build**:
+  1. In `ContractManagementTests.cs`: Added `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert` verifying tab switch and empty outbox alert.
+  2. In `ItemCardSplitRequestTests.cs`: Added `ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar` (Theory testing owner direct-split and non-owner request-split) verifying coordinator warning snackbar on empty text.
+  3. In `UserGroupMembersDialogTests.cs`: Added UI interaction tests for member addition (success + snackbar + list update, and failure + error snackbar).
+  4. In `UserGroupMembersViewModelTests.cs`: Added unit tests for `CanAddMember` condition combinations.
+  5. In `IOwnableUnitTests.cs`: Created pure unit tests for `IOwnable.IsOwnedBy` predicate covering match, mismatch, null, empty user ID.
+- **Success criteria**: All new and existing tests pass, compilation clean, format clean, handoff report generated.
+- **Interface contracts**: PROJECT.md and explorer reports 1, 2, 3.
 
 ## Key Decisions Made
-- Decomposed implementation into 3 manageable waves (Wave 1: Utility/Admin/Middleware, Wave 2: Domain Transactions, Wave 3: Complex Controllers & Pipeline).
-- Added class-level `[SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]` across controllers returning union `Result<T>` to cleanly enable 3-arm switch expressions (`Success<T> => Ok(...), Failure failure => BadRequest(...), _ => StatusCode/BadRequest(...)`) without dead code false positives.
-- Replaced imperative loops and condition nesting with declarative LINQ pipelines (`.Select(...)`, `.Where(...)`, `.OfType<T>()`) and C# property / relational patterns.
-
-## Artifact Index
-- /workspaces/SRNSWebApp/.agents/teamwork/worker_m1/progress.md — Liveness & status tracking
-- /workspaces/SRNSWebApp/.agents/teamwork/worker_m1/handoff.md — Final deliverable report
+- Used DOM tab click `.mud-tab` matching "送信済み (Outbox)" to replicate exact user click behavior with negative assertion on initial load and positive assertion after switch.
+- Used real `ItemCardSplitCoordinator` forwarded via `_splitCoordinatorMock` and JSInterop `selectionHelper.getSelectedText` returning `string.Empty` to thoroughly test `ItemCard` -> `SplitCoordinator` -> `IJSRuntime` -> `ISnackbar` chain without breaking existing constructor DI freeze.
+- Handled `MudAutocomplete` selection via `ValueChanged.InvokeAsync` in `UserGroupMembersDialogTests` to trigger two-way binding and verify button enabling, service call, snackbar, and list re-render.
+- Implemented pure unit tests for `IOwnable.IsOwnedBy` with `Theory` across all boundary cases (match, mismatch, null, whitespace, empty) and verified `Item : IOwnable`.
 
 ## Change Tracker
 - **Files modified**:
-  - `SRNSMudApp/Middlewares/AntiforgeryCookieCleanupMiddleware.cs`: Primary constructor, declarative LINQ filtering, target-typed `new()`
-  - `SRNSMudApp/Endpoints/SitemapEndpoints.cs`: Target-typed `new()`
-  - `SRNSMudApp/Controllers/InvitationController.cs`: Property pattern switch expression in `MapToDto`, target-typed `new()`
-  - `SRNSMudApp/Controllers/TagLockController.cs`: Relational pattern matching (`is < 0 or > 20`, `is <= 0`)
-  - `SRNSMudApp/Controllers/ReportController.cs`: Ternary expressions, pattern matching
-  - `SRNSMudApp/Controllers/LinkPreviewController.cs`: Local mapping function, target-typed `new()`
-  - `SRNSMudApp/Controllers/PushNotificationController.cs`: Property patterns on validation, target-typed `new()`
-  - `SRNSMudApp/Controllers/ItemSplitController.cs`: 5 `Result<T>` switch expressions, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/PublicOfferController.cs`: 3 `Result<bool>` switch expressions, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/TagDiagramController.cs`: LINQ tuple projection, 4 switch expressions, CA1508 suppression
-  - `SRNSMudApp/Controllers/TagImportController.cs`: Async coalescing `?? await`, target-typed `new()`
-  - `SRNSMudApp/Controllers/TagProposalController.cs`: 8 `Result<T>` switch expressions, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/RightAssetController.cs`: `Result<RightAsset>` switch expression, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/BountyController.cs`: Declarative LINQ projection, 2 switch expressions, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/ContractController.cs`: 5 `Result<T>` switch expressions, target-typed `new()`, CA1508 suppression
-  - `SRNSMudApp/Controllers/TagController.cs`: Property pattern matching on `SystemTagsResult`, target-typed `new()`
-  - `SRNSMudApp/Controllers/ItemController.cs`: Declarative LINQ filter pipeline with switch expressions, `Result<string>` switch expression, target-typed `new()`
-  - `SRNSMudApp/Program.cs`: Pattern matching property extraction for interceptors and HttpContext request, target-typed `new()`
-- **Build status**: `dotnet build SRNSMudApp.sln` succeeded (0 errors, 0 warnings)
+  - `SRNSMudApp.Tests/Components/Contract/ContractManagementTests.cs`: Added `WhenSwitchedToOutboxTab_RendersEmptyOutboxAlert`
+  - `SRNSMudApp.Tests/Components/UI/ItemCardSplitRequestTests.cs`: Added `ItemCard_WhenSplitClickedWithEmptySelection_ShowsWarningSnackbar`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersDialogTests.cs`: Added `WhenOwner_SelectsUserAndClicksAdd_CallsAddMemberAndShowsSnackbar_AndUpdatesList` and `WhenOwner_AddMemberFails_ShowsErrorSnackbar`
+  - `SRNSMudApp.Tests/Components/UserGroup/UserGroupMembersViewModelTests.cs`: Added 3 tests for `CanAddMember` property combinations
+  - `SRNSMudApp.Tests/Data/IOwnableUnitTests.cs`: Created new pure unit test class with 3 test methods (7 inline theory scenarios + 2 facts)
+- **Build status**: PASS (0 warnings, 0 errors on solution and test project)
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: 2,849 unit tests passed (100%), 3 E2E tests passed (100%)
-- **Lint status**: `dotnet format --diagnostics IDE0055 --verify-no-changes` exited with code 0 (0 violations)
-- **Tests added/modified**: Verified against comprehensive existing test suite (222 targeted controller/middleware unit tests + 2,627 domain/service tests)
+- **Build/test result**: PASS (3205 tests passed, 0 failed, 0 skipped)
+- **Lint status**: PASS (`dotnet format --diagnostics IDE0055 --verify-no-changes` clean)
+- **Tests added/modified**: +15 test scenarios executed cleanly in sub-second duration
 
 ## Loaded Skills
-- **Source**: /workspaces/SRNSWebApp/.agents/skills/dotnet-best-practices/SKILL.md
-  - **Local copy**: /workspaces/SRNSWebApp/.agents/teamwork/worker_m1/skills/dotnet-best-practices.md
-  - **Core methodology**: C# modern best practices, DI, async/await, test validation
-- **Source**: /workspaces/SRNSWebApp/.agents/skills/dotnet-design-pattern-review/SKILL.md
-  - **Local copy**: /workspaces/SRNSWebApp/.agents/teamwork/worker_m1/skills/dotnet-design-pattern-review.md
-  - **Core methodology**: SOLID principles, pattern matching, safe concurrency
+- None

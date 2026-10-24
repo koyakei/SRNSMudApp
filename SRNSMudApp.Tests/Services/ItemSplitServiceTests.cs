@@ -2692,4 +2692,813 @@ public class ItemSplitServiceTests : IAsyncLifetime
             Assert.Contains("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。", failure.ErrorMessage);
         }
     }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithMultipleMutualContracts_MigratesAllOfferedTargetItemIds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} [SplitTarget]" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+
+            var tag1 = new Tag { Name = $"tag1_{tid}", OwnerId = requesterId };
+            var tag2 = new Tag { Name = $"tag2_{tid}", OwnerId = requesterId };
+            dbContext.Tags.AddRange(tag1, tag2);
+            await dbContext.SaveChangesAsync();
+
+            // 2つの相互コントラクトが同一の quoteItem.Id を対価としている
+            var contract1 = new TaggingRequestEntity
+            {
+                TargetId = originalItem.TagTargetId,
+                RequestedTagId = tag1.Id,
+                OwnerId = requesterId,
+                ContractType = ContractTypes.Mutual,
+                Payload = new MutualPayload(quoteItem.Id, tag1.Id)
+            };
+            var contract2 = new TaggingRequestEntity
+            {
+                TargetId = originalItem.TagTargetId,
+                RequestedTagId = tag2.Id,
+                OwnerId = requesterId,
+                ContractType = ContractTypes.Mutual,
+                Payload = new MutualPayload(quoteItem.Id, tag2.Id)
+            };
+            dbContext.TaggingRequestEntities.AddRange(contract1, contract2);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "[SplitTarget]",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            Assert.True(result is Success<Item>);
+            var newItem = result switch
+            {
+                Success<Item> s => s.Value,
+                _ => throw new Xunit.Sdk.XunitException("Expected Success<Item>")
+            };
+
+            dbContext.ChangeTracker.Clear();
+            var updated1 = await dbContext.TaggingRequestEntities.FindAsync(contract1.Id);
+            var updated2 = await dbContext.TaggingRequestEntities.FindAsync(contract2.Id);
+            Assert.NotNull(updated1);
+            Assert.NotNull(updated2);
+
+            var mutual1 = updated1.Payload switch
+            {
+                MutualPayload m => m,
+                _ => throw new Xunit.Sdk.XunitException("Expected MutualPayload")
+            };
+            var mutual2 = updated2.Payload switch
+            {
+                MutualPayload m => m,
+                _ => throw new Xunit.Sdk.XunitException("Expected MutualPayload")
+            };
+            Assert.Equal(newItem.Id, mutual1.OfferedTargetItemId);
+            Assert.Equal(newItem.Id, mutual2.OfferedTargetItemId);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithMutualContractHavingSameNumberAsTagId_DoesNotMigrateDifferentOfferedItem()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} [SplitTarget]" };
+            var otherItem = new Item { OwnerId = ownerId, Content = $"Other_{tid}" };
+            dbContext.Items.AddRange(originalItem, otherItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+            await dbContext.SaveChangesAsync();
+
+            // OfferedTargetItemId は otherItem.Id で、OfferedTagId に偶然 quoteItem.Id の値が入っている
+            var contract = new TaggingRequestEntity
+            {
+                TargetId = originalItem.TagTargetId,
+                RequestedTagId = 1,
+                OwnerId = requesterId,
+                ContractType = ContractTypes.Mutual,
+                Payload = new MutualPayload(otherItem.Id, quoteItem.Id)
+            };
+            dbContext.TaggingRequestEntities.Add(contract);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "[SplitTarget]",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            Assert.True(result is Success<Item>);
+
+            dbContext.ChangeTracker.Clear();
+            var updated = await dbContext.TaggingRequestEntities.FindAsync(contract.Id);
+            Assert.NotNull(updated);
+            var mutual = updated.Payload switch
+            {
+                MutualPayload m => m,
+                _ => throw new Xunit.Sdk.XunitException("Expected MutualPayload")
+            };
+            // OfferedTargetItemId は書き換わらず otherItem.Id のまま
+            Assert.Equal(otherItem.Id, mutual.OfferedTargetItemId);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WithOtherContractTypesContainingQuoteIdInJson_DoesNotMigrate()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} [SplitTarget]" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+            await dbContext.SaveChangesAsync();
+
+            // Gratis コントラクトのメッセージ内に偶然 quoteItem.Id の数字が含まれている
+            var contract = new TaggingRequestEntity
+            {
+                TargetId = originalItem.TagTargetId,
+                RequestedTagId = 1,
+                OwnerId = requesterId,
+                ContractType = ContractTypes.Gratis,
+                Payload = new GratisPayload($"メッセージにID {quoteItem.Id} が含まれる")
+            };
+            dbContext.TaggingRequestEntities.Add(contract);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "[SplitTarget]",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            // Assert
+            Assert.True(result is Success<Item>);
+
+            dbContext.ChangeTracker.Clear();
+            var updated = await dbContext.TaggingRequestEntities.FindAsync(contract.Id);
+            Assert.NotNull(updated);
+            Assert.Equal(ContractTypes.Gratis, updated.ContractType);
+        }
+    }
+
+    [Fact]
+    public async Task RejectSplitAsync_WithQuoteItemHavingRepliesAndTaggingRequests_DeletesAllAssociatedEntitiesSafely()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+
+            var tag = new Tag { Name = $"tag_del_{tid}", OwnerId = requesterId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            // quoteItem に対するリプライと提案コントラクト
+            var reply = new Item { OwnerId = requesterId, Content = $"Reply_{tid}", ParentItemId = quoteItem.Id };
+            var taggingReq = new TaggingRequestEntity
+            {
+                TargetId = quoteItem.TagTargetId,
+                RequestedTagId = tag.Id,
+                OwnerId = requesterId
+            };
+            dbContext.Items.Add(reply);
+            dbContext.TaggingRequestEntities.Add(taggingReq);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 却下
+            Result<bool> result = await service.RejectSplitAsync(request.Id, ownerId, "却下");
+
+            // Assert
+            Assert.True(result is Success<bool>);
+            dbContext.ChangeTracker.Clear();
+
+            Assert.Null(await dbContext.Items.FindAsync(quoteItem.Id));
+            Assert.Null(await dbContext.Items.FindAsync(reply.Id));
+            Assert.Null(await dbContext.TaggingRequestEntities.FindAsync(taggingReq.Id));
+        }
+    }
+
+    [Fact]
+    public async Task CancelSplitAsync_WithQuoteItemHavingRepliesAndTaggingRequests_DeletesAllAssociatedEntitiesSafely()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteItem = new Item
+            {
+                OwnerId = requesterId,
+                Content = $"Quote_{tid}",
+                QuotedItemId = originalItem.Id
+            };
+            dbContext.Items.Add(quoteItem);
+
+            var tag = new Tag { Name = $"tag_del2_{tid}", OwnerId = requesterId };
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            var reply = new Item { OwnerId = requesterId, Content = $"Reply_{tid}", ParentItemId = quoteItem.Id };
+            var taggingReq = new TaggingRequestEntity
+            {
+                TargetId = quoteItem.TagTargetId,
+                RequestedTagId = tag.Id,
+                OwnerId = requesterId
+            };
+            dbContext.Items.Add(reply);
+            dbContext.TaggingRequestEntities.Add(taggingReq);
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                RequesterQuoteItemId = quoteItem.Id,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // Act: 取り下げ
+            Result<bool> result = await service.CancelSplitAsync(request.Id, requesterId);
+
+            // Assert
+            Assert.True(result is Success<bool>);
+            dbContext.ChangeTracker.Clear();
+
+            Assert.Null(await dbContext.Items.FindAsync(quoteItem.Id));
+            Assert.Null(await dbContext.Items.FindAsync(reply.Id));
+            Assert.Null(await dbContext.TaggingRequestEntities.FindAsync(taggingReq.Id));
+        }
+    }
+
+    [Fact]
+    public async Task RejectSplitAsync_WithoutRequesterQuoteItem_CompletesNormally()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                RequesterQuoteItemId = null,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            Result<bool> result = await service.RejectSplitAsync(request.Id, ownerId, "理由なし");
+
+            Assert.True(result is Success<bool>);
+            dbContext.ChangeTracker.Clear();
+            var updated = await dbContext.ItemSplitRequests.FindAsync(request.Id);
+            Assert.NotNull(updated);
+            Assert.Equal(TradeStatus.Rejected, updated.Status);
+        }
+    }
+
+    [Fact]
+    public async Task CancelSplitAsync_WithoutRequesterQuoteItem_CompletesNormally()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                RequesterQuoteItemId = null,
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            Result<bool> result = await service.CancelSplitAsync(request.Id, requesterId);
+
+            Assert.True(result is Success<bool>);
+            dbContext.ChangeTracker.Clear();
+            var updated = await dbContext.ItemSplitRequests.FindAsync(request.Id);
+            Assert.NotNull(updated);
+            Assert.Equal(TradeStatus.Canceled, updated.Status);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenContentIsLfAndSelectionIsCrlf_Succeeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Header_{tid}\nLine1\nLine2\nFooter_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 選択テキストは CRLF
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "Line1\r\nLine2", requesterId);
+
+            Assert.True(result is Success<ItemSplitRequest>);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenContentIsCrlfAndSelectionIsLf_Succeeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Header_{tid}\r\nLine1\r\nLine2\r\nFooter_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 選択テキストは LF
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "Line1\nLine2", requesterId);
+
+            Assert.True(result is Success<ItemSplitRequest>);
+        }
+    }
+
+    [Fact]
+    public async Task SplitDirectlyAsync_WithCrlfDifferences_NormalizesAndSucceeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            await dbContext.SeedUsersAsync(ownerId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Header_{tid}\r\nTargetLine1\r\nTargetLine2\r\nFooter_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // LF 形式で直接分割を要求
+            Result<Item> result = await service.SplitDirectlyAsync(originalItem.Id, "TargetLine1\nTargetLine2", ownerId);
+
+            Assert.True(result is Success<Item>);
+            var newItem = result switch
+            {
+                Success<Item> s => s.Value,
+                _ => throw new Xunit.Sdk.XunitException("Expected Success<Item>")
+            };
+            Assert.Contains("TargetLine1", newItem.Content);
+
+            dbContext.ChangeTracker.Clear();
+            var updatedOriginal = await dbContext.Items.FindAsync(originalItem.Id);
+            Assert.NotNull(updatedOriginal);
+            Assert.Contains($"/ItemDetail/{newItem.Id}", updatedOriginal.Content);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenSelectionContainsEntireLink_Succeeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Start_{tid} /ItemDetail/12345 End_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // リンク全体を選択（途中の分断ではない）
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "/ItemDetail/12345", requesterId);
+
+            Assert.True(result is Success<ItemSplitRequest>);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenSelectionIntersectsExternalUrlStart_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Prefix_{tid} https://example.com/page Suffix_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 外部リンクの開始部と交差する選択
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, $"_{tid} https://exam", requesterId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("既存のリンク文字列の途中で分割することはできません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenSelectionIntersectsExternalUrlEnd_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Prefix_{tid} https://example.com/page Suffix_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            // 外部リンクの終了部と交差する選択
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, $"page Suffix_{tid}", requesterId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("既存のリンク文字列の途中で分割することはできません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task SplitDirectlyAsync_WhenIntersectsExistingLink_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            await dbContext.SeedUsersAsync(ownerId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Start_{tid} /ItemDetail/12345 End_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.SplitDirectlyAsync(originalItem.Id, $"_{tid} /ItemDe", ownerId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("既存のリンク文字列の途中で分割することはできません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WhenIntersectsExistingLink_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            // リクエスト作成後に本文がリンクを含むように編集され、選択テキストがそのリンクを分断するようになったケース
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Start_{tid} Target End_{tid}" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // 本文を書き換えて外部リンクの途中に Target が来るようにする
+            originalItem.Content = $"Start_{tid} https://example.com/path/Target/end End_{tid}";
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("既存のリンク文字列の途中で分割することはできません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenResultIsExactly1000Chars_Succeeds()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            // item.Content.Length - selectedText.Length + 22 = 1000 となるように
+            // prefix 978文字, target 5文字 -> ContentLength = 983
+            // 983 - 5 + 22 = 1000文字
+            string prefix = new('x', 978);
+            var originalItem = new Item { OwnerId = ownerId, Content = $"{prefix}12345" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "12345", requesterId);
+
+            Assert.True(result is Success<ItemSplitRequest>);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WhenResultIs1001Chars_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            // prefix 979文字, target 5文字 -> ContentLength = 984
+            // 984 - 5 + 22 = 1001文字
+            string prefix = new('x', 979);
+            var originalItem = new Item { OwnerId = ownerId, Content = $"{prefix}12345" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(originalItem.Id, "12345", requesterId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task SplitDirectlyAsync_WhenExceeds1000Chars_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            await dbContext.SeedUsersAsync(ownerId);
+
+            string prefix = new('x', 979);
+            var originalItem = new Item { OwnerId = ownerId, Content = $"{prefix}12345" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.SplitDirectlyAsync(originalItem.Id, "12345", ownerId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task ApproveSplitAsync_WhenExceeds1000Chars_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = "Normal text Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            var request = new ItemSplitRequest
+            {
+                OriginalItemId = originalItem.Id,
+                RequesterUserId = requesterId,
+                OwnerUserId = ownerId,
+                SelectedText = "Target",
+                Status = TradeStatus.Proposed,
+                OwnerId = requesterId
+            };
+            dbContext.ItemSplitRequests.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            // 申請後に本文が980文字に加筆され、置換後に1000文字を超える状況
+            originalItem.Content = new string('z', 980) + "Target";
+            await dbContext.SaveChangesAsync();
+
+            Result<Item> result = await service.ApproveSplitAsync(request.Id, ownerId);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains("分割後のアイテム本文が最大文字数（1000文字）を超えるため、分割できません。", failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WithNonExistentQuoteItemId_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            dbContext.Items.Add(originalItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(
+                originalItem.Id, "Target", requesterId, requesterQuoteItemId: 999999);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains(ErrorMessages.SplitQuoteItemNotFound, failure.ErrorMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RequestSplitAsync_WithQuoteItemNotHavingQuotedItemId_ReturnsFailure()
+    {
+        var (dbContext, service, _, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var ownerId = $"owner_{tid}";
+            var requesterId = $"requester_{tid}";
+            await dbContext.SeedUsersAsync(ownerId, requesterId);
+
+            var originalItem = new Item { OwnerId = ownerId, Content = $"Original_{tid} Target" };
+            var standaloneItem = new Item { OwnerId = requesterId, Content = $"Standalone_{tid}", QuotedItemId = null };
+            dbContext.Items.AddRange(originalItem, standaloneItem);
+            await dbContext.SaveChangesAsync();
+
+            Result<ItemSplitRequest> result = await service.RequestSplitAsync(
+                originalItem.Id, "Target", requesterId, requesterQuoteItemId: standaloneItem.Id);
+
+            Assert.True(result is Failure);
+            var failure = result switch
+            {
+                Failure f => f,
+                _ => throw new Xunit.Sdk.XunitException("Expected Failure")
+            };
+            Assert.Contains(ErrorMessages.SplitQuoteItemNotFound, failure.ErrorMessage);
+        }
+    }
 }

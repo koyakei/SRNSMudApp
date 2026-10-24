@@ -1213,4 +1213,112 @@ public class ItemCardSplitCoordinatorTests
         _snackbarMock.Verify(s => s.Add(ErrorMessages.SplitSelfItemNotAllowed, Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
         _itemQuoteServiceMock.Verify(q => q.CreateQuoteItemAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyCollection<int>?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task RequestSplitWithVoteAsync_Downvote_SubmitsSplitRequestWithBadVote()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 11, Content = "Quote", OwnerId = RequesterId, QuotedItemId = 1 };
+        var splitRequest = new ItemSplitRequest { Id = 21, OriginalItemId = 1, RequesterQuoteItemId = 11, OwnerId = RequesterId };
+
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+        _ = _voteCoordinatorMock.Setup(v => v.ToggleVoteAsync(11, RequesterId, null, false, null))
+            .ReturnsAsync(true);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 11, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, RequesterId, null, false, null, "World");
+
+        Assert.NotNull(result);
+        Assert.Equal(21, result.Id);
+        _voteCoordinatorMock.Verify(v => v.ToggleVoteAsync(11, RequesterId, null, false, null), Times.Once);
+        _itemSplitServiceMock.Verify(s => s.RequestSplitAsync(1, "World", RequesterId, 11, default), Times.Once);
+        _snackbarMock.Verify(s => s.Add("引用してBad投票し、アイテム分割リクエストを送信しました。", Severity.Success, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithVoteAsync_WhenSelectedTextIsNull_FetchesFromJs()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 12, Content = "Quote", OwnerId = RequesterId, QuotedItemId = 1 };
+        var splitRequest = new ItemSplitRequest { Id = 22, OriginalItemId = 1, RequesterQuoteItemId = 12, OwnerId = RequesterId };
+
+        _ = _jsMock.Setup(j => j.InvokeAsync<string>("selectionHelper.getSelectedText", It.IsAny<object[]>()))
+            .Returns(ValueTask.FromResult("World"));
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+        _ = _voteCoordinatorMock.Setup(v => v.ToggleVoteAsync(12, RequesterId, null, true, null))
+            .ReturnsAsync(true);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 12, default))
+            .ReturnsAsync(new Success<ItemSplitRequest>(splitRequest));
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, RequesterId, null, true, null, null);
+
+        Assert.NotNull(result);
+        Assert.Equal(22, result.Id);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithVoteAsync_WhenVoteThrowsException_DeletesQuoteItem_ShowsError_AndReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 13, Content = "Quote", OwnerId = RequesterId, QuotedItemId = 1 };
+
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+        _ = _voteCoordinatorMock.Setup(v => v.ToggleVoteAsync(13, RequesterId, null, true, null))
+            .ThrowsAsync(new InvalidOperationException("Vote error"));
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, RequesterId, null, true, null, "World");
+
+        Assert.Null(result);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(13), Times.Once);
+        _snackbarMock.Verify(s => s.Add("投票に失敗しました: Vote error", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithVoteAsync_WhenSplitRequestThrowsException_DeletesQuoteItem_ShowsError_AndReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+        var quoteItem = new Item { Id = 14, Content = "Quote", OwnerId = RequesterId, QuotedItemId = 1 };
+
+        _ = _itemQuoteServiceMock.Setup(q => q.CreateQuoteItemAsync(1, "World", RequesterId, null, default))
+            .ReturnsAsync(quoteItem);
+        _ = _voteCoordinatorMock.Setup(v => v.ToggleVoteAsync(14, RequesterId, null, true, null))
+            .ReturnsAsync(true);
+        _ = _itemSplitServiceMock.Setup(s => s.RequestSplitAsync(1, "World", RequesterId, 14, default))
+            .ThrowsAsync(new InvalidOperationException("Split error"));
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, RequesterId, null, true, null, "World");
+
+        Assert.Null(result);
+        _itemCardDataProviderMock.Verify(d => d.DeleteItemAsync(14), Times.Once);
+        _snackbarMock.Verify(s => s.Add("分割リクエストの送信に失敗しました: Split error", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RequestSplitWithVoteAsync_WhenUserIdIsNullOrWhiteSpace_ShowsWarningAndReturnsNull(string? invalidUserId)
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, invalidUserId!, null, true, null, "World");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("リクエストを送信するにはログインが必要です。", Severity.Warning, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestSplitWithVoteAsync_WhenSelectedTextNotInContent_ShowsErrorAndReturnsNull()
+    {
+        var item = new Item { Id = 1, OwnerId = OwnerId, Content = "Hello World" };
+
+        var result = await _coordinator.RequestSplitWithVoteAsync(item, RequesterId, null, true, null, "NotPresentText");
+
+        Assert.Null(result);
+        _snackbarMock.Verify(s => s.Add("選択したテキストがこのアイテムの本文に含まれていません。", Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string?>()), Times.Once);
+    }
 }

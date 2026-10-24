@@ -1,5 +1,6 @@
 namespace SRNSMudApp.Client.Models.Api;
 
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
@@ -45,6 +46,7 @@ public sealed record ItemReactionRequest(string ReactionTagName, int Weight = 1)
 /// アイテム作成 API のリクエスト DTO。
 /// </summary>
 public sealed record CreateItemRequest(
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string Content,
     bool IsPrivate = false,
     IReadOnlyList<int>? InitialTagIds = null,
@@ -55,12 +57,16 @@ public sealed record CreateItemRequest(
 /// <summary>
 /// アイテム更新 API のリクエスト DTO。
 /// </summary>
-public sealed record UpdateItemRequest(string Content);
+public sealed record UpdateItemRequest(
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string Content
+);
 
 /// <summary>
 /// リプライ作成 API のリクエスト DTO。
 /// </summary>
 public sealed record CreateReplyRequest(
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string Content,
     bool IsPrivate = false,
     IReadOnlyList<string>? TargetUserIds = null
@@ -71,6 +77,7 @@ public sealed record CreateReplyRequest(
 /// </summary>
 public sealed record AddTagRelationRequest(
     int TagId,
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string? Comment = null
 );
 
@@ -83,7 +90,12 @@ public sealed record TagVoteRequest(bool IsUpvote);
 /// タグ作成 API のリクエスト DTO。
 /// </summary>
 public sealed record CreateTagRequest(
+    [property: Required(ErrorMessage = "タグ名は必須です。")]
+    [property: StringLength(100, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    [property: RegularExpression(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$",
+        ErrorMessage = "タグ名には漢字、ひらがな、カタカナ（半角/全角）、英数字（半角/全角）、アンダーバー、数学記号のみ使用できます。")]
     string Name,
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string? Content = null,
     bool IsPrivate = false,
     int? TargetUserGroupId = null,
@@ -94,7 +106,12 @@ public sealed record CreateTagRequest(
 /// タグ更新 API のリクエスト DTO。
 /// </summary>
 public sealed record UpdateTagRequest(
+    [property: Required(ErrorMessage = "タグ名は必須です。")]
+    [property: StringLength(100, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    [property: RegularExpression(@"^[\x20-\x7E\u3000-\u30FF\u4E00-\u9FFF\uFF01-\uFF9F\u2200-\u22FF]+$",
+        ErrorMessage = "タグ名には漢字、ひらがな、カタカナ（半角/全角）、英数字（半角/全角）、アンダーバー、数学記号のみ使用できます。")]
     string Name,
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string? Content = null,
     bool IsPrivate = false,
     int? TargetUserGroupId = null
@@ -108,12 +125,24 @@ public sealed record AddParentTagRequest(int ParentTagId);
 /// <summary>
 /// ユーザーグループ作成 API のリクエスト DTO。
 /// </summary>
-public sealed record CreateUserGroupRequest(string Name, string? Description = null);
+public sealed record CreateUserGroupRequest(
+    [property: Required(ErrorMessage = "グループ名は必須です。")]
+    [property: StringLength(100, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string Name,
+    [property: StringLength(500, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string? Description = null
+);
 
 /// <summary>
 /// ユーザーグループ更新 API のリクエスト DTO。
 /// </summary>
-public sealed record UpdateUserGroupRequest(string Name, string? Description = null);
+public sealed record UpdateUserGroupRequest(
+    [property: Required(ErrorMessage = "グループ名は必須です。")]
+    [property: StringLength(100, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string Name,
+    [property: StringLength(500, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string? Description = null
+);
 
 /// <summary>
 /// ユーザーグループメンバー追加 API のリクエスト DTO。
@@ -138,7 +167,18 @@ public sealed record ChangeItemTagRequest(int NewTagId);
 /// <summary>
 /// タグ付けリクエスト却下 API のリクエスト DTO。
 /// </summary>
-public sealed record RejectTaggingRequest(string? Reason = null);
+public sealed record RejectTaggingRequest(
+    [property: StringLength(500, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string? Reason = null
+);
+
+/// <summary>
+/// コントラクト拒否 API のリクエスト DTO。
+/// </summary>
+public sealed record RejectContractRequest(
+    [property: StringLength(500, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
+    string? Reason = null
+);
 
 /// <summary>
 /// 通知既読化 API のリクエスト DTO。
@@ -166,6 +206,7 @@ public sealed record FulfillBountyRequest(
 /// </summary>
 public sealed record CreatePublicOfferRequest(
     int OfferedTagId,
+    [property: Range(0, int.MaxValue, ErrorMessage = "{0}は0以上の値を指定してください。")]
     int RequiredAssetAmount = 0
 );
 
@@ -181,10 +222,14 @@ public sealed record TriggerPublicOfferRequest(
 /// 通報作成 API のリクエスト DTO。
 /// </summary>
 public sealed record CreateReportRequest(
+    [property: Required(ErrorMessage = "対象種別は必須です。")]
     string TargetType,
     int? ItemId,
     int? TagId,
+    [property: Required(ErrorMessage = "通報理由は必須です。")]
+    [property: StringLength(100, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string Reason,
+    [property: StringLength(1000, ErrorMessage = "{0}は{1}文字以内で入力してください。")]
     string? Detail
 );
 

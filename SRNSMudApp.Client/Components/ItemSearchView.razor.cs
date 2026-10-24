@@ -362,7 +362,7 @@ public sealed partial class ItemSearchView : ComponentBase
             }
             else
             {
-                _errorMessage = "アイテムの作成に失敗しました。ログイン状態を確認してください。";
+                _errorMessage = "アイテムの作成に失敗しました。";
             }
         }
         catch (Exception ex)
@@ -564,13 +564,12 @@ public sealed partial class ItemSearchView : ComponentBase
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
-    private async Task RemoveTagFromItemAsync(int itemId, int tagId)
+    private async Task RemoveTagFromItemAsync(int itemId, int relationId)
     {
         try
         {
-            // TagRelation の Id が不明な場合は tagId を渡すか API の仕様に合わせる
-            // ここでは tagId をキーとして RemoveTagFromItemAsync を呼び出す
-            bool success = await ApiClient.RemoveTagFromItemAsync(itemId, tagId);
+            // TagRelation の Id (RelationId) をキーとして RemoveTagFromItemAsync を呼び出す
+            bool success = await ApiClient.RemoveTagFromItemAsync(itemId, relationId);
             if (success)
             {
                 await LoadDataAsync();

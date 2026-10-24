@@ -307,4 +307,136 @@ public class ItemQuoteServiceTests : IAsyncLifetime
             Assert.Equal(group.Id, saved.TargetUserGroupId);
         }
     }
+
+    [Fact]
+    public async Task CreateQuoteItemAsync_WhenTargetIsPublic_CreatesPublicQuoteItem()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var publicTargetItem = new Item
+            {
+                Content = $"PublicTarget_{tid}",
+                OwnerId = userId,
+                IsPrivate = false,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(publicTargetItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? quoteItem = await service.CreateQuoteItemAsync(publicTargetItem.Id, "Quote Public", userId);
+
+            Assert.NotNull(quoteItem);
+            Assert.False(quoteItem.IsPrivate);
+            Assert.Null(quoteItem.TargetUserGroupId);
+
+            Item? saved = await dbContext.Items.FirstOrDefaultAsync(i => i.Id == quoteItem.Id);
+            Assert.NotNull(saved);
+            Assert.False(saved.IsPrivate);
+            Assert.Null(saved.TargetUserGroupId);
+        }
+    }
+
+    [Fact]
+    public async Task CreateQuoteItemAsync_WhenTargetIsPrivateWithoutGroup_CreatesPrivateQuoteItemWithoutGroup()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var privateTargetItem = new Item
+            {
+                Content = $"PrivateTarget_{tid}",
+                OwnerId = userId,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(privateTargetItem);
+            await dbContext.SaveChangesAsync();
+
+            Item? quoteItem = await service.CreateQuoteItemAsync(privateTargetItem.Id, "Quote Private Solo", userId);
+
+            Assert.NotNull(quoteItem);
+            Assert.True(quoteItem.IsPrivate);
+            Assert.Null(quoteItem.TargetUserGroupId);
+
+            Item? saved = await dbContext.Items.FirstOrDefaultAsync(i => i.Id == quoteItem.Id);
+            Assert.NotNull(saved);
+            Assert.True(saved.IsPrivate);
+            Assert.Null(saved.TargetUserGroupId);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateQuoteItemAsync_WhenContentIsNullOrWhiteSpace_ThrowsArgumentException(string? invalidContent)
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var targetItem = new Item { Content = $"Target_{tid}", OwnerId = userId };
+            dbContext.Items.Add(targetItem);
+            await dbContext.SaveChangesAsync();
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => service.CreateQuoteItemAsync(targetItem.Id, invalidContent!, userId));
+        }
+    }
+
+    [Fact]
+    public async Task GetQuotedByItemsAsync_WhenQuotedByPrivateItem_FiltersOutForUnauthorizedUser()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userA = $"uA_{tid}";
+            var userB = $"uB_{tid}";
+            var userC = $"uC_{tid}";
+            var adminUser = $"uAdmin_{tid}";
+            await dbContext.SeedUsersAsync(userA, userB, userC, adminUser);
+
+            var targetItem = new Item { Content = $"Target_{tid}", OwnerId = userA };
+            dbContext.Items.Add(targetItem);
+            await dbContext.SaveChangesAsync();
+
+            var privateQuote = new Item
+            {
+                Content = $"PrivateQuote_{tid}",
+                OwnerId = userB,
+                QuotedItemId = targetItem.Id,
+                IsPrivate = true,
+                TargetUserGroupId = null
+            };
+            dbContext.Items.Add(privateQuote);
+            await dbContext.SaveChangesAsync();
+
+            // Act 1: 権限のない第三者 (userC)
+            IReadOnlyList<Item> quotesForUserC = await service.GetQuotedByItemsAsync(targetItem.Id, userC, isAdmin: false);
+            Assert.Empty(quotesForUserC);
+
+            // Act 2: 未ログインユーザー (null)
+            IReadOnlyList<Item> quotesForAnon = await service.GetQuotedByItemsAsync(targetItem.Id, null, isAdmin: false);
+            Assert.Empty(quotesForAnon);
+
+            // Act 3: 投稿者本人 (userB)
+            IReadOnlyList<Item> quotesForOwner = await service.GetQuotedByItemsAsync(targetItem.Id, userB, isAdmin: false);
+            Assert.Single(quotesForOwner);
+            Assert.Equal(privateQuote.Id, quotesForOwner[0].Id);
+
+            // Act 4: 管理者 (adminUser)
+            IReadOnlyList<Item> quotesForAdmin = await service.GetQuotedByItemsAsync(targetItem.Id, adminUser, isAdmin: true);
+            Assert.Single(quotesForAdmin);
+            Assert.Equal(privateQuote.Id, quotesForAdmin[0].Id);
+        }
+    }
 }

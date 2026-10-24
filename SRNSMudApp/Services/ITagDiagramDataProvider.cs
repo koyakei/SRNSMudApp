@@ -24,12 +24,12 @@ public interface ITagDiagramDataProvider
     /// </summary>
     Task<List<int>> GetContextTagIdsForItemsAsync(IEnumerable<int> itemIds);
 
-    Task<List<Item>> GetContextItemsAsync(int itemId);
+    Task<List<Item>> GetContextItemsAsync(int itemId, string? currentUserId = null, bool isAdmin = false);
 
     /// <summary>
     ///     指定したアイテム群およびその関連アイテム（内部リンク・引用元など）を取得する。
     /// </summary>
-    Task<List<Item>> GetContextItemsAsync(IEnumerable<int> itemIds);
+    Task<List<Item>> GetContextItemsAsync(IEnumerable<int> itemIds, string? currentUserId = null, bool isAdmin = false);
 
     /// <summary>
     ///     全 Edge（関連タグおよび紐付けタグを含む）を取得する。

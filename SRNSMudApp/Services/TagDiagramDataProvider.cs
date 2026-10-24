@@ -92,11 +92,11 @@ public class TagDiagramDataProvider(
     }
 
     /// <inheritdoc />
-    public Task<List<Item>> GetContextItemsAsync(int itemId) =>
-        GetContextItemsAsync([itemId]);
+    public Task<List<Item>> GetContextItemsAsync(int itemId, string? currentUserId = null, bool isAdmin = false) =>
+        GetContextItemsAsync([itemId], currentUserId, isAdmin);
 
     /// <inheritdoc />
-    public async Task<List<Item>> GetContextItemsAsync(IEnumerable<int> itemIds)
+    public async Task<List<Item>> GetContextItemsAsync(IEnumerable<int> itemIds, string? currentUserId = null, bool isAdmin = false)
     {
         var idList = itemIds.Distinct().ToList();
         if (idList.Count == 0) return [];
@@ -104,13 +104,14 @@ public class TagDiagramDataProvider(
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         var items = await context.Items
             .AsNoTracking()
+            .WhereVisibleToUser(context, currentUserId, isAdmin)
             .Include(i => i.TagRelations)
             .Where(i => idList.Contains(i.Id))
             .ToListAsync();
 
         if (items.Count == 0) return [];
 
-        var allItemIds = new HashSet<int>(idList);
+        var allItemIds = new HashSet<int>(items.Select(i => i.Id));
         foreach (var item in items)
         {
             var matches = SRNSMudApp.Components.UI.ItemCardViewModel.InternalLinkRegex().Matches(item.Content ?? "");
@@ -135,6 +136,7 @@ public class TagDiagramDataProvider(
         return allItemIds.Count > items.Count
             ? await context.Items
                 .AsNoTracking()
+                .WhereVisibleToUser(context, currentUserId, isAdmin)
                 .Include(i => i.TagRelations)
                 .Where(i => allItemIds.Contains(i.Id))
                 .ToListAsync()

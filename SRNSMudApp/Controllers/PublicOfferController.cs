@@ -94,6 +94,12 @@ public sealed class PublicOfferController(
             return BadRequest("指定されたタグが存在しません。");
         }
 
+        // 所有権チェック: 自身が所有するタグのみオファー作成可能 (Issue 5-4)
+        if (tagData.Tag.OwnerId != currentUserId)
+        {
+            return BadRequest("自身が所有していないタグのオファーは作成できません。");
+        }
+
         PublicTradeOffer offer = new()
         {
             OfferedTagId = request.OfferedTagId,

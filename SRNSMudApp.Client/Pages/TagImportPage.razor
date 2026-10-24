@@ -1,5 +1,6 @@
 @page "/Tag/WasmImportTag"
 @attribute [Authorize]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using System.IO
 @using System.Text
 @using Microsoft.AspNetCore.Authorization

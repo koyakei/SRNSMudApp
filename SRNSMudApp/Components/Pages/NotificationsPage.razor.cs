@@ -48,8 +48,9 @@ public partial class NotificationsPage
         string? userId = user.Identity?.IsAuthenticated == true
             ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value
             : null;
+        bool isAdmin = user.IsInRole("Admin");
 
-        await ViewModel.InitializeAsync(userId);
+        await ViewModel.InitializeAsync(userId, isAdmin);
     }
 
     public Task EnsureSystemTagsExistAsync() => ViewModel.EnsureSystemTagsExistAsync();

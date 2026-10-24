@@ -1,5 +1,6 @@
 @page "/Admin/WasmRequireConfirmedAccount"
 @attribute [Authorize(Roles = "Admin")]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using System.Threading
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor

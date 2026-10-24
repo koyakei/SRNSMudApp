@@ -50,6 +50,7 @@ public class NotificationsViewModel
     }
 
     public string? CurrentUserId { get; private set; }
+    public bool IsAdmin { get; private set; }
     public IReadOnlyList<NotificationDto> Notifications { get; private set; } = [];
     public bool IsLoading { get; private set; } = true;
 
@@ -65,9 +66,10 @@ public class NotificationsViewModel
     public int? CurrentUserZenTagId { get; private set; }
     public int? CurrentUserBiTagId { get; private set; }
 
-    public async Task InitializeAsync(string? userId)
+    public async Task InitializeAsync(string? userId, bool isAdmin = false)
     {
         CurrentUserId = userId;
+        IsAdmin = isAdmin;
         if (!string.IsNullOrEmpty(userId))
         {
             Notifications = await _notificationService.GetUserNotificationsAsync(userId);
@@ -117,7 +119,7 @@ public class NotificationsViewModel
             return;
         }
 
-        List<Data.Item> items = await _notificationsData.GetAssociatedItemsAsync(itemIds);
+        List<Data.Item> items = await _notificationsData.GetAssociatedItemsAsync(itemIds, CurrentUserId, IsAdmin);
         MapAssociatedItems(Notifications, items);
     }
 
@@ -175,7 +177,7 @@ public class NotificationsViewModel
 
         try
         {
-            _ = await _taggingContractService.CancelContractAsync(notification.SourceId, CurrentUserId);
+            _ = await _taggingContractService.RejectContractAsync(notification.SourceId, CurrentUserId);
             UpdateNotificationStatus(notification, TradeStatus.Rejected);
             await FetchAssociatedItemsAsync();
             return TagCardActionResult.Success("リクエストを却下しました。");

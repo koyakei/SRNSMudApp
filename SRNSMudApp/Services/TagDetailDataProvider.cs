@@ -152,7 +152,7 @@ public class TagDetailDataProvider(
             .ToListAsync();
 
         RightAssetOverviewData? rightAssetOverview =
-            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId);
+            await _rightAssetDataProvider.GetRightAssetOverviewByTagIdAsync(tagId, currentUserId, isAdmin);
 
         return new TagDetailPageData(
             tag,

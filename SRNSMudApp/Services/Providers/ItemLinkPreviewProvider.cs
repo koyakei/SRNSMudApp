@@ -30,8 +30,17 @@ public partial class ItemLinkPreviewProvider(IDbContextFactory<ApplicationDbCont
     }
 
     /// <inheritdoc />
+    public Task<LinkPreviewData> GetPreviewAsync(Uri uri, string originalUrl, CancellationToken cancellationToken = default) =>
+        GetPreviewAsync(uri, originalUrl, null, false, cancellationToken);
+
+    /// <inheritdoc />
     [SuppressMessage("Design", "CA1054:URI parameters should not be strings", Justification = "Original URL representation")]
-    public async Task<LinkPreviewData> GetPreviewAsync(Uri uri, string originalUrl, CancellationToken cancellationToken = default)
+    public async Task<LinkPreviewData> GetPreviewAsync(
+        Uri uri,
+        string originalUrl,
+        string? currentUserId,
+        bool isAdmin = false,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentNullException.ThrowIfNull(originalUrl);
@@ -52,6 +61,12 @@ public partial class ItemLinkPreviewProvider(IDbContextFactory<ApplicationDbCont
             .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
         if (item == null)
+        {
+            return new LinkPreviewData { Url = originalUrl, IsSuccess = false };
+        }
+
+        // プライベートアイテムの可視性制御: 閲覧権限がない場合はプレビュー取得不可
+        if (!await item.IsItemVisibleToUserAsync(db, currentUserId, isAdmin))
         {
             return new LinkPreviewData { Url = originalUrl, IsSuccess = false };
         }

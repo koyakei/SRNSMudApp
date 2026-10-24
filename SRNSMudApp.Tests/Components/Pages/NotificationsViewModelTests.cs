@@ -35,7 +35,7 @@ public class NotificationsViewModelTests
             .ReturnsAsync([]);
         _homeDataMock.Setup(s => s.GetTagsAndRelationsAsync())
             .ReturnsAsync(([], []));
-        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>()))
+        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
     }
 
@@ -217,7 +217,7 @@ public class NotificationsViewModelTests
             .ReturnsAsync([note]);
         _homeDataMock.Setup(s => s.GetTagsAndRelationsAsync())
             .ReturnsAsync(([], []));
-        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>()))
+        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new Item { Id = 10, Content = "item-10", OwnerId = "user-1" }]);
 
         await sut.InitializeAsync("user-1");
@@ -380,7 +380,7 @@ public class NotificationsViewModelTests
         var note = sut.Notifications[0];
 
         Result<string> cancelRes = new Success<string>("ok");
-        _taggingContractServiceMock.Setup(s => s.CancelContractAsync(note.SourceId, "user-1"))
+        _taggingContractServiceMock.Setup(s => s.RejectContractAsync(note.SourceId, "user-1", It.IsAny<string?>()))
             .ReturnsAsync(cancelRes);
 
         var result = await sut.RejectRequestAsync(note, "comment");
@@ -401,7 +401,7 @@ public class NotificationsViewModelTests
         await sut.InitializeAsync("user-1");
         var note = sut.Notifications[0];
 
-        _taggingContractServiceMock.Setup(s => s.CancelContractAsync(note.SourceId, "user-1"))
+        _taggingContractServiceMock.Setup(s => s.RejectContractAsync(note.SourceId, "user-1", It.IsAny<string?>()))
             .ThrowsAsync(new InvalidOperationException("database failure"));
 
         var result = await sut.RejectRequestAsync(note, "comment");
@@ -436,7 +436,7 @@ public class NotificationsViewModelTests
 
         Result<Item> res = new Success<Item>(new Item { Id = 5, Content = "split", OwnerId = "user-1" });
         _itemSplitServiceMock.Setup(s => s.ApproveSplitAsync(note.SourceId, "user-1")).ReturnsAsync(res);
-        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>()))
+        _notificationsDataMock.Setup(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new Item { Id = 5, Content = "split", OwnerId = "user-1" }]);
 
         var result = await sut.ApproveSplitRequestAsync(note);
@@ -446,7 +446,7 @@ public class NotificationsViewModelTests
         var updatedNote = sut.Notifications[0];
         Assert.True(updatedNote.IsRead);
         Assert.True(updatedNote.Kind is ItemSplitRequestNotification { Status: TradeStatus.Executed });
-        _notificationsDataMock.Verify(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>()), Times.AtLeastOnce);
+        _notificationsDataMock.Verify(s => s.GetAssociatedItemsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
     [Fact]

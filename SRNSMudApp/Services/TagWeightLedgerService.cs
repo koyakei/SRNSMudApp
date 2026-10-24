@@ -36,8 +36,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(tag);
 
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
+        var (prevWeight, newWeight) = tag.ApplyWeightDelta(delta);
 
         _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
@@ -50,7 +49,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
             CommentItemId = sourceRelation?.CommentItemId,
             CommentItem = sourceRelation?.CommentItem,
             PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
+            NewWeight = newWeight,
             Delta = delta,
             IsOwnerAction = true,
             Reason = reason,
@@ -72,8 +71,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(tag);
 
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
+        var (prevWeight, newWeight) = tag.ApplyWeightDelta(delta);
 
         _ = context.TagWeightLedgers.Add(new TagWeightLedger
         {
@@ -83,7 +81,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
             SourceType = sourceType,
             SourceId = sourceId,
             PreviousWeight = prevWeight,
-            NewWeight = tag.CachedWeight,
+            NewWeight = newWeight,
             Delta = delta,
             IsOwnerAction = true,
             Reason = reason,

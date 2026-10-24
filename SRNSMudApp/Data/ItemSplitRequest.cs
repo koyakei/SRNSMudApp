@@ -1,4 +1,11 @@
+#region
+
 using System.ComponentModel.DataAnnotations;
+
+using SRNSMudApp.Models.Unions;
+using SRNSMudApp.Resources;
+
+#endregion
 
 namespace SRNSMudApp.Data;
 
@@ -54,4 +61,81 @@ public class ItemSplitRequest : BaseEntity
 
     /// <summary>リクエスト送信者が同時に投稿した引用アイテム。</summary>
     public Item? RequesterQuoteItem { get; set; }
+
+    /// <summary>
+    ///     指定されたユーザーがこのリクエストの承認権限を持っているか判定する。
+    /// </summary>
+    public bool CanBeApprovedBy(string? userId) =>
+        !string.IsNullOrEmpty(userId) && OwnerUserId == userId && Status == TradeStatus.Proposed;
+
+    /// <summary>
+    ///     指定されたユーザーがこのリクエストの却下権限を持っているか判定する。
+    /// </summary>
+    public bool CanBeRejectedBy(string? userId) =>
+        !string.IsNullOrEmpty(userId) && OwnerUserId == userId && Status == TradeStatus.Proposed;
+
+    /// <summary>
+    ///     指定されたユーザーがこのリクエストの取り下げ権限を持っているか判定する。
+    /// </summary>
+    public bool CanBeCanceledBy(string? userId) =>
+        !string.IsNullOrEmpty(userId) && RequesterUserId == userId && Status == TradeStatus.Proposed;
+
+    /// <summary>
+    ///     リクエストを承認済みに遷移させ、生成されたアイテムIDを記録する。
+    /// </summary>
+    public Result<bool> Approve(int createdItemId)
+    {
+        if (Status == TradeStatus.Executed)
+        {
+            return Result.Ok();
+        }
+
+        if (Status != TradeStatus.Proposed)
+        {
+            return Result.Fail(ErrorMessages.FormatSplitRequestNotProposedForApprove(Status));
+        }
+
+        Status = TradeStatus.Executed;
+        CreatedItemId = createdItemId;
+        return Result.Ok();
+    }
+
+    /// <summary>
+    ///     リクエストを却下済みに遷移させ、理由を記録する。
+    /// </summary>
+    public Result<bool> Reject(string? reason)
+    {
+        if (Status == TradeStatus.Rejected)
+        {
+            return Result.Ok();
+        }
+
+        if (Status != TradeStatus.Proposed)
+        {
+            return Result.Fail(ErrorMessages.FormatSplitRequestNotProposedForReject(Status));
+        }
+
+        Status = TradeStatus.Rejected;
+        RejectReason = reason;
+        return Result.Ok();
+    }
+
+    /// <summary>
+    ///     リクエストを取り下げ済みに遷移させる。
+    /// </summary>
+    public Result<bool> Cancel()
+    {
+        if (Status == TradeStatus.Canceled)
+        {
+            return Result.Ok();
+        }
+
+        if (Status != TradeStatus.Proposed)
+        {
+            return Result.Fail(ErrorMessages.FormatSplitRequestNotProposedForCancel(Status));
+        }
+
+        Status = TradeStatus.Canceled;
+        return Result.Ok();
+    }
 }

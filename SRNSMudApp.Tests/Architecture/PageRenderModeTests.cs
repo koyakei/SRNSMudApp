@@ -85,4 +85,45 @@ public class PageRenderModeTests
             $"Found {missingRenderModes.Count} feature page(s) missing '@rendermode InteractiveServer':{Environment.NewLine}" +
             string.Join(Environment.NewLine, missingRenderModes));
     }
+
+    [Fact]
+    public void EveryClientFeaturePage_MustDeclareInteractiveWebAssemblyRenderMode()
+    {
+        // Arrange: SRNSMudApp.Client アセンブリ内の全ルーティング可能コンポーネントを取得
+        var clientAssembly = typeof(SRNSMudApp.Client.Pages.ItemDetailPage).Assembly;
+        var pageTypes = clientAssembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(IComponent).IsAssignableFrom(t))
+            .Where(t => t.GetCustomAttributes(typeof(RouteAttribute), inherit: false).Any())
+            .ToList();
+
+        var missingRenderModes = new List<string>();
+
+        // Act
+        foreach (var pageType in pageTypes)
+        {
+            var renderModeAttr = pageType
+                .GetCustomAttributes(typeof(RenderModeAttribute), inherit: true)
+                .Cast<RenderModeAttribute>()
+                .FirstOrDefault();
+
+            if (renderModeAttr == null)
+            {
+                missingRenderModes.Add($"{pageType.FullName} (No RenderMode)");
+            }
+            else if (renderModeAttr.Mode is not InteractiveWebAssemblyRenderMode wasmMode)
+            {
+                missingRenderModes.Add($"{pageType.FullName} (RenderMode is {renderModeAttr.Mode.GetType().Name}, expected InteractiveWebAssemblyRenderMode)");
+            }
+            else if (wasmMode.Prerender)
+            {
+                missingRenderModes.Add($"{pageType.FullName} (InteractiveWebAssemblyRenderMode has prerender: true, expected prerender: false)");
+            }
+        }
+
+        // Assert: 漏れがあるページが存在しないことを検証
+        Assert.True(
+            missingRenderModes.Count == 0,
+            $"Found {missingRenderModes.Count} client page(s) missing '@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))':{Environment.NewLine}" +
+            string.Join(Environment.NewLine, missingRenderModes));
+    }
 }

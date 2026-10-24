@@ -192,9 +192,9 @@ public class TaggingServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RejectRequestAsync_WhenTriggerContract_ByThirdParty_ShouldSucceed()
+    public async Task RejectRequestAsync_WhenTriggerContract_ByThirdParty_ThrowsUnauthorizedAccessException()
     {
-        // Arrange: Trigger 契約は第三者でも却下可能
+        // Arrange: 第三者による Trigger 契約の強制却下は拒否される
         var (dbContext, service, tid) = CreateScope();
         await using (dbContext)
         {
@@ -223,21 +223,16 @@ public class TaggingServiceTests : IAsyncLifetime
             dbContext.TaggingRequestEntities.Add(request);
             await dbContext.SaveChangesAsync();
 
-            // Act
-            await service.RejectRequestAsync(request.Id, thirdPartyId, "Trigger reject by third party");
-
-            // Assert
-            dbContext.ChangeTracker.Clear();
-            TaggingRequestEntity? updated = await dbContext.TaggingRequestEntities.FindAsync(request.Id);
-            Assert.NotNull(updated);
-            Assert.Equal(TradeStatus.Rejected, updated!.Status);
+            // Act & Assert
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.RejectRequestAsync(request.Id, thirdPartyId, "Trigger reject by third party"));
         }
     }
 
     [Fact]
-    public async Task RejectRequestAsync_WhenBountyContract_ByThirdParty_ShouldSucceed()
+    public async Task RejectRequestAsync_WhenBountyContract_ByThirdParty_ThrowsUnauthorizedAccessException()
     {
-        // Arrange: Bounty 契約は第三者でも却下可能
+        // Arrange: 第三者による Bounty 契約の強制却下は拒否される
         var (dbContext, service, tid) = CreateScope();
         await using (dbContext)
         {
@@ -266,14 +261,9 @@ public class TaggingServiceTests : IAsyncLifetime
             dbContext.TaggingRequestEntities.Add(request);
             await dbContext.SaveChangesAsync();
 
-            // Act
-            await service.RejectRequestAsync(request.Id, thirdPartyId, "Bounty reject by third party");
-
-            // Assert
-            dbContext.ChangeTracker.Clear();
-            TaggingRequestEntity? updated = await dbContext.TaggingRequestEntities.FindAsync(request.Id);
-            Assert.NotNull(updated);
-            Assert.Equal(TradeStatus.Rejected, updated!.Status);
+            // Act & Assert
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.RejectRequestAsync(request.Id, thirdPartyId, "Bounty reject by third party"));
         }
     }
 

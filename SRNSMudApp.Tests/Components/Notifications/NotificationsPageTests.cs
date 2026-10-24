@@ -137,7 +137,7 @@ public sealed class NotificationsPageTests : IAsyncLifetime
         // Act 2: 2件目を却下
         host.FindAll("button[title='リクエストを却下する']")[^1].Click();
 
-        _contractServiceMock.Verify(s => s.CancelContractAsync(note2.SourceId, OwnerUserId), Times.Once);
+        _contractServiceMock.Verify(s => s.RejectContractAsync(note2.SourceId, OwnerUserId, It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

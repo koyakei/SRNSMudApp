@@ -51,8 +51,7 @@ public class GratisContractExecutor(
 
     private Task<Result<int>> UpdateConsumedAsset(ApplicationDbContext dbContext, RightAsset asset, int assetId)
     {
-        asset.IsBurned = true;
-        asset.Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime);
+        asset.Burn(_timeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult<Result<int>>(new Success<int>(assetId));
     }
@@ -274,8 +273,9 @@ public class GratisContractExecutor(
             OwnerId = executorUserId,
             Target = new ItemTarget(contract.TargetItemId),
             FollowedTagId = contract.RequestedTagId,
-            ParsedEventType = TimelineEventType.Update,
-            NewWeight = contract.ProposedWeight
+            ParsedEventType = (isRemove || prevWeight + delta <= 0) ? TimelineEventType.Delete : TimelineEventType.Update,
+            NewWeight = (isRemove || prevWeight + delta <= 0) ? 0 : relation.Weight,
+            PreviousWeight = prevWeight
         });
 
         return Task.FromResult<Result<string>>(new Success<string>("タグを削除または削減しました。"));

@@ -1,5 +1,6 @@
 @page "/PublicOffer/WasmBoard"
 @attribute [AllowAnonymous]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
 @using System.Threading
 @using Microsoft.AspNetCore.Authorization

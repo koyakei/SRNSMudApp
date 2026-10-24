@@ -133,14 +133,34 @@ public class ContractControllerTests
         var controller = CreateController(user);
 
         _taggingContractServiceMock
-            .Setup(s => s.CancelContractAsync(1, "user-1"))
-            .ReturnsAsync(new Success<string>("canceled"));
+            .Setup(s => s.RejectContractAsync(1, "user-1", It.IsAny<string?>()))
+            .ReturnsAsync(new Success<string>("rejected"));
 
         // Act
         ActionResult result = await controller.RejectContract(1, CancellationToken.None);
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectContract_WithReason_PassesReasonToService_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-1")], "test"));
+        var controller = CreateController(user);
+
+        _taggingContractServiceMock
+            .Setup(s => s.RejectContractAsync(1, "user-1", "不適切なタグ指定のため"))
+            .ReturnsAsync(new Success<string>("rejected"));
+
+        // Act
+        var request = new RejectContractRequest("不適切なタグ指定のため");
+        ActionResult result = await controller.RejectContract(1, request, CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+        _taggingContractServiceMock.Verify(s => s.RejectContractAsync(1, "user-1", "不適切なタグ指定のため"), Times.Once);
     }
 
     [Fact]

@@ -91,7 +91,7 @@ public class ContractManagementViewModel
     /// <returns>処理結果。</returns>
     public async Task<Result<string>> RejectContractAsync(int contractId, string userId)
     {
-        var result = await _contractService.CancelContractAsync(contractId, userId);
+        var result = await _contractService.RejectContractAsync(contractId, userId);
         if (result is Success<string>)
         {
             await LoadDataAsync(userId);
