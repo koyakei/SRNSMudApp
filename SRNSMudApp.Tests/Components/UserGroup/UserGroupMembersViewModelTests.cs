@@ -409,4 +409,41 @@ public class UserGroupMembersViewModelTests
         // Assert
         Assert.False(_sut.CanAddMember);
     }
+
+    [Fact]
+    public async Task AddMemberAsync_WhenAlreadyAdding_ReturnsFailureWithDuplicateSubmissionMessage()
+    {
+        // Arrange
+        var group = new UserGroupEntity { Id = 1, Name = "Alpha", OwnerId = "owner-1" };
+        _userGroupDataProviderMock.Setup(p => p.GetUserGroupByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(group);
+
+        await _sut.InitializeAsync(group, "owner-1");
+        _sut.SelectedUser = new ApplicationUser { Id = "u2", UserName = "Bob" };
+
+        var tcs = new TaskCompletionSource<bool>();
+        _userGroupDataProviderMock.Setup(p => p.AddMemberAsync(1, "u2", "owner-1", It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        // Act: 最初の追加操作を開始
+        var firstTask = _sut.AddMemberAsync();
+        Assert.True(_sut.IsAdding);
+
+        // 二重追加操作を実行
+        var secondResult = await _sut.AddMemberAsync();
+
+        // Assert: 二重追加は即座にFailureとなり重複メッセージを返す
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure failure)
+        {
+            Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+
+        tcs.SetResult(true);
+        var firstResult = await firstTask;
+        Assert.True(firstResult is Success<bool>);
+        Assert.False(_sut.IsAdding);
+
+        _userGroupDataProviderMock.Verify(p => p.AddMemberAsync(1, "u2", "owner-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

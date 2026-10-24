@@ -572,6 +572,12 @@
             return;
         }
 
+        if (IsAddingTag)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         IsAddingTag = true;
         try
         {
@@ -606,6 +612,12 @@
             return;
         }
 
+        if (IsPostingReply)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         IsPostingReply = true;
         try
         {
@@ -613,6 +625,12 @@
             ItemDto? res = await ApiClient.AddReplyAsync(ItemId, req, _cts.Token);
             if (res != null)
             {
+                if (res.IsDuplicate)
+                {
+                    Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    return;
+                }
+
                 Snackbar.Add("リプライを送信しました。", Severity.Success);
                 NewReplyContent = string.Empty;
                 await LoadItemAsync();

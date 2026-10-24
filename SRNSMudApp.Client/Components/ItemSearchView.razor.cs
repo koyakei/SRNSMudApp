@@ -35,6 +35,9 @@ public sealed partial class ItemSearchView : ComponentBase
     [Inject]
     private IJSRuntime JS { get; set; } = null!;
 
+    [Inject]
+    private ISnackbar? Snackbar { get; set; }
+
     /// <summary>
     /// アイテムクリック時に通知されるコールバック。
     /// </summary>
@@ -69,6 +72,7 @@ public sealed partial class ItemSearchView : ComponentBase
     private readonly Dictionary<int, IReadOnlyList<ItemDto>> _repliesByItemId = [];
     private readonly Dictionary<int, string> _replyInputs = [];
     private readonly HashSet<int> _loadingReplyItemIds = [];
+    private readonly HashSet<int> _submittingReplyItemIds = [];
 
     private readonly HashSet<int> _expandedQuoteItemIds = [];
     private readonly Dictionary<int, IReadOnlyList<ItemDto>> _quotesByItemId = [];
@@ -81,6 +85,7 @@ public sealed partial class ItemSearchView : ComponentBase
     // アイテム編集用の状態
     private int? _editingItemId;
     private string _editingContent = string.Empty;
+    private int? _savingEditItemId;
 
     // タグ追加用の状態
     private readonly Dictionary<int, bool> _isAddingTagByItemId = [];
@@ -335,6 +340,13 @@ public sealed partial class ItemSearchView : ComponentBase
             return;
         }
 
+        if (_isAddingItem)
+        {
+            Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+            return;
+        }
+
         _isAddingItem = true;
         _errorMessage = null;
 
@@ -355,6 +367,13 @@ public sealed partial class ItemSearchView : ComponentBase
             ItemDto? created = await ApiClient.CreateItemAsync(request);
             if (created != null)
             {
+                if (created.IsDuplicate)
+                {
+                    Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+                    return;
+                }
+
                 _newItemContent = string.Empty;
                 _quotingItemId = null;
                 _quotingItemContent = null;
@@ -423,12 +442,26 @@ public sealed partial class ItemSearchView : ComponentBase
             return;
         }
 
+        if (!_submittingReplyItemIds.Add(itemId))
+        {
+            Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+            return;
+        }
+
         try
         {
             var request = new CreateReplyRequest(content.Trim());
             ItemDto? reply = await ApiClient.AddReplyAsync(itemId, request);
             if (reply != null)
             {
+                if (reply.IsDuplicate)
+                {
+                    Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+                    return;
+                }
+
                 _replyInputs[itemId] = string.Empty;
                 IReadOnlyList<ItemDto> currentReplies = _repliesByItemId.TryGetValue(itemId, out var list) ? list : [];
                 _repliesByItemId[itemId] = [.. currentReplies, reply];
@@ -442,6 +475,10 @@ public sealed partial class ItemSearchView : ComponentBase
         catch (Exception ex)
         {
             _errorMessage = $"リプライの送信に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            _submittingReplyItemIds.Remove(itemId);
         }
     }
 
@@ -493,6 +530,14 @@ public sealed partial class ItemSearchView : ComponentBase
             return;
         }
 
+        if (_savingEditItemId == itemId)
+        {
+            Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+            return;
+        }
+
+        _savingEditItemId = itemId;
         try
         {
             var request = new UpdateItemRequest(_editingContent.Trim());
@@ -511,6 +556,10 @@ public sealed partial class ItemSearchView : ComponentBase
         catch (Exception ex)
         {
             _errorMessage = $"アイテムの更新に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            _savingEditItemId = null;
         }
     }
 
@@ -614,6 +663,13 @@ public sealed partial class ItemSearchView : ComponentBase
             return;
         }
 
+        if (_isAddingTag)
+        {
+            Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
+            return;
+        }
+
         _isAddingTag = true;
         _errorMessage = null;
 
@@ -674,6 +730,13 @@ public sealed partial class ItemSearchView : ComponentBase
     {
         if (string.IsNullOrWhiteSpace(_csvContentToImport))
         {
+            return;
+        }
+
+        if (_isImporting)
+        {
+            Snackbar?.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            _errorMessage = DoubleSubmissionGuard.DuplicateSubmissionMessage;
             return;
         }
 

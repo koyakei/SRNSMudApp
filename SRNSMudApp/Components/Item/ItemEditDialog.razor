@@ -31,6 +31,6 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@Cancel">キャンセル</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync">保存</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync" Disabled="@ViewModel.IsSubmitting">保存</MudButton>
     </DialogActions>
 </MudDialog>

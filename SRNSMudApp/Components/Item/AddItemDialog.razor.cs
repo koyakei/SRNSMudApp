@@ -26,6 +26,13 @@ public sealed partial class AddItemDialog : ComponentBase
     /// </summary>
     private void Cancel() => MudDialog.Cancel();
 
+    private bool _isSubmitting;
+
+    private void HandleSubmittingChanged(bool isSubmitting)
+    {
+        _isSubmitting = isSubmitting;
+    }
+
     /// <summary>
     ///     アイテムが追加された際にダイアログを成功結果で閉じます。
     /// </summary>

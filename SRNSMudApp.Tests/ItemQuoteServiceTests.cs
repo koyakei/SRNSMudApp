@@ -439,4 +439,36 @@ public class ItemQuoteServiceTests : IAsyncLifetime
             Assert.Equal(privateQuote.Id, quotesForAdmin[0].Id);
         }
     }
+
+    [Fact]
+    public async Task CreateQuoteItemAsync_WhenDuplicateSubmission_ReturnsExistingItemWithIsDuplicateTrue()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var user = $"user_{tid}";
+            await dbContext.SeedUsersAsync(user);
+
+            var targetItem = new Item { Content = $"Target_{tid}", OwnerId = user };
+            dbContext.Items.Add(targetItem);
+            await dbContext.SaveChangesAsync();
+
+            var quoteContent = $"DuplicateQuote_{tid}";
+
+            // 1回目の引用投稿
+            var firstQuote = await service.CreateQuoteItemAsync(targetItem.Id, quoteContent, user);
+            Assert.NotNull(firstQuote);
+            Assert.False(firstQuote.IsDuplicate);
+
+            // 2回目の同一引用投稿（重複）
+            var secondQuote = await service.CreateQuoteItemAsync(targetItem.Id, quoteContent, user);
+            Assert.NotNull(secondQuote);
+            Assert.Equal(firstQuote.Id, secondQuote.Id);
+            Assert.True(secondQuote.IsDuplicate);
+
+            // DB上の引用件数が1件のみであることを確認
+            var dbQuotes = await dbContext.Items.Where(i => i.QuotedItemId == targetItem.Id).ToListAsync();
+            Assert.Single(dbQuotes);
+        }
+    }
 }

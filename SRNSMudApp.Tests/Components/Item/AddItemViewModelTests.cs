@@ -699,4 +699,57 @@ public class AddItemViewModelTests
         Assert.False(success);
         Assert.Equal("DB error", errorMessage);
     }
+
+    [Fact]
+    public async Task SaveItemAsync_WhenConcurrentOrRapidCalls_ReturnsDuplicateResultAndCallsProviderOnce()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync(CreatePrincipal("user-1"));
+        sut.NewItem!.Content = "Valid content";
+
+        var tcs = new TaskCompletionSource<bool>();
+        _itemCardDataMock.Setup(m => m.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Returns(tcs.Task);
+
+        // 1回目の送信を開始（非同期処理中）
+        var firstSaveTask = sut.SaveItemAsync(null);
+
+        // 2回目の送信を即座に呼び出し（ガードにより抑止される）
+        var secondResult = await sut.SaveItemAsync(null);
+
+        Assert.False(secondResult.Success);
+        Assert.True(secondResult.IsDuplicate);
+        Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, secondResult.ErrorMessage);
+
+        // 1回目の処理を完了
+        tcs.SetResult(true);
+        var firstResult = await firstSaveTask;
+
+        Assert.True(firstResult.Success);
+        Assert.False(firstResult.IsDuplicate);
+
+        _itemCardDataMock.Verify(m => m.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SaveItemAsync_WhenProviderMarksDuplicate_ReturnsSaveItemResultWithIsDuplicateTrue()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync(CreatePrincipal("user-1"));
+        sut.NewItem!.Content = "Duplicate on server";
+
+        _itemCardDataMock.Setup(m => m.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Callback<Item, IReadOnlyCollection<int>?>((item, _) =>
+            {
+                item.Id = 123;
+                item.IsDuplicate = true;
+            })
+            .Returns(Task.CompletedTask);
+
+        var result = await sut.SaveItemAsync(null);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsDuplicate);
+        Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, result.ErrorMessage);
+    }
 }

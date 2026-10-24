@@ -57,6 +57,12 @@ public partial class BountyCreateDialog : ComponentBase
 
     private async Task Submit()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         if (_form != null)
         {
             await _form.ValidateAsync();
@@ -75,6 +81,12 @@ public partial class BountyCreateDialog : ComponentBase
                 MudDialog.Close(DialogResult.Ok(true));
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(fail.ErrorMessage, Severity.Info);
+                    return;
+                }
+
                 Snackbar.Add(fail.ErrorMessage, Severity.Error);
                 break;
             default:

@@ -271,4 +271,38 @@ public class TagNameProposalViewModelTests
 
         Assert.False(_sut.IsSubmitting);
     }
+
+    [Fact]
+    public async Task SubmitAsync_WhenAlreadySubmitting_ReturnsFailureWithDuplicateSubmissionMessage()
+    {
+        // Arrange
+        var tag = new TagEntity { Id = 5, Name = "OldName", OwnerId = "owner" };
+        _sut.Initialize(tag, "user-1");
+        _sut.ProposedName = "NewName";
+
+        var tcs = new TaskCompletionSource<Result<TagNameProposal>>();
+        _proposalServiceMock.Setup(s => s.ProposeNameAsync(5, "NewName", null, "user-1", It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        // Act: 最初の送信タスクを開始
+        var firstTask = _sut.SubmitAsync();
+        Assert.True(_sut.IsSubmitting);
+
+        // 二重送信
+        var secondResult = await _sut.SubmitAsync();
+
+        // Assert
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure failure)
+        {
+            Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+
+        tcs.SetResult(new Success<TagNameProposal>(new TagNameProposal { OwnerId = "owner" }));
+        var firstResult = await firstTask;
+        Assert.True(firstResult is Success<TagNameProposal>);
+        Assert.False(_sut.IsSubmitting);
+
+        _proposalServiceMock.Verify(s => s.ProposeNameAsync(5, "NewName", null, "user-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

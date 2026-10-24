@@ -48,10 +48,14 @@ public interface IItemCardDataProvider
     Task<bool> SetAdminHiddenAsync(int itemId, bool isHidden, string? reason, string adminUserId);
 }
 
-public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory) : IItemCardDataProvider
+public class ItemCardDataProvider(
+    IDbContextFactory<ApplicationDbContext> dbFactory,
+    IRequestDeduplicationService? deduplicationService = null) : IItemCardDataProvider
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly IRequestDeduplicationService _deduplicationService =
+        deduplicationService ?? new RequestDeduplicationService();
 
     public async Task<Item?> GetItemByIdAsync(int itemId)
     {
@@ -184,64 +188,104 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
 
     public async Task CreateItemAsync(Item item, IReadOnlyCollection<int>? initialTagIds)
     {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        _ = context.Items.Add(item);
+        string trimmedContent = item.Content?.Trim() ?? string.Empty;
+        string dedupKey = !string.IsNullOrWhiteSpace(item.IdempotencyKey)
+            ? $"idempotency:{item.OwnerId}:{item.IdempotencyKey}"
+            : $"create_item:{item.OwnerId}:{trimmedContent}:{item.ParentItemId}:{item.QuotedItemId}:{item.TargetUserGroupId}:{item.IsPrivate}";
 
-        List<TagRelation> tagRelations = [];
-        if (initialTagIds is { Count: > 0 })
+        using (await _deduplicationService.AcquireLockAsync(dedupKey).ConfigureAwait(false))
         {
-            tagRelations = initialTagIds
-                .Select(tagId => new TagRelation
-                {
-                    TagId = tagId,
-                    Weight = 1,
-                    OwnerId = item.OwnerId
-                })
-                .ToList();
-
-            item.TagRelations = tagRelations;
-        }
-
-        _ = await context.SaveChangesAsync();
-
-        if (tagRelations.Count > 0)
-        {
-            var tagIds = tagRelations.Select(tr => tr.TagId).ToList();
-            List<Tag> tags = await context.Tags.Where(t => tagIds.Contains(t.Id)).ToListAsync();
-            foreach (TagRelation relation in tagRelations)
+            if (_deduplicationService.TryGetRecentResult<int>(dedupKey, out var cachedItemId))
             {
-                Tag? tag = tags.FirstOrDefault(t => t.Id == relation.TagId);
-                var (prevWeight, newWeight) = tag != null
-                    ? tag.ApplyWeightDelta(1)
-                    : (0, 1);
-
-                _ = context.TagWeightLedgers.Add(new TagWeightLedger
-                {
-                    TagId = relation.TagId,
-                    TagNameSnapshot = tag?.Name ?? string.Empty,
-                    ItemId = item.Id,
-                    SourceType = "TagRelationInsert",
-                    SourceId = relation.Id,
-                    TagRelation = relation,
-                    PreviousWeight = prevWeight,
-                    NewWeight = newWeight,
-                    Delta = 1,
-                    IsOwnerAction = true,
-                    Reason = "タグの新規追加",
-                    OwnerId = item.OwnerId
-                });
-
-                _ = context.TimelineEvents.Add(new TimelineEvent
-                {
-                    OwnerId = item.OwnerId,
-                    TimelineTargetJson = JsonSerializer.Serialize<TimelineTarget>(new ItemTarget(item.Id)),
-                    FollowedTagId = relation.TagId,
-                    ParsedEventType = TimelineEventType.Insert,
-                    NewWeight = 1
-                });
+                item.Id = cachedItemId;
+                item.IsDuplicate = true;
+                return;
             }
 
-            _ = await context.SaveChangesAsync();
+            await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+            DateTime threshold = DateTime.UtcNow.AddSeconds(-30);
+            Item? existingItem = await context.Items
+                .AsNoTracking()
+                .Where(i => i.OwnerId == item.OwnerId
+                         && (i.Content == item.Content || i.Content == trimmedContent)
+                         && i.ParentItemId == item.ParentItemId
+                         && i.QuotedItemId == item.QuotedItemId
+                         && i.TargetUserGroupId == item.TargetUserGroupId
+                         && i.IsPrivate == item.IsPrivate
+                         && i.CreatedDate >= threshold)
+                .OrderByDescending(i => i.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (existingItem != null)
+            {
+                item.Id = existingItem.Id;
+                item.IsDuplicate = true;
+                _deduplicationService.RecordResult(dedupKey, existingItem.Id, TimeSpan.FromSeconds(30));
+                return;
+            }
+
+            _ = context.Items.Add(item);
+
+            List<TagRelation> tagRelations = [];
+            if (initialTagIds is { Count: > 0 })
+            {
+                tagRelations = initialTagIds
+                    .Select(tagId => new TagRelation
+                    {
+                        TagId = tagId,
+                        Weight = 1,
+                        OwnerId = item.OwnerId
+                    })
+                    .ToList();
+
+                item.TagRelations = tagRelations;
+            }
+
+            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+
+            if (tagRelations.Count > 0)
+            {
+                var tagIds = tagRelations.Select(tr => tr.TagId).ToList();
+                List<Tag> tags = await context.Tags.Where(t => tagIds.Contains(t.Id)).ToListAsync().ConfigureAwait(false);
+                foreach (TagRelation relation in tagRelations)
+                {
+                    Tag? tag = tags.FirstOrDefault(t => t.Id == relation.TagId);
+                    var (prevWeight, newWeight) = tag != null
+                        ? tag.ApplyWeightDelta(1)
+                        : (0, 1);
+
+                    _ = context.TagWeightLedgers.Add(new TagWeightLedger
+                    {
+                        TagId = relation.TagId,
+                        TagNameSnapshot = tag?.Name ?? string.Empty,
+                        ItemId = item.Id,
+                        SourceType = "TagRelationInsert",
+                        SourceId = relation.Id,
+                        TagRelation = relation,
+                        PreviousWeight = prevWeight,
+                        NewWeight = newWeight,
+                        Delta = 1,
+                        IsOwnerAction = true,
+                        Reason = "タグの新規追加",
+                        OwnerId = item.OwnerId
+                    });
+
+                    _ = context.TimelineEvents.Add(new TimelineEvent
+                    {
+                        OwnerId = item.OwnerId,
+                        TimelineTargetJson = JsonSerializer.Serialize<TimelineTarget>(new ItemTarget(item.Id)),
+                        FollowedTagId = relation.TagId,
+                        ParsedEventType = TimelineEventType.Insert,
+                        NewWeight = 1
+                    });
+                }
+
+                _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            _deduplicationService.RecordResult(dedupKey, item.Id, TimeSpan.FromSeconds(30));
         }
     }
     public async Task<bool> UpdateItemContentAsync(int itemId, string content)

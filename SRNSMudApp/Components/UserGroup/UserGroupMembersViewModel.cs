@@ -145,6 +145,11 @@ public sealed class UserGroupMembersViewModel
     /// </summary>
     public async Task<Result<bool>> AddMemberAsync(CancellationToken cancellationToken = default)
     {
+        if (IsAdding)
+        {
+            return new Failure(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         if (Group == null)
         {
             return new Failure("グループが指定されていません。");

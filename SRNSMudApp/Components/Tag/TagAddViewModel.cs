@@ -41,6 +41,7 @@ public class TagAddViewModel
     public string SearchText { get; set; } = string.Empty;
     public IReadOnlyList<Data.Tag>? SearchResults { get; private set; }
     public bool IsSearching { get; private set; }
+    public bool IsSubmitting { get; private set; }
     public Data.Tag? SelectedTag { get; set; }
 
     private Data.Tag? _parentTag;
@@ -175,6 +176,12 @@ public class TagAddViewModel
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Display error message in snackbar on failure")]
     public async Task<Data.Tag?> CreateChildTagAsync(string? userId, bool isAdmin)
     {
+        if (IsSubmitting)
+        {
+            _snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return null;
+        }
+
         if (string.IsNullOrWhiteSpace(NewTagName))
         {
             _snackbar.Add("タグ名は必須です。", Severity.Warning);
@@ -213,6 +220,7 @@ public class TagAddViewModel
             SelectedGroupId = ParentTag.TargetUserGroupId;
         }
 
+        IsSubmitting = true;
         try
         {
             var newTag = new Data.Tag
@@ -233,6 +241,10 @@ public class TagAddViewModel
         {
             _snackbar.Add($"タグ作成中にエラーが発生しました: {ex.Message}", Severity.Error);
             return null;
+        }
+        finally
+        {
+            IsSubmitting = false;
         }
     }
 }

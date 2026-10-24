@@ -49,6 +49,12 @@ public partial class TagEditDialog : ComponentBase
 
     private async Task SaveAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         var result = await ViewModel.SaveAsync();
         switch (result)
         {
@@ -56,6 +62,12 @@ public partial class TagEditDialog : ComponentBase
                 MudDialog.Close(DialogResult.Ok(true));
                 break;
             case Failure failure:
+                if (failure.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(failure.ErrorMessage, Severity.Info);
+                    return;
+                }
+
                 var severity = failure.ErrorMessage.Contains("ロック", StringComparison.Ordinal)
                     ? Severity.Warning
                     : Severity.Error;

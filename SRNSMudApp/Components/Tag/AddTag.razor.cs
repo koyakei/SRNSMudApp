@@ -30,6 +30,12 @@ public partial class AddTag : ComponentBase
 
     private async Task AddTagAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         var authState = await AuthStateTask;
         var result = await ViewModel.CreateTagAsync(authState.User);
 
@@ -39,6 +45,11 @@ public partial class AddTag : ComponentBase
                 NavigationManager.NavigateTo("/Tag/TagList");
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage || fail.ErrorMessage == "送信処理中です。")
+                {
+                    Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    return;
+                }
                 Snackbar.Add(fail.ErrorMessage, Severity.Error);
                 break;
             default:

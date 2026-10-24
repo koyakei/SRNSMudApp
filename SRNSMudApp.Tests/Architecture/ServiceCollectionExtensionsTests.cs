@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using SRNSMudApp.Client.Services;
 using SRNSMudApp.Data;
 using SRNSMudApp.Data.Interceptors;
 using SRNSMudApp.Extensions;
@@ -28,6 +29,8 @@ public class ServiceCollectionExtensionsTests
         services.AddDataProviders();
 
         // Assert: 主要な DataProvider が登録されていることを検証
+        Assert.Contains(services, d => d.ServiceType == typeof(IRequestDeduplicationService) && d.Lifetime == ServiceLifetime.Singleton);
+        Assert.Contains(services, d => d.ServiceType == typeof(IDoubleSubmissionGuard) && d.Lifetime == ServiceLifetime.Transient);
         Assert.Contains(services, d => d.ServiceType == typeof(ITagCardDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IItemCardDataProvider) && d.Lifetime == ServiceLifetime.Scoped);
         Assert.Contains(services, d => d.ServiceType == typeof(IItemListDataProvider) && d.Lifetime == ServiceLifetime.Scoped);

@@ -560,6 +560,30 @@ public sealed class AddItemTests : IAsyncLifetime
         Assert.True(checkboxes.Count >= 2);
     }
 
+    [Fact]
+    public void Save_WhenDuplicateSubmission_ShowsSnackbarAndInvokesCreateItemOnce()
+    {
+        var snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        _ = _itemCardDataMock
+            .Setup(d => d.CreateItemAsync(It.IsAny<SRNSMudApp.Data.Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Callback<SRNSMudApp.Data.Item, IReadOnlyCollection<int>?>((item, _) =>
+            {
+                item.IsDuplicate = true;
+            })
+            .Returns(Task.CompletedTask);
+
+        IRenderedComponent<AddItem> cut = _ctx.Render<AddItem>();
+        cut.WaitForState(() => cut.FindAll("form").Count > 0);
+        cut.Find("textarea").Input(TestContent);
+
+        cut.Find("form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage));
+        });
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

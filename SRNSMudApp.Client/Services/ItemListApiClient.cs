@@ -582,7 +582,13 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
             throw new HttpRequestException(error, null, response.StatusCode);
         }
 
-        return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+        var dto = await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+        if (dto != null && (response.Headers.Contains("X-Duplicate-Request") || dto.IsDuplicate))
+        {
+            return dto with { IsDuplicate = true };
+        }
+
+        return dto;
     }
 
     public async Task<IReadOnlyList<ItemDto>> GetRepliesAsync(int itemId, CancellationToken cancellationToken = default)
@@ -602,7 +608,13 @@ public sealed class ItemListApiClient(HttpClient httpClient) : IItemListApiClien
             throw new HttpRequestException(error, null, response.StatusCode);
         }
 
-        return await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+        var dto = await response.Content.ReadFromJsonAsync<ItemDto>(cancellationToken);
+        if (dto != null && (response.Headers.Contains("X-Duplicate-Request") || dto.IsDuplicate))
+        {
+            return dto with { IsDuplicate = true };
+        }
+
+        return dto;
     }
 
     public async Task<IReadOnlyList<ItemDto>> GetQuotesAsync(int itemId, CancellationToken cancellationToken = default)

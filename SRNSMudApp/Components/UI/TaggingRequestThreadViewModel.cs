@@ -78,6 +78,11 @@ public sealed class TaggingRequestThreadViewModel
             var newReply = await _itemReplyService.AddReplyToRequestAsync(TaggingRequest.Id, CurrentUserId, message);
             if (newReply is not null)
             {
+                if (newReply.IsDuplicate)
+                {
+                    return newReply;
+                }
+
                 _replies.Add(newReply);
                 NewReplyMessage = string.Empty;
 
@@ -100,7 +105,20 @@ public sealed class TaggingRequestThreadViewModel
     /// </summary>
     public async Task<bool> ApproveRequestAsync()
     {
-        return TaggingRequest == null || CurrentUserId == null ? false : await _requestActions.ApproveAsync(TaggingRequest.Id, CurrentUserId);
+        if (IsSubmitting || TaggingRequest == null || CurrentUserId == null)
+        {
+            return false;
+        }
+
+        IsSubmitting = true;
+        try
+        {
+            return await _requestActions.ApproveAsync(TaggingRequest.Id, CurrentUserId);
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
     }
 
     /// <summary>
@@ -108,8 +126,19 @@ public sealed class TaggingRequestThreadViewModel
     /// </summary>
     public async Task<bool> RejectRequestAsync()
     {
-        return TaggingRequest == null || CurrentUserId == null
-            ? false
-            : await _requestActions.RejectViaDialogAsync(TaggingRequest.Id, CurrentUserId);
+        if (IsSubmitting || TaggingRequest == null || CurrentUserId == null)
+        {
+            return false;
+        }
+
+        IsSubmitting = true;
+        try
+        {
+            return await _requestActions.RejectViaDialogAsync(TaggingRequest.Id, CurrentUserId);
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
     }
 }

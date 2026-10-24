@@ -10,11 +10,11 @@
             {
                 <div class="d-flex justify-end mb-2">
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
-                               OnClick="ApproveRequestAsync" Class="mr-2">
+                               OnClick="ApproveRequestAsync" Class="mr-2" Disabled="@ViewModel.IsSubmitting">
                         承認
                     </MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                               StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="RejectRequestAsync">
+                               StartIcon="@Icons.Material.Filled.ThumbDown" OnClick="RejectRequestAsync" Disabled="@ViewModel.IsSubmitting">
                         却下
                     </MudButton>
                 </div>

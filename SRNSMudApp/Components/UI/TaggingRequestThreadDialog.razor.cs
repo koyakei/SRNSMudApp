@@ -27,6 +27,9 @@ public partial class TaggingRequestThreadDialog : ComponentBase
     [Inject]
     private TaggingRequestThreadViewModel ViewModel { get; set; } = null!;
 
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = null!;
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateTask;
@@ -42,11 +45,26 @@ public partial class TaggingRequestThreadDialog : ComponentBase
 
     private async Task SubmitReplyAsync()
     {
-        await ViewModel.SubmitReplyAsync();
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
+        var reply = await ViewModel.SubmitReplyAsync();
+        if (reply is { IsDuplicate: true })
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+        }
     }
 
     private async Task ApproveRequestAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            return;
+        }
+
         if (await ViewModel.ApproveRequestAsync())
         {
             MudDialog.Close(DialogResult.Ok(true));
@@ -55,6 +73,11 @@ public partial class TaggingRequestThreadDialog : ComponentBase
 
     private async Task RejectRequestAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            return;
+        }
+
         if (await ViewModel.RejectRequestAsync())
         {
             MudDialog.Close(DialogResult.Ok(true));

@@ -78,4 +78,12 @@ public class Item : BaseEntity, ITaggable
     /// <summary>タグ履歴コメントに付随するタグ付与アクションのメタ情報。</summary>
     [NotMapped]
     public TagActionMetadata? TagActionInfo { get; set; }
+
+    /// <summary>サーバー側での重複リクエスト検知フラグ。</summary>
+    [NotMapped]
+    public bool IsDuplicate { get; set; }
+
+    /// <summary>クライアント指定の冪等性キー。</summary>
+    [NotMapped]
+    public string? IdempotencyKey { get; set; }
 }

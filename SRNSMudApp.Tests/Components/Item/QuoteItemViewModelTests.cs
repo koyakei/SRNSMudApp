@@ -216,4 +216,62 @@ public sealed class QuoteItemViewModelTests
 
         Assert.False(_sut.IsSubmitting);
     }
+
+    [Fact]
+    public async Task SubmitAsync_WhenCalledRapidlyOrInFlight_ReturnsDuplicateFailure()
+    {
+        // Arrange
+        _sut.QuotedItem = new ItemEntity { Id = 88, OwnerId = "owner-1", Content = "Test" };
+        _sut.CurrentUserId = "user-1";
+        _sut.Content = "Quote message";
+
+        var tcs = new TaskCompletionSource<ItemEntity?>();
+        _itemQuoteServiceMock.Setup(s => s.CreateQuoteItemAsync(
+                88, "Quote message", "user-1", null, It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        // 1回目の送信を開始
+        var firstTask = _sut.SubmitAsync();
+
+        // 2回目の送信（処理中のため重複抑止）
+        var secondResult = await _sut.SubmitAsync();
+
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure failure)
+        {
+            Assert.Contains(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+
+        // 1回目の処理を完了
+        tcs.SetResult(new ItemEntity { Id = 89, Content = "Quote message", OwnerId = "user-1" });
+        var firstResult = await firstTask;
+
+        Assert.True(firstResult is Success<ItemEntity>);
+        _itemQuoteServiceMock.Verify(s => s.CreateQuoteItemAsync(
+            88, "Quote message", "user-1", null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenServerReturnsDuplicateItem_ReturnsDuplicateFailure()
+    {
+        // Arrange
+        _sut.QuotedItem = new ItemEntity { Id = 88, OwnerId = "owner-1", Content = "Test" };
+        _sut.CurrentUserId = "user-1";
+        _sut.Content = "Quote message";
+
+        var duplicateItem = new ItemEntity { Id = 89, Content = "Quote message", OwnerId = "user-1", IsDuplicate = true };
+        _itemQuoteServiceMock.Setup(s => s.CreateQuoteItemAsync(
+                88, "Quote message", "user-1", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(duplicateItem);
+
+        // Act
+        var result = await _sut.SubmitAsync();
+
+        // Assert
+        Assert.True(result is Failure);
+        if (result is Failure failure)
+        {
+            Assert.Contains(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+    }
 }

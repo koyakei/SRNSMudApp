@@ -26,21 +26,25 @@ public sealed class ItemEditViewModel
     private readonly ITagSearchQueryService _tagSearchQueryService;
     private readonly IUserDataProvider _userDataProvider;
     private readonly ILinkPreviewService _linkPreviewService;
+    private readonly Client.Services.IDoubleSubmissionGuard _submissionGuard;
 
     public ItemEditViewModel(
         ItemCardActionViewModel actionViewModel,
         ITagSearchQueryService tagSearchQueryService,
         IUserDataProvider userDataProvider,
-        ILinkPreviewService linkPreviewService)
+        ILinkPreviewService linkPreviewService,
+        Client.Services.IDoubleSubmissionGuard? submissionGuard = null)
     {
         _actionViewModel = actionViewModel ?? throw new ArgumentNullException(nameof(actionViewModel));
         _tagSearchQueryService = tagSearchQueryService ?? throw new ArgumentNullException(nameof(tagSearchQueryService));
         _userDataProvider = userDataProvider ?? throw new ArgumentNullException(nameof(userDataProvider));
         _linkPreviewService = linkPreviewService ?? throw new ArgumentNullException(nameof(linkPreviewService));
+        _submissionGuard = submissionGuard ?? new Client.Services.DoubleSubmissionGuard();
     }
 
     public Data.Item? Item { get; private set; }
     public string EditContent { get; set; } = string.Empty;
+    public bool IsSubmitting => _submissionGuard.IsSubmitting;
 
     public int CharacterCount => EditContent?.Length ?? 0;
     public bool IsOverCharacterLimit => CharacterCount > MaxContentLength;
@@ -67,11 +71,40 @@ public sealed class ItemEditViewModel
     /// <summary>
     ///     アイテムの更新を保存する。
     /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch generic exception types",
+        Justification = "Blazor UI にエラーメッセージを表示するため汎用例外を捕捉する")]
     public async Task<(bool Success, string? ErrorMessage)> SaveAsync(CancellationToken cancellationToken = default)
     {
-        return Item == null
-            ? ((bool Success, string? ErrorMessage))(false, "対象アイテムが設定されていません。")
-            : await _actionViewModel.UpdateItemContentAsync(Item.Id, EditContent).ConfigureAwait(false);
+        if (Item == null)
+        {
+            return (false, "対象アイテムが設定されていません。");
+        }
+
+        var operationKey = $"edit:{Item.Id}:{EditContent}";
+        if (!_submissionGuard.TryBeginSubmit(operationKey))
+        {
+            return (false, Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
+        try
+        {
+            var result = await _actionViewModel.UpdateItemContentAsync(Item.Id, EditContent).ConfigureAwait(false);
+            if (result.Success)
+            {
+                _submissionGuard.Complete(operationKey);
+            }
+            else
+            {
+                _submissionGuard.Reset();
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _submissionGuard.Reset();
+            return (false, ex.Message);
+        }
     }
 
     /// <summary>

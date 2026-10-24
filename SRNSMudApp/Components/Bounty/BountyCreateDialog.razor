@@ -27,8 +27,16 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">キャンセル</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
-            依頼を作成
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid || ViewModel.IsSubmitting)">
+            @if (ViewModel.IsSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                <span>作成中...</span>
+            }
+            else
+            {
+                <span>依頼を作成</span>
+            }
         </MudButton>
     </DialogActions>
 </MudDialog>

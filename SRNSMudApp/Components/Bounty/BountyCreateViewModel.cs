@@ -106,6 +106,11 @@ public sealed class BountyCreateViewModel
     /// </summary>
     public async Task<Result<bool>> SubmitAsync(CancellationToken cancellationToken = default)
     {
+        if (IsSubmitting)
+        {
+            return new Failure(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(CurrentUserId))
         {
             return new Failure("ユーザー情報が取得できませんでした。");

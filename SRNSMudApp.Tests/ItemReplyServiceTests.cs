@@ -427,4 +427,132 @@ public class ItemReplyServiceTests : IAsyncLifetime
             Assert.DoesNotContain(reply!.NotificationRecipients, r => r.RecipientUserId == userA);
         }
     }
+
+    [Fact]
+    public async Task AddItemReplyAsync_WhenDuplicateSubmission_ReturnsExistingItemWithIsDuplicateTrue()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var user = $"user_{tid}";
+            await dbContext.SeedUsersAsync(user);
+
+            var parentItem = new Item { Content = $"Parent_{tid}", OwnerId = user };
+            dbContext.Items.Add(parentItem);
+            await dbContext.SaveChangesAsync();
+
+            // 1回目のリプライ送信
+            var firstReply = await service.AddItemReplyAsync(
+                parentItemId: parentItem.Id,
+                content: $"DuplicateReply_{tid}",
+                userId: user);
+
+            Assert.NotNull(firstReply);
+            Assert.False(firstReply.IsDuplicate);
+
+            // 2回目の同一リプライ送信（重複）
+            var secondReply = await service.AddItemReplyAsync(
+                parentItemId: parentItem.Id,
+                content: $"DuplicateReply_{tid}",
+                userId: user);
+
+            Assert.NotNull(secondReply);
+            Assert.Equal(firstReply.Id, secondReply.Id);
+            Assert.True(secondReply.IsDuplicate);
+
+            // DB上のリプライ件数が1件のみであることを確認
+            var dbReplies = await dbContext.Items.Where(i => i.ParentItemId == parentItem.Id).ToListAsync();
+            Assert.Single(dbReplies);
+        }
+    }
+
+    [Fact]
+    public async Task AddReplyToRequestAsync_WhenDuplicateSubmission_ReturnsExistingItemWithIsDuplicateTrue()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = userId };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Items.Add(targetItem);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            var request = new TaggingRequestEntity
+            {
+                ContractType = "Gratis",
+                OwnerId = userId,
+                TargetItemId = targetItem.Id,
+                RequestedTagId = tag.Id,
+                RequesterUserId = userId,
+                TagOwnerUserId = userId
+            };
+            dbContext.TaggingRequestEntities.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            var message = $"DuplicateRequestReply_{tid}";
+
+            // 1回目のリクエストリプライ送信
+            var firstReply = await service.AddReplyToRequestAsync(request.Id, userId, message);
+            Assert.NotNull(firstReply);
+            Assert.False(firstReply.IsDuplicate);
+
+            // 2回目の同一リクエストリプライ送信（重複）
+            var secondReply = await service.AddReplyToRequestAsync(request.Id, userId, message);
+            Assert.NotNull(secondReply);
+            Assert.Equal(firstReply.Id, secondReply.Id);
+            Assert.True(secondReply.IsDuplicate);
+
+            // DB上のアイテム件数が1件のみであることを確認
+            var dbReplies = await dbContext.Items.Where(i => i.TaggingRequestEntityId == request.Id).ToListAsync();
+            Assert.Single(dbReplies);
+        }
+    }
+
+    [Fact]
+    public async Task AddReplyToRequestAsync_ConcurrentDuplicateCalls_CreatesOnlyOneItem()
+    {
+        var (dbContext, service, tid) = CreateScope();
+        await using (dbContext)
+        {
+            var userId = $"user_{tid}";
+            await dbContext.SeedUsersAsync(userId);
+
+            var targetItem = new Item { Content = $"TargetItem_{tid}", OwnerId = userId };
+            var tag = new Tag { Name = $"Tag_{tid}", OwnerId = userId };
+            dbContext.Items.Add(targetItem);
+            dbContext.Tags.Add(tag);
+            await dbContext.SaveChangesAsync();
+
+            var request = new TaggingRequestEntity
+            {
+                ContractType = "Gratis",
+                OwnerId = userId,
+                TargetItemId = targetItem.Id,
+                RequestedTagId = tag.Id,
+                RequesterUserId = userId,
+                TagOwnerUserId = userId
+            };
+            dbContext.TaggingRequestEntities.Add(request);
+            await dbContext.SaveChangesAsync();
+
+            var message = $"ConcurrentReply_{tid}";
+
+            var tasks = Enumerable.Range(0, 3)
+                .Select(_ => service.AddReplyToRequestAsync(request.Id, userId, message))
+                .ToList();
+
+            var results = await Task.WhenAll(tasks);
+
+            Assert.All(results, Assert.NotNull);
+            var duplicateCount = results.Count(r => r!.IsDuplicate);
+            Assert.Equal(2, duplicateCount);
+
+            var dbReplies = await dbContext.Items.Where(i => i.TaggingRequestEntityId == request.Id).ToListAsync();
+            Assert.Single(dbReplies);
+        }
+    }
 }

@@ -43,6 +43,12 @@ public partial class UserGroupMembersDialog : ComponentBase
 
     private async Task AddMemberAsync()
     {
+        if (ViewModel.IsAdding)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         string? addedUserName = ViewModel.SelectedUser?.UserName;
         Result<bool> result = await ViewModel.AddMemberAsync();
 
@@ -52,6 +58,12 @@ public partial class UserGroupMembersDialog : ComponentBase
                 Snackbar.Add($"ユーザー「{addedUserName}」を追加しました。", Severity.Success);
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(fail.ErrorMessage, Severity.Info);
+                    return;
+                }
+
                 Snackbar.Add(fail.ErrorMessage, Severity.Error);
                 break;
             default:

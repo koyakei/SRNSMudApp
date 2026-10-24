@@ -78,10 +78,20 @@ public partial class ItemEditDialog : ComponentBase, IAsyncDisposable
 
     private async Task SaveAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         var (success, errorMessage) = await ViewModel.SaveAsync();
         if (success)
         {
             MudDialog.Close(DialogResult.Ok(true));
+        }
+        else if (errorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+        {
+            Snackbar.Add(errorMessage, Severity.Info);
         }
         else if (!string.IsNullOrEmpty(errorMessage))
         {

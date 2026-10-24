@@ -51,7 +51,8 @@ public sealed record CreateItemRequest(
     bool IsPrivate = false,
     IReadOnlyList<int>? InitialTagIds = null,
     int? QuotedItemId = null,
-    int? TargetUserGroupId = null
+    int? TargetUserGroupId = null,
+    string? IdempotencyKey = null
 );
 
 /// <summary>

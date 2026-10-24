@@ -64,6 +64,12 @@ public partial class ReportContentDialog : ComponentBase
     [SuppressMessage("Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Display error notification to user")]
     private async Task SubmitAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         if (string.IsNullOrEmpty(ViewModel.CurrentUserId))
         {
             Snackbar.Add("通報するにはログインが必要です。", Severity.Warning);

@@ -62,6 +62,12 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
 
     private async Task SubmitAsync()
     {
+        if (_isSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         _isSubmitting = true;
         try
         {
@@ -81,6 +87,12 @@ public partial class SplitRequestWithQuoteDialog : ComponentBase
             if (createdQuote is null)
             {
                 Snackbar.Add("引用の投稿に失敗しました。", Severity.Error);
+                return;
+            }
+
+            if (createdQuote.IsDuplicate)
+            {
+                Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
                 return;
             }
 

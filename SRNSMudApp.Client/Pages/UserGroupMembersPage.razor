@@ -193,6 +193,12 @@
             return;
         }
 
+        if (IsAddingMember)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         IsAddingMember = true;
         try
         {

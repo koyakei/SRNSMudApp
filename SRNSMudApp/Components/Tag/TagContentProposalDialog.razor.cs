@@ -51,6 +51,12 @@ public partial class TagContentProposalDialog : ComponentBase
 
     private async Task SubmitAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         if (AuthState is null)
         {
             Snackbar.Add("ログインが必要です。", Severity.Warning);
@@ -66,6 +72,12 @@ public partial class TagContentProposalDialog : ComponentBase
                 MudDialog.Close(DialogResult.Ok(true));
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(fail.ErrorMessage, Severity.Info);
+                    return;
+                }
+
                 Snackbar.Add(fail.ErrorMessage, Severity.Error);
                 break;
             default:

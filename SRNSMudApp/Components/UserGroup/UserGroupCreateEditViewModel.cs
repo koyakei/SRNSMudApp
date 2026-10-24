@@ -52,6 +52,11 @@ public sealed class UserGroupCreateEditViewModel
     /// </summary>
     public async Task<Result<UserGroupEntity>> SaveAsync(CancellationToken cancellationToken = default)
     {
+        if (IsSaving)
+        {
+            return new Failure(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(CurrentUserId))
         {
             return new Failure("ユーザー情報が取得できませんでした。");

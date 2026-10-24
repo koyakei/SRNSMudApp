@@ -11,8 +11,17 @@
                        form="@FormId"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
-                       Size="Size.Small">
-                保存
+                       Size="Size.Small"
+                       Disabled="@_isSubmitting">
+                @if (_isSubmitting)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                    <span>保存中...</span>
+                }
+                else
+                {
+                    <span>保存</span>
+                }
             </MudButton>
         </div>
     </TitleContent>
@@ -20,6 +29,7 @@
         <AddItem TextareaId="add-item-textarea-dialog"
                  FormId="@FormId"
                  HideSubmitButton="true"
+                 IsSubmittingChanged="HandleSubmittingChanged"
                  OnItemAdded="HandleItemAdded" />
     </DialogContent>
 </MudDialog>

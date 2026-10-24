@@ -12,6 +12,7 @@ using Microsoft.JSInterop;
 
 using MudBlazor;
 
+using SRNSMudApp.Client.Services;
 using SRNSMudApp.Models;
 using SRNSMudApp.Services;
 
@@ -74,6 +75,11 @@ public partial class AddItem : ComponentBase, IAsyncDisposable
     ///     内部の保存ボタンを非表示にするかどうか（ダイアログヘッダーなど外部にボタンを配置する場合）。
     /// </summary>
     [Parameter] public bool HideSubmitButton { get; set; }
+
+    /// <summary>
+    ///     送信中状態が変化した際に呼び出されるコールバック。
+    /// </summary>
+    [Parameter] public EventCallback<bool> IsSubmittingChanged { get; set; }
 
     [SupplyParameterFromForm] private ItemEntity? NewItem { get => ViewModel.NewItem; set => ViewModel.NewItem = value; }
 
@@ -160,37 +166,64 @@ public partial class AddItem : ComponentBase, IAsyncDisposable
         Justification = "Tribute.js のクリア処理失敗は UI の致命的エラーではないため握りつぶす")]
     private async Task HandleValidSubmit()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         if (!ViewModel.CanSubmitCurrent)
         {
             return;
         }
 
-        var (success, errorMessage) = await ViewModel.SaveItemAsync(InitialTags);
-        if (success)
+        if (IsSubmittingChanged.HasDelegate)
         {
-            try
+            await IsSubmittingChanged.InvokeAsync(true);
+        }
+
+        try
+        {
+            var result = await ViewModel.SaveItemAsync(InitialTags);
+            if (result.IsDuplicate)
             {
-                await JS.InvokeVoidAsync("tributeInterop.clear", TextareaId);
-            }
-            catch (Exception)
-            {
-                // ignored
+                Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                return;
             }
 
-            Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
-
-            if (OnItemAdded.HasDelegate)
+            if (result.Success)
             {
-                await OnItemAdded.InvokeAsync();
+                try
+                {
+                    await JS.InvokeVoidAsync("tributeInterop.clear", TextareaId);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+
+                Snackbar.Add("アイテムが正常に保存されました。", Severity.Success);
+
+                if (OnItemAdded.HasDelegate)
+                {
+                    await OnItemAdded.InvokeAsync();
+                }
+                else
+                {
+                    NavigationManager.NavigateTo(NavigationManager.Uri, true);
+                }
             }
             else
             {
-                NavigationManager.NavigateTo(NavigationManager.Uri, true);
+                Snackbar.Add($"エラー: {result.ErrorMessage}", Severity.Error);
             }
         }
-        else
+        finally
         {
-            Snackbar.Add($"エラー: {errorMessage}", Severity.Error);
+            if (IsSubmittingChanged.HasDelegate)
+            {
+                await IsSubmittingChanged.InvokeAsync(false);
+            }
         }
     }
 
