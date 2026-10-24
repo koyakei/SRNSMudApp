@@ -408,12 +408,43 @@ public class ItemControllerTests
         // Act
         ActionResult<ItemDto> result = await controller.CreateItem(new CreateItemRequest("New item content", false, [1, 2]), CancellationToken.None);
 
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var itemDto = Assert.IsType<ItemDto>(okResult.Value);
         Assert.Equal(999, itemDto.Id);
         Assert.Equal("New item content", itemDto.Content);
         Assert.Equal("user-abc", itemDto.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task CreateItem_WhenDuplicateDetected_SetsDuplicateHeaderAndReturnsDtoWithIsDuplicateTrue()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+
+        _itemCardDataMock
+            .Setup(d => d.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Callback<Item, IReadOnlyCollection<int>?>((item, _) =>
+            {
+                item.Id = 777;
+                item.IsDuplicate = true;
+            })
+            .Returns(Task.CompletedTask);
+
+        _itemCardDataMock
+            .Setup(d => d.GetItemByIdAsync(777))
+            .ReturnsAsync(new Item { Id = 777, Content = "Duplicate content", OwnerId = "user-abc" });
+
+        // Act
+        ActionResult<ItemDto> result = await controller.CreateItem(new CreateItemRequest("Duplicate content", false, null), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var itemDto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal(777, itemDto.Id);
+        Assert.True(itemDto.IsDuplicate);
+        Assert.True(controller.Response.Headers.ContainsKey("X-Duplicate-Request"));
+        Assert.Equal("true", controller.Response.Headers["X-Duplicate-Request"].ToString());
     }
 
     [Fact]
@@ -456,6 +487,63 @@ public class ItemControllerTests
         var replyDto = Assert.IsType<ItemDto>(okResult.Value);
         Assert.Equal(102, replyDto.Id);
         Assert.Equal("New Reply", replyDto.Content);
+    }
+
+    [Fact]
+    public async Task CreateItem_WithIdempotencyKey_PassesIdempotencyKeyToItem()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        Item? passedItem = null;
+
+        _itemCardDataMock
+            .Setup(d => d.CreateItemAsync(It.IsAny<Item>(), It.IsAny<IReadOnlyCollection<int>?>()))
+            .Callback<Item, IReadOnlyCollection<int>?>((item, _) =>
+            {
+                passedItem = item;
+                item.Id = 888;
+            })
+            .Returns(Task.CompletedTask);
+
+        _itemCardDataMock
+            .Setup(d => d.GetItemByIdAsync(888))
+            .ReturnsAsync(new Item { Id = 888, Content = "Content with key", OwnerId = "user-abc" });
+
+        // Act
+        var request = new CreateItemRequest("Content with key", false, null, IdempotencyKey: "client-key-123");
+        ActionResult<ItemDto> result = await controller.CreateItem(request, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.NotNull(passedItem);
+        Assert.Equal("client-key-123", passedItem.IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task AddReply_WhenDuplicate_ReturnsDuplicateHeaderAndDto()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user);
+        var parent = new Item { Id = 1, Content = "Parent", OwnerId = "user-abc" };
+        var duplicateReply = new Item { Id = 103, Content = "Duplicate Reply", ParentItemId = 1, OwnerId = "user-abc", IsDuplicate = true };
+
+        _itemCardDataMock.Setup(d => d.GetItemByIdAsync(1)).ReturnsAsync(parent);
+        _itemReplyMock
+            .Setup(r => r.AddItemReplyAsync(1, "Duplicate Reply", "user-abc", null, false, null))
+            .ReturnsAsync(duplicateReply);
+
+        // Act
+        ActionResult<ItemDto> result = await controller.AddReply(1, new CreateReplyRequest("Duplicate Reply"), CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var replyDto = Assert.IsType<ItemDto>(okResult.Value);
+        Assert.Equal(103, replyDto.Id);
+        Assert.True(replyDto.IsDuplicate);
+        Assert.True(controller.Response.Headers.ContainsKey("X-Duplicate-Request"));
+        Assert.Equal("true", controller.Response.Headers["X-Duplicate-Request"].ToString());
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 
+using SRNSMudApp.Client.Services;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
@@ -37,6 +38,7 @@ public class AddItemViewModel
     private readonly ITagSearchQueryService _tagSearchQueryService;
     private readonly ITagSuggestionService _tagSuggestionService;
     private readonly IInternalLinkConversionService _linkConversionService;
+    private readonly IDoubleSubmissionGuard _submissionGuard;
 
     public AddItemViewModel(
         IItemCardDataProvider itemCardData,
@@ -45,7 +47,8 @@ public class AddItemViewModel
         ILinkPreviewService linkPreviewService,
         ITagSearchQueryService tagSearchQueryService,
         ITagSuggestionService tagSuggestionService,
-        IInternalLinkConversionService linkConversionService)
+        IInternalLinkConversionService linkConversionService,
+        IDoubleSubmissionGuard? submissionGuard = null)
     {
         _itemCardData = itemCardData ?? throw new ArgumentNullException(nameof(itemCardData));
         _userGroupData = userGroupData ?? throw new ArgumentNullException(nameof(userGroupData));
@@ -54,7 +57,10 @@ public class AddItemViewModel
         _tagSearchQueryService = tagSearchQueryService ?? throw new ArgumentNullException(nameof(tagSearchQueryService));
         _tagSuggestionService = tagSuggestionService ?? throw new ArgumentNullException(nameof(tagSuggestionService));
         _linkConversionService = linkConversionService ?? throw new ArgumentNullException(nameof(linkConversionService));
+        _submissionGuard = submissionGuard ?? new DoubleSubmissionGuard();
     }
+
+    public bool IsSubmitting => _submissionGuard.IsSubmitting;
 
     public Item? NewItem { get; set; }
     public Item? ParentItem { get; set; }
@@ -286,18 +292,31 @@ public class AddItemViewModel
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch generic exception types",
         Justification = "Blazor UI にエラーメッセージを表示するため汎用例外を捕捉する")]
-    public async Task<(bool Success, string? ErrorMessage)> SaveItemAsync(IEnumerable<Tag>? initialTags)
+    public async Task<SaveItemResult> SaveItemAsync(IEnumerable<Tag>? initialTags)
     {
         if (NewItem == null || !CanSubmit(NewItem.Content))
         {
-            return (false, "入力内容を確認してください。");
+            return new SaveItemResult(false, "入力内容を確認してください。");
+        }
+
+        var parentId = EffectiveParentItem?.Id ?? ParentItemId;
+        var rootId = EffectiveParentItem?.RootItemId ?? parentId;
+        var operationKey = ComputeItemSubmissionKey(
+            CurrentUserId,
+            NewItem.Content,
+            parentId,
+            rootId,
+            IsPrivate,
+            SelectedGroupId);
+
+        if (!_submissionGuard.TryBeginSubmit(operationKey))
+        {
+            return new SaveItemResult(false, DoubleSubmissionGuard.DuplicateSubmissionMessage, IsDuplicate: true);
         }
 
         try
         {
             var initialIds = initialTags?.Select(t => t.Id) ?? [];
-            var parentId = EffectiveParentItem?.Id ?? ParentItemId;
-            var rootId = EffectiveParentItem?.RootItemId ?? parentId;
 
             (Item itemToSave, IReadOnlyList<int> allTagIds) = PrepareItemForSave(
                 NewItem.Content,
@@ -311,14 +330,36 @@ public class AddItemViewModel
                 rootId);
 
             await _itemCardData.CreateItemAsync(itemToSave, allTagIds);
+
+            if (itemToSave.IsDuplicate)
+            {
+                _submissionGuard.Complete(operationKey);
+                ResetItem();
+                return new SaveItemResult(false, DoubleSubmissionGuard.DuplicateSubmissionMessage, IsDuplicate: true);
+            }
+
+            _submissionGuard.Complete(operationKey);
             ResetItem();
-            return (true, null);
+            return new SaveItemResult(true, null);
         }
         catch (Exception ex)
         {
-            return (false, ex.Message);
+            _submissionGuard.Reset();
+            return new SaveItemResult(false, ex.Message);
         }
     }
+
+    /// <summary>
+    ///     二重送信防止用の操作キーを生成する。
+    /// </summary>
+    public static string ComputeItemSubmissionKey(
+        string? userId,
+        string? content,
+        int? parentItemId,
+        int? rootItemId,
+        bool isPrivate,
+        int? selectedGroupId) =>
+        $"item:{userId ?? ""}:{content?.Trim() ?? ""}:{parentItemId}:{rootItemId}:{isPrivate}:{selectedGroupId}";
 
     // --- 既存の静的メソッド群（ドメインロジック / 後方互換） ---
 

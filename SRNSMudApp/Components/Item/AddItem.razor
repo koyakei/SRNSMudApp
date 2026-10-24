@@ -112,7 +112,7 @@
                 {
                     <MudStack AlignItems="AlignItems.Center" Class="mt-2" Style="min-width: 90px;">
                         <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
-                                   Size="Size.Large" Class="w-100">
+                                   Size="Size.Large" Class="w-100" Disabled="@ViewModel.IsSubmitting">
                             保存
                         </MudButton>
                     </MudStack>

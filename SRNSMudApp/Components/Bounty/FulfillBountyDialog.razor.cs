@@ -45,13 +45,22 @@ public partial class FulfillBountyDialog : ComponentBase
 
     private bool CanSubmit()
     {
-        return ViewModel.IsLoading
-            ? false
-            : ViewModel.CanFulfillAsOwner || (ViewModel.MyValidAssets.Count > 0 && ViewModel.SelectedAsset is not null && _isValid);
+        if (ViewModel.IsLoading || ViewModel.IsSubmitting)
+        {
+            return false;
+        }
+
+        return ViewModel.CanFulfillAsOwner || (ViewModel.MyValidAssets.Count > 0 && ViewModel.SelectedAsset is not null && _isValid);
     }
 
     private async Task Submit()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         if (!CanSubmit())
         {
             return;
@@ -74,6 +83,12 @@ public partial class FulfillBountyDialog : ComponentBase
                 MudDialog.Close(DialogResult.Ok(true));
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(fail.ErrorMessage, Severity.Info);
+                    return;
+                }
+
                 Snackbar.Add($"エラーが発生しました: {fail.ErrorMessage}", Severity.Error);
                 break;
             default:

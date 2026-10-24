@@ -23,5 +23,6 @@ builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagApiClient>(sp => sp.Ge
 builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagProposalApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
 builder.Services.AddScoped<SRNSMudApp.Client.Services.ITagLedgerApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
 builder.Services.AddScoped<SRNSMudApp.Client.Services.ITaggingRequestApiClient>(sp => sp.GetRequiredService<SRNSMudApp.Client.Services.IItemListApiClient>());
+builder.Services.AddTransient<SRNSMudApp.Client.Services.IDoubleSubmissionGuard, SRNSMudApp.Client.Services.DoubleSubmissionGuard>();
 
 await builder.Build().RunAsync();

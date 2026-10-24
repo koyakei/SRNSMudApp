@@ -198,7 +198,19 @@ else
                                             <div class="d-flex flex-column gap-2 mb-2">
                                                 <MudTextField @bind-Value="_editingContent" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
                                                 <div class="d-flex gap-2">
-                                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => SaveEditAsync(item.Id))">保存</MudButton>
+                                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                               Disabled="@(_savingEditItemId == item.Id || string.IsNullOrWhiteSpace(_editingContent))"
+                                                               OnClick="@(() => SaveEditAsync(item.Id))">
+                                                        @if (_savingEditItemId == item.Id)
+                                                        {
+                                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                                            <span>保存中...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>保存</span>
+                                                        }
+                                                    </MudButton>
                                                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" OnClick="CancelEdit">キャンセル</MudButton>
                                                 </div>
                                             </div>
@@ -384,7 +396,18 @@ else
                                                               Placeholder="リプライを入力..." Variant="Variant.Outlined"
                                                               Margin="Margin.Dense" Lines="1" Class="flex-grow-1" />
                                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                                           OnClick="@(() => SubmitReplyAsync(item.Id))">送信</MudButton>
+                                                           Disabled="@(_submittingReplyItemIds.Contains(item.Id) || string.IsNullOrWhiteSpace(_replyInputs.GetValueOrDefault(item.Id, "")))"
+                                                           OnClick="@(() => SubmitReplyAsync(item.Id))">
+                                                    @if (_submittingReplyItemIds.Contains(item.Id))
+                                                    {
+                                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                                        <span>送信中...</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>送信</span>
+                                                    }
+                                                </MudButton>
                                             </div>
                                         }
                                     </div>

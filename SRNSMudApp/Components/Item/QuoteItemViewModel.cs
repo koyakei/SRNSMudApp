@@ -14,13 +14,16 @@ public class QuoteItemViewModel
 {
     private readonly IItemQuoteService _itemQuoteService;
     private readonly ILinkPreviewService _linkPreviewService;
+    private readonly Client.Services.IDoubleSubmissionGuard _submissionGuard;
 
     public QuoteItemViewModel(
         IItemQuoteService itemQuoteService,
-        ILinkPreviewService linkPreviewService)
+        ILinkPreviewService linkPreviewService,
+        Client.Services.IDoubleSubmissionGuard? submissionGuard = null)
     {
         _itemQuoteService = itemQuoteService ?? throw new ArgumentNullException(nameof(itemQuoteService));
         _linkPreviewService = linkPreviewService ?? throw new ArgumentNullException(nameof(linkPreviewService));
+        _submissionGuard = submissionGuard ?? new Client.Services.DoubleSubmissionGuard();
     }
 
     public Data.Item? QuotedItem { get; set; }
@@ -61,16 +64,36 @@ public class QuoteItemViewModel
             return Result.Fail<Data.Item>("引用元のアイテムが指定されていません。");
         }
 
+        var operationKey = $"quote:{CurrentUserId}:{QuotedItem.Id}:{Content.Trim()}";
+        if (IsSubmitting || !_submissionGuard.TryBeginSubmit(operationKey))
+        {
+            return Result.Fail<Data.Item>(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         IsSubmitting = true;
         try
         {
             var created = await _itemQuoteService.CreateQuoteItemAsync(
                 QuotedItem.Id, Content, CurrentUserId, cancellationToken: cancellationToken);
 
-            return created is null ? Result.Fail<Data.Item>("引用元のアイテムが見つかりませんでした。") : Result.Ok(created);
+            if (created is null)
+            {
+                _submissionGuard.Reset();
+                return Result.Fail<Data.Item>("引用元のアイテムが見つかりませんでした。");
+            }
+
+            if (created.IsDuplicate)
+            {
+                _submissionGuard.Complete(operationKey);
+                return Result.Fail<Data.Item>(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+            }
+
+            _submissionGuard.Complete(operationKey);
+            return Result.Ok(created);
         }
         catch (Exception ex)
         {
+            _submissionGuard.Reset();
             return Result.Fail<Data.Item>($"エラーが発生しました: {ex.Message}");
         }
         finally

@@ -231,4 +231,31 @@ public class UserGroupCreateEditViewModelTests
 
         Assert.False(_sut.IsSaving);
     }
+
+    [Fact]
+    public async Task SaveAsync_WhenAlreadySaving_ReturnsFailureWithDuplicateMessage()
+    {
+        _sut.Initialize(null, "user-1");
+        _sut.Name = "Concurrent Group";
+
+        var tcs = new TaskCompletionSource<UserGroupEntity>();
+        _userGroupDataProviderMock.Setup(p => p.CreateUserGroupAsync("Concurrent Group", "", "user-1", It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        var firstSave = _sut.SaveAsync();
+        Assert.True(_sut.IsSaving);
+
+        // 実行中の2回目の呼び出しは重複送信として拒否される
+        var secondResult = await _sut.SaveAsync();
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure fail)
+        {
+            Assert.Equal(global::SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, fail.ErrorMessage);
+        }
+
+        tcs.SetResult(new UserGroupEntity { Id = 1, Name = "Concurrent Group", OwnerId = "user-1" });
+        var firstResult = await firstSave;
+        Assert.True(firstResult is Success<UserGroupEntity>);
+        Assert.False(_sut.IsSaving);
+    }
 }

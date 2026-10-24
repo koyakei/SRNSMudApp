@@ -16,13 +16,16 @@ public class TagEditViewModel
 {
     private readonly ITagCommandService _tagCommandService;
     private readonly IUserGroupDataProvider _userGroupData;
+    private readonly Client.Services.IDoubleSubmissionGuard _submissionGuard;
 
     public TagEditViewModel(
         ITagCommandService tagCommandService,
-        IUserGroupDataProvider userGroupData)
+        IUserGroupDataProvider userGroupData,
+        Client.Services.IDoubleSubmissionGuard? submissionGuard = null)
     {
         _tagCommandService = tagCommandService;
         _userGroupData = userGroupData;
+        _submissionGuard = submissionGuard ?? new Client.Services.DoubleSubmissionGuard();
     }
 
     public TagEntity? Tag { get; private set; }
@@ -33,9 +36,10 @@ public class TagEditViewModel
     public bool IsAdmin { get; private set; }
     public bool IsPrivate { get; set; }
     public int? SelectedTargetGroupId { get; set; }
+    public bool IsSubmitting => _submissionGuard.IsSubmitting;
 
     public bool IsSystemTag => Tag != null && (Tag.IsSystem || TagEntity.VoteTagNames.Contains(Tag.Name) || TagEntity.ReactionTagNames.Contains(Tag.Name) || Tag.Name == TagEntity.RootTagName);
-    public bool CanSave => !string.IsNullOrWhiteSpace(EditName);
+    public bool CanSave => !IsSubmitting && !string.IsNullOrWhiteSpace(EditName);
 
     /// <summary>
     ///     編集対象のタグ情報およびユーザー権限を設定し、管理グループ一覧を非同期取得する。
@@ -94,6 +98,12 @@ public class TagEditViewModel
             return Result.Fail<bool>("タグ名は空にできません。");
         }
 
+        var operationKey = $"tag_edit:{Tag.Id}:{EditName.Trim()}:{EditContent.Trim()}:{IsPrivate}:{SelectedTargetGroupId}";
+        if (IsSubmitting || !_submissionGuard.TryBeginSubmit(operationKey))
+        {
+            return Result.Fail<bool>(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         try
         {
             bool updated = await _tagCommandService.UpdateTagAsync(
@@ -106,10 +116,18 @@ public class TagEditViewModel
                 IsPrivate,
                 SelectedTargetGroupId);
 
-            return updated ? Result.Ok(true) : Result.Fail<bool>("対象のタグが見つからないか、ロックされているため更新できません。");
+            if (updated)
+            {
+                _submissionGuard.Complete(operationKey);
+                return Result.Ok(true);
+            }
+
+            _submissionGuard.Reset();
+            return Result.Fail<bool>("対象のタグが見つからないか、ロックされているため更新できません。");
         }
         catch (Exception ex)
         {
+            _submissionGuard.Reset();
             return Result.Fail<bool>($"エラーが発生しました: {ex.Message}");
         }
     }

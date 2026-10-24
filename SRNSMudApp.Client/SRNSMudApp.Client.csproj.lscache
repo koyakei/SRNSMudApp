@@ -74,6 +74,7 @@ obj/Debug/net11.0/
  SRNSMudApp.Client.GlobalUsings.g.cs
 Resources/ClientMessages.cs
 Services/
+ DoubleSubmissionGuard.cs
  ITagApiClient.cs
  ITaggingRequestApiClient.cs
  ITagLedgerApiClient.cs

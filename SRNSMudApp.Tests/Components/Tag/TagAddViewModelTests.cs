@@ -359,4 +359,43 @@ public sealed class TagAddViewModelTests
         _tagCommandServiceMock.Verify(c => c.CreateTagAsync(
             It.Is<TagEntity>(t => t.IsPrivate && t.TargetUserGroupId == 42), false), Times.Once);
     }
+
+    [Fact]
+    public async Task CreateChildTagAsync_WhenAlreadySubmitting_ShowsSnackbarAndReturnsNull()
+    {
+        var parent = new TagEntity { Id = 10, Name = "Parent", OwnerId = "user-1" };
+        _sut.ParentTag = parent;
+        _sut.NewTagName = "NewChild";
+
+        var tcs = new TaskCompletionSource();
+        _tagCommandServiceMock
+            .Setup(c => c.CreateTagAsync(It.IsAny<TagEntity>(), false))
+            .Returns(tcs.Task);
+
+        _tagLockServiceMock
+            .Setup(l => l.IsChildCreationRestrictedAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _tagSearchQueryServiceMock
+            .Setup(s => s.FindTagByNameAsync("NewChild"))
+            .ReturnsAsync((TagEntity?)null);
+
+        // 1回目の呼び出し（実行中になる）
+        var firstTask = _sut.CreateChildTagAsync("user-1", false);
+        Assert.True(_sut.IsSubmitting);
+
+        // 2回目の呼び出し（重複抑止）
+        var secondResult = await _sut.CreateChildTagAsync("user-1", false);
+
+        Assert.Null(secondResult);
+        _snackbarMock.Verify(s => s.Add(
+            global::SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage,
+            Severity.Info,
+            It.IsAny<Action<SnackbarOptions>>(),
+            null), Times.Once);
+
+        tcs.SetResult();
+        var firstResult = await firstTask;
+        Assert.NotNull(firstResult);
+        Assert.False(_sut.IsSubmitting);
+    }
 }

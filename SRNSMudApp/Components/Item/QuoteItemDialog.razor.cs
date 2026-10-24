@@ -44,6 +44,12 @@ public partial class QuoteItemDialog : ComponentBase
 
     private async Task SaveAsync()
     {
+        if (ViewModel.IsSubmitting)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         var result = await ViewModel.SubmitAsync();
         switch (result)
         {
@@ -52,6 +58,11 @@ public partial class QuoteItemDialog : ComponentBase
                 MudDialog.Close(DialogResult.Ok(success.Value));
                 break;
             case Failure failure:
+                if (failure.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(failure.ErrorMessage, Severity.Info);
+                    return;
+                }
                 Snackbar.Add(failure.ErrorMessage, Severity.Error);
                 if (failure.ErrorMessage.Contains("見つかりませんでした", StringComparison.Ordinal))
                 {

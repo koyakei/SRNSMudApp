@@ -108,7 +108,19 @@ else
                                 <MudTextField @bind-Value="EditGroupDescription" Label="説明" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
                                 <div class="d-flex justify-end gap-1 mt-2">
                                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CancelEdit">キャンセル</MudButton>
-                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => SaveEditGroupAsync(group.Id))">保存</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                               Disabled="@(IsSavingEdit || string.IsNullOrWhiteSpace(EditGroupName))"
+                                               OnClick="@(() => SaveEditGroupAsync(group.Id))">
+                                        @if (IsSavingEdit)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                            <span>保存中...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>保存</span>
+                                        }
+                                    </MudButton>
                                 </div>
                             </div>
                         }

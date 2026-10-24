@@ -440,6 +440,12 @@ public sealed class ItemController(
             return BadRequest("Content は1000文字以内で入力してください。");
         }
 
+        string? idempotencyKey = request.IdempotencyKey;
+        if (string.IsNullOrWhiteSpace(idempotencyKey) && Request?.Headers.TryGetValue("Idempotency-Key", out var headerKey) == true)
+        {
+            idempotencyKey = headerKey.ToString();
+        }
+
         var item = new Item
         {
             Content = request.Content.Trim(),
@@ -447,6 +453,7 @@ public sealed class ItemController(
             IsPrivate = request.IsPrivate,
             QuotedItemId = request.QuotedItemId,
             TargetUserGroupId = request.TargetUserGroupId,
+            IdempotencyKey = idempotencyKey,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };
@@ -454,7 +461,17 @@ public sealed class ItemController(
         await _itemCardDataProvider.CreateItemAsync(item, request.InitialTagIds);
 
         Item? createdItem = await _itemCardDataProvider.GetItemByIdAsync(item.Id);
-        return Ok(MapToItemDto(createdItem ?? item, 0, 0));
+        var dto = MapToItemDto(createdItem ?? item, 0, 0);
+        if (item.IsDuplicate)
+        {
+            if (Response != null)
+            {
+                Response.Headers["X-Duplicate-Request"] = "true";
+            }
+            return Ok(dto with { IsDuplicate = true });
+        }
+
+        return Ok(dto);
     }
 
     /// <summary>
@@ -531,7 +548,17 @@ public sealed class ItemController(
             return BadRequest("リプライの作成に失敗しました。");
         }
 
-        return Ok(MapToItemDto(reply, 0, 0));
+        var replyDto = MapToItemDto(reply, 0, 0);
+        if (reply.IsDuplicate)
+        {
+            if (Response != null)
+            {
+                Response.Headers["X-Duplicate-Request"] = "true";
+            }
+            return Ok(replyDto with { IsDuplicate = true });
+        }
+
+        return Ok(replyDto);
     }
 
     /// <summary>

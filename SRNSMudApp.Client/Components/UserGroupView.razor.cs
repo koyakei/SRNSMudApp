@@ -35,6 +35,8 @@ public partial class UserGroupView : ComponentBase, IDisposable
 
     public bool IsCreating { get; private set; }
 
+    public bool IsSavingEdit { get; private set; }
+
     public string NewGroupName { get; set; } = string.Empty;
 
     public string? NewGroupDescription { get; set; }
@@ -101,6 +103,12 @@ public partial class UserGroupView : ComponentBase, IDisposable
             return;
         }
 
+        if (IsCreating)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         IsCreating = true;
 
         try
@@ -144,6 +152,7 @@ public partial class UserGroupView : ComponentBase, IDisposable
         EditingGroupId = null;
         EditGroupName = string.Empty;
         EditGroupDescription = null;
+        IsSavingEdit = false;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UI 表示向けにエラーメッセージへ集約するため")]
@@ -155,6 +164,13 @@ public partial class UserGroupView : ComponentBase, IDisposable
             return;
         }
 
+        if (IsSavingEdit)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
+        IsSavingEdit = true;
         try
         {
             var request = new UpdateUserGroupRequest(EditGroupName.Trim(), EditGroupDescription?.Trim());
@@ -174,6 +190,10 @@ public partial class UserGroupView : ComponentBase, IDisposable
         catch (Exception ex)
         {
             Snackbar.Add($"グループ更新エラー: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSavingEdit = false;
         }
     }
 
@@ -244,6 +264,12 @@ public partial class UserGroupView : ComponentBase, IDisposable
     {
         if (string.IsNullOrWhiteSpace(NewMemberUserId))
         {
+            return;
+        }
+
+        if (IsAddingMember)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
             return;
         }
 

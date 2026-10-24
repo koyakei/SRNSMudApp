@@ -231,4 +231,39 @@ public class BountyCreateViewModelTests
     {
         return payload is BountyPayload bp && bp.OfferedRewardAssetId == expectedRewardAssetId;
     }
+
+    [Fact]
+    public async Task SubmitAsync_WhenAlreadySubmitting_ReturnsFailureWithDuplicateSubmissionMessage()
+    {
+        // Arrange
+        var item = new ItemEntity { Id = 5, Content = "TargetItem", OwnerId = "requester" };
+        var tag = new TagEntity { Id = 20, Name = "TargetTag", OwnerId = "tag-owner" };
+        await _sut.InitializeAsync(item, "requester");
+        _sut.SelectedTag = tag;
+
+        var tcs = new TaskCompletionSource<Result<bool>>();
+        _createBountyHandlerMock.Setup(h => h.HandleAsync(It.IsAny<CreateBountyCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        // Act: 最初の送信タスクを開始
+        var firstTask = _sut.SubmitAsync();
+        Assert.True(_sut.IsSubmitting);
+
+        // 二重送信
+        var secondResult = await _sut.SubmitAsync();
+
+        // Assert
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure failure)
+        {
+            Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+
+        tcs.SetResult(new Success<bool>(true));
+        var firstResult = await firstTask;
+        Assert.True(firstResult is Success<bool>);
+        Assert.False(_sut.IsSubmitting);
+
+        _createBountyHandlerMock.Verify(h => h.HandleAsync(It.IsAny<CreateBountyCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

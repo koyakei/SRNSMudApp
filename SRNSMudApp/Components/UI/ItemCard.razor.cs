@@ -342,6 +342,12 @@ public partial class ItemCard : IAsyncDisposable
             return;
         }
 
+        if (_isSubmittingReply)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         _isSubmittingReply = true;
         try
         {
@@ -354,6 +360,12 @@ public partial class ItemCard : IAsyncDisposable
 
             if (addedReply is not null)
             {
+                if (addedReply.IsDuplicate)
+                {
+                    Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    return;
+                }
+
                 _newReplyContent = "";
                 _hasManuallyModifiedTargets = false;
                 _unselectedTargetUserIds.Clear();

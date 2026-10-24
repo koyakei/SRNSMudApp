@@ -7,6 +7,7 @@ using Microsoft.JSInterop;
 
 using MudBlazor;
 
+using SRNSMudApp.Client.Services;
 using SRNSMudApp.Components.UI;
 using SRNSMudApp.Data;
 using SRNSMudApp.Models;
@@ -215,12 +216,24 @@ public partial class ItemDetail
             return;
         }
 
+        if (_isSubmittingReply)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         _isSubmittingReply = true;
         try
         {
             Data.Item? addedReply = await ViewModel.SubmitReplyAsync(ItemId, _newReplyText, _isReplyPrivate);
             if (addedReply is not null)
             {
+                if (addedReply.IsDuplicate)
+                {
+                    Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+                    return;
+                }
+
                 _newReplyText = "";
                 var currentItem = _pageState is Loaded<ItemDetailData> loaded ? loaded.Data.Item : null;
                 _isReplyPrivate = currentItem?.IsPrivate ?? false;

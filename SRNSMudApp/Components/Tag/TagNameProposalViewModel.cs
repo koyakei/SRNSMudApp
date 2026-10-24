@@ -71,6 +71,11 @@ public sealed class TagNameProposalViewModel
     /// </summary>
     public async Task<Result<TagNameProposal>> SubmitAsync(CancellationToken cancellationToken = default)
     {
+        if (IsSubmitting)
+        {
+            return new Failure(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         if (TargetTag == null)
         {
             return new Failure("対象タグが指定されていません。");

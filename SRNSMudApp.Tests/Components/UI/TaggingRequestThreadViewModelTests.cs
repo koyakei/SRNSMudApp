@@ -176,4 +176,92 @@ public class TaggingRequestThreadViewModelTests
         Assert.True(vm.CanApprove);
         _requestActionsMock.Verify(a => a.CanApprove(request, "u1"), Times.Once);
     }
+
+    [Fact]
+    public async Task SubmitReplyAsync_WhenDuplicate_ReturnsReplyWithoutAddingToRepliesOrClearingInput()
+    {
+        var request = new TaggingRequestEntity { Id = 10, OwnerId = "u1", Replies = [] };
+        var vm = CreateViewModel();
+        _homeDataMock.Setup(h => h.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        await vm.InitializeAsync(request, "u1");
+        vm.NewReplyMessage = "Duplicate message";
+
+        var duplicateReply = new Item { Id = 99, OwnerId = "u1", Content = "Duplicate message", IsDuplicate = true };
+        _replyServiceMock.Setup(s => s.AddReplyToRequestAsync(10, "u1", "Duplicate message"))
+            .ReturnsAsync(duplicateReply);
+
+        // Act
+        var result = await vm.SubmitReplyAsync();
+
+        // Assert
+        Assert.Same(duplicateReply, result);
+        Assert.Empty(vm.Replies);
+        Assert.Empty(request.Replies);
+        Assert.Equal("Duplicate message", vm.NewReplyMessage);
+        Assert.False(vm.IsSubmitting);
+    }
+
+    [Fact]
+    public async Task ApproveRequestAsync_WhenAlreadySubmitting_ReturnsFalseImmediately()
+    {
+        var request = new TaggingRequestEntity { Id = 5, OwnerId = "u1" };
+        var vm = CreateViewModel();
+        _homeDataMock.Setup(h => h.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        await vm.InitializeAsync(request, "u1");
+
+        var tcs = new TaskCompletionSource<bool>();
+        _requestActionsMock.Setup(a => a.ApproveAsync(5, "u1"))
+            .Returns(tcs.Task);
+
+        // Act: 最初の承認リクエストを実行中にする
+        var firstTask = vm.ApproveRequestAsync();
+        Assert.True(vm.IsSubmitting);
+
+        // 実行中の二重送信呼び出し
+        var secondResult = await vm.ApproveRequestAsync();
+        Assert.False(secondResult);
+
+        // 最初のタスクを完了
+        tcs.SetResult(true);
+        var firstResult = await firstTask;
+        Assert.True(firstResult);
+        Assert.False(vm.IsSubmitting);
+
+        _requestActionsMock.Verify(a => a.ApproveAsync(5, "u1"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectRequestAsync_WhenAlreadySubmitting_ReturnsFalseImmediately()
+    {
+        var request = new TaggingRequestEntity { Id = 5, OwnerId = "u1" };
+        var vm = CreateViewModel();
+        _homeDataMock.Setup(h => h.GetTagsAndRelationsAsync())
+            .ReturnsAsync(([], []));
+
+        await vm.InitializeAsync(request, "u1");
+
+        var tcs = new TaskCompletionSource<bool>();
+        _requestActionsMock.Setup(a => a.RejectViaDialogAsync(5, "u1"))
+            .Returns(tcs.Task);
+
+        // Act: 最初の却下リクエストを実行中にする
+        var firstTask = vm.RejectRequestAsync();
+        Assert.True(vm.IsSubmitting);
+
+        // 実行中の二重送信呼び出し
+        var secondResult = await vm.RejectRequestAsync();
+        Assert.False(secondResult);
+
+        // 最初のタスクを完了
+        tcs.SetResult(true);
+        var firstResult = await firstTask;
+        Assert.True(firstResult);
+        Assert.False(vm.IsSubmitting);
+
+        _requestActionsMock.Verify(a => a.RejectViaDialogAsync(5, "u1"), Times.Once);
+    }
 }

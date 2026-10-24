@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using SRNSMudApp.Client.Services;
 using SRNSMudApp.Components.Account.Pages.Debug;
 using SRNSMudApp.Components.Admin;
 using SRNSMudApp.Components.Bounty;
@@ -41,6 +42,9 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddMemoryCache();
+
+        services.AddSingleton<IRequestDeduplicationService, RequestDeduplicationService>();
+        services.AddTransient<IDoubleSubmissionGuard, DoubleSubmissionGuard>();
 
         services.AddScoped<ITagCardDataProvider, TagCardDataProvider>();
         services.AddScoped<IItemCardDataProvider, ItemCardDataProvider>();

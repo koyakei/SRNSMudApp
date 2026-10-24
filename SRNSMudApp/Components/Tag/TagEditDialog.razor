@@ -36,9 +36,17 @@
         </MudSelect>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@Cancel">キャンセル</MudButton>
+        <MudButton OnClick="@Cancel" Disabled="@ViewModel.IsSubmitting">キャンセル</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@SaveAsync" Disabled="@(!ViewModel.CanSave)">
-            保存
+            @if (ViewModel.IsSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>保存中...</span>
+            }
+            else
+            {
+                <span>保存</span>
+            }
         </MudButton>
     </DialogActions>
 </MudDialog>

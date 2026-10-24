@@ -255,4 +255,31 @@ public sealed class ItemEditViewModelTests
         var urls = ItemEditViewModel.GetExternalUrls(text);
         Assert.Empty(urls);
     }
+
+    [Fact]
+    public async Task SaveAsync_WhenDuplicateSubmission_ReturnsFailureWithDuplicateMessage()
+    {
+        var guard = new global::SRNSMudApp.Client.Services.DoubleSubmissionGuard();
+        var vm = new ItemEditViewModel(
+            _actionViewModel,
+            _mockTagSearch.Object,
+            _mockUserData.Object,
+            _mockLinkPreview.Object,
+            guard);
+
+        var item = new SRNSMudApp.Data.Item { Id = 10, Content = "Content", OwnerId = "user-1" };
+        vm.Initialize(item);
+        vm.EditContent = "Edited";
+
+        _mockItemCardData.Setup(d => d.UpdateItemContentAsync(10, "Edited"))
+            .ReturnsAsync(true);
+
+        var firstResult = await vm.SaveAsync();
+        Assert.True(firstResult.Success);
+
+        // 5秒以内の直近同一操作は重複防止される
+        var secondResult = await vm.SaveAsync();
+        Assert.False(secondResult.Success);
+        Assert.Equal(global::SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, secondResult.ErrorMessage);
+    }
 }

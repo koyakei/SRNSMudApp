@@ -71,6 +71,40 @@ public class ItemCardDataProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CreateItemAsync_WhenIdenticalItemSubmittedWithinDeduplicationWindow_MarksDuplicateAndDoesNotInsertNewRow()
+    {
+        var (db, sut, _, goodTagId, _, tid) = await CreateScopeAsync();
+        await using (db)
+        {
+            var authorId = $"author_{tid}";
+            var firstItem = new Item
+            {
+                Content = $"Duplicate test content {tid}",
+                OwnerId = authorId
+            };
+
+            await sut.CreateItemAsync(firstItem, [goodTagId]);
+            Assert.False(firstItem.IsDuplicate);
+            Assert.True(firstItem.Id > 0);
+
+            var secondItem = new Item
+            {
+                Content = $"Duplicate test content {tid}",
+                OwnerId = authorId
+            };
+
+            await sut.CreateItemAsync(secondItem, [goodTagId]);
+
+            // 2回目の投稿は重複として検知され、新規レコードは作成されない
+            Assert.True(secondItem.IsDuplicate);
+            Assert.Equal(firstItem.Id, secondItem.Id);
+
+            var count = await db.Items.CountAsync(i => i.Content == $"Duplicate test content {tid}");
+            Assert.Equal(1, count);
+        }
+    }
+
+    [Fact]
     public async Task CanUserAttachTagDirectlyAsync_WhenTagIsAutoApproved_ReturnsTrueAndAddsRelation()
     {
         var (db, sut, userId, _, itemId, tid) = await CreateScopeAsync();

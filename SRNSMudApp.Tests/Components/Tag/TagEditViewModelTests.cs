@@ -258,4 +258,26 @@ public sealed class TagEditViewModelTests
         _tagCommandServiceMock.Verify(s => s.UpdateTagAsync(
             50, "PrivateTag", It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<IReadOnlyCollection<int>?>(), false, true, 77), Times.Once);
     }
+
+    [Fact]
+    public async Task SaveAsync_WhenDuplicateSubmission_ReturnsFailureWithDuplicateMessage()
+    {
+        var tag = new TagEntity { Id = 60, Name = "TagName", Content = "Desc", OwnerId = "u1", AutoApproveUserGroups = [] };
+        await _sut.InitializeAsync(tag, "u1", false);
+
+        _tagCommandServiceMock.Setup(s => s.UpdateTagAsync(
+                60, "TagName", "Desc", It.IsAny<bool>(), It.IsAny<IReadOnlyCollection<int>?>(), false, false, null))
+            .ReturnsAsync(true);
+
+        var first = await _sut.SaveAsync();
+        Assert.True(first is Success<bool>);
+
+        // 2回目の保存（直近の同一操作）は重複として抑止される
+        var second = await _sut.SaveAsync();
+        Assert.True(second is Failure);
+        if (second is Failure fail)
+        {
+            Assert.Equal(global::SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, fail.ErrorMessage);
+        }
+    }
 }

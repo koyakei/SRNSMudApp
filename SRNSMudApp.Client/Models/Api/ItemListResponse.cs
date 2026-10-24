@@ -51,7 +51,8 @@ public sealed record ItemDto(
     int QuoteCount = 0,
     string? QuotedItemContent = null,
     string? QuotedItemOwnerUserName = null,
-    string? TargetUserGroupName = null
+    string? TargetUserGroupName = null,
+    bool IsDuplicate = false
 );
 
 /// <summary>

@@ -537,6 +537,66 @@ public sealed class ItemDetailThreadTests : IAsyncLifetime
         _itemReplyServiceMock.Verify(s => s.AddItemReplyAsync(itemId, "Public reply to private item", UserId, null, false, null), Times.Once);
     }
 
+    [Fact]
+    public void ItemDetail_WhenReplyIsDuplicate_ShowsSnackbar()
+    {
+        const int itemId = 10;
+        var author = new ApplicationUser { Id = UserId, UserName = UserName };
+        var focusedItem = new SRNSMudApp.Data.Item
+        {
+            Id = itemId,
+            Content = "Root item",
+            OwnerId = UserId,
+            Owner = author
+        };
+
+        var pageData = new ItemDetailPageData(
+            focusedItem,
+            [],
+            [],
+            []);
+
+        _ = _itemDetailDataMock.Setup(d => d.GetItemDetailAsync(itemId, default))
+            .ReturnsAsync(pageData);
+
+        _ = _contractServiceMock.Setup(s => s.GetRequestsByItemIdAsync(itemId))
+            .ReturnsAsync([]);
+
+        var duplicateReply = new SRNSMudApp.Data.Item
+        {
+            Id = 999,
+            ParentItemId = itemId,
+            Content = "Duplicate Reply",
+            OwnerId = UserId,
+            IsDuplicate = true
+        };
+
+        _itemReplyServiceMock.Setup(s => s.AddItemReplyAsync(
+                itemId,
+                "Duplicate Reply",
+                UserId,
+                null,
+                false,
+                null))
+            .ReturnsAsync(duplicateReply);
+
+        var snackbar = _ctx.Services.GetRequiredService<ISnackbar>();
+        IRenderedComponent<ItemDetail> cut = _ctx.Render<ItemDetail>(p => p.Add(x => x.ItemId, itemId));
+
+        cut.WaitForState(() => cut.FindAll("textarea[data-testid='item-detail-reply-input']").Count > 0);
+
+        var inputElem = cut.Find("textarea[data-testid='item-detail-reply-input']");
+        inputElem.Input("Duplicate Reply");
+
+        var submitBtn = cut.Find("button[data-testid='item-detail-reply-submit']");
+        submitBtn.Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(snackbar.ShownSnackbars, s => s.Message.ToString().Contains(global::SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage));
+        });
+    }
+
     public async Task DisposeAsync()
     {
         await _ctx.DisposeAsync();

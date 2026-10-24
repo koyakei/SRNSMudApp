@@ -10,31 +10,83 @@ namespace SRNSMudApp.Services;
 /// </summary>
 public class ItemReplyService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
-    INotificationService? notificationService = null) : IItemReplyService
+    INotificationService? notificationService = null,
+    IRequestDeduplicationService? deduplicationService = null) : IItemReplyService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly INotificationService? _notificationService = notificationService;
+    private readonly IRequestDeduplicationService _deduplicationService =
+        deduplicationService ?? new RequestDeduplicationService();
 
     public async Task<Item?> AddReplyToRequestAsync(int requestId, string userId, string message)
     {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
-        var reply = new Item
+        string trimmedMessage = message?.Trim() ?? string.Empty;
+        string dedupKey = $"request_reply:{userId}:{requestId}:{trimmedMessage}";
+
+        using (await _deduplicationService.AcquireLockAsync(dedupKey).ConfigureAwait(false))
         {
-            TaggingRequestEntityId = requestId,
-            OwnerId = userId,
-            Content = message,
-            CreatedDate = DateTime.UtcNow
-        };
+            if (_deduplicationService.TryGetRecentResult<int>(dedupKey, out var cachedReplyId))
+            {
+                await using ApplicationDbContext cachedContext = await _dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+                Item? cachedItem = await cachedContext.Items
+                    .AsNoTracking()
+                    .Include(r => r.Owner)
+                    .Include(r => r.TagRelations)
+                        .ThenInclude(tr => tr.Tag)
+                    .FirstOrDefaultAsync(r => r.Id == cachedReplyId)
+                    .ConfigureAwait(false);
 
-        _ = context.Items!.Add(reply);
-        _ = await context.SaveChangesAsync();
+                if (cachedItem != null)
+                {
+                    cachedItem.IsDuplicate = true;
+                    return cachedItem;
+                }
+            }
 
-        return await context.Items
-            .Include(r => r.Owner)
-            .Include(r => r.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .FirstOrDefaultAsync(r => r.Id == reply.Id);
+            await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+            DateTime threshold = DateTime.UtcNow.AddSeconds(-30);
+            Item? existingReply = await context.Items
+                .AsNoTracking()
+                .Include(r => r.Owner)
+                .Include(r => r.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                .Where(r => r.TaggingRequestEntityId == requestId
+                         && r.OwnerId == userId
+                         && (r.Content == message || r.Content == trimmedMessage)
+                         && r.CreatedDate >= threshold)
+                .OrderByDescending(r => r.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (existingReply != null)
+            {
+                existingReply.IsDuplicate = true;
+                _deduplicationService.RecordResult(dedupKey, existingReply.Id, TimeSpan.FromSeconds(30));
+                return existingReply;
+            }
+
+            var reply = new Item
+            {
+                TaggingRequestEntityId = requestId,
+                OwnerId = userId,
+                Content = message ?? string.Empty,
+                CreatedDate = DateTime.UtcNow
+            };
+
+            _ = context.Items!.Add(reply);
+            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+
+            _deduplicationService.RecordResult(dedupKey, reply.Id, TimeSpan.FromSeconds(30));
+
+            return await context.Items
+                .Include(r => r.Owner)
+                .Include(r => r.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                .FirstOrDefaultAsync(r => r.Id == reply.Id)
+                .ConfigureAwait(false);
+        }
     }
 
     public async Task<IReadOnlyList<Item>> GetItemRepliesAsync(
@@ -216,120 +268,177 @@ public class ItemReplyService(
         bool isPrivate = false,
         int? targetUserGroupId = null)
     {
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+        string trimmedContent = content?.Trim() ?? string.Empty;
+        string dedupKey = $"reply:{userId}:{parentItemId}:{trimmedContent}:{isPrivate}:{targetUserGroupId}";
 
-        List<TagRelation> inheritedRelations = await context.TagRelations
-            .Where(tr => tr.ItemId == parentItemId)
-            .ToListAsync();
-
-        var parentRootId = await context.Items
-            .Where(i => i.Id == parentItemId)
-            .Select(i => i.RootItemId)
-            .FirstOrDefaultAsync();
-
-        var replyItem = new Item
+        using (await _deduplicationService.AcquireLockAsync(dedupKey).ConfigureAwait(false))
         {
-            Content = content,
-            OwnerId = userId,
-            ParentItemId = parentItemId,
-            RootItemId = parentRootId ?? parentItemId,
-            IsPrivate = isPrivate,
-            TargetUserGroupId = isPrivate ? targetUserGroupId : null,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
-        };
-
-        _ = context.Items!.Add(replyItem);
-        _ = await context.SaveChangesAsync();
-
-        // 通知対象ユーザー（Twitterライクなメンション先）の永続化
-        List<string> recipientIds;
-        if (targetUserIds != null)
-        {
-            recipientIds = targetUserIds.Where(id => !string.IsNullOrWhiteSpace(id) && id != userId).Distinct().ToList();
-        }
-        else
-        {
-            // 省略時はスレッド参加者（親アイテムオーナー + 既存リプライ投稿者、自分を除く）を自動対象とする
-            var parentOwnerId = await context.Items
-                .Where(i => i.Id == parentItemId)
-                .Select(i => i.OwnerId)
-                .FirstOrDefaultAsync();
-
-            var replierIds = await context.Items
-                .Where(i => i.ParentItemId == parentItemId)
-                .Select(i => i.OwnerId)
-                .ToListAsync();
-
-            recipientIds = [.. (new[] { parentOwnerId }.Concat(replierIds))
-                .Where(id => !string.IsNullOrEmpty(id) && id != userId)
-                .Distinct()!];
-        }
-
-        // Issue 4-2: 会話からオプトアウト（ConversationOptOut）したユーザーを通知対象から除外する
-        int threadRootId = replyItem.RootItemId ?? parentItemId;
-        List<string> optedOutUserIds = await context.ConversationOptOuts
-            .Where(o => o.RootItemId == threadRootId)
-            .Select(o => o.UserId)
-            .ToListAsync();
-
-        if (optedOutUserIds.Count > 0)
-        {
-            recipientIds = recipientIds.Where(id => !optedOutUserIds.Contains(id)).ToList();
-        }
-
-        if (recipientIds.Count > 0)
-        {
-            var recipients = recipientIds.Select(rid => new ItemReplyNotificationRecipient
+            if (_deduplicationService.TryGetRecentResult<int>(dedupKey, out var cachedReplyId))
             {
-                ReplyItemId = replyItem.Id,
-                RecipientUserId = rid,
-                CreatedDate = DateTimeOffset.UtcNow
-            });
-            context.ItemReplyNotificationRecipients.AddRange(recipients);
-            _ = await context.SaveChangesAsync();
+                await using ApplicationDbContext cachedContext = await _dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+                Item? cachedItem = await cachedContext.Items
+                    .AsNoTracking()
+                    .Include(i => i.Owner)
+                    .Include(i => i.TagRelations)
+                        .ThenInclude(tr => tr.Tag)
+                    .Include(i => i.NotificationRecipients)
+                    .FirstOrDefaultAsync(i => i.Id == cachedReplyId)
+                    .ConfigureAwait(false);
 
-            if (_notificationService != null)
-            {
-                string notificationBody = replyItem.IsPrivate
-                    ? "非公開の返信が届きました。"
-                    : (replyItem.Content.Length > 100 ? replyItem.Content[..97] + "..." : replyItem.Content);
-
-                foreach (string rid in recipientIds)
+                if (cachedItem != null)
                 {
-                    _ = _notificationService.NotifyUserAsync(
-                        rid,
-                        "新しい返信",
-                        notificationBody,
-                        $"/items/{parentItemId}");
+                    cachedItem.IsDuplicate = true;
+                    return cachedItem;
                 }
             }
-        }
 
-        if (inheritedRelations.Count > 0)
-        {
-            var replyTagRelations = inheritedRelations
-                .Select(relation => new TagRelation
+            await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+            DateTime threshold = DateTime.UtcNow.AddSeconds(-30);
+            Item? existingReply = await context.Items
+                .AsNoTracking()
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                .Include(i => i.NotificationRecipients)
+                .Where(i => i.ParentItemId == parentItemId
+                         && i.OwnerId == userId
+                         && (i.Content == content || i.Content == trimmedContent)
+                         && i.IsPrivate == isPrivate
+                         && i.TargetUserGroupId == (isPrivate ? targetUserGroupId : null)
+                         && i.CreatedDate >= threshold)
+                .OrderByDescending(i => i.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (existingReply != null)
+            {
+                existingReply.IsDuplicate = true;
+                _deduplicationService.RecordResult(dedupKey, existingReply.Id, TimeSpan.FromSeconds(30));
+                return existingReply;
+            }
+
+            List<TagRelation> inheritedRelations = await context.TagRelations
+                .Where(tr => tr.ItemId == parentItemId)
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var parentRootId = await context.Items
+                .Where(i => i.Id == parentItemId)
+                .Select(i => i.RootItemId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            var replyItem = new Item
+            {
+                Content = content ?? string.Empty,
+                OwnerId = userId,
+                ParentItemId = parentItemId,
+                RootItemId = parentRootId ?? parentItemId,
+                IsPrivate = isPrivate,
+                TargetUserGroupId = isPrivate ? targetUserGroupId : null,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+
+            _ = context.Items!.Add(replyItem);
+            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+
+            // 通知対象ユーザー（Twitterライクなメンション先）の永続化
+            List<string> recipientIds;
+            if (targetUserIds != null)
+            {
+                recipientIds = targetUserIds.Where(id => !string.IsNullOrWhiteSpace(id) && id != userId).Distinct().ToList();
+            }
+            else
+            {
+                // 省略時はスレッド参加者（親アイテムオーナー + 既存リプライ投稿者、自分を除く）を自動対象とする
+                var parentOwnerId = await context.Items
+                    .Where(i => i.Id == parentItemId)
+                    .Select(i => i.OwnerId)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+
+                var replierIds = await context.Items
+                    .Where(i => i.ParentItemId == parentItemId)
+                    .Select(i => i.OwnerId)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                recipientIds = [.. (new[] { parentOwnerId }.Concat(replierIds))
+                    .Where(id => !string.IsNullOrEmpty(id) && id != userId)
+                    .Distinct()!];
+            }
+
+            // Issue 4-2: 会話からオプトアウト（ConversationOptOut）したユーザーを通知対象から除外する
+            int threadRootId = replyItem.RootItemId ?? parentItemId;
+            List<string> optedOutUserIds = await context.ConversationOptOuts
+                .Where(o => o.RootItemId == threadRootId)
+                .Select(o => o.UserId)
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            if (optedOutUserIds.Count > 0)
+            {
+                recipientIds = recipientIds.Where(id => !optedOutUserIds.Contains(id)).ToList();
+            }
+
+            if (recipientIds.Count > 0)
+            {
+                var recipients = recipientIds.Select(rid => new ItemReplyNotificationRecipient
                 {
-                    ItemId = replyItem.Id,
-                    TagId = relation.TagId,
-                    Weight = relation.Weight,
-                    OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                })
-                .ToList();
+                    ReplyItemId = replyItem.Id,
+                    RecipientUserId = rid,
+                    CreatedDate = DateTimeOffset.UtcNow
+                });
+                context.ItemReplyNotificationRecipients.AddRange(recipients);
+                _ = await context.SaveChangesAsync().ConfigureAwait(false);
 
-            context.TagRelations.AddRange(replyTagRelations);
-            _ = await context.SaveChangesAsync();
+                if (_notificationService != null)
+                {
+                    string notificationBody = replyItem.IsPrivate
+                        ? "非公開の返信が届きました。"
+                        : (replyItem.Content.Length > 100 ? replyItem.Content[..97] + "..." : replyItem.Content);
+
+                    foreach (string rid in recipientIds)
+                    {
+                        _ = _notificationService.NotifyUserAsync(
+                            rid,
+                            "新しい返信",
+                            notificationBody,
+                            $"/items/{parentItemId}");
+                    }
+                }
+            }
+
+            if (inheritedRelations.Count > 0)
+            {
+                var replyTagRelations = inheritedRelations
+                    .Select(relation => new TagRelation
+                    {
+                        ItemId = replyItem.Id,
+                        TagId = relation.TagId,
+                        Weight = relation.Weight,
+                        OwnerId = userId,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    })
+                    .ToList();
+
+                context.TagRelations.AddRange(replyTagRelations);
+                _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            _deduplicationService.RecordResult(dedupKey, replyItem.Id, TimeSpan.FromSeconds(30));
+
+            return await context.Items
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                .ThenInclude(tr => tr.Tag)
+                .Include(i => i.NotificationRecipients)
+                .FirstOrDefaultAsync(i => i.Id == replyItem.Id)
+                .ConfigureAwait(false);
         }
-
-        return await context.Items
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-            .ThenInclude(tr => tr.Tag)
-            .Include(i => i.NotificationRecipients)
-            .FirstOrDefaultAsync(i => i.Id == replyItem.Id);
     }
 
     public async Task<bool> ToggleConversationOptOutAsync(int rootItemId, string userId)

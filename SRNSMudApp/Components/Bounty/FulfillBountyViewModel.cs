@@ -104,6 +104,11 @@ public sealed class FulfillBountyViewModel
     /// </summary>
     public async Task<Result<string>> SubmitAsync()
     {
+        if (IsSubmitting)
+        {
+            return new Failure(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage);
+        }
+
         if (Bounty == null)
         {
             return new Failure("依頼が指定されていません。");

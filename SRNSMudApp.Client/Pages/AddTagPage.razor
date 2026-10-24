@@ -99,6 +99,12 @@
             return;
         }
 
+        if (_isSubmitting)
+        {
+            Snackbar.Add(DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         _isSubmitting = true;
         try
         {

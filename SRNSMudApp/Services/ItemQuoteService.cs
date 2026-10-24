@@ -14,16 +14,20 @@ namespace SRNSMudApp.Services;
 /// <param name="dbFactory">DbContext ファクトリ。</param>
 /// <param name="sourceResolvers">優先順位順に実行する元アイテム解決戦略。</param>
 /// <param name="timeProvider">日時プロバイダー（省略時はシステム日時）。</param>
+/// <param name="deduplicationService">リクエスト重複排除サービス（省略時は新規インスタンス）。</param>
 public class ItemQuoteService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
     IEnumerable<IItemSourceResolver> sourceResolvers,
-    TimeProvider? timeProvider = null) : IItemQuoteService
+    TimeProvider? timeProvider = null,
+    IRequestDeduplicationService? deduplicationService = null) : IItemQuoteService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IReadOnlyList<IItemSourceResolver> _sourceResolvers =
         sourceResolvers?.ToArray() ?? throw new ArgumentNullException(nameof(sourceResolvers));
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly IRequestDeduplicationService _deduplicationService =
+        deduplicationService ?? new RequestDeduplicationService();
 
     /// <inheritdoc />
     public async Task<Item?> CreateQuoteItemAsync(
@@ -43,58 +47,111 @@ public class ItemQuoteService(
             throw new ArgumentException("ユーザーIDは必須です。", nameof(userId));
         }
 
-        await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        string trimmedContent = content.Trim();
+        string dedupKey = $"quote:{userId}:{quotedItemId}:{trimmedContent}";
 
-        // 引用元のアイテムが存在することを確認し、公開範囲（IsPrivate / TargetUserGroupId）を取得する。
-        // （非公開・グループ限定アイテムの引用が公開タイムラインへ流出するのを防ぐため、公開範囲を引き継ぐ）
-        var targetItem = await context.Items
-            .AsNoTracking()
-            .Select(i => new { i.Id, i.IsPrivate, i.TargetUserGroupId })
-            .FirstOrDefaultAsync(i => i.Id == quotedItemId, cancellationToken);
-        if (targetItem is null)
+        using (await _deduplicationService.AcquireLockAsync(dedupKey, cancellationToken).ConfigureAwait(false))
         {
-            return null;
-        }
+            if (_deduplicationService.TryGetRecentResult<int>(dedupKey, out var cachedQuoteId))
+            {
+                await using ApplicationDbContext cachedContext = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+                Item? cachedItem = await cachedContext.Items
+                    .AsNoTracking()
+                    .Include(i => i.Owner)
+                    .Include(i => i.TagRelations)
+                        .ThenInclude(tr => tr.Tag)
+                    .Include(i => i.QuotedItem)
+                        .ThenInclude(q => q!.Owner)
+                    .FirstOrDefaultAsync(i => i.Id == cachedQuoteId, cancellationToken)
+                    .ConfigureAwait(false);
 
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var quoteItem = new Item
-        {
-            Content = content,
-            OwnerId = userId,
-            QuotedItemId = quotedItemId,
-            IsPrivate = targetItem.IsPrivate,
-            TargetUserGroupId = targetItem.TargetUserGroupId,
-            CreatedDate = now,
-            UpdatedDate = now,
-            ItemKindJson = JsonSerializer.Serialize(new QuoteItem(quotedItemId))
-        };
-
-        _ = context.Items.Add(quoteItem);
-
-        if (initialTagIds is { Count: > 0 })
-        {
-            var relations = initialTagIds
-                .Select(tagId => new TagRelation
+                if (cachedItem != null)
                 {
-                    TagId = tagId,
-                    Weight = 1,
-                    OwnerId = userId,
-                    CreatedDate = now,
-                    UpdatedDate = now
-                })
-                .ToList();
-            quoteItem.TagRelations = relations;
+                    cachedItem.IsDuplicate = true;
+                    return cachedItem;
+                }
+            }
+
+            await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+            // 引用元のアイテムが存在することを確認し、公開範囲（IsPrivate / TargetUserGroupId）を取得する。
+            // （非公開・グループ限定アイテムの引用が公開タイムラインへ流出するのを防ぐため、公開範囲を引き継ぐ）
+            var targetItem = await context.Items
+                .AsNoTracking()
+                .Select(i => new { i.Id, i.IsPrivate, i.TargetUserGroupId })
+                .FirstOrDefaultAsync(i => i.Id == quotedItemId, cancellationToken)
+                .ConfigureAwait(false);
+            if (targetItem is null)
+            {
+                return null;
+            }
+
+            DateTime threshold = _timeProvider.GetUtcNow().UtcDateTime.AddSeconds(-30);
+            Item? existingQuote = await context.Items
+                .AsNoTracking()
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                .Include(i => i.QuotedItem)
+                    .ThenInclude(q => q!.Owner)
+                .Where(i => i.QuotedItemId == quotedItemId
+                         && i.OwnerId == userId
+                         && (i.Content == content || i.Content == trimmedContent)
+                         && i.CreatedDate >= threshold)
+                .OrderByDescending(i => i.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (existingQuote != null)
+            {
+                existingQuote.IsDuplicate = true;
+                _deduplicationService.RecordResult(dedupKey, existingQuote.Id, TimeSpan.FromSeconds(30));
+                return existingQuote;
+            }
+
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var quoteItem = new Item
+            {
+                Content = content,
+                OwnerId = userId,
+                QuotedItemId = quotedItemId,
+                IsPrivate = targetItem.IsPrivate,
+                TargetUserGroupId = targetItem.TargetUserGroupId,
+                CreatedDate = now,
+                UpdatedDate = now,
+                ItemKindJson = JsonSerializer.Serialize(new QuoteItem(quotedItemId))
+            };
+
+            _ = context.Items.Add(quoteItem);
+
+            if (initialTagIds is { Count: > 0 })
+            {
+                var relations = initialTagIds
+                    .Select(tagId => new TagRelation
+                    {
+                        TagId = tagId,
+                        Weight = 1,
+                        OwnerId = userId,
+                        CreatedDate = now,
+                        UpdatedDate = now
+                    })
+                    .ToList();
+                quoteItem.TagRelations = relations;
+            }
+
+            _ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            _deduplicationService.RecordResult(dedupKey, quoteItem.Id, TimeSpan.FromSeconds(30));
+
+            return await context.Items
+                .Include(i => i.Owner)
+                .Include(i => i.TagRelations)
+                    .ThenInclude(tr => tr.Tag)
+                .Include(i => i.QuotedItem)
+                    .ThenInclude(q => q!.Owner)
+                .FirstOrDefaultAsync(i => i.Id == quoteItem.Id, cancellationToken)
+                .ConfigureAwait(false);
         }
-
-        _ = await context.SaveChangesAsync(cancellationToken);
-
-        return await context.Items
-            .Include(i => i.Owner)
-            .Include(i => i.TagRelations)
-                .ThenInclude(tr => tr.Tag)
-            .Include(i => i.QuotedItem)
-                .ThenInclude(q => q!.Owner)
-            .FirstOrDefaultAsync(i => i.Id == quoteItem.Id, cancellationToken);
     }
 
     /// <inheritdoc />

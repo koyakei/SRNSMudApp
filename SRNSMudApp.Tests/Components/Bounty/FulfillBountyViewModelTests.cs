@@ -256,4 +256,52 @@ public class FulfillBountyViewModelTests
             Assert.Contains("消費するアセットを選択してください", failure.ErrorMessage);
         }
     }
+
+    [Fact]
+    public async Task SubmitAsync_WhenAlreadySubmitting_ReturnsFailureWithDuplicateSubmissionMessage()
+    {
+        // Arrange
+        var tag = new TagEntity { Id = 10, Name = "TagName", OwnerId = "user-owner" };
+        var item = new ItemEntity { Id = 20, Content = "Content", OwnerId = "other" };
+        var bounty = new TaggingRequestEntity
+        {
+            Id = 42,
+            ContractType = "Bounty",
+            RequestedTagId = 10,
+            RequestedTag = tag,
+            TargetItemId = 20,
+            TargetItem = item,
+            OwnerId = "requester",
+            RequesterUserId = "requester",
+            TagOwnerUserId = "user-owner",
+            Payload = new BountyPayload(0)
+        };
+
+        await _sut.InitializeAsync(bounty, "user-owner");
+
+        var tcs = new TaskCompletionSource<Result<string>>();
+        _contractServiceMock.Setup(s => s.AcceptContractAsync(42, "user-owner", null))
+            .Returns(tcs.Task);
+
+        // Act: 最初の送信タスクを開始
+        var firstTask = _sut.SubmitAsync();
+        Assert.True(_sut.IsSubmitting);
+
+        // 二重送信
+        var secondResult = await _sut.SubmitAsync();
+
+        // Assert
+        Assert.True(secondResult is Failure);
+        if (secondResult is Failure failure)
+        {
+            Assert.Equal(SRNSMudApp.Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, failure.ErrorMessage);
+        }
+
+        tcs.SetResult(new Success<string>("Contract completed"));
+        var firstResult = await firstTask;
+        Assert.True(firstResult is Success<string>);
+        Assert.False(_sut.IsSubmitting);
+
+        _contractServiceMock.Verify(s => s.AcceptContractAsync(42, "user-owner", null), Times.Once);
+    }
 }

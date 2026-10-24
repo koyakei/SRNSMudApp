@@ -43,6 +43,12 @@ public partial class UserGroupCreateEditDialog : ComponentBase
 
     private async Task SaveAsync()
     {
+        if (ViewModel.IsSaving)
+        {
+            Snackbar.Add(Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage, Severity.Info);
+            return;
+        }
+
         var result = await ViewModel.SaveAsync();
 
         switch (result)
@@ -60,6 +66,11 @@ public partial class UserGroupCreateEditDialog : ComponentBase
                 }
                 break;
             case Failure fail:
+                if (fail.ErrorMessage == Client.Services.DoubleSubmissionGuard.DuplicateSubmissionMessage)
+                {
+                    Snackbar.Add(fail.ErrorMessage, Severity.Info);
+                    return;
+                }
                 Snackbar.Add(fail.ErrorMessage, Severity.Error);
                 break;
             default:
