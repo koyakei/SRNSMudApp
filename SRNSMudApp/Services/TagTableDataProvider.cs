@@ -70,8 +70,7 @@ public class TagTableDataProvider(
         Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
         if (tagFromDb is not null)
         {
-            var prevWeight = tagFromDb.CachedWeight;
-            tagFromDb.CachedWeight++;
+            var (prevWeight, newWeight) = tagFromDb.ApplyWeightDelta(1);
             _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,
@@ -80,7 +79,7 @@ public class TagTableDataProvider(
                 SourceType = "TagRelationToTagInsert",
                 SourceId = null,
                 PreviousWeight = prevWeight,
-                NewWeight = tagFromDb.CachedWeight,
+                NewWeight = newWeight,
                 Delta = 1,
                 IsOwnerAction = true,
                 Reason = "タグにタグを追加",
@@ -105,8 +104,7 @@ public class TagTableDataProvider(
         if (entity.Tag is not null)
         {
             Tag tag = entity.Tag;
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight -= entity.Weight;
+            var (prevWeight, newWeight) = tag.ApplyWeightDelta(-entity.Weight);
             _ = context.TagWeightLedgers.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
@@ -115,7 +113,7 @@ public class TagTableDataProvider(
                 SourceType = "TagRelationToTagDelete",
                 SourceId = null,
                 PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
+                NewWeight = newWeight,
                 Delta = -entity.Weight,
                 IsOwnerAction = true,
                 Reason = "タグの関連付け解除",

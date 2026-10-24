@@ -532,7 +532,7 @@ public sealed class AddItemTests : IAsyncLifetime
         cut.Find("form").Submit();
 
         // Assert
-        Assert.Equal("C# に関するメモ", capturedContent);
+        cut.WaitForAssertion(() => Assert.Equal("C# に関するメモ", capturedContent));
     }
 
     [Fact]

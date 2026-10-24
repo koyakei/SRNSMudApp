@@ -211,11 +211,9 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
             foreach (TagRelation relation in tagRelations)
             {
                 Tag? tag = tags.FirstOrDefault(t => t.Id == relation.TagId);
-                var prevWeight = tag?.CachedWeight ?? 0;
-                if (tag != null)
-                {
-                    tag.CachedWeight += 1;
-                }
+                var (prevWeight, newWeight) = tag != null
+                    ? tag.ApplyWeightDelta(1)
+                    : (0, 1);
 
                 _ = context.TagWeightLedgers.Add(new TagWeightLedger
                 {
@@ -226,7 +224,7 @@ public class ItemCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
                     SourceId = relation.Id,
                     TagRelation = relation,
                     PreviousWeight = prevWeight,
-                    NewWeight = tag?.CachedWeight ?? 1,
+                    NewWeight = newWeight,
                     Delta = 1,
                     IsOwnerAction = true,
                     Reason = "タグの新規追加",

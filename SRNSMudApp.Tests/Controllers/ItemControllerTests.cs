@@ -34,10 +34,11 @@ public class ItemControllerTests
     private readonly Mock<IUserGroupDataProvider> _userGroupMock = new();
     private readonly Mock<IAdminDataProvider> _adminDataMock = new();
     private readonly Mock<ICommandHandler<ApproveTaggingRequestCommand, Result<string>>> _approveCommandHandlerMock = new();
+    private readonly Mock<ICommandHandler<RejectTaggingRequestCommand, Result<bool>>> _rejectCommandHandlerMock = new();
     private readonly Mock<ITagRequestRejectionService> _tagRequestRejectionMock = new();
     private readonly Mock<IItemDetailDataProvider> _itemDetailDataMock = new();
 
-    private ItemController CreateController(ClaimsPrincipal? user = null)
+    private ItemController CreateController(ClaimsPrincipal? user = null, bool useRejectHandler = false)
     {
         var controller = new ItemController(
             _dataProviderMock.Object,
@@ -51,6 +52,7 @@ public class ItemControllerTests
             _userGroupMock.Object,
             _adminDataMock.Object,
             _approveCommandHandlerMock.Object,
+            useRejectHandler ? _rejectCommandHandlerMock.Object : null,
             _tagRequestRejectionMock.Object,
             _itemDetailDataMock.Object);
         if (user != null)
@@ -896,6 +898,41 @@ public class ItemControllerTests
 
         // Assert
         Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectTaggingRequest_WithCommandHandler_Success_ReturnsOk()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user, useRejectHandler: true);
+        _rejectCommandHandlerMock
+            .Setup(h => h.HandleAsync(It.Is<RejectTaggingRequestCommand>(c => c.RequestId == 10 && c.CurrentUserId == "user-abc" && c.Reason == "Reason-1"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Success<bool>(true));
+
+        // Act
+        var result = await controller.RejectTaggingRequest(10, new RejectTaggingRequest("Reason-1"), CancellationToken.None);
+
+        // Assert
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectTaggingRequest_WithCommandHandler_Failure_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-abc")], "test"));
+        var controller = CreateController(user, useRejectHandler: true);
+        _rejectCommandHandlerMock
+            .Setup(h => h.HandleAsync(It.Is<RejectTaggingRequestCommand>(c => c.RequestId == 10), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Failure("Already processed"));
+
+        // Act
+        var result = await controller.RejectTaggingRequest(10, new RejectTaggingRequest("Reason-1"), CancellationToken.None);
+
+        // Assert
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Already processed", badRequest.Value);
     }
 
     [Fact]

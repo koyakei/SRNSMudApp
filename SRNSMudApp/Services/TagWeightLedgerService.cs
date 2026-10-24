@@ -271,7 +271,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
         {
             existing.Weight += 1;
             existing.UpdatedDate = now;
-            tag.CachedWeight += 1;
+            _ = tag.ApplyWeightDelta(1);
             await context.SaveChangesAsync();
             return existing;
         }
@@ -286,7 +286,7 @@ public class TagWeightLedgerService(IDbContextFactory<ApplicationDbContext>? dbF
             UpdatedDate = now
         };
         _ = context.TagRelations.Add(newRelation);
-        tag.CachedWeight += 1;
+        _ = tag.ApplyWeightDelta(1);
         await context.SaveChangesAsync();
         return newRelation;
     }

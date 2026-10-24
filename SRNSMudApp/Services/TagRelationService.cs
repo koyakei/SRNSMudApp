@@ -57,9 +57,7 @@ public class TagRelationService(IDbContextFactory<ApplicationDbContext> dbFactor
                 _ = context.TagRelations.Add(relation);
                 _ = await context.SaveChangesAsync();
 
-                var previousWeight = tag.CachedWeight;
-                tag.CachedWeight += requiredWeight;
-                var newWeight = tag.CachedWeight;
+                var (previousWeight, newWeight) = tag.ApplyWeightDelta(requiredWeight);
 
                 var ledger = new TagWeightLedger
                 {
@@ -171,9 +169,7 @@ public class TagRelationService(IDbContextFactory<ApplicationDbContext> dbFactor
                 relation.Weight += manipulationDelta;
                 _ = await context.SaveChangesAsync();
 
-                var previousWeight = tag.CachedWeight;
-                tag.CachedWeight += manipulationDelta;
-                var newWeight = tag.CachedWeight;
+                var (previousWeight, newWeight) = tag.ApplyWeightDelta(manipulationDelta);
 
                 var ledger = new TagWeightLedger
                 {

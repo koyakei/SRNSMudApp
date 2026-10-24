@@ -26,6 +26,20 @@ using ReactionTagNames = SRNSMudApp.Models.ReactionTagNames;
 /// <summary>
 /// ItemList の一覧表示やタグ検索に関する API を提供するコントローラー。
 /// </summary>
+/// <param name="itemListDataProvider">アイテム一覧およびタグ検索データプロバイダー。</param>
+/// <param name="itemListExportService">アイテムエクスポートサービス。</param>
+/// <param name="homeDataProvider">システムタグ初期化・ホームデータプロバイダー。</param>
+/// <param name="itemReactionService">アイテムリアクション・投票サービス。</param>
+/// <param name="itemCardDataProvider">アイテムカードデータ操作プロバイダー。</param>
+/// <param name="itemReplyService">アイテムリプライサービス。</param>
+/// <param name="itemQuoteService">アイテム引用サービス。</param>
+/// <param name="itemTagService">アイテムタグ管理サービス。</param>
+/// <param name="userGroupDataProvider">ユーザーグループデータプロバイダー。</param>
+/// <param name="adminDataProvider">管理者用データ操作プロバイダー。</param>
+/// <param name="approveCommandHandler">タグ付けリクエスト承認コマンドハンドラー（任意）。</param>
+/// <param name="rejectCommandHandler">タグ付けリクエスト却下コマンドハンドラー（任意）。</param>
+/// <param name="tagRequestRejectionService">タグ付けリクエスト却下サービス（任意・後方互換用）。</param>
+/// <param name="itemDetailDataProvider">アイテム詳細データプロバイダー（任意）。</param>
 [ApiController]
 [Route("api/[controller]")]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<T> union type pattern matching")]
@@ -41,6 +55,7 @@ public sealed class ItemController(
     IUserGroupDataProvider userGroupDataProvider,
     IAdminDataProvider adminDataProvider,
     ICommandHandler<ApproveTaggingRequestCommand, Result<string>>? approveCommandHandler = null,
+    ICommandHandler<RejectTaggingRequestCommand, Result<bool>>? rejectCommandHandler = null,
     ITagRequestRejectionService? tagRequestRejectionService = null,
     IItemDetailDataProvider? itemDetailDataProvider = null) : ControllerBase
 {
@@ -65,13 +80,18 @@ public sealed class ItemController(
     private readonly IAdminDataProvider _adminDataProvider =
         adminDataProvider ?? throw new ArgumentNullException(nameof(adminDataProvider));
     private readonly ICommandHandler<ApproveTaggingRequestCommand, Result<string>>? _approveCommandHandler = approveCommandHandler;
+    private readonly ICommandHandler<RejectTaggingRequestCommand, Result<bool>>? _rejectCommandHandler = rejectCommandHandler;
     private readonly ITagRequestRejectionService? _tagRequestRejectionService = tagRequestRejectionService;
     private readonly IItemDetailDataProvider? _itemDetailDataProvider = itemDetailDataProvider;
 
     /// <summary>
     /// タグ名のサジェスト候補を検索します。
     /// </summary>
+    /// <param name="q">検索クエリ文字列。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>タグ名のサジェスト候補リスト。</returns>
     [HttpGet("search-tags")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<TagSuggestion>))]
     public async Task<ActionResult<IReadOnlyList<TagSuggestion>>> SearchTags(
         [FromQuery] string? q,
         CancellationToken cancellationToken)
@@ -89,7 +109,13 @@ public sealed class ItemController(
     /// <summary>
     /// 特定タグに関連付けられたユーザー名一覧を検索します。
     /// </summary>
+    /// <param name="tagName">対象のタグ名。</param>
+    /// <param name="userSearch">ユーザー名の絞り込みクエリ。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>ユーザー名のリスト。</returns>
     [HttpGet("tag-users")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<string>))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<string>>> SearchTagUsers(
         [FromQuery] string tagName,
         [FromQuery] string? userSearch,
@@ -108,7 +134,11 @@ public sealed class ItemController(
     /// <summary>
     /// フィルタおよびソート条件に合致するアイテムとタグの一覧を取得します。
     /// </summary>
+    /// <param name="request">検索・絞り込み・ソート条件およびページネーション指定。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>条件に合致するアイテムとタグの一覧および総件数。</returns>
     [HttpPost("query")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemListQueryResponse))]
     public async Task<ActionResult<ItemListQueryResponse>> QueryItems(
         [FromBody] ItemListQueryRequest? request,
         CancellationToken cancellationToken)
@@ -171,7 +201,13 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムの詳細情報を取得します。
     /// </summary>
+    /// <param name="id">取得対象アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>アイテム詳細DTO。</returns>
     [HttpGet("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemDto))]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ItemDto>> GetItemById(int id, CancellationToken cancellationToken)
     {
         Item? item = await _itemCardDataProvider.GetItemByIdAsync(id);
@@ -270,7 +306,11 @@ public sealed class ItemController(
     /// <summary>
     /// 指定されたアイテム一覧を JSON 形式でエクスポートします。
     /// </summary>
+    /// <param name="request">エクスポート対象アイテムID一覧を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>エクスポートされた JSON 文字列。</returns>
     [HttpPost("export")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(string))]
     public async Task<ActionResult<string>> ExportItems(
         [FromBody] ItemListExportRequest? request,
         CancellationToken cancellationToken)
@@ -299,7 +339,14 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムへの投票（アップボート / ダウンボート）を切り替えます。
     /// </summary>
+    /// <param name="id">投票対象アイテムのID。</param>
+    /// <param name="request">投票の種類（Upvote / Downvote）を指定するリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>投票更新後の結果情報。</returns>
     [HttpPost("{id:int}/vote")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemVoteResult))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ItemVoteResult>> VoteItem(
         int id,
         [FromBody] ItemVoteRequest request,
@@ -329,7 +376,14 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムへのリアクション（真実・善・美）を切り替えます。
     /// </summary>
+    /// <param name="id">リアクション対象アイテムのID。</param>
+    /// <param name="request">リアクションタグ名およびウェイトを指定するリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>リアクション更新後の結果情報。</returns>
     [HttpPost("{id:int}/reaction")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemVoteResult))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ItemVoteResult>> ReactItem(
         int id,
         [FromBody] ItemReactionRequest request,
@@ -359,7 +413,13 @@ public sealed class ItemController(
     /// <summary>
     /// 新規アイテムを作成します。
     /// </summary>
+    /// <param name="request">新規作成するアイテムの本文や公開範囲、初期タグ情報を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成されたアイテムの詳細DTO。</returns>
     [HttpPost("create")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemDto))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ItemDto>> CreateItem(
         [FromBody] CreateItemRequest request,
         CancellationToken cancellationToken)
@@ -400,7 +460,11 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムのリプライ一覧を取得します。
     /// </summary>
+    /// <param name="id">親アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>リプライアイテムDTOの一覧。</returns>
     [HttpGet("{id:int}/replies")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<ItemDto>))]
     public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetReplies(
         int id,
         CancellationToken cancellationToken)
@@ -415,7 +479,15 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムにリプライを投稿します。
     /// </summary>
+    /// <param name="id">返信先となる親アイテムのID。</param>
+    /// <param name="request">リプライ本文や公開範囲情報を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>作成されたリプライアイテムDTO。</returns>
     [HttpPost("{id:int}/replies")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ItemDto))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ItemDto>> AddReply(
         int id,
         [FromBody] CreateReplyRequest request,
@@ -465,7 +537,11 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムを引用しているアイテム一覧を取得します。
     /// </summary>
+    /// <param name="id">引用されている元アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>引用しているアイテムDTOの一覧。</returns>
     [HttpGet("{id:int}/quotes")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<ItemDto>))]
     public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetQuotes(
         int id,
         CancellationToken cancellationToken)
@@ -480,7 +556,16 @@ public sealed class ItemController(
     /// <summary>
     /// アイテム本文を更新します。
     /// </summary>
+    /// <param name="id">更新対象アイテムのID。</param>
+    /// <param name="request">更新後のアイテム本文を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPut("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> UpdateItem(
         int id,
         [FromBody] UpdateItemRequest request,
@@ -526,7 +611,14 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムを削除します。
     /// </summary>
+    /// <param name="id">削除対象アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteItem(
         int id,
         CancellationToken cancellationToken)
@@ -564,7 +656,14 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムにタグを追加します。
     /// </summary>
+    /// <param name="id">タグ追加先アイテムのID。</param>
+    /// <param name="request">追加するタグIDおよびコメントを含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPost("{id:int}/tags")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult> AddTag(
         int id,
         [FromBody] AddTagRelationRequest request,
@@ -588,7 +687,14 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムからタグ関連付けを削除します。
     /// </summary>
+    /// <param name="id">対象アイテムのID。</param>
+    /// <param name="relationId">削除するタグ関連付けID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpDelete("{id:int}/tags/{relationId:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult> RemoveTag(
         int id,
         int relationId,
@@ -612,7 +718,15 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムに紐づくタグ関連付けのタグを変更します。
     /// </summary>
+    /// <param name="id">対象アイテムのID。</param>
+    /// <param name="relationId">変更対象のタグ関連付けID。</param>
+    /// <param name="request">変更先タグIDを含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPut("{id:int}/tags/{relationId:int}/change")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult> ChangeItemTag(
         int id,
         int relationId,
@@ -637,7 +751,10 @@ public sealed class ItemController(
     /// <summary>
     /// ログインユーザーが所属・管理するグループ一覧を取得します。
     /// </summary>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>ユーザーが所属するグループ一覧DTO。</returns>
     [HttpGet("user-groups")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<UserGroupDto>))]
     public async Task<ActionResult<IReadOnlyList<UserGroupDto>>> GetUserGroups(
         CancellationToken cancellationToken)
     {
@@ -655,7 +772,17 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムに紐づくタグのウェイト（重み）を変更します。
     /// </summary>
+    /// <param name="id">対象アイテムのID。</param>
+    /// <param name="relationId">対象のタグ関連付けID。</param>
+    /// <param name="request">ウェイトの増減値を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPut("{id:int}/tags/{relationId:int}/weight")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> UpdateTagWeight(
         int id,
         int relationId,
@@ -681,7 +808,11 @@ public sealed class ItemController(
     /// <summary>
     /// 指定アイテムを引用しているアイテム一覧を取得します。
     /// </summary>
+    /// <param name="id">引用元アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>引用アイテム一覧DTO。</returns>
     [HttpGet("{id:int}/quoted-by")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<ItemDto>))]
     public async Task<ActionResult<IReadOnlyList<ItemDto>>> GetQuotedByItems(
         int id,
         CancellationToken cancellationToken)
@@ -696,7 +827,13 @@ public sealed class ItemController(
     /// <summary>
     /// CSV 形式のアイテムおよびタグデータをインポートします。
     /// </summary>
+    /// <param name="request">CSV データ文字列を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>インポート件数およびメッセージを含むレスポンス。</returns>
     [HttpPost("import")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ImportCsvResponse))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ImportCsvResponse>> ImportCsv(
         [FromBody] ImportCsvRequest request,
         CancellationToken cancellationToken)
@@ -726,7 +863,11 @@ public sealed class ItemController(
     /// <summary>
     /// アイテムに紐づく保留中のタグ付けリクエスト一覧を取得します。
     /// </summary>
+    /// <param name="id">対象アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>保留中タグ付けリクエスト一覧DTO。</returns>
     [HttpGet("{id:int}/tag-requests")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<TaggingRequestDto>))]
     public async Task<ActionResult<IReadOnlyList<TaggingRequestDto>>> GetTaggingRequests(
         int id,
         CancellationToken cancellationToken)
@@ -750,7 +891,14 @@ public sealed class ItemController(
     /// <summary>
     /// タグ付けリクエストを承認します。
     /// </summary>
+    /// <param name="requestId">承認対象のリクエストID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPost("tag-requests/{requestId:int}/approve")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Quality", "CA1508:Avoid dead code", Justification = "Result<string> pattern matching false positive")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<string> pattern matching false positive")]
     public async Task<ActionResult> ApproveTaggingRequest(
@@ -782,7 +930,17 @@ public sealed class ItemController(
     /// <summary>
     /// タグ付けリクエストを却下します。
     /// </summary>
+    /// <param name="requestId">却下対象のリクエストID。</param>
+    /// <param name="request">却下理由を含むリクエスト。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>実行結果のステータス。</returns>
     [HttpPost("tag-requests/{requestId:int}/reject")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Quality", "CA1508:Avoid dead code", Justification = "Result<bool> pattern matching false positive")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1508:Avoid dead code", Justification = "Result<bool> pattern matching false positive")]
     public async Task<ActionResult> RejectTaggingRequest(
         int requestId,
         [FromBody] RejectTaggingRequest request,
@@ -792,6 +950,19 @@ public sealed class ItemController(
         if (string.IsNullOrEmpty(currentUserId))
         {
             return Unauthorized("リクエストを却下するにはログインが必要です。");
+        }
+
+        if (_rejectCommandHandler != null)
+        {
+            Result<bool> result = await _rejectCommandHandler.HandleAsync(
+                new RejectTaggingRequestCommand(requestId, currentUserId, request.Reason), cancellationToken);
+
+            return result switch
+            {
+                Success<bool> => Ok(),
+                Failure failure => BadRequest(failure.ErrorMessage),
+                _ => BadRequest("リクエストの却下に失敗しました。")
+            };
         }
 
         if (_tagRequestRejectionService == null)
@@ -806,7 +977,13 @@ public sealed class ItemController(
     /// <summary>
     /// 指定されたアイテムのタグ重み変動台帳（TagWeightLedger）履歴を取得します。
     /// </summary>
+    /// <param name="id">対象アイテムのID。</param>
+    /// <param name="cancellationToken">キャンセレーショントークン。</param>
+    /// <returns>タグ重み変動台帳履歴DTO一覧。</returns>
     [HttpGet("{id:int}/tag-ledger")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IReadOnlyList<TagWeightLedgerDto>))]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     public async Task<ActionResult<IReadOnlyList<TagWeightLedgerDto>>> GetItemTagLedger(
         int id,
         CancellationToken cancellationToken)

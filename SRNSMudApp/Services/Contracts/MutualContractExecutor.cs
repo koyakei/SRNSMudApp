@@ -15,17 +15,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class MutualContractExecutor(
-    TimeProvider? timeProvider = null) : IContractExecutor
+    TimeProvider? timeProvider = null) : ContractExecutorBase(timeProvider)
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    public override string ContractType => ContractTypes.Mutual;
 
-    public string ContractType => ContractTypes.Mutual;
-
-    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    protected override async Task<Result<string>> ExecuteCoreAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
-        ArgumentNullException.ThrowIfNull(contract);
-
         int requiredAmount = contract.RequestType == TaggingRequestType.Add ? Math.Max(1, contract.ProposedWeight) : 1;
 
         Result<RightAsset> assetValidation = contract.ConsumedRightAsset switch
@@ -53,7 +48,7 @@ public class MutualContractExecutor(
         int weightToConsume)
     {
         var requesterAssetId = contract.ConsumedRightAssetId!.Value;
-        consumedAsset.Consume(weightToConsume, _timeProvider.GetUtcNow().UtcDateTime);
+        consumedAsset.Consume(weightToConsume, TimeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(consumedAsset);
 
         Tag? requestedTag = contract.RequestedTag ?? await dbContext.Tags.FindAsync(contract.RequestedTagId);
@@ -102,9 +97,7 @@ public class MutualContractExecutor(
         _ = dbContext.TagRelations.Add(relation1);
         _ = await dbContext.SaveChangesAsync();
 
-        var prevReqWeight = requestedTag.CachedWeight;
-        requestedTag.CachedWeight += contract.ProposedWeight;
-        var newReqWeight = requestedTag.CachedWeight;
+        var (prevReqWeight, newReqWeight) = requestedTag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledger1 = new TagWeightLedger
         {
@@ -152,9 +145,7 @@ public class MutualContractExecutor(
         var prevWeight = relation.Weight;
         _ = dbContext.TagRelations.Remove(relation);
 
-        var prevReqWeightRem = requestedTag.CachedWeight;
-        requestedTag.CachedWeight -= prevWeight;
-        var newReqWeightRem = requestedTag.CachedWeight;
+        var (prevReqWeightRem, newReqWeightRem) = requestedTag.ApplyWeightDelta(-prevWeight);
 
         var ledger1Rem = new TagWeightLedger
         {
@@ -202,7 +193,7 @@ public class MutualContractExecutor(
             OwnerId = contract.RequesterUserId,
             TargetTagId = mutualPayload.OfferedTagId,
             IsBurned = true,
-            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
+            Status = new Burned(TimeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(offeredTagAsset);
 
@@ -216,9 +207,7 @@ public class MutualContractExecutor(
         _ = dbContext.TagRelations.Add(relation2);
         _ = await dbContext.SaveChangesAsync();
 
-        var prevOffWeight = offeredTag.CachedWeight;
-        offeredTag.CachedWeight += contract.ProposedWeight;
-        var newOffWeight = offeredTag.CachedWeight;
+        var (prevOffWeight, newOffWeight) = offeredTag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledger2 = new TagWeightLedger
         {

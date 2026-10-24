@@ -339,8 +339,7 @@ public class TaggingImportDataProvider(
                     };
                     _ = db.TagEdgeTagAttachments.Add(attachment);
 
-                    var prevWeight = appliedTag.CachedWeight;
-                    appliedTag.CachedWeight += 1;
+                    var (prevWeight, newWeight) = appliedTag.ApplyWeightDelta(1);
 
                     _ = db.TagWeightLedgers.Add(new TagWeightLedger
                     {
@@ -351,7 +350,7 @@ public class TaggingImportDataProvider(
                         ConsumedRightAssetId = asset.Id,
                         Delta = 1,
                         PreviousWeight = prevWeight,
-                        NewWeight = appliedTag.CachedWeight,
+                        NewWeight = newWeight,
                         IsOwnerAction = appliedTag.OwnerId == currentUserId,
                         Reason = "Import: Edgeへのタグ付け",
                         OwnerId = currentUserId,

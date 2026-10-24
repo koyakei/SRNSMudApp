@@ -13,14 +13,17 @@ namespace SRNSMudApp.Services;
 /// </summary>
 /// <param name="dbFactory">DbContext ファクトリ。</param>
 /// <param name="sourceResolvers">優先順位順に実行する元アイテム解決戦略。</param>
+/// <param name="timeProvider">日時プロバイダー（省略時はシステム日時）。</param>
 public class ItemQuoteService(
     IDbContextFactory<ApplicationDbContext> dbFactory,
-    IEnumerable<IItemSourceResolver> sourceResolvers) : IItemQuoteService
+    IEnumerable<IItemSourceResolver> sourceResolvers,
+    TimeProvider? timeProvider = null) : IItemQuoteService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IReadOnlyList<IItemSourceResolver> _sourceResolvers =
         sourceResolvers?.ToArray() ?? throw new ArgumentNullException(nameof(sourceResolvers));
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <inheritdoc />
     public async Task<Item?> CreateQuoteItemAsync(
@@ -53,6 +56,7 @@ public class ItemQuoteService(
             return null;
         }
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var quoteItem = new Item
         {
             Content = content,
@@ -60,8 +64,8 @@ public class ItemQuoteService(
             QuotedItemId = quotedItemId,
             IsPrivate = targetItem.IsPrivate,
             TargetUserGroupId = targetItem.TargetUserGroupId,
-            CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow,
+            CreatedDate = now,
+            UpdatedDate = now,
             ItemKindJson = JsonSerializer.Serialize(new QuoteItem(quotedItemId))
         };
 
@@ -75,8 +79,8 @@ public class ItemQuoteService(
                     TagId = tagId,
                     Weight = 1,
                     OwnerId = userId,
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
+                    CreatedDate = now,
+                    UpdatedDate = now
                 })
                 .ToList();
             quoteItem.TagRelations = relations;

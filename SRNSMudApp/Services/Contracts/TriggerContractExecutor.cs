@@ -15,17 +15,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class TriggerContractExecutor(
-    TimeProvider? timeProvider = null) : IContractExecutor
+    TimeProvider? timeProvider = null) : ContractExecutorBase(timeProvider)
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    public override string ContractType => ContractTypes.Trigger;
 
-    public string ContractType => ContractTypes.Trigger;
-
-    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    protected override async Task<Result<string>> ExecuteCoreAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
-        ArgumentNullException.ThrowIfNull(contract);
-
         var targetOfferId = contract.Payload is PublicOfferPayload p ? p.TargetPublicTradeOfferId : 0;
         PublicTradeOffer? offer = await dbContext.PublicTradeOffers
                                      .FirstOrDefaultAsync(o => o.Id == targetOfferId);
@@ -90,7 +85,7 @@ public class TriggerContractExecutor(
 
     private Task<int> UpdateTriggerConsumedAssetAsync(ApplicationDbContext dbContext, RightAsset asset, int assetId, int requiredAmount)
     {
-        asset.Consume(requiredAmount, _timeProvider.GetUtcNow().UtcDateTime);
+        asset.Consume(requiredAmount, TimeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult(assetId);
     }
@@ -102,7 +97,7 @@ public class TriggerContractExecutor(
             OwnerId = offer.OwnerId,
             TargetTagId = offer.OfferedTagId,
             IsBurned = true,
-            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
+            Status = new Burned(TimeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(ownerAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -137,9 +132,7 @@ public class TriggerContractExecutor(
 
     private static Result<string> CompleteTriggerAdd(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation newRelation)
     {
-        var prevWeight = tag.CachedWeight;
-        tag.CachedWeight += contract.ProposedWeight;
-        var newWeight = tag.CachedWeight;
+        var (prevWeight, newWeight) = tag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledger = new TagWeightLedger
         {
@@ -203,9 +196,7 @@ public class TriggerContractExecutor(
 
     private static Result<string> CompleteTriggerRemove(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer, int consumedAssetId, Tag tag, TagRelation relation, int prevWeight)
     {
-        var previousWeight = tag.CachedWeight;
-        tag.CachedWeight -= prevWeight;
-        var newWeight = tag.CachedWeight;
+        var (previousWeight, newWeight) = tag.ApplyWeightDelta(-prevWeight);
 
         var ledger = new TagWeightLedger
         {

@@ -171,8 +171,7 @@ public class TagEdgeService(
                 _ = context.TagEdgeTagAttachments.Add(attachment);
                 _ = await context.SaveChangesAsync();
 
-                var previousWeight = tag.CachedWeight;
-                tag.CachedWeight += weight;
+                var (previousWeight, newWeight) = tag.ApplyWeightDelta(weight);
 
                 _ = context.TagWeightLedgers.Add(new TagWeightLedger
                 {
@@ -183,7 +182,7 @@ public class TagEdgeService(
                     ConsumedRightAssetId = rightAsset.Id,
                     Delta = weight,
                     PreviousWeight = previousWeight,
-                    NewWeight = tag.CachedWeight,
+                    NewWeight = newWeight,
                     IsOwnerAction = tag.OwnerId == currentUserId,
                     Reason = "Edgeへのタグ紐付け（RightAsset消費）",
                     OwnerId = currentUserId
@@ -225,8 +224,7 @@ public class TagEdgeService(
         Tag? tag = attachment.Tag ?? await context.Tags.FindAsync(attachment.TagId);
         if (tag is not null)
         {
-            var previousWeight = tag.CachedWeight;
-            tag.CachedWeight -= attachment.Weight;
+            var (previousWeight, newWeight) = tag.ApplyWeightDelta(-attachment.Weight);
 
             _ = context.TagWeightLedgers.Add(new TagWeightLedger
             {
@@ -237,7 +235,7 @@ public class TagEdgeService(
                 ConsumedRightAssetId = attachment.ConsumedRightAssetId,
                 Delta = -attachment.Weight,
                 PreviousWeight = previousWeight,
-                NewWeight = tag.CachedWeight,
+                NewWeight = newWeight,
                 IsOwnerAction = tag.OwnerId == currentUserId,
                 Reason = "Edgeタグ紐付けの解除",
                 OwnerId = currentUserId

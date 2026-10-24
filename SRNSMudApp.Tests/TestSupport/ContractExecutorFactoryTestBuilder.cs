@@ -13,6 +13,6 @@ public static class ContractExecutorFactoryTestBuilder
             new MutualContractExecutor(timeProvider),
             new TriggerContractExecutor(timeProvider),
             new BountyContractExecutor(timeProvider),
-            new MoveContractExecutor()
+            new MoveContractExecutor(timeProvider)
         ]);
 }

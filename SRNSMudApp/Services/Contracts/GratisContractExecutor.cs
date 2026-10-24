@@ -17,17 +17,12 @@ namespace SRNSMudApp.Services.Contracts;
 ///     ステートレスな設計とし、呼び出し元からトランザクション境界となる <see cref="ApplicationDbContext" /> を受け取る。
 /// </summary>
 public class GratisContractExecutor(
-    TimeProvider? timeProvider = null) : IContractExecutor
+    TimeProvider? timeProvider = null) : ContractExecutorBase(timeProvider)
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    public override string ContractType => ContractTypes.Gratis;
 
-    public string ContractType => ContractTypes.Gratis;
-
-    public async Task<Result<string>> ExecuteAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
+    protected override async Task<Result<string>> ExecuteCoreAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, string currentUserId, int? fulfillerAssetId = null)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
-        ArgumentNullException.ThrowIfNull(contract);
-
         Result<int> assetProcessResult = await (contract.ConsumedRightAsset switch
         {
             not null => UpdateConsumedAsset(dbContext, contract.ConsumedRightAsset, contract.ConsumedRightAssetId!.Value),
@@ -51,7 +46,7 @@ public class GratisContractExecutor(
 
     private Task<Result<int>> UpdateConsumedAsset(ApplicationDbContext dbContext, RightAsset asset, int assetId)
     {
-        asset.Burn(_timeProvider.GetUtcNow().UtcDateTime);
+        asset.Burn(TimeProvider.GetUtcNow().UtcDateTime);
         _ = dbContext.RightAssets.Update(asset);
         return Task.FromResult<Result<int>>(new Success<int>(assetId));
     }
@@ -63,7 +58,7 @@ public class GratisContractExecutor(
             OwnerId = ownerId,
             TargetTagId = targetTagId,
             IsBurned = true,
-            Status = new Burned(_timeProvider.GetUtcNow().UtcDateTime)
+            Status = new Burned(TimeProvider.GetUtcNow().UtcDateTime)
         };
         _ = dbContext.RightAssets.Add(rightAsset);
         _ = await dbContext.SaveChangesAsync();
@@ -111,9 +106,7 @@ public class GratisContractExecutor(
         dbContext.TagEdgeTagAttachments.Add(newAttachment);
         await dbContext.SaveChangesAsync();
 
-        var previousWeight = tag.CachedWeight;
-        tag.CachedWeight += contract.ProposedWeight;
-        var newWeight = tag.CachedWeight;
+        var (previousWeight, newWeight) = tag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledger = new TagWeightLedger
         {
@@ -157,9 +150,7 @@ public class GratisContractExecutor(
             attachment.Weight += delta;
         }
 
-        var previousWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
-        var newWeight = tag.CachedWeight;
+        var (previousWeight, newWeight) = tag.ApplyWeightDelta(delta);
 
         var ledger = new TagWeightLedger
         {
@@ -193,9 +184,7 @@ public class GratisContractExecutor(
         _ = dbContext.TagRelations.Add(newRelation);
         _ = await dbContext.SaveChangesAsync();
 
-        var previousWeightAdd = tag.CachedWeight;
-        tag.CachedWeight += contract.ProposedWeight;
-        var newWeightAdd = tag.CachedWeight;
+        var (previousWeightAdd, newWeightAdd) = tag.ApplyWeightDelta(contract.ProposedWeight);
 
         var ledgerAdd = new TagWeightLedger
         {
@@ -249,8 +238,7 @@ public class GratisContractExecutor(
             false => (object)(relation.Weight += delta)
         };
 
-        var previousTagWeight = tag.CachedWeight;
-        tag.CachedWeight += delta;
+        var (previousTagWeight, newTagWeight) = tag.ApplyWeightDelta(delta);
 
         _ = dbContext.TagWeightLedgers.Add(new TagWeightLedger
         {
@@ -262,7 +250,7 @@ public class GratisContractExecutor(
             ConsumedRightAssetId = consumedAssetId,
             Delta = delta,
             PreviousWeight = previousTagWeight,
-            NewWeight = tag.CachedWeight,
+            NewWeight = newTagWeight,
             IsOwnerAction = true,
             Reason = $"Gratis Tagging Contract Accepted ({(isRemove ? "Remove" : "Decrease Weight")})",
             OwnerId = executorUserId

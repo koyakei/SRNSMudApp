@@ -134,8 +134,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         Tag? tagFromDb = await context.Tags.FindAsync(selectedTagId);
         if (tagFromDb is not null)
         {
-            var prevWeight = tagFromDb.CachedWeight;
-            tagFromDb.CachedWeight++;
+            var (prevWeight, newWeight) = tagFromDb.ApplyWeightDelta(1);
             _ = context.TagWeightLedgers!.Add(new TagWeightLedger
             {
                 TagId = tagFromDb.Id,
@@ -144,7 +143,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceType = "TagRelationToTagInsert",
                 SourceId = null,
                 PreviousWeight = prevWeight,
-                NewWeight = tagFromDb.CachedWeight,
+                NewWeight = newWeight,
                 Delta = 1,
                 IsOwnerAction = true,
                 Reason = "タグの新規追加",
@@ -167,8 +166,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 Tag? tag = entity.Tag;
                 if (tag is not null)
                 {
-                    var prevWeight = tag.CachedWeight;
-                    tag.CachedWeight -= entity.Weight;
+                    var (prevWeight, newWeight) = tag.ApplyWeightDelta(-entity.Weight);
                     _ = context.TagWeightLedgers!.Add(new TagWeightLedger
                     {
                         TagId = tag.Id,
@@ -177,7 +175,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                         SourceType = "TagRelationToTagDelete",
                         SourceId = null,
                         PreviousWeight = prevWeight,
-                        NewWeight = tag.CachedWeight,
+                        NewWeight = newWeight,
                         Delta = -entity.Weight,
                         IsOwnerAction = true,
                         Reason = "タグの関連付け解除",
@@ -344,8 +342,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
         Tag? tag = await context.Tags.FindAsync(entity.TagId);
         if (tag is not null)
         {
-            var prevWeight = tag.CachedWeight;
-            tag.CachedWeight += delta;
+            var (prevWeight, newWeight) = tag.ApplyWeightDelta(delta);
             _ = context.TagWeightLedgers.Add(new TagWeightLedger
             {
                 TagId = tag.Id,
@@ -354,7 +351,7 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
                 SourceType = "TagRelationToTagUpdate",
                 SourceId = null,
                 PreviousWeight = prevWeight,
-                NewWeight = tag.CachedWeight,
+                NewWeight = newWeight,
                 Delta = delta,
                 IsOwnerAction = true,
                 Reason = reason,
