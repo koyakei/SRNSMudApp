@@ -1,3 +1,4 @@
+
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
@@ -72,4 +73,5 @@ jobs:
           done
           echo "Health check failed (did not return 200 OK within timeout)!"
           exit 1
+
 
