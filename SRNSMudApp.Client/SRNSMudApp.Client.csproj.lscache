@@ -15,17 +15,30 @@ lastDtbSucceeded
 
 [properties]
 AssemblyName=SRNSMudApp.Client
+AssemblyName=SRNSMudApp.Client
+BaseIntermediateOutputPath=<PATH>obj/
 BaseIntermediateOutputPath=<PATH>obj/
 BaseOutputPath=bin/
+BaseOutputPath=bin/
+MaxSupportedLangVersion=15.0
 MaxSupportedLangVersion=15.0
 OutputType=exe
+OutputType=exe
+ProjectAssetsFile=<PATH>obj/project.assets.json
 ProjectAssetsFile=<PATH>obj/project.assets.json
 RootNamespace=SRNSMudApp.Client
+RootNamespace=SRNSMudApp.Client
+TargetFramework=net11.0
 TargetFramework=net11.0
 TargetFrameworkIdentifier=.NETCoreApp
+TargetFrameworkIdentifier=.NETCoreApp
+TargetFrameworkVersion=v11.0
 TargetFrameworkVersion=v11.0
 TargetPath=<PATH>bin/Debug/net11.0/SRNSMudApp.Client.dll
+TargetPath=<PATH>bin/Debug/net11.0/SRNSMudApp.Client.dll
 TargetRefPath=<PATH>obj/Debug/net11.0/ref/SRNSMudApp.Client.dll
+TargetRefPath=<PATH>obj/Debug/net11.0/ref/SRNSMudApp.Client.dll
+TemporaryDependencyNodeTargetIdentifier=net11.0
 TemporaryDependencyNodeTargetIdentifier=net11.0
 
 [commandLineArguments]
@@ -70,7 +83,6 @@ Models/
  TagSuggestion.cs
 obj/Debug/net11.0/
  .NETCoreApp,Version=v11.0.AssemblyAttributes.cs
- SRNSMudApp.Client.AssemblyInfo.cs
  SRNSMudApp.Client.GlobalUsings.g.cs
 Resources/ClientMessages.cs
 Services/
