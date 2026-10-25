@@ -60,15 +60,16 @@ jobs:
       - name: Verify Deployment Health
         run: |
           echo "Waiting for app to start and verifying health..."
-          for i in {1..15}; do
+          sleep 15
+          for i in {1..10}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://srns.azurewebsites.net/ || true)
             echo "Attempt $i: HTTP Status $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "App is healthy and responding with 200 OK!"
               exit 0
             fi
-            sleep 10
+            sleep 15
           done
-          echo "Health check failed (did not return 200 OK within 150 seconds)!"
+          echo "Health check failed (did not return 200 OK within timeout)!"
           exit 1
 
