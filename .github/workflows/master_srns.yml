@@ -27,7 +27,7 @@ jobs:
         run: dotnet build SRNSMudApp/SRNSMudApp.csproj --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish SRNSMudApp/SRNSMudApp.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish SRNSMudApp/SRNSMudApp.csproj -c Release -r linux-x64 --self-contained true -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -56,4 +56,19 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
           package: ./deploy-package
+
+      - name: Verify Deployment Health
+        run: |
+          echo "Waiting for app to start and verifying health..."
+          for i in {1..15}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://srns.azurewebsites.net/ || true)
+            echo "Attempt $i: HTTP Status $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "App is healthy and responding with 200 OK!"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Health check failed (did not return 200 OK within 150 seconds)!"
+          exit 1
 

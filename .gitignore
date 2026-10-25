@@ -8,6 +8,7 @@
 *.bak
 *.lscache
 .local/
+.dotnet/
 
 # User-specific files
 *.rsuser
