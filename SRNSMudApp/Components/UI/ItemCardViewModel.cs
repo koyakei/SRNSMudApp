@@ -175,18 +175,14 @@ public static class ItemCardViewModel
     /// </summary>
     public static string GetTagDisplayWeight(TagRelation relation, TimelineEvent? highlightEvent)
     {
-        var isUpdated = highlightEvent?.ParsedEventType == TimelineEventType.Update;
-        var isInserted = highlightEvent?.ParsedEventType == TimelineEventType.Insert;
-        var isDeleted = highlightEvent?.ParsedEventType == TimelineEventType.Delete;
-
-        return (isUpdated || isInserted) switch
+        // イベントタイプに応じたパターンマッチング switch 式により、差分表示または現在のウェイトを判定して返却
+        return highlightEvent?.ParsedEventType switch
         {
-            true => $"{highlightEvent?.PreviousWeight ?? 0} → {highlightEvent?.NewWeight}",
-            false => isDeleted switch
-            {
-                true => highlightEvent?.PreviousWeight.ToString(CultureInfo.InvariantCulture) ?? "",
-                false => relation.Weight.ToString(CultureInfo.InvariantCulture)
-            }
+            TimelineEventType.Update or TimelineEventType.Insert =>
+                $"{highlightEvent.PreviousWeight} → {highlightEvent.NewWeight}",
+            TimelineEventType.Delete =>
+                highlightEvent.PreviousWeight.ToString(CultureInfo.InvariantCulture),
+            _ => relation.Weight.ToString(CultureInfo.InvariantCulture)
         };
     }
 

@@ -278,22 +278,20 @@ public class TagCardViewModel
             .OrderByDescending(tr => tr.Weight)
             .ToList() ?? [];
 
-        // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelationToTag としてリストに追加して表示する
+        // 削除されたタグが TimelineEvent に含まれている場合は、仮想的な TagRelationToTag として射影し重複を排除して AddRange で追加する
         if (highlightEvents is not null)
         {
-            foreach (TimelineEvent ev in highlightEvents.Where(e => e.ParsedEventType == Models.TimelineEventType.Delete))
-            {
-                if (ev.FollowedTag is not null && allTags.All(t => t.TagId != ev.FollowedTagId))
+            allTags.AddRange(highlightEvents
+                .Where(ev => ev.ParsedEventType == Models.TimelineEventType.Delete && ev.FollowedTag is not null)
+                .DistinctBy(ev => ev.FollowedTagId)
+                .Where(ev => allTags.All(t => t.TagId != ev.FollowedTagId))
+                .Select(ev => new TagRelationToTag
                 {
-                    allTags.Add(new TagRelationToTag
-                    {
-                        TagId = ev.FollowedTagId,
-                        Tag = ev.FollowedTag,
-                        Weight = ev.PreviousWeight,
-                        OwnerId = ev.OwnerId // fake owner
-                    });
-                }
-            }
+                    TagId = ev.FollowedTagId,
+                    Tag = ev.FollowedTag,
+                    Weight = ev.PreviousWeight,
+                    OwnerId = ev.OwnerId // fake owner
+                }));
         }
 
         var hasManyTags = allTags.Count >= HasManyThreshold;

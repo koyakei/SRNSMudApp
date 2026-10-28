@@ -308,25 +308,18 @@ public class TagLockService(IDbContextFactory<ApplicationDbContext> dbFactory) :
         var tagsById = tags.ToDictionary(t => t.Id);
 
         // 各親配下で個別ロックされているタグが存在するかマップを作成
-        HashSet<int?> parentsWithLockedChildren = [];
-        HashSet<HierarchyId> parentNodesWithLockedChildren = [];
+        HashSet<int?> parentsWithLockedChildren = [.. tags
+            .Where(t => t.IsLocked && t.ParentTagId.HasValue)
+            .Select(t => t.ParentTagId)];
 
-        foreach (Tag t in tags.Where(t => t.IsLocked))
-        {
-            if (t.ParentTagId.HasValue)
-            {
-                _ = parentsWithLockedChildren.Add(t.ParentTagId.Value);
-            }
-            if (t.Node is not null && t.Node.GetLevel() > 0)
-            {
-                _ = parentNodesWithLockedChildren.Add(t.Node.GetAncestor(1));
-            }
-        }
+        HashSet<HierarchyId> parentNodesWithLockedChildren = [.. tags
+            .Where(t => t.IsLocked && t.Node is not null && t.Node.GetLevel() > 0)
+            .Select(t => t.Node!.GetAncestor(1))];
 
         List<TagLockItemDto> results = [];
-        foreach (Tag t in tags.OrderBy(t => t.Node != null ? t.Node.GetLevel() : 0).ThenBy(t => t.Name))
+        foreach (Tag t in tags.OrderBy(t => t.Node is not null ? t.Node.GetLevel() : 0).ThenBy(t => t.Name))
         {
-            var level = t.Node?.GetLevel() ?? (t.ParentTagId == null ? 0 : 1);
+            var level = t.Node?.GetLevel() ?? (t.ParentTagId is null ? 0 : 1);
             var isLevelLocked = lockedLevel > 0 && level > 0 && level <= lockedLevel;
             var isDirectlyLocked = t.IsLocked || t.Name == Tag.RootTagName;
 
@@ -334,9 +327,9 @@ public class TagLockService(IDbContextFactory<ApplicationDbContext> dbFactory) :
             if (t.Node is not null && t.Node.GetLevel() > 0)
             {
                 HierarchyId? parentNode = t.Node.GetAncestor(1);
-                isSiblingLocked = parentNode != null &&
+                isSiblingLocked = parentNode is not null &&
                                   parentNodesWithLockedChildren.Contains(parentNode) &&
-                                  tags.Any(sibling => sibling.Id != t.Id && sibling.IsLocked && sibling.Node != null && sibling.Node.GetAncestor(1) == parentNode);
+                                  tags.Any(sibling => sibling.Id != t.Id && sibling.IsLocked && sibling.Node is not null && sibling.Node.GetAncestor(1) == parentNode);
             }
             else if (t.ParentTagId.HasValue)
             {

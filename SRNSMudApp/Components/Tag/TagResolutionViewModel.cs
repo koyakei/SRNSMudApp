@@ -10,15 +10,10 @@ namespace SRNSMudApp.Components.Tag;
 /// <summary>
 ///     TagResolutionDialog の状態管理、候補検索・補完、バリデーション、および決定モデル生成を担当する ViewModel。
 ///     UI（Blazor / bUnit）から切り離し、純粋な xUnit + Moq 単体テストを可能にする。
+///     プライマリコンストラクタにより依存データプロバイダーを注入する。
 /// </summary>
-public class TagResolutionViewModel
+public class TagResolutionViewModel(ITaggingImportDataProvider dataProvider)
 {
-    private readonly ITaggingImportDataProvider _dataProvider;
-
-    public TagResolutionViewModel(ITaggingImportDataProvider dataProvider)
-    {
-        _dataProvider = dataProvider;
-    }
 
     public string TagName { get; set; } = string.Empty;
     public string TagKind { get; set; } = "UserCustomTag";
@@ -67,7 +62,7 @@ public class TagResolutionViewModel
         {
             try
             {
-                var results = await _dataProvider.SearchTagsAsync(TagName, cancellationToken);
+                var results = await dataProvider.SearchTagsAsync(TagName, cancellationToken);
                 if (results != null)
                 {
                     suggestions.AddRange(results);
@@ -99,7 +94,7 @@ public class TagResolutionViewModel
         {
             try
             {
-                var parentResults = await _dataProvider.SearchParentCandidateTagsAsync(TagName, cancellationToken);
+                var parentResults = await dataProvider.SearchParentCandidateTagsAsync(TagName, cancellationToken);
                 if (parentResults != null)
                 {
                     parentCandidates.AddRange(parentResults);
@@ -115,17 +110,13 @@ public class TagResolutionViewModel
         {
             try
             {
-                var defaultParents = await _dataProvider.SearchParentCandidateTagsAsync(null, cancellationToken);
+                var defaultParents = await dataProvider.SearchParentCandidateTagsAsync(null, cancellationToken);
                 if (defaultParents != null)
                 {
-                    foreach (var pTag in defaultParents)
-                    {
-                        if (parentCandidates.All(s => s.Id != pTag.Id))
-                        {
-                            parentCandidates.Add(pTag);
-                            if (parentCandidates.Count >= 8) break;
-                        }
-                    }
+                    // 重複しないデフォルト親候補を LINQ ExceptBy と Take で取得し AddRange で追加
+                    parentCandidates.AddRange(defaultParents
+                        .ExceptBy(parentCandidates.Select(s => s.Id), p => p.Id)
+                        .Take(8 - parentCandidates.Count));
                 }
             }
             catch
@@ -160,7 +151,7 @@ public class TagResolutionViewModel
     {
         return string.IsNullOrWhiteSpace(value) && InitialSuggestions.Count > 0
             ? InitialSuggestions
-            : await _dataProvider.SearchTagsAsync(value, cancellationToken);
+            : await dataProvider.SearchTagsAsync(value, cancellationToken);
     }
 
     /// <summary>
@@ -170,7 +161,7 @@ public class TagResolutionViewModel
     {
         return string.IsNullOrWhiteSpace(value) && ParentSuggestions.Count > 0
             ? ParentSuggestions
-            : await _dataProvider.SearchParentCandidateTagsAsync(value, cancellationToken);
+            : await dataProvider.SearchParentCandidateTagsAsync(value, cancellationToken);
     }
 
     /// <summary>

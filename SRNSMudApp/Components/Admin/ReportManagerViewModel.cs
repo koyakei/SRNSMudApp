@@ -10,16 +10,10 @@ namespace SRNSMudApp.Components.Admin;
 /// <summary>
 ///     ReportManager コンポーネントの状態管理、データ取得、および表示・判定ロジックを担当する ViewModel。
 ///     通報ステータスや通報対象種別の表示文字列・カラーマッピングをカプセル化し、単体テストを可能にする。
+///     プライマリコンストラクタにより依存サービスを簡潔に注入する。
 /// </summary>
-public class ReportManagerViewModel
+public class ReportManagerViewModel(IContentReportService contentReportService)
 {
-    private readonly IContentReportService _contentReportService;
-
-    public ReportManagerViewModel(IContentReportService contentReportService)
-    {
-        _contentReportService = contentReportService;
-    }
-
     public IReadOnlyList<ContentReport> Reports { get; private set; } = [];
     public ReportStatus? SelectedStatus { get; set; } = ReportStatus.Pending;
     public ReportTargetType? SelectedTargetType { get; set; }
@@ -35,7 +29,7 @@ public class ReportManagerViewModel
         IsLoading = true;
         try
         {
-            var reports = await _contentReportService.GetReportsAsync(SelectedStatus, SelectedTargetType);
+            var reports = await contentReportService.GetReportsAsync(SelectedStatus, SelectedTargetType);
             Reports = reports ?? [];
             return (true, null);
         }
@@ -54,7 +48,7 @@ public class ReportManagerViewModel
     /// </summary>
     public async Task<ContentReport?> GetReportByIdAsync(int reportId)
     {
-        return await _contentReportService.GetReportByIdAsync(reportId);
+        return await contentReportService.GetReportByIdAsync(reportId);
     }
 
     /// <summary>

@@ -139,11 +139,10 @@ public class NotificationService(
         IReadOnlyList<NotificationReadState> readStates) =>
         requests.Select(req =>
         {
-            var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
-            {
-                true => "",
-                false => $"\n理由: {(req.Rejection is RejectionReason rr ? rr.Reason : "")}"
-            };
+            var rejectReason = req.Rejection is RejectionReason r && !string.IsNullOrWhiteSpace(r.Reason)
+                ? r.Reason
+                : null;
+            var commentMsg = rejectReason is not null ? $"\n理由: {rejectReason}" : "";
             return new NotificationDto
             {
                 SourceId = req.Id,
@@ -151,7 +150,7 @@ public class NotificationService(
                     RequestId: req.Id,
                     TagName: req.RequestedTag?.Name,
                     RequestType: req.RequestType,
-                    RejectComment: req.Rejection is RejectionReason rr2 ? rr2.Reason : "",
+                    RejectComment: rejectReason ?? "",
                     TargetItemId: req.TargetItemId,
                     TargetTagId: req.RequestedTagId
                 ),

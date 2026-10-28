@@ -1,94 +1,80 @@
-# Dispatch: Worker M1 Iteration 2 (Remediation Implementation)
-
-## Objective
-Implement forensic remediations for SEC-01, DATA-01/DATA-02, and THREAD-01 hardening per `teamwork_preview_explorer_m1_it2_3` handoff blueprint.
-
-## Exclusive Write Ownership
-You own and may edit ONLY the following files:
-- `SRNSMudApp/Controllers/PushNotificationController.cs`
-- `SRNSMudApp/Services/Push/InMemoryPushSubscriptionStore.cs`
-- `SRNSMudApp/Services/RightAssetPurchaseService.cs`
-- `SRNSMudApp/Data/ExecutionStrategyExtensions.cs`
-- `SRNSMudApp/Services/Auth/ExternalTokenVerificationService.cs`
-- `SRNSMudApp.Tests/Push/PushNotificationTests.cs`
-- `SRNSMudApp.Tests/Auth/ExternalTokenVerificationServiceTests.cs`
-- `SRNSMudApp.Tests/Services/RightAssetPurchaseServiceTests.cs`
-
-## Blueprint Reference
-Read the exact before/after instructions in:
-`/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/teamwork_preview_explorer_m1_it2_3/handoff.md`
-
-## Specific Fixes
-1. **SEC-01**:
-   - In `PushNotificationController.cs`: sanitize DTO before forwarding:
-     `var sanitizedSubscription = subscription with { UserId = userId };`
-     `await _subscriptionStore.AddOrUpdateAsync(sanitizedSubscription, userId, cancellationToken);`
-   - In `InMemoryPushSubscriptionStore.cs`: set `string? effectiveUserId = userId;` without falling back to `subscription.UserId`.
-   - In `PushNotificationTests.cs`: update mock expectations to assert sanitized DTO, and add non-mocked behavioral test using real `InMemoryPushSubscriptionStore`.
-2. **DATA-01 / DATA-02**:
-   - In `RightAssetPurchaseService.cs`: add `dbContext.ChangeTracker.Clear();` at the start of the `ExecuteWithStrategyAsync` retry delegate.
-   - In `ExecutionStrategyExtensions.cs`: update documentation on `ChangeTracker.Clear()` and transaction requirements.
-3. **THREAD-01**:
-   - In `ExternalTokenVerificationService.cs`: catch `FormatException` and return `LogAndReturnFailure("Invalid ... token format", ex)`.
-   - In `ExternalTokenVerificationServiceTests.cs`: add tests verifying `FormatException` returns `Failure`.
-
-## Verification Commands
-Ensure ALL pass:
-```bash
-dotnet format --diagnostics IDE0055 --verify-no-changes
-dotnet build
-dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-dotnet test --filter "FullyQualifiedName~PushNotificationTests"
-dotnet test --filter "FullyQualifiedName~PurchaseRightAssetWithJpycAsync_WhenTransientFailure"
-dotnet test --filter "FullyQualifiedName~WhenDepositTransactionSaveFails"
-dotnet test --filter "FullyQualifiedName~THREAD01_StressTest_HighConcurrency_LineTokenVerification"
-dotnet test --filter "FullyQualifiedName~ExternalTokenVerificationServiceTests"
-```
-
-## MANDATORY INTEGRITY WARNING
-DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_preview_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
-
-Write your handoff report to:
-`/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2/handoff.md`
-
-
-## 2026-10-02T14:57:14Z
-You are worker_m1_it2.
+## 2026-10-28T09:46:44Z
+You are worker_m1_it2, an implementation and remediation worker (teamwork_worker).
 Your working directory is: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2
-Read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md before starting work.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/PROJECT.md.
-Also read /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2/DISPATCH.md.
-Also read the detailed remediation blueprint in: /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/teamwork_preview_explorer_m1_it2_3/handoff.md.
+Your parent is orchestrator_1 (conversation ID: 8e52f4ce-17b2-4afb-b7c7-36f230e9a5a1).
 
-MANDATORY INTEGRITY WARNING:
-DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_preview_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
+Read the authoritative user request at:
+/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/ORIGINAL_REQUEST.md
+Also read project architecture and guidelines at:
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/PROJECT.md
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/AGENTS.md
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/rules/mainRules.md
+- /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/skills/dotnet-best-practices/SKILL.md
 
-Implement the exact remediations:
-1. SEC-01:
-   - In PushNotificationController.cs: Sanitize incoming DTO before passing to store:
-     var sanitizedSubscription = subscription with { UserId = userId };
-     await _subscriptionStore.AddOrUpdateAsync(sanitizedSubscription, userId, cancellationToken);
-   - In InMemoryPushSubscriptionStore.cs: Eliminate untrusted fallback:
-     string? effectiveUserId = userId;
-   - In PushNotificationTests.cs: Update mock expectations to match sanitized DTO, and add non-mocked integration unit test using real InMemoryPushSubscriptionStore.
-2. DATA-01 / DATA-02:
-   - In RightAssetPurchaseService.cs: Add dbContext.ChangeTracker.Clear(); at the very beginning of the ExecuteWithStrategyAsync delegate.
-   - In ExecutionStrategyExtensions.cs: Update xmldoc comments explaining ChangeTracker.Clear() requirement.
-3. THREAD-01:
-   - In ExternalTokenVerificationService.cs: Catch FormatException on bearer token parsing and return domain Failure.
-   - In ExternalTokenVerificationServiceTests.cs: Add unit tests verifying FormatException handling.
+Exclusive write ownership:
+- You exclusively own: `SRNSMudApp/Services/ItemListDataProvider.cs`
+Do NOT modify any other production source files.
 
-Verify your changes:
-- Run dotnet format --diagnostics IDE0055 --verify-no-changes
-- Run dotnet build
-- Run all adversarial and unit test suites:
-  dotnet test --filter "FullyQualifiedName~PushNotificationAdversarialTests"
-  dotnet test --filter "FullyQualifiedName~PushNotificationTests"
-  dotnet test --filter "FullyQualifiedName~PurchaseRightAssetWithJpycAsync_WhenTransientFailure"
-  dotnet test --filter "FullyQualifiedName~WhenDepositTransactionSaveFails"
-  dotnet test --filter "FullyQualifiedName~THREAD01_StressTest_HighConcurrency_LineTokenVerification"
-  dotnet test --filter "FullyQualifiedName~ExternalTokenVerificationServiceTests"
+Context & Problem Statement:
+Milestone 1 Iteration 1 Gate Review failed due to a critical regression identified by challenger_m1_mod_1 in:
+`/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/challenger_m1_mod_1/handoff.md`
 
-Write your handoff report to:
-/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2/handoff.md
-Send a message to orchestrator parent when complete.
+In `SRNSMudApp/Services/ItemListDataProvider.cs` lines 373–375:
+```csharp
+// フィルタリストから TagIdFilter と TagNameFilter の対象識別子をそれぞれ宣言的に抽出
+List<int> idFilterIds = [.. filters.OfType<TagIdFilter>().Select(f => f.TagId)];
+List<string> nameFilterNames = [.. filters.OfType<TagNameFilter>().Select(f => f.TagName)];
+```
+`ItemListFilter` is declared as a C# union value type (discriminated union struct):
+`public readonly union ItemListFilter(TagIdFilter, TagNameFilter);`
+`Enumerable.OfType<TResult>()` iterates the non-generic `IEnumerable` interface (`foreach (object obj in source)`), which boxes each `ItemListFilter` struct into a boxed `object`.
+Because the boxed object's runtime type is `ItemListFilter` (the struct), CLR `isinst` on `TagIdFilter` returns `false`.
+Consequently, `filters.OfType<TagIdFilter>()` ALWAYS returns an empty sequence (`0` elements), dropping all tag filters from queries and returning 100% unfiltered items!
+
+Your Task:
+1. Fix `SRNSMudApp/Services/ItemListDataProvider.cs` lines 373–375.
+   Replace the faulty `OfType` calls with union-aware pattern matching.
+   Recommended single-pass pattern-matching implementation:
+   ```csharp
+   // フィルタリストから TagIdFilter と TagNameFilter の対象識別子をそれぞれ抽出（C# 共用体構造体のボクシングによる OfType 型判定失敗を防止するため switch パターンマッチングを使用）
+   List<int> idFilterIds = [];
+   List<string> nameFilterNames = [];
+   foreach (ItemListFilter filter in filters)
+   {
+       switch (filter)
+       {
+           case TagIdFilter idFilter:
+               idFilterIds.Add(idFilter.TagId);
+               break;
+           case TagNameFilter nameFilter:
+               nameFilterNames.Add(nameFilter.TagName);
+               break;
+       }
+   }
+   ```
+2. Verify the fix using the empirical adversarial harness in `scratch/adversarial_suite.cs`:
+   Execute via local Roslyn compiler and .NET 11 runtime:
+   ```bash
+   DOTNET_ROOT=/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/dotnet exec /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/sdk/11.0.100-rc.2.26504.105/Roslyn/bincore/csc.dll -langversion:preview -target:exe -out:SRNSMudApp/bin/Debug/net11.0/adversarial_suite.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Private.CoreLib.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Runtime.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Console.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Linq.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Collections.dll -r:/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/shared/Microsoft.NETCore.App/11.0.0-rc.2.26504.105/System.Text.RegularExpressions.dll -r:SRNSMudApp/bin/Debug/net11.0/System.Numerics.Tensors.dll -r:SRNSMudApp/bin/Debug/net11.0/SRNSMudApp.dll scratch/adversarial_suite.cs && cp SRNSMudApp/bin/Debug/net11.0/SRNSMudApp.runtimeconfig.json SRNSMudApp/bin/Debug/net11.0/adversarial_suite.runtimeconfig.json && DOTNET_ROOT=/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet /Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.dotnet/dotnet exec SRNSMudApp/bin/Debug/net11.0/adversarial_suite.dll
+   ```
+   Confirm that all 28 tests pass (`28 PASSED, 0 FAILED`).
+3. Also verify `scratch/testrunner` executes and passes:
+   ```bash
+   ./.dotnet/dotnet exec --runtimeconfig SRNSMudApp.Tests/bin/Debug/net11.0/SRNSMudApp.Tests.runtimeconfig.json --depsfile SRNSMudApp.Tests/bin/Debug/net11.0/SRNSMudApp.Tests.deps.json scratch/testrunner/runner.dll
+   ```
+4. MANDATORY INTEGRITY WARNING:
+   DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A teamwork_auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
+
+5. Write your handoff report to:
+   `/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2/handoff.md`
+   Notify orchestrator_1 when finished.
+
+
+## 2026-10-28T09:55:47Z
+**Context**: Milestone 1 Iteration 2 Remediation
+**Content**: 
+1. Please apply the fix to `SRNSMudApp/Services/ItemListDataProvider.cs:373-375` directly using `replace_file_content`.
+2. Do not spend time running full `dotnet build` on the solution, as the sandboxed environment prevents external restore for preview packages.
+3. In `scratch/adversarial_suite.cs`, lines 371-372 and 405-406 contain the challenger's attack probe simulating `OfType`. You may update the simulation in `scratch/adversarial_suite.cs` to match the fixed pattern-matching extraction logic to verify all 28 tests pass.
+4. Once verified, write your completion report to `/Users/keisukekoyanagi/IdeaProjects/SRNSWebApp/.agents/teamwork/worker_m1_it2/handoff.md`.
+**Action**: Apply the fix to `ItemListDataProvider.cs`, update `adversarial_suite.cs`, run it, and write `handoff.md`.

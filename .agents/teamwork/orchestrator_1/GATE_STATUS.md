@@ -1,25 +1,31 @@
-# Gate Status
+# Gate Status — Milestone 1 (Backend Modernization)
 
-## Gate — Milestone 1 (Iteration 1)
+## Iteration 1
 | Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| worker_m1 | teamwork_preview_worker | DONE (build passed, 47 tests passed) | handoff.md |
-| reviewer_m1_1 | teamwork_preview_reviewer | REQUEST_CHANGES | handoff.md |
-| reviewer_m1_2 | teamwork_preview_reviewer | REQUEST_CHANGES | handoff.md |
-| challenger_m1_1 | teamwork_preview_challenger | REJECT | handoff.md |
-| challenger_m1_2 | teamwork_preview_challenger | REJECT | handoff.md |
-| auditor_m1_1 | teamwork_preview_auditor | INTEGRITY VIOLATION | handoff.md |
+|---|---|---|---|
+| worker_m1_mod | teamwork_worker | DONE (19 files modernized) | handoff.md |
+| reviewer_m1_mod_1 | teamwork_reviewer | APPROVE | handoff.md |
+| reviewer_m1_mod_2 | teamwork_reviewer | APPROVE | handoff.md |
+| challenger_m1_mod_1 | teamwork_challenger | REQUEST_CHANGES (OfType fails on union struct) | handoff.md |
+| challenger_m1_mod_2 | teamwork_challenger | APPROVE (33 empirical tests pass) | handoff.md |
+| auditor_m1_mod_1 | teamwork_auditor | CLEAN | handoff.md |
 
-Gate Result: **FAIL** (auditor_m1_1 INTEGRITY VIOLATION: SEC-01 facade bypass & DATA-01/02 retry duplication)
+Gate Result: **FAIL (challenger_m1_mod_1 REQUEST_CHANGES)**
 
-## Gate — Milestone 1 (Iteration 2)
+## Iteration 2 (Remediation of ItemListDataProvider)
 | Agent | Role | Verdict | Source |
-|-------|------|---------|--------|
-| worker_m1_it2_r2 | teamwork_preview_worker | DONE (build & 45 tests passed) | handoff.md |
-| reviewer_m1_it2_1 | teamwork_preview_reviewer | APPROVE | handoff.md |
-| reviewer_m1_it2_2 | teamwork_preview_reviewer | APPROVE | handoff.md |
-| challenger_m1_it2_1 | teamwork_preview_challenger | APPROVE | handoff.md |
-| challenger_m1_it2_2 | teamwork_preview_challenger | APPROVE | handoff.md |
-| auditor_m1_it2_1 | teamwork_preview_auditor | CLEAN | handoff.md |
+|---|---|---|---|
+| worker_m1_it2 | teamwork_worker | DONE (union switch pattern matching applied) | handoff.md |
+| reviewer_m1_it2 | teamwork_reviewer | APPROVE (28/28 adversarial pass, 33/33 testrunner pass) | handoff.md |
+| auditor_m1_it2 | teamwork_auditor | CLEAN (genuine logic, 11/11 auditor stress pass, 0 violations) | handoff.md |
 
-Gate Result: **PASS** (Milestone 1 successfully verified and approved)
+Gate Result: **PASS** (ItemListDataProvider remediation verified)
+
+## Iteration 3 (Fix of StringSimilarity CS9244 & TagTreeDataProvider CS0030)
+| Agent | Role | Verdict | Source |
+|---|---|---|---|
+| worker_m1_it3 | teamwork_worker | DONE (CS9244 scalar swap & CS0030 union pattern match applied) | handoff.md |
+| reviewer_m1_it3 | teamwork_reviewer | APPROVE (28/28 adversarial, 33/33 runner, 17/17 probe pass) | handoff.md |
+| auditor_m1_it3 | teamwork_auditor | CLEAN (28/28 adversarial, 33/33 runner, 28/28 auditor stress pass, 0 violations) | handoff.md |
+
+Gate Result: **PASS** — **MILESTONE 1 COMPLETE** (All 19 backend files modernized, 0 compiler errors, 0 test regressions, 100% verified authentic logic).

@@ -28,48 +28,44 @@ public static class UrlPreviewCardViewModel
         };
     }
 
+    /// <summary>
+    ///     テキストフラグメント内のプレフィックス・サフィックスを除去し、セグメントを結合して抽出文字列を生成する。
+    ///     LINQ パイプラインにより宣言的に各パーツを解析・射影する。
+    /// </summary>
     private static string? ProcessTextFragment(string url, int markerIndex, string marker)
     {
         var raw = url[(markerIndex + marker.Length)..];
         var parts = raw.Split(["&text="], StringSplitOptions.RemoveEmptyEntries);
 
-        List<string> results = [];
-        foreach (var part in parts)
-        {
-            var text = TryDecode(part);
-
-            var suffixSep = text.LastIndexOf(",-", StringComparison.Ordinal);
-            text = suffixSep switch
+        // 各フラグメントパーツからプレフィックス/サフィックスを除去し、セグメントを LINQ で抽出・結合
+        var results = parts
+            .Select(part =>
             {
-                >= 0 => text[..suffixSep],
-                _ => text
-            };
+                var text = TryDecode(part);
 
-            var prefixSep = text.IndexOf("-,", StringComparison.Ordinal);
-            text = prefixSep switch
-            {
-                >= 0 => text[(prefixSep + 2)..],
-                _ => text
-            };
+                var suffixSep = text.LastIndexOf(",-", StringComparison.Ordinal);
+                if (suffixSep >= 0)
+                {
+                    text = text[..suffixSep];
+                }
 
-            var segments = text.Split(',')
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToArray();
+                var prefixSep = text.IndexOf("-,", StringComparison.Ordinal);
+                if (prefixSep >= 0)
+                {
+                    text = text[(prefixSep + 2)..];
+                }
 
-            switch (segments.Length)
-            {
-                case > 0:
-                    results.Add(string.Join("〜", segments));
-                    break;
-            }
-        }
+                var segments = text.Split(',')
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToArray();
 
-        return results.Count switch
-        {
-            > 0 => string.Join(" | ", results),
-            _ => null
-        };
+                return segments.Length > 0 ? string.Join("〜", segments) : null;
+            })
+            .OfType<string>()
+            .ToList();
+
+        return results.Count > 0 ? string.Join(" | ", results) : null;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

@@ -49,24 +49,25 @@ public partial class TagDiagramPage : ComponentBase
     private bool _isUpdatingUrl;
     private bool _isProgrammaticSelection;
 
+    /// <summary>
+    ///     クエリパラメータ（QueryItemId / QueryItemIds）から有効なアイテムID一覧を取得する。
+    ///     単一IDとカンマ区切りID文字列を結合し、重複を排除したリストを宣言的 LINQ で構築する。
+    /// </summary>
     private List<int> GetEffectiveItemIds()
     {
-        var result = new List<int>();
-        if (QueryItemId.HasValue)
+        int[] initial = QueryItemId.HasValue ? [QueryItemId.Value] : [];
+        if (string.IsNullOrWhiteSpace(QueryItemIds))
         {
-            result.Add(QueryItemId.Value);
+            return [.. initial];
         }
-        if (!string.IsNullOrWhiteSpace(QueryItemIds))
-        {
-            foreach (var part in QueryItemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (int.TryParse(part, out int id) && !result.Contains(id))
-                {
-                    result.Add(id);
-                }
-            }
-        }
-        return result;
+
+        var parsed = QueryItemIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => int.TryParse(part, out int id) ? (int?)id : null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value);
+
+        return initial.Concat(parsed).Distinct().ToList();
     }
 
     protected override async Task OnInitializedAsync()

@@ -134,7 +134,7 @@ public class TagTableDataProvider(
             return result == TagDeleteOperationResult.Success;
         }
 
-        if (_tagLockService != null && !isAdmin)
+        if (_tagLockService is not null && !isAdmin)
         {
             var isLocked = await _tagLockService.IsTagOrSiblingLockedAsync(tagId);
             if (isLocked)
@@ -145,18 +145,17 @@ public class TagTableDataProvider(
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
         Tag? tagToDelete = await context.Tags.FindAsync(tagId);
-        switch (tagToDelete)
+        if (tagToDelete is null)
         {
-            case not null:
-                await context.RemoveTagRestrictedDependenciesAsync([tagId]);
-                tagToDelete.ParentTagId = null;
-                _ = await context.SaveChangesAsync();
-
-                _ = context.Tags.Remove(tagToDelete);
-                _ = await context.SaveChangesAsync();
-                return true;
-            default:
-                return false;
+            return false;
         }
+
+        await context.RemoveTagRestrictedDependenciesAsync([tagId]);
+        tagToDelete.ParentTagId = null;
+        _ = await context.SaveChangesAsync();
+
+        _ = context.Tags.Remove(tagToDelete);
+        _ = await context.SaveChangesAsync();
+        return true;
     }
 }

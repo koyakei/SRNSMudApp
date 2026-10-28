@@ -106,26 +106,20 @@ public class TagDiagramPageViewModel
 
             if (preservedExtraIds != null)
             {
-                foreach (int id in preservedExtraIds)
-                {
-                    _ = PinnedTagIds.Add(id);
-                }
+                // HashSet.Add の命令型ループを canonical な UnionWith にモダン化
+                PinnedTagIds.UnionWith(preservedExtraIds);
             }
 
             if (preservedHiddenTagIds != null)
             {
-                foreach (int id in preservedHiddenTagIds)
-                {
-                    _ = HiddenTagIds.Add(id);
-                }
+                // HashSet.Add の命令型ループを canonical な UnionWith にモダン化
+                HiddenTagIds.UnionWith(preservedHiddenTagIds);
             }
 
             if (preservedHiddenItemIds != null)
             {
-                foreach (int id in preservedHiddenItemIds)
-                {
-                    _ = HiddenItemIds.Add(id);
-                }
+                // HashSet.Add の命令型ループを canonical な UnionWith にモダン化
+                HiddenItemIds.UnionWith(preservedHiddenItemIds);
             }
 
             var validItemIds = queryItemIds?.Where(id => id > 0).Distinct().ToList() ?? [];
@@ -136,10 +130,8 @@ public class TagDiagramPageViewModel
                     ? await _dataProvider.GetContextTagIdsForItemAsync(validItemIds[0]) ?? []
                     : await _dataProvider.GetContextTagIdsForItemsAsync(validItemIds) ?? [];
 
-                foreach (int id in contextTagIds)
-                {
-                    _ = PinnedTagIds.Add(id);
-                }
+                // コンテキストタグIDを PinnedTagIds に一括追加
+                PinnedTagIds.UnionWith(contextTagIds);
 
                 ContextItems = validItemIds.Count == 1
                     ? await _dataProvider.GetContextItemsAsync(validItemIds[0]) ?? []
@@ -181,10 +173,8 @@ public class TagDiagramPageViewModel
                 ? await _dataProvider.GetContextTagIdsForItemAsync(validItemIds[0]) ?? []
                 : await _dataProvider.GetContextTagIdsForItemsAsync(validItemIds) ?? [];
 
-            foreach (int id in contextTagIds)
-            {
-                _ = PinnedTagIds.Add(id);
-            }
+            // コンテキストタグIDを PinnedTagIds に一括追加
+            PinnedTagIds.UnionWith(contextTagIds);
 
             ContextItems = validItemIds.Count == 1
                 ? await _dataProvider.GetContextItemsAsync(validItemIds[0]) ?? []

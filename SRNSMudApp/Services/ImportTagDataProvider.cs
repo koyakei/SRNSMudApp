@@ -147,7 +147,7 @@ public partial class ImportTagDataProvider(
             .Where(t => t.OwnerId == effectiveOwnerId)
             .ToListAsync();
 
-        var existingTags = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Tag> existingTags = new(StringComparer.OrdinalIgnoreCase);
         foreach (var t in loadedTags)
         {
             var trimmedName = t.Name.Trim();
@@ -159,7 +159,7 @@ public partial class ImportTagDataProvider(
         }
 
         var createdCount = 0;
-        var updatedTagIds = new HashSet<int>();
+        HashSet<int> updatedTagIds = [];
 
         // Execute with retry strategy instead of manual transaction
         return await dbContext.Database.ExecuteWithStrategyAsync(async () =>
@@ -184,18 +184,13 @@ public partial class ImportTagDataProvider(
                     var contentCol1 = fields[^2].Trim();
                     var contentCol2 = fields[^1].Trim();
 
-                    if (!string.IsNullOrEmpty(contentCol1) && !string.IsNullOrEmpty(contentCol2))
+                    leafContent = (string.IsNullOrEmpty(contentCol1), string.IsNullOrEmpty(contentCol2)) switch
                     {
-                        leafContent = $"{contentCol1}\n{contentCol2}";
-                    }
-                    else if (!string.IsNullOrEmpty(contentCol1))
-                    {
-                        leafContent = contentCol1;
-                    }
-                    else if (!string.IsNullOrEmpty(contentCol2))
-                    {
-                        leafContent = contentCol2;
-                    }
+                        (false, false) => $"{contentCol1}\n{contentCol2}",
+                        (false, true) => contentCol1,
+                        (true, false) => contentCol2,
+                        _ => string.Empty
+                    };
                 }
                 else
                 {
@@ -394,7 +389,7 @@ public partial class ImportTagDataProvider(
     /// </summary>
     private static List<List<string>> ParseCsv(string csvContent)
     {
-        var records = new List<List<string>>();
+        List<List<string>> records = [];
         if (string.IsNullOrWhiteSpace(csvContent))
         {
             return records;
@@ -417,7 +412,7 @@ public partial class ImportTagDataProvider(
         }
         var delimiter = tabCount > commaCount ? '\t' : ',';
 
-        var currentRecord = new List<string>();
+        List<string> currentRecord = [];
         var currentField = new StringBuilder();
         var inQuotes = false;
 

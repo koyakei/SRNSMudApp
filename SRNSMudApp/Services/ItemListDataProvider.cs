@@ -370,17 +370,18 @@ public class ItemListDataProvider(
         List<Tag> foundTags;
         if (filters.Count != 0)
         {
-            var idFilterIds = new List<int>();
-            var nameFilterNames = new List<string>();
-            foreach (ItemListFilter f in filters)
+            // フィルタリストから TagIdFilter と TagNameFilter の対象識別子をそれぞれ抽出（C# 共用体構造体のボクシングによる OfType 型判定失敗を防止するため switch パターンマッチングを使用）
+            List<int> idFilterIds = [];
+            List<string> nameFilterNames = [];
+            foreach (ItemListFilter filter in filters)
             {
-                switch (f)
+                switch (filter)
                 {
-                    case TagIdFilter idF:
-                        idFilterIds.Add(idF.TagId);
+                    case TagIdFilter idFilter:
+                        idFilterIds.Add(idFilter.TagId);
                         break;
-                    case TagNameFilter nameF:
-                        nameFilterNames.Add(nameF.TagName);
+                    case TagNameFilter nameFilter:
+                        nameFilterNames.Add(nameFilter.TagName);
                         break;
                 }
             }

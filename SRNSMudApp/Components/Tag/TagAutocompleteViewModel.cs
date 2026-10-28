@@ -11,16 +11,10 @@ using Tag = SRNSMudApp.Data.Tag;
 
 /// <summary>
 ///     TagAutocomplete コンポーネントのタグ検索ロジックを仲介する ViewModel。
+///     プライマリコンストラクタにより依存性注入の定型句を簡素化。
 /// </summary>
-public sealed class TagAutocompleteViewModel
+public sealed class TagAutocompleteViewModel(ITagSearchQueryService tagSearchQueryService)
 {
-    private readonly ITagSearchQueryService _tagSearchQueryService;
-
-    public TagAutocompleteViewModel(ITagSearchQueryService tagSearchQueryService)
-    {
-        _tagSearchQueryService = tagSearchQueryService;
-    }
-
     /// <summary>
     ///     カスタム検索関数が指定されていればそれを呼び出し、無ければフォールバック付きタグ検索を実行する。
     /// </summary>
@@ -31,6 +25,6 @@ public sealed class TagAutocompleteViewModel
     {
         return customSearchFunc != null
             ? await customSearchFunc(value, token)
-            : await _tagSearchQueryService.SearchTagsWithFallbackAsync(value, token);
+            : await tagSearchQueryService.SearchTagsWithFallbackAsync(value, token);
     }
 }

@@ -200,25 +200,21 @@ public class UserDataProvider(
         }
 
         var now = DateTime.UtcNow;
-        var created = false;
-        foreach (var name in reactionNames)
-        {
-            if (!existingNames.Contains(name))
+        // 未作成のリアクションタグを一括生成してデータベースに追加
+        List<Tag> newTags = [.. reactionNames
+            .Where(name => !existingNames.Contains(name))
+            .Select(name => new Tag
             {
-                dbContext.Tags.Add(new Tag
-                {
-                    Name = name,
-                    IsSystem = true,
-                    OwnerId = userId,
-                    CreatedDate = now,
-                    UpdatedDate = now
-                });
-                created = true;
-            }
-        }
+                Name = name,
+                IsSystem = true,
+                OwnerId = userId,
+                CreatedDate = now,
+                UpdatedDate = now
+            })];
 
-        if (created)
+        if (newTags.Count > 0)
         {
+            dbContext.Tags.AddRange(newTags);
             try
             {
                 await dbContext.SaveChangesAsync();
@@ -256,26 +252,23 @@ public class UserDataProvider(
         UserFollow? existing = await dbContext.UserFollows
             .FirstOrDefaultAsync(uf => uf.OwnerId == currentUserId && uf.FollowedUserId == targetUserId);
 
-        switch (existing)
+        if (existing is not null)
         {
-            case not null:
-                _ = dbContext.UserFollows.Remove(existing);
-                _ = await dbContext.SaveChangesAsync();
-                return false;
-            default:
-                {
-                    var newFollow = new UserFollow
-                    {
-                        OwnerId = currentUserId,
-                        FollowedUserId = targetUserId,
-                        CreatedDate = DateTime.UtcNow,
-                        UpdatedDate = DateTime.UtcNow
-                    };
-                    _ = dbContext.UserFollows.Add(newFollow);
-                    _ = await dbContext.SaveChangesAsync();
-                    return true;
-                }
+            _ = dbContext.UserFollows.Remove(existing);
+            _ = await dbContext.SaveChangesAsync();
+            return false;
         }
+
+        var newFollow = new UserFollow
+        {
+            OwnerId = currentUserId,
+            FollowedUserId = targetUserId,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        };
+        _ = dbContext.UserFollows.Add(newFollow);
+        _ = await dbContext.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> IsFollowingUserAsync(string currentUserId, string targetUserId)

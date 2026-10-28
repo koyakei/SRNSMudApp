@@ -63,10 +63,10 @@ public static class StringSimilarity
             return a.Length;
         }
 
-        // 短い方を b にスワップして行バッファサイズを最小化
+        // 短い方を b にスワップして行バッファサイズを最小化（ReadOnlySpan は ref struct のためタプルスワップではなくスカラー変数スワップを使用）
         if (a.Length < b.Length)
         {
-            var temp = a;
+            ReadOnlySpan<char> temp = a;
             a = b;
             b = temp;
         }

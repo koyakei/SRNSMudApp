@@ -31,26 +31,11 @@ public static partial class ContentParser
             return [];
         }
 
-        List<string> results = [];
-        MatchCollection matches = UrlRegex().Matches(text);
-        foreach (Match match in matches)
-        {
-            if (!results.Contains(match.Value))
-            {
-                results.Add(match.Value);
-            }
-        }
-
-        MatchCollection internalMatches = InternalLinkRegex().Matches(text);
-        foreach (Match match in internalMatches)
-        {
-            if (!results.Contains(match.Value))
-            {
-                results.Add(match.Value);
-            }
-        }
-
-        return results;
+        // 外部URLと内部リンクを抽出し、出現順を維持したまま重複を除去して返す
+        return [.. UrlRegex().Matches(text)
+            .Concat(InternalLinkRegex().Matches(text))
+            .Select(m => m.Value)
+            .Distinct()];
     }
 
     /// <summary>
@@ -64,11 +49,10 @@ public static partial class ContentParser
         }
 
         List<ContentSegment> results = [];
-        List<Match> matches = [];
-        matches.AddRange(UrlRegex().Matches(text).Cast<Match>());
-        matches.AddRange(InternalLinkRegex().Matches(text).Cast<Match>());
-
-        matches = matches.OrderBy(m => m.Index).ToList();
+        // 冗長なCast<Match>()を排除し、マッチ結果を結合して出現インデックス順に整列
+        List<Match> matches = [.. UrlRegex().Matches(text)
+            .Concat(InternalLinkRegex().Matches(text))
+            .OrderBy(m => m.Index)];
 
         List<Match> validMatches = [];
         int currentEnd = 0;

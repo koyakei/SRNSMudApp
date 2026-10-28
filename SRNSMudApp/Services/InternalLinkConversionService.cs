@@ -75,20 +75,8 @@ public class InternalLinkConversionService(
             List<LinkConversionCandidate> resolved = ResolveOverlaps(allCandidates);
 
             // 自動置換と手動候補に分類
-            List<LinkConversionCandidate> auto = [];
-            List<LinkConversionCandidate> manual = [];
-
-            foreach (LinkConversionCandidate candidate in resolved)
-            {
-                if (candidate.IsAutoReplace)
-                {
-                    auto.Add(candidate);
-                }
-                else
-                {
-                    manual.Add(candidate);
-                }
-            }
+            List<LinkConversionCandidate> auto = [.. resolved.Where(c => c.IsAutoReplace)];
+            List<LinkConversionCandidate> manual = [.. resolved.Where(c => !c.IsAutoReplace)];
 
             return new InternalLinkConversionResult(auto, manual);
         }

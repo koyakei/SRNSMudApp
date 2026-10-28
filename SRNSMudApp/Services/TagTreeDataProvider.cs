@@ -391,22 +391,20 @@ public class TagTreeDataProvider(
             .AsNoTracking()
             .ToListAsync();
 
-        List<PendingTagMoveDto> dtos = [];
-        foreach (TaggingRequestEntity req in requests)
-        {
-            if (req.Payload is TagMovePayload payload)
+        // 移動リクエストをフィルタリングし、PendingTagMoveDto に射影（union 型の安全なパターンマッチングで TagMovePayload を抽出）
+        return [.. requests
+            .Where(req => req.Payload is TagMovePayload)
+            .Select(req =>
             {
-                dtos.Add(new PendingTagMoveDto(
+                var payload = req.Payload is TagMovePayload p ? p : null;
+                return new PendingTagMoveDto(
                     req.Id,
                     req.RequestedTagId,
                     req.RequestedTag?.Name ?? "不明なタグ",
-                    payload.NewParentTagId,
+                    payload?.NewParentTagId,
                     req.RequesterUserId,
-                    req.TagOwnerUserId));
-            }
-        }
-
-        return dtos;
+                    req.TagOwnerUserId);
+            })];
     }
 
     public async Task<Result<string>> CancelTagMoveAsync(int requestId, string currentUserId)

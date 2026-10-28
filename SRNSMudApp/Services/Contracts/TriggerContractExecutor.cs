@@ -41,11 +41,9 @@ public class TriggerContractExecutor(
 
     private async Task<Result<string>> ProcessTriggerWithOfferAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer)
     {
-        Result<RightAsset?> assetValidation = (offer.RequiredAssetAmount > 0) switch
-        {
-            true => ValidateTriggerAsset(contract, offer),
-            false => new Success<RightAsset?>(null)
-        };
+        Result<RightAsset?> assetValidation = offer.RequiredAssetAmount > 0
+            ? ValidateTriggerAsset(contract, offer)
+            : new Success<RightAsset?>(null);
 
         return await (assetValidation switch
         {

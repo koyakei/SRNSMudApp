@@ -190,43 +190,38 @@ public class ItemDetailDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
         // 付与されたタグの履歴として表示できるよう補完する
         if (item.TagRelations is { Count: > 0 })
         {
-            var existingLedgerRelationIds = ledgers
+            HashSet<int> existingLedgerRelationIds = [.. ledgers
                 .Where(l => l.SourceId.HasValue)
-                .Select(l => l.SourceId!.Value)
-                .ToHashSet();
+                .Select(l => l.SourceId!.Value)];
 
-            var existingLedgerTagIds = ledgers
+            HashSet<int> existingLedgerTagIds = [.. ledgers
                 .Where(l => l.ItemId == itemId)
-                .Select(l => l.TagId)
-                .ToHashSet();
+                .Select(l => l.TagId)];
 
-            foreach (TagRelation tr in item.TagRelations)
-            {
-                if (!existingLedgerRelationIds.Contains(tr.Id) && !existingLedgerTagIds.Contains(tr.TagId))
+            // 台帳履歴に存在しないタグ関連付けを補完して追加
+            ledgers.AddRange(item.TagRelations
+                .Where(tr => !existingLedgerRelationIds.Contains(tr.Id) && !existingLedgerTagIds.Contains(tr.TagId))
+                .Select(tr => new TagWeightLedger
                 {
-                    ledgers.Add(new TagWeightLedger
-                    {
-                        TagId = tr.TagId,
-                        Tag = tr.Tag!,
-                        TagNameSnapshot = tr.Tag?.Name ?? string.Empty,
-                        ItemId = itemId,
-                        SourceType = "TagRelationInsert",
-                        SourceId = tr.Id,
-                        TagRelation = tr,
-                        CommentItemId = tr.CommentItemId,
-                        CommentItem = tr.CommentItem,
-                        Delta = tr.Weight,
-                        PreviousWeight = 0,
-                        NewWeight = tr.Tag?.CachedWeight ?? tr.Weight,
-                        IsOwnerAction = tr.OwnerId == item.OwnerId,
-                        Reason = "タグの新規追加",
-                        OwnerId = tr.OwnerId,
-                        Owner = tr.Owner ?? tr.Tag?.Owner ?? item.Owner,
-                        CreatedDate = tr.CreatedDate,
-                        UpdatedDate = tr.UpdatedDate
-                    });
-                }
-            }
+                    TagId = tr.TagId,
+                    Tag = tr.Tag!,
+                    TagNameSnapshot = tr.Tag?.Name ?? string.Empty,
+                    ItemId = itemId,
+                    SourceType = "TagRelationInsert",
+                    SourceId = tr.Id,
+                    TagRelation = tr,
+                    CommentItemId = tr.CommentItemId,
+                    CommentItem = tr.CommentItem,
+                    Delta = tr.Weight,
+                    PreviousWeight = 0,
+                    NewWeight = tr.Tag?.CachedWeight ?? tr.Weight,
+                    IsOwnerAction = tr.OwnerId == item.OwnerId,
+                    Reason = "タグの新規追加",
+                    OwnerId = tr.OwnerId,
+                    Owner = tr.Owner ?? tr.Tag?.Owner ?? item.Owner,
+                    CreatedDate = tr.CreatedDate,
+                    UpdatedDate = tr.UpdatedDate
+                }));
 
             ledgers = [.. ledgers.OrderByDescending(l => l.CreatedDate)];
         }

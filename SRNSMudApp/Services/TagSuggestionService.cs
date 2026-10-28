@@ -58,37 +58,20 @@ public class TagSuggestionService(
                 .Where(t => t.Embedding != null && t.Name != Data.Tag.RootTagName)
                 .ToListAsync(cancellationToken);
 
-            List<SuggestedTag> suggestions = [];
-
-            foreach (Data.Tag tag in candidates)
+            if (cancellationToken.IsCancellationRequested)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return [];
-                }
-
-                // 投票タグ・リアクションタグは自動サジェスト対象外とする
-                if (Data.Tag.VoteTagNames.Contains(tag.Name) || Data.Tag.ReactionTagNames.Contains(tag.Name))
-                {
-                    continue;
-                }
-
-                if (tag.Embedding.Length != queryVector.Length)
-                {
-                    continue;
-                }
-
-                float score = TensorPrimitives.CosineSimilarity(tag.Embedding, queryVector);
-                if (score >= minScore)
-                {
-                    suggestions.Add(new SuggestedTag(tag.Id, tag.Name, score));
-                }
+                return [];
             }
 
-            return suggestions
+            // 投票タグ・リアクションタグを除外し、ベクトル類似度を計算して上位20件をサジェスト
+            return [.. candidates
+                .Where(tag => !Data.Tag.VoteTagNames.Contains(tag.Name)
+                              && !Data.Tag.ReactionTagNames.Contains(tag.Name)
+                              && tag.Embedding?.Length == queryVector.Length)
+                .Select(tag => new SuggestedTag(tag.Id, tag.Name, TensorPrimitives.CosineSimilarity(tag.Embedding!, queryVector)))
+                .Where(s => s.Score >= minScore)
                 .OrderByDescending(s => s.Score)
-                .Take(20)
-                .ToList();
+                .Take(20)];
         }
         catch (OperationCanceledException)
         {

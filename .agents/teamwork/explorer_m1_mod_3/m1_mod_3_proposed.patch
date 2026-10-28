@@ -1,0 +1,402 @@
+--- a/SRNSMudApp/Services/ContractDataProvider.cs
++++ b/SRNSMudApp/Services/ContractDataProvider.cs
+@@ -108,13 +108,14 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
+         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
+-        return string.IsNullOrEmpty(value) switch
+-        {
+-            true => await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token),
+-            _ => await dbContext.Items
+-                                .Where(i => i.Content.Contains(value))
+-                                .Take(10)
+-                                .ToListAsync(token),
+-        };
++        if (string.IsNullOrEmpty(value))
++        {
++            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
++        }
++
++        return await dbContext.Items
++            .Where(i => i.Content.Contains(value))
++            .Take(10)
++            .ToListAsync(token);
+     }
+ 
+     public async Task<List<Tag>> SearchTagsByNameAsync(string? value, CancellationToken token = default)
+     {
+         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
+-        return string.IsNullOrEmpty(value) switch
+-        {
+-            true => await dbContext.Tags.Take(10).ToListAsync(token),
+-            _ => await dbContext.Tags
+-                                .Where(t => t.Name.Contains(value))
+-                                .Take(10)
+-                                .ToListAsync(token),
+-        };
++        if (string.IsNullOrEmpty(value))
++        {
++            return await dbContext.Tags.Take(10).ToListAsync(token);
++        }
++
++        return await dbContext.Tags
++            .Where(t => t.Name.Contains(value))
++            .Take(10)
++            .ToListAsync(token);
+     }
+ 
+@@ -175,12 +176,12 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFacto
+         PublicTradeOffer? entity = await dbContext.PublicTradeOffers!.FindAsync(offerId);
+-        switch (entity != null && entity.OwnerId == userId)
+-        {
+-            case true:
+-                entity.IsActive = false;
+-                _ = await dbContext.SaveChangesAsync();
+-                return true;
+-            default:
+-                return false;
+-        }
++        if (entity is not null && entity.OwnerId == userId)
++        {
++            entity.IsActive = false;
++            _ = await dbContext.SaveChangesAsync();
++            return true;
++        }
++
++        return false;
+     }
+
+--- a/SRNSMudApp/Services/NotificationsDataProvider.cs
++++ b/SRNSMudApp/Services/NotificationsDataProvider.cs
+@@ -52,10 +52,9 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> db
+     {
+-        switch (itemIds.Count)
+-        {
+-            case 0:
+-                return [];
+-            default:
+-                break;
+-        }
++        if (itemIds.Count == 0)
++        {
++            return [];
++        }
+ 
+         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+--- a/SRNSMudApp/Services/TagTableDataProvider.cs
++++ b/SRNSMudApp/Services/TagTableDataProvider.cs
+@@ -136,17 +136,17 @@ public class TagTableDataProvider(
+-        if (_tagLockService != null && !isAdmin)
++        if (_tagLockService is not null && !isAdmin)
+         {
+             var isLocked = await _tagLockService.IsTagOrSiblingLockedAsync(tagId);
+             if (isLocked)
+             {
+                 return false;
+             }
+         }
+ 
+         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync();
+         Tag? tagToDelete = await context.Tags.FindAsync(tagId);
+-        switch (tagToDelete)
+-        {
+-            case not null:
+-                await context.RemoveTagRestrictedDependenciesAsync([tagId]);
+-                tagToDelete.ParentTagId = null;
+-                _ = await context.SaveChangesAsync();
+-
+-                _ = context.Tags.Remove(tagToDelete);
+-                _ = await context.SaveChangesAsync();
+-                return true;
+-            default:
+-                return false;
+-        }
++        if (tagToDelete is null)
++        {
++            return false;
++        }
++
++        await context.RemoveTagRestrictedDependenciesAsync([tagId]);
++        tagToDelete.ParentTagId = null;
++        _ = await context.SaveChangesAsync();
++
++        _ = context.Tags.Remove(tagToDelete);
++        _ = await context.SaveChangesAsync();
++        return true;
+     }
+
+--- a/SRNSMudApp/Services/TagCardDataProvider.cs
++++ b/SRNSMudApp/Services/TagCardDataProvider.cs
+@@ -162,48 +162,47 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactor
+         TagRelationToTag? entity = await context.TagRelationToTags.Include(tr => tr.Tag)
+             .FirstOrDefaultAsync(tr => tr.Id == relationId);
+-        switch (entity)
+-        {
+-            case not null:
+-                Tag? tag = entity.Tag;
+-                if (tag is not null)
+-                {
+-                    var (prevWeight, newWeight) = tag.ApplyWeightDelta(-entity.Weight);
+-                    _ = context.TagWeightLedgers!.Add(new TagWeightLedger
+-                    {
+-                        TagId = tag.Id,
+-                        TagNameSnapshot = tag.Name,
+-                        TargetTagId = entity.TargetTagId,
+-                        SourceType = "TagRelationToTagDelete",
+-                        SourceId = null,
+-                        PreviousWeight = prevWeight,
+-                        NewWeight = newWeight,
+-                        Delta = -entity.Weight,
+-                        IsOwnerAction = true,
+-                        Reason = "タグの関連付け解除",
+-                        OwnerId = ownerId
+-                    });
+-                }
+-
+-                try
+-                {
+-                    _ = context.Remove(entity);
+-                    _ = context.TimelineEvents!.Add(new TimelineEvent
+-                    {
+-                        OwnerId = ownerId,
+-                        Target = new TagTarget(entity.TargetTagId),
+-                        FollowedTagId = entity.TagId,
+-                        ParsedEventType = Models.TimelineEventType.Delete,
+-                        PreviousWeight = entity.Weight
+-                    });
+-                    _ = await context.SaveChangesAsync();
+-                    return TagCardOperationResult.Success;
+-                }
+-                catch (DbUpdateConcurrencyException)
+-                {
+-                    context.ChangeTracker.Clear();
+-                    return TagCardOperationResult.NotFound;
+-                }
+-            default:
+-                return TagCardOperationResult.NotFound;
+-        }
++        if (entity is null)
++        {
++            return TagCardOperationResult.NotFound;
++        }
++
++        Tag? tag = entity.Tag;
++        if (tag is not null)
++        {
++            var (prevWeight, newWeight) = tag.ApplyWeightDelta(-entity.Weight);
++            _ = context.TagWeightLedgers!.Add(new TagWeightLedger
++            {
++                TagId = tag.Id,
++                TagNameSnapshot = tag.Name,
++                TargetTagId = entity.TargetTagId,
++                SourceType = "TagRelationToTagDelete",
++                SourceId = null,
++                PreviousWeight = prevWeight,
++                NewWeight = newWeight,
++                Delta = -entity.Weight,
++                IsOwnerAction = true,
++                Reason = "タグの関連付け解除",
++                OwnerId = ownerId
++            });
++        }
++
++        try
++        {
++            _ = context.Remove(entity);
++            _ = context.TimelineEvents!.Add(new TimelineEvent
++            {
++                OwnerId = ownerId,
++                Target = new TagTarget(entity.TargetTagId),
++                FollowedTagId = entity.TagId,
++                ParsedEventType = Models.TimelineEventType.Delete,
++                PreviousWeight = entity.Weight
++            });
++            _ = await context.SaveChangesAsync();
++            return TagCardOperationResult.Success;
++        }
++        catch (DbUpdateConcurrencyException)
++        {
++            context.ChangeTracker.Clear();
++            return TagCardOperationResult.NotFound;
++        }
+     }
+@@ -282,19 +281,18 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactor
+         TagRelationToTag? entity = await context.TagRelationToTags.FindAsync(oldRelationId);
+-        switch (entity)
+-        {
+-            case not null:
+-                try
+-                {
+-                    entity.TagId = newTagId;
+-                    entity.UpdatedDate = DateTime.UtcNow;
+-                    _ = await context.SaveChangesAsync();
+-                    return TagCardOperationResult.Success;
+-                }
+-                catch (DbUpdateConcurrencyException)
+-                {
+-                    context.ChangeTracker.Clear();
+-                    return TagCardOperationResult.NotFound;
+-                }
+-            default:
+-                return TagCardOperationResult.NotFound;
+-        }
++        if (entity is null)
++        {
++            return TagCardOperationResult.NotFound;
++        }
++
++        try
++        {
++            entity.TagId = newTagId;
++            entity.UpdatedDate = DateTime.UtcNow;
++            _ = await context.SaveChangesAsync();
++            return TagCardOperationResult.Success;
++        }
++        catch (DbUpdateConcurrencyException)
++        {
++            context.ChangeTracker.Clear();
++            return TagCardOperationResult.NotFound;
++        }
+     }
+@@ -309,24 +307,23 @@ public class TagCardDataProvider(IDbContextFactory<ApplicationDbContext> dbFactor
+         Tag? entity = await context.Tags.FindAsync(childTagId);
+-        switch (entity)
+-        {
+-            case not null:
+-                if (entity.OwnerId != ownerId)
+-                {
+-                    return TagCardOperationResult.NotOwner;
+-                }
+-
+-                try
+-                {
+-                    entity.ParentTagId = parentTagId;
+-                    entity.UpdatedDate = DateTime.UtcNow;
+-                    _ = await context.SaveChangesAsync();
+-                    return TagCardOperationResult.Success;
+-                }
+-                catch (DbUpdateConcurrencyException)
+-                {
+-                    context.ChangeTracker.Clear();
+-                    return TagCardOperationResult.NotFound;
+-                }
+-            default:
+-                return TagCardOperationResult.NotFound;
+-        }
++        if (entity is null)
++        {
++            return TagCardOperationResult.NotFound;
++        }
++
++        if (entity.OwnerId != ownerId)
++        {
++            return TagCardOperationResult.NotOwner;
++        }
++
++        try
++        {
++            entity.ParentTagId = parentTagId;
++            entity.UpdatedDate = DateTime.UtcNow;
++            _ = await context.SaveChangesAsync();
++            return TagCardOperationResult.Success;
++        }
++        catch (DbUpdateConcurrencyException)
++        {
++            context.ChangeTracker.Clear();
++            return TagCardOperationResult.NotFound;
++        }
+     }
+
+--- a/SRNSMudApp/Services/UserDataProvider.cs
++++ b/SRNSMudApp/Services/UserDataProvider.cs
+@@ -258,22 +258,21 @@ public class UserDataProvider(
+-        switch (existing)
+-        {
+-            case not null:
+-                _ = dbContext.UserFollows.Remove(existing);
+-                _ = await dbContext.SaveChangesAsync();
+-                return false;
+-            default:
+-                {
+-                    var newFollow = new UserFollow
+-                    {
+-                        OwnerId = currentUserId,
+-                        FollowedUserId = targetUserId,
+-                        CreatedDate = DateTime.UtcNow,
+-                        UpdatedDate = DateTime.UtcNow
+-                    };
+-                    _ = dbContext.UserFollows.Add(newFollow);
+-                    _ = await dbContext.SaveChangesAsync();
+-                    return true;
+-                }
+-        }
++        if (existing is not null)
++        {
++            _ = dbContext.UserFollows.Remove(existing);
++            _ = await dbContext.SaveChangesAsync();
++            return false;
++        }
++
++        var newFollow = new UserFollow
++        {
++            OwnerId = currentUserId,
++            FollowedUserId = targetUserId,
++            CreatedDate = DateTime.UtcNow,
++            UpdatedDate = DateTime.UtcNow
++        };
++        _ = dbContext.UserFollows.Add(newFollow);
++        _ = await dbContext.SaveChangesAsync();
++        return true;
+     }
+
+--- a/SRNSMudApp/Services/Contracts/GratisContractExecutor.cs
++++ b/SRNSMudApp/Services/Contracts/GratisContractExecutor.cs
+@@ -234,7 +234,14 @@ public class GratisContractExecutor(IDbContextFactory<ApplicationDbContext> dbFa
+         var delta = isRemove ? -prevWeight : -contract.ProposedWeight;
+ 
+-        _ = (isRemove || prevWeight + delta <= 0) switch
+-        {
+-            true => dbContext.TagRelations.Remove(relation),
+-            false => (object)(relation.Weight += delta)
+-        };
++        if (isRemove || prevWeight + delta <= 0)
++        {
++            _ = dbContext.TagRelations.Remove(relation);
++        }
++        else
++        {
++            relation.Weight += delta;
++        }
+ 
+         var (previousTagWeight, newTagWeight) = tag.ApplyWeightDelta(delta);
+
+--- a/SRNSMudApp/Services/Contracts/TriggerContractExecutor.cs
++++ b/SRNSMudApp/Services/Contracts/TriggerContractExecutor.cs
+@@ -43,7 +43,9 @@ public class TriggerContractExecutor(IDbContextFactory<ApplicationDbContext> dbF
+     private async Task<Result<string>> ProcessTriggerWithOfferAsync(ApplicationDbContext dbContext, TaggingRequestEntity contract, PublicTradeOffer offer)
+     {
+-        Result<RightAsset?> assetValidation = (offer.RequiredAssetAmount > 0) switch
+-        {
+-            true => ValidateTriggerAsset(contract, offer),
+-            false => new Success<RightAsset?>(null)
+-        };
++        Result<RightAsset?> assetValidation = offer.RequiredAssetAmount > 0
++            ? ValidateTriggerAsset(contract, offer)
++            : new Success<RightAsset?>(null);
+ 
+         return await (assetValidation switch
+
+--- a/SRNSMudApp/Services/NotificationService.cs
++++ b/SRNSMudApp/Services/NotificationService.cs
+@@ -141,8 +141,10 @@ public class NotificationService(
+         requests.Select(req =>
+         {
+-            var commentMsg = string.IsNullOrWhiteSpace(req.Rejection is RejectionReason r ? r.Reason : "") switch
+-            {
+-                true => "",
+-                false => $"\n理由: {(req.Rejection is RejectionReason rr ? rr.Reason : "")}"
+-            };
++            var reason = req.Rejection is RejectionReason r && !string.IsNullOrWhiteSpace(r.Reason)
++                ? r.Reason
++                : null;
++            var commentMsg = reason is not null ? $"\n理由: {reason}" : "";
+             return new NotificationDto

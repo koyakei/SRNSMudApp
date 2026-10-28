@@ -114,24 +114,21 @@ public sealed class DoubleSubmissionGuard : IDoubleSubmissionGuard
         }
     }
 
+    /// <summary>
+    ///     期限切れとなった重複防止ウィンドウのエントリを辞書から削除する。
+    ///     LINQ を用いて宣言的にキーを抽出し、反復中の変更例外を防ぎつつ削除する。
+    /// </summary>
     private void CleanupExpired(DateTimeOffset now)
     {
-        List<string>? keysToRemove = null;
-        foreach (var (k, timestamp) in _recentOperations)
-        {
-            if (now - timestamp >= _recentWindow)
-            {
-                keysToRemove ??= [];
-                keysToRemove.Add(k);
-            }
-        }
+        // 有効期限を過ぎた操作キーを LINQ で抽出
+        var expiredKeys = _recentOperations
+            .Where(kvp => now - kvp.Value >= _recentWindow)
+            .Select(kvp => kvp.Key)
+            .ToList();
 
-        if (keysToRemove != null)
+        foreach (var key in expiredKeys)
         {
-            foreach (var k in keysToRemove)
-            {
-                _recentOperations.Remove(k);
-            }
+            _recentOperations.Remove(key);
         }
     }
 }

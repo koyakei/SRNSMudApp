@@ -5,16 +5,10 @@ using SRNSMudApp.Services;
 
 /// <summary>
 ///     ユーザー検索 (UserSearch) 画面の状態管理および検索ロジックを担う ViewModel。
+///     プライマリコンストラクタにより依存性注入の定型句を簡素化。
 /// </summary>
-public sealed class UserSearchViewModel
+public sealed class UserSearchViewModel(IUserDataProvider userDataProvider)
 {
-    private readonly IUserDataProvider _userDataProvider;
-
-    public UserSearchViewModel(IUserDataProvider userDataProvider)
-    {
-        _userDataProvider = userDataProvider;
-    }
-
     public ApplicationUser? SelectedUser { get; set; }
 
     /// <summary>
@@ -22,7 +16,7 @@ public sealed class UserSearchViewModel
     /// </summary>
     public async Task<IEnumerable<ApplicationUser>> SearchUsersAsync(string? query, CancellationToken token = default)
     {
-        return await _userDataProvider.SearchUsersByNormalizedNameAsync(query, token);
+        return await userDataProvider.SearchUsersByNormalizedNameAsync(query, token);
     }
 
     /// <summary>

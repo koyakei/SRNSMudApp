@@ -232,11 +232,14 @@ public class GratisContractExecutor(
         var prevWeight = relation.Weight;
         var delta = isRemove ? -prevWeight : -contract.ProposedWeight;
 
-        _ = (isRemove || prevWeight + delta <= 0) switch
+        if (isRemove || prevWeight + delta <= 0)
         {
-            true => dbContext.TagRelations.Remove(relation),
-            false => (object)(relation.Weight += delta)
-        };
+            _ = dbContext.TagRelations.Remove(relation);
+        }
+        else
+        {
+            relation.Weight += delta;
+        }
 
         var (previousTagWeight, newTagWeight) = tag.ApplyWeightDelta(delta);
 

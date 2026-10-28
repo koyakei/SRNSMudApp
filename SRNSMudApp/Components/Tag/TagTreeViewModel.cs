@@ -401,23 +401,19 @@ public class TagTreeViewModel
             });
         }
 
-        // 移動申請中のノードをこの親ノード直下に生やす
-        IEnumerable<PendingTagMoveDto> matchingMoves = pendingMoves.Where(m => m.NewParentTagId == parentId);
-        foreach (PendingTagMoveDto move in matchingMoves)
-        {
-            var canCancel = !string.IsNullOrEmpty(currentUserId) &&
-                            (currentUserId == move.RequesterUserId || currentUserId == move.TagOwnerUserId);
-
-            result.Add(new
+        // 移動申請中のノードをこの親ノード直下に生やす（LINQ Select で射影し AddRange で一括追加）
+        result.AddRange(pendingMoves
+            .Where(m => m.NewParentTagId == parentId)
+            .Select(move => (object)new
             {
                 id = $"move-req-{move.RequestId}",
                 name = move.TagName,
                 isPendingMove = true,
                 requestId = move.RequestId,
                 targetTagId = move.TagId,
-                canCancel
-            });
-        }
+                canCancel = !string.IsNullOrEmpty(currentUserId) &&
+                            (currentUserId == move.RequesterUserId || currentUserId == move.TagOwnerUserId)
+            }));
 
         return result;
     }

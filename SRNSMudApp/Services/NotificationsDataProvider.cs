@@ -50,12 +50,9 @@ public class NotificationsDataProvider(IDbContextFactory<ApplicationDbContext> d
         bool isAdmin = false,
         CancellationToken cancellationToken = default)
     {
-        switch (itemIds.Count)
+        if (itemIds.Count == 0)
         {
-            case 0:
-                return [];
-            default:
-                break;
+            return [];
         }
 
         await using ApplicationDbContext context = await _dbFactory.CreateDbContextAsync(cancellationToken);

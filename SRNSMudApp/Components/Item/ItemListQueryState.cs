@@ -90,18 +90,19 @@ public sealed record ItemListQueryState
             }
 
             var parts = value.Split(':');
-            if (parts.Length == 2 && int.TryParse(parts[0], CultureInfo.InvariantCulture, out var tagId))
+            // C# 11 リストパターンと switch 式によりコロン区切りのタグIDとソート順を安全に抽出
+            if (parts is [var idStr, var orderStr] && int.TryParse(idStr, CultureInfo.InvariantCulture, out var tagId))
             {
-                switch (parts[1])
+                var sortOrder = orderStr switch
                 {
-                    case "asc":
-                        yield return new SortEntry(tagId, SortOrder.Asc);
-                        break;
-                    case "desc":
-                        yield return new SortEntry(tagId, SortOrder.Desc);
-                        break;
-                    default:
-                        break;
+                    "asc" => (SortOrder?)SortOrder.Asc,
+                    "desc" => SortOrder.Desc,
+                    _ => null
+                };
+
+                if (sortOrder.HasValue)
+                {
+                    yield return new SortEntry(tagId, sortOrder.Value);
                 }
             }
         }

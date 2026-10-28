@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="SRNSMudApp">
+      <HintPath>../../SRNSMudApp/bin/Debug/net11.0/SRNSMudApp.dll</HintPath>
+    </Reference>
+    <Reference Include="SRNSMudApp.Client">
+      <HintPath>../../SRNSMudApp.Client/bin/Debug/net11.0/SRNSMudApp.Client.dll</HintPath>
+    </Reference>
+    <Reference Include="SRNSMudApp.Tests">
+      <HintPath>../../SRNSMudApp.Tests/bin/Debug/net11.0/SRNSMudApp.Tests.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

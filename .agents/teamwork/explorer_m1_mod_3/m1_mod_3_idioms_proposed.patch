@@ -1,0 +1,153 @@
+--- a/SRNSMudApp/Services/StringSimilarity.cs
++++ b/SRNSMudApp/Services/StringSimilarity.cs
+@@ -67,5 +67,3 @@ public static class StringSimilarity
+         if (a.Length < b.Length)
+         {
+-            var temp = a;
+-            a = b;
+-            b = temp;
++            (a, b) = (b, a);
+         }
+
+--- a/SRNSMudApp/Services/ImportTagDataProvider.cs
++++ b/SRNSMudApp/Services/ImportTagDataProvider.cs
+@@ -150,3 +150,3 @@ public class ImportTagDataProvider(
+-        var existingTags = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
++        Dictionary<string, Tag> existingTags = new(StringComparer.OrdinalIgnoreCase);
+@@ -162,3 +162,3 @@ public class ImportTagDataProvider(
+-        var updatedTagIds = new HashSet<int>();
++        HashSet<int> updatedTagIds = [];
+@@ -186,13 +186,8 @@ public class ImportTagDataProvider(
+-                    if (!string.IsNullOrEmpty(contentCol1) && !string.IsNullOrEmpty(contentCol2))
+-                    {
+-                        leafContent = $"{contentCol1}\n{contentCol2}";
+-                    }
+-                    else if (!string.IsNullOrEmpty(contentCol1))
+-                    {
+-                        leafContent = contentCol1;
+-                    }
+-                    else if (!string.IsNullOrEmpty(contentCol2))
+-                    {
+-                        leafContent = contentCol2;
+-                    }
++                    leafContent = (string.IsNullOrEmpty(contentCol1), string.IsNullOrEmpty(contentCol2)) switch
++                    {
++                        (false, false) => $"{contentCol1}\n{contentCol2}",
++                        (false, true) => contentCol1,
++                        (true, false) => contentCol2,
++                        _ => string.Empty
++                    };
+@@ -397,3 +392,3 @@ public class ImportTagDataProvider(
+-        var records = new List<List<string>>();
++        List<List<string>> records = [];
+@@ -420,3 +415,3 @@ public class ImportTagDataProvider(
+-        var currentRecord = new List<string>();
++        List<string> currentRecord = [];
+
+--- a/SRNSMudApp/Services/TagDiagramDataProvider.cs
++++ b/SRNSMudApp/Services/TagDiagramDataProvider.cs
+@@ -41,4 +41,4 @@ public class TagDiagramDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
+-        var tagIds = new HashSet<int>();
+-        var linkedItemIds = new List<int>();
++        HashSet<int> tagIds = [];
++        List<int> linkedItemIds = [];
+@@ -114,3 +114,3 @@ public class TagDiagramDataProvider(IDbContextFactory<ApplicationDbContext> dbFa
+-        var allItemIds = new HashSet<int>(items.Select(i => i.Id));
++        HashSet<int> allItemIds = [.. items.Select(i => i.Id)];
+
+--- a/SRNSMudApp/Services/ItemReplyService.cs
++++ b/SRNSMudApp/Services/ItemReplyService.cs
+@@ -116,3 +116,3 @@ public class ItemReplyService(IDbContextFactory<ApplicationDbContext> dbFactory)
+-        var replyIds = new HashSet<int>(regularReplies.Select(r => r.Id));
++        HashSet<int> replyIds = [.. regularReplies.Select(r => r.Id)];
+@@ -153,3 +153,3 @@ public class ItemReplyService(IDbContextFactory<ApplicationDbContext> dbFactory)
+-        var processedCommentItemIds = new HashSet<int>(replyIds);
++        HashSet<int> processedCommentItemIds = [.. replyIds];
+
+--- a/SRNSMudApp/Services/Contracts/MoveContractExecutor.cs
++++ b/SRNSMudApp/Services/Contracts/MoveContractExecutor.cs
+@@ -75,3 +75,3 @@ public class MoveContractExecutor(
+-        if (oldNode != null)
++        if (oldNode is not null)
+@@ -95,3 +95,3 @@ public class MoveContractExecutor(
+-        return new Success<string>("タグの配置変更リクエストを承認しました。");
++        return new("タグの配置変更リクエストを承認しました。");
+
+--- a/SRNSMudApp/Services/TagLockService.cs
++++ b/SRNSMudApp/Services/TagLockService.cs
+@@ -327,4 +327,4 @@ public class TagLockService(
+-        foreach (Tag t in tags.OrderBy(t => t.Node != null ? t.Node.GetLevel() : 0).ThenBy(t => t.Name))
++        foreach (Tag t in tags.OrderBy(t => t.Node is not null ? t.Node.GetLevel() : 0).ThenBy(t => t.Name))
+         {
+-            var level = t.Node?.GetLevel() ?? (t.ParentTagId == null ? 0 : 1);
++            var level = t.Node?.GetLevel() ?? (t.ParentTagId is null ? 0 : 1);
+@@ -337,4 +337,4 @@ public class TagLockService(
+-                isSiblingLocked = parentNode != null &&
++                isSiblingLocked = parentNode is not null &&
+                                   parentNodesWithLockedChildren.Contains(parentNode) &&
+-                                  tags.Any(sibling => sibling.Id != t.Id && sibling.IsLocked && sibling.Node != null && sibling.Node.GetAncestor(1) == parentNode);
++                                  tags.Any(sibling => sibling.Id != t.Id && sibling.IsLocked && sibling.Node is not null && sibling.Node.GetAncestor(1) == parentNode);
+
+--- a/SRNSMudApp/Services/Providers/TagLinkPreviewProvider.cs
++++ b/SRNSMudApp/Services/Providers/TagLinkPreviewProvider.cs
+@@ -88,3 +88,3 @@ public class TagLinkPreviewProvider(
+-            if (displayTag == null && tag.ParentTagId.HasValue)
++            if (displayTag is null && tag.ParentTagId.HasValue)
+@@ -99,3 +99,3 @@ public class TagLinkPreviewProvider(
+-                    if (parent == null)
++                    if (parent is null)
+@@ -115,4 +115,4 @@ public class TagLinkPreviewProvider(
+-        if (displayTag == null)
++        if (displayTag is null)
+         {
+-            return new LinkPreviewData { Url = originalUrl, IsSuccess = false };
++            return new() { Url = originalUrl, IsSuccess = false };
+
+--- a/SRNSMudApp/Services/TagTreeDataProvider.cs
++++ b/SRNSMudApp/Services/TagTreeDataProvider.cs
+@@ -394,15 +394,10 @@ public class TagTreeDataProvider(
+-        List<PendingTagMoveDto> dtos = [];
+-        foreach (TaggingRequestEntity req in requests)
+-        {
+-            if (req.Payload is TagMovePayload payload)
+-            {
+-                dtos.Add(new PendingTagMoveDto(
+-                    req.Id,
+-                    req.RequestedTagId,
+-                    req.RequestedTag?.Name ?? "不明なタグ",
+-                    payload.NewParentTagId,
+-                    req.RequesterUserId,
+-                    req.TagOwnerUserId));
+-            }
+-        }
+-
+-        return dtos;
++        return [.. requests
++            .Where(req => req.Payload is TagMovePayload)
++            .Select(req => new PendingTagMoveDto(
++                req.Id,
++                req.RequestedTagId,
++                req.RequestedTag?.Name ?? "不明なタグ",
++                ((TagMovePayload)req.Payload!).NewParentTagId,
++                req.RequesterUserId,
++                req.TagOwnerUserId))];
+
+--- a/SRNSMudApp/Services/InternalLinkConversionService.cs
++++ b/SRNSMudApp/Services/InternalLinkConversionService.cs
+@@ -78,13 +78,4 @@ public class InternalLinkConversionService(
+-            List<LinkConversionCandidate> auto = [];
+-            List<LinkConversionCandidate> manual = [];
+-
+-            foreach (LinkConversionCandidate candidate in resolved)
+-            {
+-                if (candidate.IsAutoReplace)
+-                {
+-                    auto.Add(candidate);
+-                }
+-                else
+-                {
+-                    manual.Add(candidate);
+-                }
+-            }
++            List<LinkConversionCandidate> auto = [.. resolved.Where(c => c.IsAutoReplace)];
++            List<LinkConversionCandidate> manual = [.. resolved.Where(c => !c.IsAutoReplace)];

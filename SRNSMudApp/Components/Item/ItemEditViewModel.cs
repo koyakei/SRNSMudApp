@@ -135,38 +135,32 @@ public sealed class ItemEditViewModel
             return string.Empty;
         }
 
-        var lines = text.Split('\n');
-        for (int i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i];
-            var segments = ItemCardViewModel.GetContentSegments(line);
-            var sb = new StringBuilder();
-            foreach (var segment in segments)
+        // 各行・各セグメントを宣言的な LINQ パイプラインで HTML 文字列に変換し、BR タグで結合する
+        var formattedLines = text.Split('\n')
+            .Select(line =>
             {
-                if (segment.IsUrl && segment.Text.StartsWith('/', StringComparison.Ordinal))
+                var segments = ItemCardViewModel.GetContentSegments(line);
+                var formattedSegments = segments.Select(segment =>
                 {
-                    var displayText = segment.Text;
-                    if (segment.Text.StartsWith("/TagDetail/", StringComparison.Ordinal))
+                    if (segment.IsUrl && segment.Text.StartsWith('/', StringComparison.Ordinal))
                     {
-                        displayText = "#タグ";
+                        var displayText = segment.Text switch
+                        {
+                            var t when t.StartsWith("/TagDetail/", StringComparison.Ordinal) => "#タグ",
+                            var t when t.StartsWith("/User/UserDetail/", StringComparison.Ordinal) => "@ユーザー",
+                            _ => segment.Text
+                        };
+
+                        return string.Create(CultureInfo.InvariantCulture, $"<span class=\"internal-link-preview-pill\" data-testid=\"internal-link-preview-pill\" data-url=\"{segment.Text}\" contenteditable=\"false\">{displayText}</span>&#8203;&nbsp;");
                     }
-                    else if (segment.Text.StartsWith("/User/UserDetail/", StringComparison.Ordinal))
-                    {
-                        displayText = "@ユーザー";
-                    }
 
-                    sb.Append(CultureInfo.InvariantCulture, $"<span class=\"internal-link-preview-pill\" data-testid=\"internal-link-preview-pill\" data-url=\"{segment.Text}\" contenteditable=\"false\">{displayText}</span>&#8203;&nbsp;");
-                }
-                else
-                {
-                    sb.Append(WebUtility.HtmlEncode(segment.Text).Replace(" ", "&nbsp;", StringComparison.Ordinal));
-                }
-            }
+                    return WebUtility.HtmlEncode(segment.Text).Replace(" ", "&nbsp;", StringComparison.Ordinal);
+                });
 
-            lines[i] = sb.ToString();
-        }
+                return string.Concat(formattedSegments);
+            });
 
-        return string.Join("<br>", lines);
+        return string.Join("<br>", formattedLines);
     }
 
     /// <summary>

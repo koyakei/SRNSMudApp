@@ -9,16 +9,10 @@ using DataItem = SRNSMudApp.Data.Item;
 /// <summary>
 ///     QuotedItemListDialog の状態管理、引用元アイテムおよび引用一覧のデータ取得を担当する ViewModel。
 ///     UI（Blazor / bUnit）から切り離し、純粋な xUnit + Moq 単体テストを可能にする。
+///     プライマリコンストラクタにより依存サービスを簡潔に注入する。
 /// </summary>
-public class QuotedItemListViewModel
+public class QuotedItemListViewModel(IItemQuoteService itemQuoteService)
 {
-    private readonly IItemQuoteService _itemQuoteService;
-
-    public QuotedItemListViewModel(IItemQuoteService itemQuoteService)
-    {
-        _itemQuoteService = itemQuoteService;
-    }
-
     public DataItem? TargetItem { get; set; }
     public DataItem? SourceItem { get; private set; }
     public IReadOnlyList<DataItem> QuotedItems { get; private set; } = [];
@@ -46,8 +40,8 @@ public class QuotedItemListViewModel
         IsLoading = true;
         try
         {
-            SourceItem = await _itemQuoteService.GetSourceItemAsync(TargetItem.Id, cancellationToken);
-            QuotedItems = await _itemQuoteService.GetQuotedByItemsAsync(TargetItem.Id, cancellationToken);
+            SourceItem = await itemQuoteService.GetSourceItemAsync(TargetItem.Id, cancellationToken);
+            QuotedItems = await itemQuoteService.GetQuotedByItemsAsync(TargetItem.Id, cancellationToken);
         }
         catch
         {

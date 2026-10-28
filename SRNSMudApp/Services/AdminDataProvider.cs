@@ -44,13 +44,14 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 .Where(t => t.OwnerId == userId && allTagNames.Contains(t.Name))
                 .ToDictionaryAsync(t => t.Name, t => t);
 
-            IEnumerable<string> newTagNames = allTagNames.Where(name => !existingTags.ContainsKey(name));
-            List<Tag> newTags = [];
-            foreach (var tagName in newTagNames)
+            // 存在しない新規タグを宣言的に生成し、検索マップとコンテキストに追加
+            List<Tag> newTags = [.. allTagNames
+                .Where(name => !existingTags.ContainsKey(name))
+                .Select(tagName => new Tag { Name = tagName, OwnerId = userId })];
+
+            foreach (var tag in newTags)
             {
-                var newTag = new Tag { Name = tagName, OwnerId = userId };
-                newTags.Add(newTag);
-                existingTags[tagName] = newTag;
+                existingTags[tag.Name] = tag;
             }
 
             if (newTags.Count != 0)
@@ -65,29 +66,23 @@ public class AdminDataProvider(IDbContextFactory<ApplicationDbContext> dbFactory
                 var newItem = new Item
                 {
                     Content = content,
-                    OwnerId = userId,
-                    TagRelations = []
+                    OwnerId = userId
                 };
                 _ = context.Items.Add(newItem);
 
-                IEnumerable<string> tagNamesInLine =
-                    values.Skip(1).Where(tn => !string.IsNullOrWhiteSpace(tn)).Distinct();
-                foreach (var tagName in tagNamesInLine)
-                {
-                    if (!existingTags.TryGetValue(tagName, out Tag? tag))
-                    {
-                        continue;
-                    }
-
-                    var newRelation = new TagRelation
+                // アイテムに関連付けるタグを抽出し、TagRelation を生成して設定
+                newItem.TagRelations = [.. values.Skip(1)
+                    .Where(tn => !string.IsNullOrWhiteSpace(tn))
+                    .Distinct()
+                    .Select(tn => existingTags.GetValueOrDefault(tn))
+                    .Where(tag => tag is not null)
+                    .Select(tag => new TagRelation
                     {
                         Item = newItem,
                         Tag = tag!,
                         Weight = 1,
                         OwnerId = userId
-                    };
-                    newItem.TagRelations.Add(newRelation);
-                }
+                    })];
 
                 importedItemCount++;
             }

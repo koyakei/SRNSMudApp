@@ -106,27 +106,29 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     public async Task<List<Item>> SearchItemsAsync(string? value, CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
-        return string.IsNullOrEmpty(value) switch
+        if (string.IsNullOrEmpty(value))
         {
-            true => await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token),
-            _ => await dbContext.Items
-                                .Where(i => i.Content.Contains(value))
-                                .Take(10)
-                                .ToListAsync(token),
-        };
+            return await dbContext.Items.OrderByDescending(i => i.Id).Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Items
+            .Where(i => i.Content.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
     }
 
     public async Task<List<Tag>> SearchTagsByNameAsync(string? value, CancellationToken token = default)
     {
         await using ApplicationDbContext dbContext = await dbFactory.CreateDbContextAsync(token);
-        return string.IsNullOrEmpty(value) switch
+        if (string.IsNullOrEmpty(value))
         {
-            true => await dbContext.Tags.Take(10).ToListAsync(token),
-            _ => await dbContext.Tags
-                                .Where(t => t.Name.Contains(value))
-                                .Take(10)
-                                .ToListAsync(token),
-        };
+            return await dbContext.Tags.Take(10).ToListAsync(token);
+        }
+
+        return await dbContext.Tags
+            .Where(t => t.Name.Contains(value))
+            .Take(10)
+            .ToListAsync(token);
     }
 
     public async Task<BountyBoardData> GetActiveBountiesAsync()
@@ -173,15 +175,14 @@ public class ContractDataProvider(IDbContextFactory<ApplicationDbContext> dbFact
     {
         await using ApplicationDbContext dbContext = await _dbFactory.CreateDbContextAsync();
         PublicTradeOffer? entity = await dbContext.PublicTradeOffers!.FindAsync(offerId);
-        switch (entity != null && entity.OwnerId == userId)
+        if (entity is not null && entity.OwnerId == userId)
         {
-            case true:
-                entity.IsActive = false;
-                _ = await dbContext.SaveChangesAsync();
-                return true;
-            default:
-                return false;
+            entity.IsActive = false;
+            _ = await dbContext.SaveChangesAsync();
+            return true;
         }
+
+        return false;
     }
 
     public async Task<List<Tag>> SearchMyTagsAsync(

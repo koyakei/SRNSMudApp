@@ -63,44 +63,37 @@ public sealed class ItemListViewModel : IDisposable
             .Select(f => f.TagName!)];
         Dictionary<string, Data.Tag> tagsByName = await _listData.GetTagsByNamesAsync(nameFilters);
 
-        var initialFilters = new List<TagFilter>();
-        foreach (FilterEntry filter in state.Filters)
-        {
-            if (filter.TagId.HasValue)
+        // フィルタエントリを TagFilter に射影（TagId または TagName に基づくマッピング）
+        var initialFilters = state.Filters
+            .Select(filter => filter switch
             {
-                if (tagsById.TryGetValue(filter.TagId.Value, out Data.Tag? tag))
+                { TagId: { } tagId } when tagsById.TryGetValue(tagId, out Data.Tag? tag) => new TagFilter
                 {
-                    initialFilters.Add(new TagFilter
-                    {
-                        TagId = tag.Id,
-                        Tag = tag,
-                        TagName = tag.Name,
-                        UserName = filter.UserName
-                    });
-                }
-            }
-            else if (!string.IsNullOrWhiteSpace(filter.TagName))
-            {
-                _ = tagsByName.TryGetValue(filter.TagName, out Data.Tag? tag);
-                initialFilters.Add(new TagFilter
-                {
-                    TagName = filter.TagName,
+                    TagId = tag.Id,
                     Tag = tag,
+                    TagName = tag.Name,
                     UserName = filter.UserName
-                });
-            }
-        }
+                },
+                { TagId: null, TagName: { } name } when !string.IsNullOrWhiteSpace(name) => new TagFilter
+                {
+                    TagName = name,
+                    Tag = tagsByName.GetValueOrDefault(name),
+                    UserName = filter.UserName
+                },
+                _ => null
+            })
+            .OfType<TagFilter>()
+            .ToList();
 
         TagSearch.InitializeFilters(initialFilters);
 
         _sortConditions.Clear();
-        foreach (SortEntry entry in state.SortEntries)
-        {
-            if (tagsById.TryGetValue(entry.TagId, out Data.Tag? tag))
-            {
-                _sortConditions.Add(new SortCondition { Tag = tag, Order = entry.Order });
-            }
-        }
+        // ソートエントリを SortCondition に射影し AddRange で一括登録
+        _sortConditions.AddRange(state.SortEntries
+            .Select(entry => tagsById.TryGetValue(entry.TagId, out Data.Tag? tag)
+                ? new SortCondition { Tag = tag, Order = entry.Order }
+                : null)
+            .OfType<SortCondition>());
 
         await LoadDataAsync();
     }

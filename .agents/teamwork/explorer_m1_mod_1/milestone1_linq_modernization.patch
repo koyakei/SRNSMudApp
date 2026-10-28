@@ -1,0 +1,197 @@
+diff --git a/SRNSMudApp/Models/ContentParser.cs b/SRNSMudApp/Models/ContentParser.cs
+--- a/SRNSMudApp/Models/ContentParser.cs
++++ b/SRNSMudApp/Models/ContentParser.cs
+@@ -33,23 +33,9 @@ public static partial class ContentParser
+         if (string.IsNullOrWhiteSpace(text))
+         {
+             return [];
+         }
+ 
+-        List<string> results = [];
+-        MatchCollection matches = UrlRegex().Matches(text);
+-        foreach (Match match in matches)
+-        {
+-            if (!results.Contains(match.Value))
+-            {
+-                results.Add(match.Value);
+-            }
+-        }
+-
+-        MatchCollection internalMatches = InternalLinkRegex().Matches(text);
+-        foreach (Match match in internalMatches)
+-        {
+-            if (!results.Contains(match.Value))
+-            {
+-                results.Add(match.Value);
+-            }
+-        }
+-
+-        return results;
++        return [.. UrlRegex().Matches(text)
++            .Concat(InternalLinkRegex().Matches(text))
++            .Select(m => m.Value)
++            .Distinct()];
+     }
+ 
+     /// <summary>
+@@ -66,7 +52,6 @@ public static partial class ContentParser
+         List<ContentSegment> results = [];
+-        List<Match> matches = [];
+-        matches.AddRange(UrlRegex().Matches(text).Cast<Match>());
+-        matches.AddRange(InternalLinkRegex().Matches(text).Cast<Match>());
+-
+-        matches = matches.OrderBy(m => m.Index).ToList();
++        List<Match> matches = [.. UrlRegex().Matches(text)
++            .Concat(InternalLinkRegex().Matches(text))
++            .OrderBy(m => m.Index)];
+ 
+         List<Match> validMatches = [];
+diff --git a/SRNSMudApp/Services/TagSuggestionService.cs b/SRNSMudApp/Services/TagSuggestionService.cs
+--- a/SRNSMudApp/Services/TagSuggestionService.cs
++++ b/SRNSMudApp/Services/TagSuggestionService.cs
+@@ -61,31 +61,16 @@ public class TagSuggestionService(
+-            List<SuggestedTag> suggestions = [];
+-
+-            foreach (Data.Tag tag in candidates)
++            if (cancellationToken.IsCancellationRequested)
+             {
+-                if (cancellationToken.IsCancellationRequested)
+-                {
+-                    return [];
+-                }
+-
+-                // 投票タグ・リアクションタグは自動サジェスト対象外とする
+-                if (Data.Tag.VoteTagNames.Contains(tag.Name) || Data.Tag.ReactionTagNames.Contains(tag.Name))
+-                {
+-                    continue;
+-                }
+-
+-                if (tag.Embedding.Length != queryVector.Length)
+-                {
+-                    continue;
+-                }
+-
+-                float score = TensorPrimitives.CosineSimilarity(tag.Embedding, queryVector);
+-                if (score >= minScore)
+-                {
+-                    suggestions.Add(new SuggestedTag(tag.Id, tag.Name, score));
+-                }
++                return [];
+             }
+ 
+-            return suggestions
++            return [.. candidates
++                .Where(tag => !Data.Tag.VoteTagNames.Contains(tag.Name)
++                              && !Data.Tag.ReactionTagNames.Contains(tag.Name)
++                              && tag.Embedding?.Length == queryVector.Length)
++                .Select(tag => new SuggestedTag(tag.Id, tag.Name, TensorPrimitives.CosineSimilarity(tag.Embedding!, queryVector)))
++                .Where(s => s.Score >= minScore)
+                 .OrderByDescending(s => s.Score)
+-                .Take(20)
+-                .ToList();
++                .Take(20)];
+         }
+         catch (OperationCanceledException)
+diff --git a/SRNSMudApp/Services/TagSimilarityService.cs b/SRNSMudApp/Services/TagSimilarityService.cs
+--- a/SRNSMudApp/Services/TagSimilarityService.cs
++++ b/SRNSMudApp/Services/TagSimilarityService.cs
+@@ -28,34 +28,26 @@ public class TagSimilarityService : ITagSimilarityService
+-        List<SimilarTagCandidate> matches = [];
+-
+-        foreach (Tag tag in candidateTags)
+-        {
+-            if (string.IsNullOrEmpty(tag.Name) || tag.Name == Tag.RootTagName)
+-            {
+-                continue;
+-            }
+-
+-            float similarity = StringSimilarity.Calculate(trimmedQuery.AsSpan(), tag.Name.AsSpan());
+-
+-            // 部分一致（包含関係）を考慮してスコアを底上げ
+-            bool isSubstring = tag.Name.Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase) ||
+-                               trimmedQuery.Contains(tag.Name, StringComparison.OrdinalIgnoreCase);
+-
+-            if (isSubstring)
+-            {
+-                float lengthRatio = (float)Math.Min(trimmedQuery.Length, tag.Name.Length) /
+-                                    Math.Max(trimmedQuery.Length, tag.Name.Length);
+-                similarity = Math.Max(similarity, 0.60f + (lengthRatio * 0.35f));
+-            }
+-
+-            if (similarity >= minSimilarity)
+-            {
+-                matches.Add(new SimilarTagCandidate(tag, similarity));
+-            }
+-        }
+-
+-        return matches
++        return [.. candidateTags
++            .Where(tag => !string.IsNullOrEmpty(tag.Name) && tag.Name != Tag.RootTagName)
++            .Select(tag =>
++            {
++                float similarity = StringSimilarity.Calculate(trimmedQuery.AsSpan(), tag.Name.AsSpan());
++
++                // 部分一致（包含関係）を考慮してスコアを底上げ
++                bool isSubstring = tag.Name.Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase) ||
++                                   trimmedQuery.Contains(tag.Name, StringComparison.OrdinalIgnoreCase);
++
++                if (isSubstring)
++                {
++                    float lengthRatio = (float)Math.Min(trimmedQuery.Length, tag.Name.Length) /
++                                        Math.Max(trimmedQuery.Length, tag.Name.Length);
++                    similarity = Math.Max(similarity, 0.60f + (lengthRatio * 0.35f));
++                }
++
++                return new SimilarTagCandidate(tag, similarity);
++            })
++            .Where(c => c.Similarity >= minSimilarity)
+             .OrderByDescending(c => c.Similarity)
+             .ThenBy(c => c.Tag.Name.Length)
+             .ThenBy(c => c.Tag.Name, StringComparer.OrdinalIgnoreCase)
+-            .Take(maxResults)
+-            .ToList();
++            .Take(maxResults)];
+     }
+ }
+diff --git a/SRNSMudApp/Services/ItemListDataProvider.cs b/SRNSMudApp/Services/ItemListDataProvider.cs
+--- a/SRNSMudApp/Services/ItemListDataProvider.cs
++++ b/SRNSMudApp/Services/ItemListDataProvider.cs
+@@ -373,14 +373,2 @@ public class ItemListDataProvider(...)
+-            var idFilterIds = new List<int>();
+-            var nameFilterNames = new List<string>();
+-            foreach (ItemListFilter f in filters)
+-            {
+-                switch (f)
+-                {
+-                    case TagIdFilter idF:
+-                        idFilterIds.Add(idF.TagId);
+-                        break;
+-                    case TagNameFilter nameF:
+-                        nameFilterNames.Add(nameF.TagName);
+-                        break;
+-                }
+-            }
++            List<int> idFilterIds = [.. filters.OfType<TagIdFilter>().Select(f => f.TagId)];
++            List<string> nameFilterNames = [.. filters.OfType<TagNameFilter>().Select(f => f.TagName)];
+diff --git a/SRNSMudApp/Services/InternalLinkConversionService.cs b/SRNSMudApp/Services/InternalLinkConversionService.cs
+--- a/SRNSMudApp/Services/InternalLinkConversionService.cs
++++ b/SRNSMudApp/Services/InternalLinkConversionService.cs
+@@ -78,16 +78,2 @@ public class InternalLinkConversionService(...)
+-            List<LinkConversionCandidate> auto = [];
+-            List<LinkConversionCandidate> manual = [];
+-
+-            foreach (LinkConversionCandidate candidate in resolved)
+-            {
+-                if (candidate.IsAutoReplace)
+-                {
+-                    auto.Add(candidate);
+-                }
+-                else
+-                {
+-                    manual.Add(candidate);
+-                }
+-            }
++            List<LinkConversionCandidate> auto = [.. resolved.Where(c => c.IsAutoReplace)];
++            List<LinkConversionCandidate> manual = [.. resolved.Where(c => !c.IsAutoReplace)];
+ 
+             return new InternalLinkConversionResult(auto, manual);

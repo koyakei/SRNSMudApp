@@ -25,39 +25,30 @@ public class TagSimilarityService : ITagSimilarityService
             return [];
         }
 
-        List<SimilarTagCandidate> matches = [];
-
-        foreach (Tag tag in candidateTags)
-        {
-            if (string.IsNullOrEmpty(tag.Name) || tag.Name == Tag.RootTagName)
+        // ルートタグ除外、類似度計算、部分一致スコア底上げを行い、類似度降順・タグ名昇順で取得
+        return [.. candidateTags
+            .Where(tag => !string.IsNullOrEmpty(tag.Name) && tag.Name != Tag.RootTagName)
+            .Select(tag =>
             {
-                continue;
-            }
+                float similarity = StringSimilarity.Calculate(trimmedQuery.AsSpan(), tag.Name.AsSpan());
 
-            float similarity = StringSimilarity.Calculate(trimmedQuery.AsSpan(), tag.Name.AsSpan());
+                // 部分一致（包含関係）を考慮してスコアを底上げ
+                bool isSubstring = tag.Name.Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase) ||
+                                   trimmedQuery.Contains(tag.Name, StringComparison.OrdinalIgnoreCase);
 
-            // 部分一致（包含関係）を考慮してスコアを底上げ
-            bool isSubstring = tag.Name.Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase) ||
-                               trimmedQuery.Contains(tag.Name, StringComparison.OrdinalIgnoreCase);
+                if (isSubstring)
+                {
+                    float lengthRatio = (float)Math.Min(trimmedQuery.Length, tag.Name.Length) /
+                                        Math.Max(trimmedQuery.Length, tag.Name.Length);
+                    similarity = Math.Max(similarity, 0.60f + (lengthRatio * 0.35f));
+                }
 
-            if (isSubstring)
-            {
-                float lengthRatio = (float)Math.Min(trimmedQuery.Length, tag.Name.Length) /
-                                    Math.Max(trimmedQuery.Length, tag.Name.Length);
-                similarity = Math.Max(similarity, 0.60f + (lengthRatio * 0.35f));
-            }
-
-            if (similarity >= minSimilarity)
-            {
-                matches.Add(new SimilarTagCandidate(tag, similarity));
-            }
-        }
-
-        return matches
+                return new SimilarTagCandidate(tag, similarity);
+            })
+            .Where(c => c.Similarity >= minSimilarity)
             .OrderByDescending(c => c.Similarity)
             .ThenBy(c => c.Tag.Name.Length)
             .ThenBy(c => c.Tag.Name, StringComparer.OrdinalIgnoreCase)
-            .Take(maxResults)
-            .ToList();
+            .Take(maxResults)];
     }
 }
