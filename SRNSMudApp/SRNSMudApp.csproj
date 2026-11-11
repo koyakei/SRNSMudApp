@@ -5,7 +5,6 @@
     <RootNamespace>SRNSMudApp</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>preview</LangVersion>
     <UserSecretsId>aspnet-SRNSMudApp-a40b7b0b-3097-4e13-ba77-0bf473c95a79</UserSecretsId>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     <!-- .NET の静的コード解析をすべて有効化 -->
@@ -13,30 +12,33 @@
     <!-- ビルド時にもコードスタイルの警告を出す -->
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);MUD0002;CA1062;CS1591;CS8602;CS8604</NoWarn>
-    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <NoWarn>$(NoWarn);MUD0002;CA1062;CS1591;CS8602;CS8604;NU1510;NU1608</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="FirebaseAdmin" Version="3.1.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.*-*">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.*-*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer.HierarchyId" Version="11.0.*-*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer.HierarchyId" Version="11.0.*" />
     <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.0" />
     <PackageReference Include="NuGet.Packaging" Version="7.6.0" />
     <PackageReference Include="NuGet.Protocol" Version="7.6.0" />
     <PackageReference Include="SmartComponents.LocalEmbeddings" Version="0.1.0-preview10148" />
     <PackageReference Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
+    <!-- Z.Blazor.Diagrams は .NET 11 未対応 (Components のバージョン制約が &lt; 11.0.0) のため
+         直接参照で GA 版を強制し、復元警告 (NU1510/NU1608) は抑制している。対応版のリリース後に整理すること。 -->
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="11.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="11.0.*" />
     <ProjectReference Include="../SRNSMudApp.Client/SRNSMudApp.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="11.0.*-*" />
-    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="11.0.*-*" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.*-*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="11.0.*-*" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="11.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="11.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="11.0.*" />
     <PackageReference Include="Extensions.MudBlazor.StaticInput" Version="4.1.0" />
     <PackageReference Include="MudBlazor" Version="9.1.0" />
     <PackageReference Include="Sidio.Sitemap.AspNetCore" Version="3.1.1" />

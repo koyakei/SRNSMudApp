@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:11.0-preview
+FROM mcr.microsoft.com/devcontainers/dotnet:11.0
 
 # Install SQL Tools: cross-platform sqlcmd (arm64 & amd64 support)
 RUN ARCH=$(uname -m) && \
@@ -14,7 +14,7 @@ RUN ARCH=$(uname -m) && \
     ln -sf /usr/local/bin/sqlcmd /opt/mssql-tools18/bin/sqlcmd && \
     rm -f /tmp/sqlcmd.tar.bz2
 
-ARG DOTNET_SDK_VERSION=11.0.100-rc.1.26425.128
+ARG DOTNET_SDK_VERSION=11.0.100
 
 RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --version "$DOTNET_SDK_VERSION" --install-dir /usr/share/dotnet \
